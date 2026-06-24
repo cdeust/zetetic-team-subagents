@@ -304,6 +304,18 @@
       "ttl_days": 30,
       "max_file_kb": 100
     },
+    "simplifier": {
+      "description": "simplifier team agent's working memory.",
+      "owners": [
+        "simplifier",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
     "test-engineer": {
       "description": "test-engineer team agent's working memory.",
       "owners": [

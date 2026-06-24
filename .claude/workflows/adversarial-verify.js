@@ -2,11 +2,11 @@ export const meta = {
   name: 'adversarial-verify',
   // meta must be a PURE LITERAL for the Workflow runtime — no string concatenation (BinaryExpression is
   // rejected at load), so description/whenToUse are single string literals even though they run long.
-  description: 'Adversarial verification of a diff BEFORE a "done"/APPROVE verdict (roadmap A2 / CR-4). Runs four perspective-diverse skeptics against the commit range — each PROMPTED TO REFUTE, not to approve: (1) residual false-positives / over-fit, (2) missed cases, (3) robustness / adversarial inputs, (4) test adequacy (would the tests survive a mutation). Each lens reads the real diff via an agent Bash call and returns structured findings; synthesis is DETERMINISTIC (any confirmed blocking finding => REQUEST_CHANGES; advisory-only => COMMENT; none => clean). Inputs: args.repoPath (default "."), args.diffBase, args.diffHead. Two copies of one model are not independent oracles (arXiv:2310.01798): this is a BEST-EFFORT pre-merge skeptic pass that widens coverage and fails closed on an empty diff or a non-returning lens — it does NOT self-certify. The authoritative gate remains a human/CI exec outside this workflow.',
+  description: 'Adversarial verification of a diff BEFORE a "done"/APPROVE verdict (roadmap A2 / CR-4). Runs five perspective-diverse skeptics against the commit range — each PROMPTED TO REFUTE, not to approve: (1) residual false-positives / over-fit, (2) missed cases, (3) robustness / adversarial inputs, (4) test adequacy (would the tests survive a mutation), (5) superfluous complexity / over-engineering (no hard rule violated). Each lens reads the real diff via an agent Bash call and returns structured findings; synthesis is DETERMINISTIC (any confirmed blocking finding => REQUEST_CHANGES; advisory-only => COMMENT; none => clean). Inputs: args.repoPath (default "."), args.diffBase, args.diffHead. Two copies of one model are not independent oracles (arXiv:2310.01798): this is a BEST-EFFORT pre-merge skeptic pass that widens coverage and fails closed on an empty diff or a non-returning lens — it does NOT self-certify. The authoritative gate remains a human/CI exec outside this workflow.',
   whenToUse: 'Invoke before emitting an APPROVE/done verdict on a change set, to subject it to independent adversarial lenses that try to break it rather than confirm it. Wired as the pre-verdict step of the code-reviewer agent; also runnable standalone on any commit range.',
   phases: [
     { title: 'Scope', detail: 'confirm the diff is non-empty and list changed files (fail closed otherwise)' },
-    { title: 'Refute', detail: 'four perspective-diverse skeptics, each prompted to REFUTE the diff' },
+    { title: 'Refute', detail: 'five perspective-diverse skeptics, each prompted to REFUTE the diff' },
     { title: 'Synthesize', detail: 'deterministic verdict from the confirmed findings' },
   ],
 }
@@ -21,7 +21,7 @@ export const meta = {
 // review of the same range. The workflow only SURFACES findings + a draft verdict.
 // ---------------------------------------------------------------------------
 
-// The four A2 lenses. Distinct agentType per lens so each looks through a different
+// The five A2 lenses. Distinct agentType per lens so each looks through a different
 // failure-mode aperture (perspective-diverse verify beats N identical refuters): a
 // fragility thinker finds different holes than an exhaustive-space auditor. Every
 // prompt is framed to REFUTE — the default posture is "this change is not yet safe."
@@ -57,6 +57,19 @@ const LENSES = [
       'check that a test asserts its postcondition (not merely that it ran) and would FAIL if the logic were ' +
       'mutated (boundary flipped, operator swapped, return negated). A high-coverage diff whose tests kill no ' +
       'mutant is a blocking test-adequacy failure (mutation testing is owned by test-engineer).',
+  },
+  {
+    key: 'simplicity',
+    agentType: 'zetetic-team-subagents:simplifier',
+    aperture: 'superfluous complexity — over-engineering that no hard rule forbids. Assume the change does more ' +
+      'than its problem requires and try to prove it: an abstraction with fewer than three real, varying uses ' +
+      '(rule-of-three); a one-implementation interface, base class, or generic parameter; a factory that builds ' +
+      'one thing; a pass-through wrapper or layer that only forwards with no added meaning (needless indirection); ' +
+      'a parameter, flag, or extension point no caller varies and no dated requirement needs (YAGNI / speculative ' +
+      'generality); a performance optimization with no profile behind it (premature optimization). These are ' +
+      'language-agnostic simplicity principles, not framework rules. A finding is "blocking" only if the complexity ' +
+      'is both unused and a real maintenance hazard; otherwise advisory. Complexity that earns its keep (>=3 real ' +
+      'uses, a cited constraint, a measured hot path) is NOT a finding. De-over-engineering is owned by simplifier.',
   },
 ]
 

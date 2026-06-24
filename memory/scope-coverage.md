@@ -22,7 +22,7 @@
 | `checkpoints` | `*` | `*` | Context-cap / compaction checkpoints (token-budget protocol). Any agent may checkpoint. TTL 30 days. |
 | `reviewer-prefs` | `_user`, `orchestrator` | `engineer`, `refactorer`, `code-reviewer` | Team lead's standing review preferences (CAP-2). Lead/curator-only writes so agents can't invent prefs; never overrides a coding-standards.md blocking rule. Per-lead subpath `/memories/reviewer-prefs/<lead>/`. No TTL; 50 KB/file. |
 
-## Team agents — per-agent scopes (17 entries)
+## Team agents — per-agent scopes (18 entries)
 
 Every team agent owns exactly one scope keyed by its slug. Subpath: `/memories/<slug>/`.
 
@@ -43,6 +43,7 @@ Every team agent owns exactly one scope keyed by its slug. Subpath: `/memories/<
 | `refactorer` | `refactorer` | `refactorer` | all `*`-readable scopes |
 | `reviewer-academic` | `reviewer-academic` | `reviewer-academic` | all `*`-readable scopes |
 | `security-auditor` | `security-auditor` | `security-auditor` | all `*`-readable scopes |
+| `simplifier` | `simplifier` | `simplifier` | all `*`-readable scopes |
 | `test-engineer` | `test-engineer` | `test-engineer` | all `*`-readable scopes |
 | `ux-designer` | `ux-designer` | `ux-designer` | all `*`-readable scopes |
 
@@ -95,10 +96,18 @@ All genius agents share scope `genius`. Per-agent isolation is by **mandatory su
 
 | Category | Count | Coverage |
 |---|---|---|
-| Team agents (excl. genius) | 19 | 19 / 19 = 100% |
+| Team agents (excl. genius) | 20 | 20 / 20 = 100% |
 | Genius agents | 97 | 97 / 97 = 100% |
-| **Total agents** | **116** | **100%** |
-| Distinct registry scopes | 26 | (7 systemic + 17 team + 1 research + 1 genius) |
+| **Total agents** | **117** | **100%** |
+| Distinct registry scopes | 27 | (7 systemic + 18 team + 1 research + 1 genius) |
+
+> **Why this total (117) is one less than the README's agent count (118):** this doc
+> tabulates only **scope-owning** agents. `memory-writer` is a budgeted scribe that
+> writes into its *parent's* scope and owns none — it has an `agent_topic` but no
+> `memory_scope` and no `scope-registry.json` entry, so it is intentionally excluded
+> from the tables above. The README/marketplace counts enumerate agent definition
+> files (which include `memory-writer`), hence 118. Both are correct for what they
+> count.
 
 ## Seeding `reviewer-prefs` from a lead's history (CAP-2)
 

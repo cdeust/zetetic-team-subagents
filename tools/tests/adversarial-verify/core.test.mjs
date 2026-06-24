@@ -11,18 +11,18 @@ function check(name, cond) {
   else { console.log('  FAIL: ' + name); fail++ }
 }
 const clean = () => ({ read_diff: true, findings: [] })
-const fourClean = [clean(), clean(), clean(), clean()]
+const fiveClean = [clean(), clean(), clean(), clean(), clean()]
 
 console.log('adversarial-verify synthesis-core tests')
 
-// Sanity: the four fixed A2 lenses are present and distinct.
-check('four-lenses', LENSES.length === 4)
+// Sanity: the five fixed A2 lenses are present and distinct.
+check('five-lenses', LENSES.length === 5)
 check('lens-keys', JSON.stringify(LENSES.map((l) => l.key)) ===
-  JSON.stringify(['residual-fp', 'missed-cases', 'robustness', 'test-adequacy']))
-check('lens-agenttypes-distinct', new Set(LENSES.map((l) => l.agentType)).size === 4)
+  JSON.stringify(['residual-fp', 'missed-cases', 'robustness', 'test-adequacy', 'simplicity']))
+check('lens-agenttypes-distinct', new Set(LENSES.map((l) => l.agentType)).size === 5)
 
 // (1) empty diff -> fail closed (REQUEST_CHANGES + gap), regardless of lens results.
-let r = synthesizeVerdict({ nonempty: false, files: [] }, fourClean)
+let r = synthesizeVerdict({ nonempty: false, files: [] }, fiveClean)
 check('empty-diff-request-changes', r.verdict === 'REQUEST_CHANGES')
 check('empty-diff-gap', r.gaps.length === 1)
 
@@ -31,7 +31,7 @@ r = synthesizeVerdict(null, [])
 check('null-scope-request-changes', r.verdict === 'REQUEST_CHANGES' && r.gaps.length === 1)
 
 // (2) non-empty diff, all lenses clean -> APPROVE.
-r = synthesizeVerdict({ nonempty: true, files: ['a.py'] }, fourClean)
+r = synthesizeVerdict({ nonempty: true, files: ['a.py'] }, fiveClean)
 check('all-clean-approve', r.verdict === 'APPROVE' && r.blocking.length === 0 && r.gaps.length === 0)
 
 // (3) REGRESSION (WF-0.2): the robustness lens flags an UNSOURCED-class blocking finding
@@ -42,22 +42,22 @@ const unsourced = {
   findings: [{ severity: 'blocking', file: 'retry.py:2', title: 'unsourced constant DELAY = 2.741592',
     evidence: 'magic float with no `source:` annotation; threshold invented, not measured' }],
 }
-r = synthesizeVerdict({ nonempty: true, files: ['retry.py'] }, [clean(), clean(), unsourced, clean()])
+r = synthesizeVerdict({ nonempty: true, files: ['retry.py'] }, [clean(), clean(), unsourced, clean(), clean()])
 check('unsourced-blocking-request-changes', r.verdict === 'REQUEST_CHANGES')
 check('unsourced-finding-surfaced', r.blocking.length === 1 && r.blocking[0].lens === 'robustness')
 check('unsourced-finding-evidence-kept', /source:/.test(r.blocking[0].evidence))
 
 // (4) advisory-only findings -> COMMENT (not blocking).
 const advisory = { read_diff: true, findings: [{ severity: 'advisory', file: 'x.py:9', title: 'nit', evidence: 'style' }] }
-r = synthesizeVerdict({ nonempty: true, files: ['x.py'] }, [clean(), advisory, clean(), clean()])
+r = synthesizeVerdict({ nonempty: true, files: ['x.py'] }, [clean(), advisory, clean(), clean(), clean()])
 check('advisory-only-comment', r.verdict === 'COMMENT' && r.advisory.length === 1)
 
 // (5) a lens that did not return (null) -> fail closed via gap.
-r = synthesizeVerdict({ nonempty: true, files: ['a.py'] }, [clean(), null, clean(), clean()])
+r = synthesizeVerdict({ nonempty: true, files: ['a.py'] }, [clean(), null, clean(), clean(), clean()])
 check('missing-lens-fail-closed', r.verdict === 'REQUEST_CHANGES' && r.gaps.length === 1)
 
 // (6) a lens that did not confirm reading the diff -> fail closed via gap.
-r = synthesizeVerdict({ nonempty: true, files: ['a.py'] }, [clean(), { read_diff: false, findings: [] }, clean(), clean()])
+r = synthesizeVerdict({ nonempty: true, files: ['a.py'] }, [clean(), { read_diff: false, findings: [] }, clean(), clean(), clean()])
 check('lens-did-not-read-fail-closed', r.verdict === 'REQUEST_CHANGES' && r.gaps.length === 1)
 
 console.log('----')

@@ -5,14 +5,14 @@
 <p align="center">
   <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/tests-288-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/agents-117-8A2BE2" alt="Agents">
+  <img src="https://img.shields.io/badge/agents-118-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-64-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-18_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 </p>
 
 > **Claude Code agents whose commits are blocked when constants lack source citations.**
-> 97 genius reasoning agents (plus 20 team-role agents = 117 total) each citing their primary paper and documenting their refusal conditions, paired with a pre-commit hook that blocks any floating-point constant with 3+ significant digits that lacks a `source:` annotation.
+> 97 genius reasoning agents (plus 21 team-role agents = 118 total) each citing their primary paper and documenting their refusal conditions, paired with a pre-commit hook that blocks any floating-point constant with 3+ significant digits that lacks a `source:` annotation.
 > Not a prompt library. A methodology with **commit-time enforcement**.
 
 ---

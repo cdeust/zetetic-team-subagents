@@ -6,6 +6,55 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.24.0] — `simplifier` agent (de-over-engineering) + adversarial-verify simplicity lens
+
+### Added
+
+- **New `simplifier` team agent** (`agents/simplifier.md`). De-over-engineers code
+  that already works and breaks no hard rule but carries more complexity than its
+  problem requires — premature abstraction, needless indirection, speculative
+  generality, premature optimization, and drifted duplication. Distinct trigger from
+  `refactorer`: refactorer fixes *hard-rule violations*; simplifier removes
+  *superfluous complexity that violates no hard rule* (already-functional,
+  already-compliant code never invokes refactorer, so over-engineering needs its own
+  trigger — folding both into one agent would be an SRP violation in agent design).
+  Behavior-preserving (tests pass before and after, one simplification per commit),
+  stakes-calibrated, and language-/project-agnostic (idiom-mapping across Python,
+  TypeScript, Go, Rust, Java, Swift). Its over-engineering heuristics are an **open,
+  non-exhaustive catalog** (YAGNI, rule-of-three, needless indirection, premature
+  optimization, speculative generality, drifted duplication, plus KISS, Gall's Law,
+  Ousterhout shallow modules, dead code, boolean blindness, …) — each removal must
+  name and source its principle per the zetetic §8 standard. New `simplifier` memory
+  scope (`memory/scope-registry.json`).
+- **A2 / CR-4 — adversarial-verify pre-verdict workflow** now carries a **fifth,
+  perspective-diverse lens**: `simplicity` (agentType `simplifier`), prompted to
+  REFUTE by hunting superfluous complexity that no hard rule forbids. Joins the four
+  existing refute lenses (residual-fp, missed-cases, robustness, test-adequacy);
+  synthesis stays deterministic and fail-closed. (The A2/adversarial-verify work
+  shipped in code prior to this release without a CHANGELOG entry; recorded here.)
+
+### Changed
+
+- **`code-reviewer` Move 5** now hands off superfluous-complexity smells (over-
+  engineering with no hard-rule violation) to `simplifier` as an advisory note,
+  distinct from the §4 size-breach blocking gate. Output format and blind-spot
+  hand-off list updated accordingly.
+- README badge, body, `CONTRIBUTING.md`, and the marketplace plugin/metadata
+  descriptions refreshed: 97 reasoning patterns + 21 team agents (118 total).
+  `rules/agent-routing-table.md` regenerated (118 agents).
+- `memory/scope-coverage.md`: simplifier added to the team table; counts reconciled
+  to 20 **scope-owning** team agents, 117 tabulated agents, 27 distinct registry
+  scopes (7 systemic + 18 team + 1 research + 1 genius). This doc tabulates only
+  scope-owning agents, so its total is intentionally one less than the 118 agent
+  *definition files* the README/marketplace count — `memory-writer` is a scribe that
+  owns no scope. A new footnote in the doc records the distinction.
+
+### Tests
+
+- `tools/tests/adversarial-verify/core.test.mjs` updated for the five-lens core
+  (lens count, lens-keys ordering, distinct-agentType count, five-element fixtures).
+  13/13 deterministic synthesis-core tests pass.
+
 ## [2.23.0] — CAP-2 reviewer-prefs, history seeding, and doc/count refresh
 
 ### Added

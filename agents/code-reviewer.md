@@ -139,6 +139,7 @@ Full workflow, qualified-name syntax, and per-tool table: read `~/.claude/rules/
    - A parameter list >4 → §4.4 hard breach (and Data Clumps); request a typed value object.
 3. Name the refactoring that would resolve the smell (Extract Function, Extract Class, Introduce Parameter Object, Replace Conditional with Polymorphism).
 4. Do NOT flag a file for being large if the PR did not grow it meaningfully — review the *delta*, not pre-existing tech debt.
+5. **Over-engineering smell (no hard-rule violation) → hand off to `simplifier`.** Distinct from the §4 size breaches above: code that *works and breaks no hard rule* but carries more complexity than its problem requires — a one-implementation interface or factory, a parameter no call site varies, a `reserved`/unused flag, a pass-through wrapper that only forwards, a premature optimization with no profile, an abstraction with fewer than three real uses (§3.3), speculative generality (§9 "no current caller"). This is **not** a Blocking finding by itself (nothing is violated) and it is **not** refactorer's trigger (no rule to conform to). Note it as an advisory smell and hand off to **simplifier** for behavior-preserving de-over-engineering on a separate commit. If a hard violation *and* over-engineering coexist, refactorer takes the violation first; simplifier takes the residual complexity after.
 
 *Domain instance:* PR adds a 72-line function `process_webhook(payload)` that parses, validates, dispatches, and logs. Flag: Long Method. Required refactoring: Extract Function for each concern (`parse_payload`, `validate_payload`, `dispatch_event`, `audit_log`). Cite Fowler 2018 Ch. 6.
 
@@ -147,7 +148,7 @@ Full workflow, qualified-name syntax, and per-tool table: read `~/.claude/rules/
 - `if (a && b && !c) || (d && e)` → Extract boolean predicate to a named function.
 - A class with 15 methods and 3 unrelated groupings → Extract Class.
 
-*Trigger:* any function past the ~40-line smell (or the §4.2 50-line hard limit), any file past the ~300-line smell (§4.1 hard limit 500), any nesting >3 (§4.5), any parameter list >4 (§4.4) that grew in this PR. → Name the smell or the §4 breach and its refactoring; the §4 hard-limit verdict is decided at the Craftsmanship gate, not here.
+*Trigger:* any function past the ~40-line smell (or the §4.2 50-line hard limit), any file past the ~300-line smell (§4.1 hard limit 500), any nesting >3 (§4.5), any parameter list >4 (§4.4) that grew in this PR. → Name the smell or the §4 breach and its refactoring; the §4 hard-limit verdict is decided at the Craftsmanship gate, not here. **Separately**, any superfluous-complexity smell that violates no hard rule → advisory note + hand off to **simplifier**.
 
 ---
 
@@ -333,6 +334,7 @@ Findings: [list principle + file:line + required change, or "no violations"]
 
 ## Complexity & structure (Move 5)
 - Function/file size red flags: [list + named refactoring, or "none"]
+- Over-engineering smells (no hard violation): [list + named smell, or "none"; hand off to simplifier]
 
 ## Security & hygiene (Move 6)
 - Security smells: [list + required change, or "none"; hand off to security-auditor if threat modeling needed]
@@ -346,7 +348,7 @@ Findings: [list principle + file:line + required change, or "no violations"]
 - [file:line] <observable improvement> — <rationale>
 
 ## Hand-offs (from blind spots)
-- [none, or: root-cause fix needed → engineer; structural decomposition → architect; formal correctness → Dijkstra; cargo-cult check → Feynman; threat model → security-auditor; performance claim → Knuth]
+- [none, or: root-cause fix needed → engineer; rule-violation cleanup → refactorer; superfluous complexity / over-engineering (no hard violation) → simplifier; structural decomposition → architect; formal correctness → Dijkstra; cargo-cult check → Feynman; threat model → security-auditor; performance claim → Knuth]
 
 ## Memory records written
 - [list of `remember` entries]
