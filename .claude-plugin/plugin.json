@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py\"",
             "timeout": 5
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh\"",
             "timeout": 5
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-review.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-review.sh\"",
             "timeout": 5
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-provenance.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-provenance.sh\"",
             "timeout": 5
           }
         ]
@@ -72,7 +72,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh\"",
             "timeout": 5
           }
         ]
@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh\"",
             "timeout": 5
           }
         ]
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-difficulty.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-difficulty.sh\"",
             "timeout": 5
           }
         ]
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-lab-notebook.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-lab-notebook.sh\"",
             "timeout": 5
           }
         ]
@@ -116,7 +116,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-balance.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-balance.sh\"",
             "timeout": 5
           }
         ]
@@ -126,7 +126,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh\"",
             "timeout": 5
           }
         ]
@@ -137,7 +137,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-error-routing.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-error-routing.sh\"",
             "timeout": 5
           }
         ]
@@ -148,7 +148,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
             "timeout": 10
           }
         ]
@@ -157,7 +157,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh\"",
             "timeout": 10
           }
         ]
@@ -168,7 +168,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/stop-context-guard.py",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-context-guard.py\"",
             "timeout": 10
           }
         ]
@@ -177,7 +177,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/stop-acceptance-gate.py",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-acceptance-gate.py\"",
             "timeout": 10
           }
         ]
@@ -186,7 +186,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh\"",
             "timeout": 10
           }
         ]
@@ -195,7 +195,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-end-memory-drain.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-memory-drain.sh\"",
             "timeout": 10
           }
         ]
@@ -206,7 +206,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification-handler.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/notification-handler.sh\"",
             "timeout": 5
           }
         ]

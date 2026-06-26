@@ -1,0 +1,7 @@
+# Force LF on scripts. A CRLF checkout on Windows breaks the
+# `#!/usr/bin/env bash` shebang (bash chokes on the trailing `\r`) and
+# corrupts Python hooks run through Git Bash. These types must stay LF
+# regardless of the contributor's core.autocrlf setting.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.json text eol=lf

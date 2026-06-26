@@ -36,6 +36,11 @@ fail() { echo -e "  ${RED}[FAIL]${NC} $1"; exit 1; }
 info() { echo -e "  $1"; }
 step() { echo ""; echo -e "${TEAL}───${NC} ${WHITE}${BOLD}$1${NC} ${TEAL}───${NC}"; }
 
+# ── Sourced modules (lib/) ─────────────────────────────────────────────
+# Behavior-preserving split for coding-standards §4 (file/function size).
+# shellcheck source=/dev/null
+for _mod in overrides staging actions; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
+
 # ── Flag parsing ───────────────────────────────────────────────────────
 ACTION="install"
 DRY_RUN=false
@@ -77,235 +82,6 @@ read_version() {
   else
     grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$pjson" | head -1 | sed 's/.*"\([^"]*\)"/\1/'
   fi
-}
-
-# ── Agent override resolution (model + effort) ─────────────────────────
-# Reads ~/.claude/zetetic-agent-models.json and resolves model + effort per agent.
-# Config schema (backward compatible):
-#   { "agents": {
-#       "engineer": "sonnet",                                 # shorthand: model only
-#       "architect": { "model": "opus", "effort": "high" },    # full: model + effort
-#       "refactorer": { "effort": "low" }                      # effort only (keeps frontmatter model)
-#     },
-#     "patterns": [
-#       { "glob": "genius/*", "model": "sonnet" },             # shorthand
-#       { "glob": "genius/*", "model": "sonnet", "effort": "medium" }  # full
-#     ] }
-# Precedence: exact match > first glob match > default from frontmatter
-# Lines stored as: "name=model|effort" where model or effort may be empty.
-OVERRIDES_LOADED=false
-OVERRIDES_AGENTS=""
-OVERRIDES_PATTERNS=""
-
-load_overrides() {
-  [[ "$OVERRIDES_LOADED" == true ]] && return
-  OVERRIDES_LOADED=true
-  [[ ! -f "$MODEL_CONFIG" ]] && return
-  command -v python3 &>/dev/null || { warn "python3 required for overrides — skipping"; return; }
-
-  if ! python3 -c "import json; json.load(open('$MODEL_CONFIG'))" 2>/dev/null; then
-    warn "Invalid JSON in $MODEL_CONFIG — skipping overrides"
-    return
-  fi
-
-  OVERRIDES_AGENTS=$(python3 -c "
-import json
-d = json.load(open('$MODEL_CONFIG'))
-for name, v in d.get('agents', {}).items():
-    if isinstance(v, str):
-        print(f'{name}={v}|')
-    elif isinstance(v, dict):
-        print(f'{name}={v.get(\"model\",\"\")}|{v.get(\"effort\",\"\")}')
-" 2>/dev/null || true)
-
-  OVERRIDES_PATTERNS=$(python3 -c "
-import json
-d = json.load(open('$MODEL_CONFIG'))
-for p in d.get('patterns', []):
-    print(f\"{p['glob']}={p.get('model','')}|{p.get('effort','')}\")
-" 2>/dev/null || true)
-
-  local ac pc
-  ac=$(echo "$OVERRIDES_AGENTS" | grep -c '=' 2>/dev/null || echo "0")
-  pc=$(echo "$OVERRIDES_PATTERNS" | grep -c '=' 2>/dev/null || echo "0")
-  [[ "$ac" -gt 0 || "$pc" -gt 0 ]] && ok "Overrides loaded: $ac agents, $pc patterns"
-}
-
-# Returns "model|effort" (either may be empty = keep default).
-resolve_override() {
-  local agent_name="$1"
-  [[ -z "$OVERRIDES_AGENTS" && -z "$OVERRIDES_PATTERNS" ]] && { echo "|"; return; }
-
-  # Exact match
-  local exact
-  exact=$(echo "$OVERRIDES_AGENTS" | grep "^${agent_name}=" 2>/dev/null | head -1 | cut -d= -f2-)
-  [[ -n "$exact" ]] && { echo "$exact"; return; }
-
-  # Glob patterns — first match wins
-  while IFS= read -r pattern_line; do
-    [[ -z "$pattern_line" ]] && continue
-    local glob_pattern="${pattern_line%%=*}"
-    local glob_rest="${pattern_line#*=}"
-    # shellcheck disable=SC2254
-    case "$agent_name" in
-      $glob_pattern) echo "$glob_rest"; return ;;
-    esac
-  done <<< "$OVERRIDES_PATTERNS"
-
-  echo "|"
-}
-
-# Back-compat alias (older callers expect just model)
-load_model_overrides() { load_overrides; }
-resolve_model() {
-  local ov; ov="$(resolve_override "$1")"
-  local model="${ov%%|*}"
-  [[ -n "$model" ]] && echo "$model" || echo "$2"
-}
-
-# ── Uninstall ──────────────────────────────────────────────────────────
-do_uninstall() {
-  step "Uninstalling Zetetic Team Subagents"
-
-  if [[ ! -f "$MANIFEST" ]]; then
-    warn "No manifest found — nothing to uninstall"
-    warn "If files remain, remove manually from ~/.claude/agents/, skills/, commands/"
-    return
-  fi
-
-  local removed=0 skipped=0
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    local expected_hash="${line%%  *}"
-    local rel_path="${line#*  }"
-    local target="${CLAUDE_DIR}/${rel_path}"
-    [[ ! -f "$target" ]] && continue
-
-    # Skip user-modified files
-    local current_hash; current_hash="$(sha_cmd "$target")"
-    if [[ "$expected_hash" != "no-checksum" && "$current_hash" != "$expected_hash" ]]; then
-      if [[ "$DRY_RUN" == true ]]; then
-        info "Would keep (user-modified): $rel_path"
-      else
-        warn "Keeping user-modified: $rel_path"
-        skipped=$((skipped + 1))
-      fi
-      continue
-    fi
-
-    if [[ "$DRY_RUN" == true ]]; then
-      info "Would remove: $rel_path"
-    else
-      rm "$target"
-    fi
-    removed=$((removed + 1))
-  done < "$MANIFEST"
-
-  # Clean empty directories
-  if [[ "$DRY_RUN" == false ]]; then
-    find "${CLAUDE_DIR}/agents/genius" -type d -empty -delete 2>/dev/null || true
-    for subdir in skills commands hooks tools rules; do
-      find "${CLAUDE_DIR}/${subdir}" -mindepth 1 -type d -empty -delete 2>/dev/null || true
-    done
-
-    # Restore backups
-    local restored=0
-    while IFS= read -r backup; do
-      [[ -z "$backup" ]] && continue
-      local original="${backup%${BACKUP_SUFFIX}}"
-      mv "$backup" "$original" && restored=$((restored + 1))
-    done < <(find "$CLAUDE_DIR" -name "*${BACKUP_SUFFIX}" -type f 2>/dev/null)
-    [[ "$restored" -gt 0 ]] && ok "Restored $restored user-modified files from backup"
-
-    # Remove hooks from plugin.json
-    local plugin_json="$PLUGIN_ROOT/.claude-plugin/plugin.json"
-    if [[ -f "$plugin_json" ]] && command -v python3 &>/dev/null && grep -q '"hooks"' "$plugin_json"; then
-      python3 -c "
-import json
-with open('$plugin_json') as f: d = json.load(f)
-d.pop('hooks', None)
-with open('$plugin_json', 'w') as f: json.dump(d, f, indent=2); f.write('\n')
-" 2>/dev/null && ok "Removed hooks from plugin.json" || warn "Could not clean plugin.json"
-    fi
-
-    rm -f "$MANIFEST" "$VERSION_FILE"
-  fi
-
-  ok "Removed $removed files"
-  [[ "$skipped" -gt 0 ]] && ok "Kept $skipped user-modified files"
-  echo ""
-  echo -e "${GREEN}Uninstall complete.${NC} Restart Claude Code to deactivate."
-}
-
-# ── Configure (model overrides) ────────────────────────────────────────
-do_configure() {
-  step "Agent override configuration (model + effort)"
-
-  if [[ -f "$MODEL_CONFIG" ]]; then
-    info "Existing config: $MODEL_CONFIG"
-    echo ""
-    cat "$MODEL_CONFIG"
-    echo ""
-    echo -e "  Edit this file directly, then run ${CYAN}$0 update${NC} to apply."
-    echo "  To reset: rm $MODEL_CONFIG && $0 configure"
-    return
-  fi
-
-  cat > "$MODEL_CONFIG" <<'CONF'
-{
-  "//": "Zetetic Agent Overrides (model + effort) — survives plugin updates",
-  "//models": "opus (most capable), sonnet (balanced), haiku (fastest/cheapest)",
-  "//effort": "low (terse procedural), medium (balanced), high (deep reasoning), max (opus 4.6 only)",
-  "//schema": "string value = model shorthand; object value = {model?, effort?}. Either field may be omitted to keep the frontmatter default.",
-  "//precedence": "per-call > this config > agent frontmatter default",
-
-  "patterns": [
-    { "glob": "genius/*", "model": "sonnet" }
-  ],
-
-  "agents": {
-    "refactorer":        { "model": "haiku",  "effort": "low"    },
-    "latex-engineer":    { "model": "haiku",  "effort": "low"    },
-
-    "engineer":          { "model": "sonnet", "effort": "medium" },
-    "code-reviewer":     { "model": "sonnet", "effort": "medium" },
-    "test-engineer":     { "model": "sonnet", "effort": "medium" },
-    "frontend-engineer": { "model": "sonnet", "effort": "medium" },
-    "dba":               { "model": "sonnet", "effort": "medium" },
-    "devops-engineer":   { "model": "sonnet", "effort": "medium" },
-    "data-scientist":    { "model": "sonnet", "effort": "medium" },
-    "experiment-runner": { "model": "sonnet", "effort": "medium" },
-    "mlops":             { "model": "sonnet", "effort": "medium" },
-    "ux-designer":       { "model": "sonnet", "effort": "medium" },
-    "professor":         { "model": "sonnet", "effort": "medium" },
-
-    "architect":          { "model": "opus", "effort": "high" },
-    "orchestrator":       { "model": "opus", "effort": "medium" },
-    "security-auditor":   { "model": "opus", "effort": "high" },
-    "research-scientist": { "model": "opus", "effort": "high" },
-    "paper-writer":       { "model": "opus", "effort": "high" },
-    "reviewer-academic":  { "model": "opus", "effort": "high" }
-  }
-}
-CONF
-
-  ok "Created $MODEL_CONFIG"
-  echo ""
-  echo "  Default config (model + effort):"
-  echo "    - refactorer, latex-engineer          → haiku  + low     (mechanical)"
-  echo "    - most team agents                     → sonnet + medium  (balanced)"
-  echo "    - architect, security, research roles  → opus   + high    (deep)"
-  echo "    - 97 genius agents                     → sonnet (effort kept from frontmatter:"
-  echo "                                              deep-reasoning geniuses default to high,"
-  echo "                                              procedural geniuses default to medium)"
-  echo ""
-  echo -e "  Edit to customize, then run ${CYAN}$0 update${NC} to apply."
-  echo "  Config is yours — plugin updates never overwrite it."
-  echo ""
-  echo "  Schema notes:"
-  echo "    - String value ('sonnet') = model shorthand; effort unchanged"
-  echo "    - Object value { model, effort } = set either or both"
-  echo "    - Omit a field to keep the frontmatter default"
 }
 
 # ── Install dispatch guards ────────────────────────────────────────────
@@ -374,88 +150,6 @@ count_hooks=0
 count_tools=0
 count_rules=0
 count_overridden=0
-
-# Stage a file (with optional model+effort override for agent .md files)
-stage_file() {
-  local src="$1" rel_dest="$2" apply_overrides="${3:-false}"
-  local dest_dir; dest_dir="$(dirname "$STAGING/$rel_dest")"
-  mkdir -p "$dest_dir"
-
-  if [[ "$apply_overrides" == true ]] && [[ "$src" == *.md ]]; then
-    local agent_rel="${rel_dest#agents/}"
-    local agent_name="${agent_rel%.md}"
-
-    # Current frontmatter values
-    local current_model current_effort
-    current_model=$(sed -n '/^---$/,/^---$/{ /^model:/s/^model: *//p; }' "$src" 2>/dev/null | head -1)
-    [[ -z "$current_model" ]] && current_model="opus"
-    current_effort=$(sed -n '/^---$/,/^---$/{ /^effort:/s/^effort: *//p; }' "$src" 2>/dev/null | head -1)
-
-    # Resolve overrides — "model|effort" (either may be empty = keep default)
-    local override; override="$(resolve_override "$agent_name")"
-    local ov_model="${override%%|*}"
-    local ov_effort="${override#*|}"
-    local target_model="${ov_model:-$current_model}"
-    local target_effort="${ov_effort:-$current_effort}"
-
-    if [[ "$target_model" != "$current_model" ]] || [[ "$target_effort" != "$current_effort" ]]; then
-      # Rewrite both lines (sed handles each; if effort line is absent and override provides one, insert it)
-      local tmp; tmp=$(mktemp)
-      cp "$src" "$tmp"
-      if [[ "$target_model" != "$current_model" ]]; then
-        sed -i.bak "s/^model: .*/model: $target_model/" "$tmp" && rm -f "${tmp}.bak"
-      fi
-      if [[ -n "$target_effort" ]] && [[ "$target_effort" != "$current_effort" ]]; then
-        if [[ -n "$current_effort" ]]; then
-          sed -i.bak "s/^effort: .*/effort: $target_effort/" "$tmp" && rm -f "${tmp}.bak"
-        else
-          # Insert effort: after model: line
-          sed -i.bak "/^model:/a\\
-effort: $target_effort
-" "$tmp" && rm -f "${tmp}.bak"
-        fi
-      fi
-      mv "$tmp" "$STAGING/$rel_dest"
-      count_overridden=$((count_overridden + 1))
-    else
-      cp "$src" "$STAGING/$rel_dest"
-    fi
-  else
-    cp "$src" "$STAGING/$rel_dest"
-  fi
-
-  local checksum; checksum="$(sha_cmd "$STAGING/$rel_dest")"
-  manifest_lines+=("${checksum}  ${rel_dest}")
-}
-
-# Stage a directory tree (files + subdirectories)
-stage_tree() {
-  local src_root="$1" dest_prefix="$2" apply_models="${3:-false}"
-  local counter_var="$4"
-  local count=0
-
-  [[ -d "$src_root" ]] || return
-
-  # Top-level files
-  for f in "$src_root"/*.md "$src_root"/*.sh "$src_root"/*.json; do
-    [[ -f "$f" ]] || continue
-    stage_file "$f" "${dest_prefix}/$(basename "$f")" "$apply_models"
-    count=$((count + 1))
-  done
-
-  # Subdirectories
-  for dir in "$src_root"/*/; do
-    [[ -d "$dir" ]] || continue
-    local dname; dname="$(basename "$dir")"
-    for f in "$dir"*.md "$dir"*.sh "$dir"*.json; do
-      [[ -f "$f" ]] || continue
-      stage_file "$f" "${dest_prefix}/${dname}/$(basename "$f")" "$apply_models"
-      count=$((count + 1))
-    done
-  done
-
-  printf -v "$counter_var" "%d" "$count"
-}
 
 stage_tree "$PLUGIN_ROOT/agents"   "agents"   true  _n; count_agents=$_n
 # Count genius agents separately for reporting
@@ -649,9 +343,24 @@ check_py_dep() {
   python3 -c "import $module" 2>/dev/null && ok "$name" || warn "$name not found (optional). Install: $hint"
 }
 
+# python3 needs special handling: on Windows, `command -v python3` resolves to
+# the Microsoft Store stub (in PATH, but exits non-zero and runs nothing). A
+# plain command-v check reports a false "ok". Probe by actually executing it,
+# and point Windows users at the `py -3` launcher the hooks fall back to.
+check_python3() {
+  if command -v python3 &>/dev/null && python3 -c '' &>/dev/null; then
+    ok "python3"
+  elif command -v py &>/dev/null && py -3 -c '' &>/dev/null; then
+    warn "python3 not runnable, but 'py -3' works — Python hooks will use it (run-python.sh)."
+  else
+    fail "No working Python 3 found. Install from python.org (Windows: ensure 'py -3' works
+       and disable the Microsoft Store python/python3 execution aliases)."
+  fi
+}
+
 check_dep "jq"       "jq"       "brew install jq"                           "yes"
 check_dep "git"      "git"      "brew install git / xcode-select --install" "yes"
-check_dep "python3"  "python3"  "brew install python"                       "yes"
+check_python3
 check_dep "Docker"   "docker"   "brew install --cask docker"
 check_dep "fswatch"  "fswatch"  "brew install fswatch"
 check_dep "entr"     "entr"     "brew install entr"

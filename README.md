@@ -81,6 +81,16 @@ claude plugin install zetetic-team-subagents
 
 That's the whole install. The plugin's installer copies agents, skills, hooks, and tools into `~/.claude/`. Manual install + advanced config: [`docs/INSTALL.md`](docs/INSTALL.md).
 
+### Windows prerequisites
+
+Agents, rules, skills, and commands are static Markdown and work natively. The
+**hooks** need two things present on Windows:
+
+- **Git Bash** — the `.sh` hooks run through the bash shipped with [Git for Windows](https://git-scm.com/download/win) (`C:\Program Files\Git\bin\bash.exe`). Without it, every shell hook is silently skipped.
+- **A working Python 3** — install from [python.org](https://www.python.org/downloads/) (tick *Add python.exe to PATH*). The `python3` name in `PATH` is usually the Microsoft Store stub, which is not Python; the Python hooks resolve the interpreter via [`hooks/run-python.sh`](hooks/run-python.sh), preferring the `py -3` launcher. Verify `py -3 --version` works, and disable the Microsoft Store `python`/`python3` *execution aliases* (Settings → Apps → Advanced app settings → App execution aliases) if `python3` shadows your real install.
+
+`setup.sh` probes both and warns if either is missing. Restart Claude Code after changing `PATH`.
+
 ---
 
 ## What you actually get
