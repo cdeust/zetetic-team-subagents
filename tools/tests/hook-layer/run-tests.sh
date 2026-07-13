@@ -504,6 +504,76 @@ else
   # clean file -> exit 0.
   rc="$(ck_rc "$FX/clean.py")"
   [[ "$rc" -eq 0 ]] && pass "clean.py -> exit 0" || fail "clean.py expected exit 0, got $rc"
+
+  # ── Detector FALSE-POSITIVE (c): CRAFT-FN-IIFE-RECURSION-FP ────────────
+  # A no-bundler browser module wrapped in an IIFE `(function () { ... })();`
+  # must NOT be scored as one giant function; internal functions must be
+  # measured individually instead. See tools/lib/craftsmanship-detectors.sh
+  # craft_fn_brace for the root-cause writeup (§4.2, Martin 2008 Ch.3).
+
+  # (c1) IIFE module, all internal functions small (<=50 lines) -> 0 findings.
+  {
+    printf '(function () {\n'
+    printf '  function small1() {\n'
+    for i in $(seq 1 5); do printf '    var a%d = %d;\n' "$i" "$i"; done
+    printf '  }\n'
+    printf '  function small2() {\n'
+    for i in $(seq 1 5); do printf '    var b%d = %d;\n' "$i" "$i"; done
+    printf '  }\n'
+    printf '})();\n'
+  } > "$FX/iife_small.js"
+  out="$(ck "$FX/iife_small.js")"
+  if grep -q 'FUNCTION_TOO_LONG' <<<"$out"; then
+    fail "iife_small.js: FUNCTION_TOO_LONG false positive on IIFE wrapper (internal fns small)"
+  else
+    pass "iife_small.js: no FUNCTION_TOO_LONG false positive (IIFE wrapper, small internals)"
+  fi
+  rc="$(ck_rc "$FX/iife_small.js")"
+  [[ "$rc" -eq 0 ]] && pass "iife_small.js -> exit 0 (no block)" \
+                    || fail "iife_small.js expected exit 0, got $rc"
+
+  # (c2) IIFE module with ONE internal function >60 lines (>50*1.2 flex band)
+  # -> exactly 1 FUNCTION_TOO_LONG finding, attributed to the INNER function's
+  # header line, not to the wrapper (line 1).
+  {
+    printf '(function () {\n'
+    printf '  function bigOne() {\n'
+    for i in $(seq 1 65); do printf '    var x%d = %d;\n' "$i" "$i"; done
+    printf '  }\n'
+    printf '  function small1() {\n'
+    for i in $(seq 1 5); do printf '    var a%d = %d;\n' "$i" "$i"; done
+    printf '  }\n'
+    printf '})();\n'
+  } > "$FX/iife_big_inner.js"
+  out="$(ck "$FX/iife_big_inner.js")"
+  n_findings="$(grep -c 'FUNCTION_TOO_LONG' <<<"$out")"
+  [[ "$n_findings" -eq 1 ]] && pass "iife_big_inner.js: exactly 1 FUNCTION_TOO_LONG finding" \
+                            || fail "iife_big_inner.js: expected 1 FUNCTION_TOO_LONG finding, got $n_findings"
+  if grep -q 'FUNCTION_TOO_LONG.*iife_big_inner\.js:2:' <<<"$out"; then
+    pass "iife_big_inner.js: finding attributed to inner function header (line 2), not wrapper"
+  else
+    fail "iife_big_inner.js: finding not attributed to inner function header (line 2)"
+  fi
+  rc="$(ck_rc "$FX/iife_big_inner.js")"
+  [[ "$rc" -eq 1 ]] && pass "iife_big_inner.js blocks (exit 1)" || fail "iife_big_inner.js expected exit 1, got $rc"
+
+  # (c3) TRUE POSITIVE preserved: a plain (non-IIFE) named function >60 lines
+  # in a NON-wrapped .js file still blocks -> non-regression on the base case.
+  { printf 'function plainBig() {\n'; for i in $(seq 1 65); do printf '  var y%d = %d;\n' "$i" "$i"; done; printf '}\n'; } > "$FX/plain_big.js"
+  if grep -q 'FUNCTION_TOO_LONG' <<<"$(ck "$FX/plain_big.js")"; then pass "plain_big.js: FUNCTION_TOO_LONG label fires (non-IIFE, non-regression)"
+  else fail "plain_big.js: FUNCTION_TOO_LONG label missing (non-IIFE, non-regression)"; fi
+  rc="$(ck_rc "$FX/plain_big.js")"
+  [[ "$rc" -eq 1 ]] && pass "plain_big.js blocks (exit 1)" || fail "plain_big.js expected exit 1, got $rc"
+
+  # (c4) TRUE POSITIVE preserved: a named-variable arrow function assignment
+  # (`var f = () => {...}`) is NOT an IIFE (identifier precedes the arrow
+  # header, not a grouping/unary-operator token) and must still block when
+  # oversized.
+  { printf 'var plainArrow = () => {\n'; for i in $(seq 1 65); do printf '  var z%d = %d;\n' "$i" "$i"; done; printf '};\n'; } > "$FX/plain_arrow.js"
+  if grep -q 'FUNCTION_TOO_LONG' <<<"$(ck "$FX/plain_arrow.js")"; then pass "plain_arrow.js: FUNCTION_TOO_LONG label fires (assigned arrow, non-regression)"
+  else fail "plain_arrow.js: FUNCTION_TOO_LONG label missing (assigned arrow, non-regression)"; fi
+  rc="$(ck_rc "$FX/plain_arrow.js")"
+  [[ "$rc" -eq 1 ]] && pass "plain_arrow.js blocks (exit 1)" || fail "plain_arrow.js expected exit 1, got $rc"
 fi
 
 echo

@@ -163,6 +163,25 @@ craft_fn_bash() {
 # qualifies only when it carries an explicit function token (function/func/fn/
 # def) or an arrow `=>`, OR is a generic `name(...) {` whose leading word is NOT
 # a control-flow keyword. source: §4.2 FUNC_MAX (Martin 2008, Clean Code Ch.3).
+# CRAFT-FN-IIFE-RECURSION-FP: browser-served JS modules without a bundler are
+# commonly wrapped in an IIFE `(function () { ... })();` to create a module
+# namespace without leaking globals. The scanner is a single-pass, outermost-
+# span matcher: it has no recursion into an already-open span, so when the
+# IIFE header itself matched is_fn_header() (it carries the `function` token),
+# the ENTIRE module became one measured "function" and every internal function
+# was swallowed unmeasured, guaranteeing FUNCTION_TOO_LONG on any IIFE-wrapped
+# module over the line limit, by construction, regardless of the internal
+# functions' actual sizes (root cause, not a size problem). An IIFE wrapper is
+# a module-namespacing SCOPE, not a logic unit in the §4.2 sense — the limit
+# targets units of business logic, not lexical scoping envelopes.
+# source: §4.2 FUNC_MAX (Martin 2008, Clean Code Ch.3 — the size limit is
+# about cyclomatic/logical complexity of a unit of work, not scope nesting).
+# Fix: when a matched header is an IIFE wrapper, do NOT open a span for it;
+# skip the header line and keep scanning at top level so headers of the
+# functions DEFINED INSIDE the module are matched and measured individually
+# (existing behavior for a genuine IIFE nested inside an already-open,
+# measured function is unchanged: it stays swallowed by that outer span,
+# same as any other nested construct — CRAFT-FN-CONTROLHEADER-FP above).
 craft_fn_brace() {
   local f="$1" max="$2" flex="$3" lang="$4"
   awk -v max="$max" '
@@ -177,7 +196,23 @@ craft_fn_brace() {
       }
       return 0
     }
+    # IIFE wrapper header: after leading whitespace and an optional leading
+    # `;` (ASI defensive prefix), the line opens with one of the grouping/
+    # unary-operator tokens JS uses to force an expression context — `(`,
+    # `!`, `+`, `-`, `~` — immediately followed by either the `function`
+    # keyword (optionally `async function`) or an arrow-function header
+    # `(...) => {`. Covers: `(function () {`, `;(function() {`,
+    # `(function foo() {`, `!function() {`, `(() => {`, `((win) => {`.
+    # Does NOT match a named/assigned arrow `var f = () => {` (line starts
+    # with the identifier, not with one of the operator tokens).
+    function is_iife_header(line,   w) {
+      w=line; sub(/^[[:space:]]*;?[[:space:]]*/,"",w)
+      if (w ~ /^[(!+~-][[:space:]]*(async[[:space:]]+)?function([^A-Za-z0-9_]|$)/) return 1
+      if (w ~ /^[(!+~-].*\)[[:space:]]*=>[[:space:]]*\{/) return 1
+      return 0
+    }
     !open && is_fn_header($0) {
+      if (is_iife_header($0)) next
       sline=NR; depth=0; open=1; sname="fn@"NR
     }
     open { o=gsub(/\{/,"{"); c=gsub(/\}/,"}"); depth+=o-c; if(depth<=0 && NR>sline){ len=NR-sline; if(len>max) emit(sname,sline,len); open=0 } }
