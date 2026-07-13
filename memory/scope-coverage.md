@@ -22,6 +22,14 @@
 | `checkpoints` | `*` | `*` | Context-cap / compaction checkpoints (token-budget protocol). Any agent may checkpoint. TTL 30 days. |
 | `reviewer-prefs` | `_user`, `orchestrator` | `engineer`, `refactorer`, `code-reviewer` | Team lead's standing review preferences (CAP-2). Lead/curator-only writes so agents can't invent prefs; never overrides a coding-standards.md blocking rule. Per-lead subpath `/memories/reviewer-prefs/<lead>/`. No TTL; 50 KB/file. |
 
+## External plugin agents (owned by a slug, but no agent file in this repo)
+
+This registry is the central seed for the whole file-memory system (`tools/memory-tool.sh` resolves `../memory/scope-registry.json`), so agents shipped by *other* plugins must be declared here to be allowed to write. They have no `agents/<slug>.md` in this repo and therefore no `memory_scope:` frontmatter for the refactorer to set.
+
+| Scope | Owners | Readers | Notes |
+|---|---|---|---|
+| `cortex-viz` | `cortex-viz`, `_user` | `*` | Working memory for the `cortex-viz` visualization plugin agent. TTL 30 days; 100 KB/file. |
+
 ## Team agents — per-agent scopes (19 entries)
 
 Every team agent owns exactly one scope keyed by its slug. Subpath: `/memories/<slug>/`.

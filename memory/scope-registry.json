@@ -351,6 +351,18 @@
       ],
       "ttl_days": 30,
       "max_file_kb": 100
+    },
+    "cortex-viz": {
+      "description": "cortex-viz visualization agent's working memory.",
+      "owners": [
+        "cortex-viz",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
     }
   }
 }
