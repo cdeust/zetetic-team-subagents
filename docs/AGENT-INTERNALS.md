@@ -1,6 +1,6 @@
 # Agent file shape and internals
 
-Every agent ships as a single Markdown file with YAML frontmatter. Slim frontmatter keeps cumulative description tokens across all 117 agents under Claude Code's startup cap (~12.6k tokens, was 28k in v2.12.0). Rich routing detail lives in body sections, loaded only when the agent is invoked.
+Every agent ships as a single Markdown file with YAML frontmatter. Slim frontmatter keeps cumulative description tokens across all 118 agents under Claude Code's startup cap (~12.6k tokens, was 28k in v2.12.0). Rich routing detail lives in body sections, loaded only when the agent is invoked.
 
 ## File shape (current — v2.13.0+)
 

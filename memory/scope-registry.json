@@ -339,6 +339,18 @@
       ],
       "ttl_days": 30,
       "max_file_kb": 100
+    },
+    "git-historian": {
+      "description": "Git-history investigation state — verdicts, bisect logs, excavation notes",
+      "owners": [
+        "git-historian",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
     }
   }
 }

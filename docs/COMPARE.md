@@ -101,7 +101,7 @@ These tools are not mutually exclusive. The realistic stack often combines:
 |---|---|
 | Cursor + zetetic hooks | Inline completion in the editor; commits gated by zetetic-checker |
 | Aider + zetetic agents | Aider applies diffs; before commit, zetetic agents verify the change matches a refusal-condition policy |
-| Claude Code + zetetic | Vanilla Claude Code provides subagent orchestration; zetetic provides 117 agent definitions (in zetetic's "agent-as-reasoning-pattern" sense — see disambiguation card above) plus the commit-time gate layer |
+| Claude Code + zetetic | Vanilla Claude Code provides subagent orchestration; zetetic provides 118 agent definitions (in zetetic's "agent-as-reasoning-pattern" sense — see disambiguation card above) plus the commit-time gate layer |
 | Continue + zetetic | Continue does codebase Q&A; zetetic agents handle the reasoning when an answer requires multi-step methodology |
 
 Zetetic is built ON TOP OF Claude Code, not as an alternative. If you don't use Claude Code, zetetic doesn't run for you. The [`zetetic-checker`](../tools/zetetic-checker.sh) is one piece that runs anywhere as a standalone bash script — installable as a git pre-commit hook regardless of which AI assistant you use, but it only checks the source-citation rules (UNSOURCED keywords, MAGIC_NUMBER floats, TODO_NO_REF), not the agent reasoning layer.
