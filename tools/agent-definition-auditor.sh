@@ -25,7 +25,15 @@
 
 set -uo pipefail
 
-ROOT="${1:-/Users/cdeust/Developments/zetetic-team-subagents/agents}"
+# ROOT defaults to <repo-root>/agents, resolved relative to this script's own
+# location (not the caller's cwd) so the auditor works identically from any
+# invocation directory and on any machine/CI runner — the previous default
+# was a personal absolute path that silently matched 0 files in CI, letting
+# the whole audit (F1-F9, B1-B3, G1-G3, P1) pass vacuously.
+# source: issue #21 (agent-definition-auditor.sh never ran in CI)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="${1:-$REPO_ROOT/agents}"
 TEAM_DIR="$ROOT"
 GEN_DIR="$ROOT/genius"
 
@@ -203,6 +211,18 @@ for f in "$GEN_DIR"/*.md; do
   [[ "$(basename "$f")" == "INDEX.md" ]] && continue
   check_file "$f" "genius"
 done
+
+# An audit that audits nothing is not a passing audit — it is a silent no-op
+# masquerading as a green check (the exact failure mode reported in issue
+# #21). Fail loudly and explicitly rather than printing an empty report and
+# exiting 0.
+if [[ "$files" -eq 0 ]]; then
+  echo "ERROR: agent-definition-auditor matched 0 files under ROOT='$ROOT'" >&2
+  echo "       (TEAM_DIR=$TEAM_DIR, GEN_DIR=$GEN_DIR)" >&2
+  echo "       Silence is not success: an audit that finds nothing to audit is a failure, not a pass." >&2
+  rm -f "$BLOCKERS_FILE" "$WARNINGS_FILE"
+  exit 2
+fi
 
 echo "============================================================"
 echo "AGENT DEFINITION AUDIT  ($files files)"
