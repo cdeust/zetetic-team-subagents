@@ -16,8 +16,8 @@
 #       truncated to "\"W.", "Ronald A.", "Ursula K.", "S.R." — unroutable by
 #       spawn/routing since description is the routing criterion)
 #   B1  body has <identity> tag
-#   B2  body has Move 1 anchor
-#   B3  body has at least 3 Moves
+#   B2  body has Move 1 anchor       (exempt for scribe-kind: body has <procedure> instead)
+#   B3  body has at least 3 Moves    (exempt for scribe-kind: body has <procedure> instead)
 #   G1  genius-only: shapes field
 #   G2  genius-only: primary sources / citations
 #   G3  genius-only: <revolution> section
@@ -149,6 +149,37 @@ check_genius_extras() {
   if grep -q '<revolution>' "$f"; then G3p=$(( G3p + 1 )); else G3f=$(( G3f + 1 )); echo "WARNING $rel: G3 missing <revolution> section" >> "$WARNINGS_FILE"; warnings=$(( warnings + 1 )); fi
 }
 
+# check_move_scaffold — B2/B3: Move-anchor presence and depth, with a
+# structural scribe exemption. An agent whose body declares a <procedure>
+# scaffold instead of <canonical-moves>/"Move N" is a single-purpose,
+# budgeted scribe (e.g. memory-writer.md) by deliberate design, not a
+# reasoning agent that forgot its Moves. Detection is structural — the
+# file's own body says so via <procedure> — not a hardcoded name list;
+# this schema has no kind:/agent_type: frontmatter field to key off
+# instead. Absence of <procedure> leaves B2/B3 exactly as before, so a
+# real reasoning agent missing Move 1 still blocks. Split out of
+# check_file() to keep that function under coding-standards.md §4.2 (50
+# lines). source: issue #21 follow-up, coordinator decision 2026-07-15.
+check_move_scaffold() {
+  local f="$1" rel="$2"
+  if grep -q '<procedure>' "$f"; then
+    return # scribe-kind: B2/B3 exempt, no pass/fail tallied
+  fi
+
+  # B2 Move 1
+  if grep -qE '^\*\*Move 1' "$f"; then B2p=$(( B2p + 1 )); else B2f=$(( B2f + 1 )); echo "BLOCKER $rel: B2 missing 'Move 1' anchor" >> "$BLOCKERS_FILE"; blockers=$(( blockers + 1 )); fi
+
+  # B3 >=3 Moves
+  local mv; mv=$(grep -cE '^\*\*Move [0-9]+' "$f" || true)
+  if [[ "$mv" -ge 3 ]]; then
+    B3p=$(( B3p + 1 ))
+  else
+    B3f=$(( B3f + 1 ))
+    echo "WARNING $rel: B3 only $mv Move(s) — depth shallow" >> "$WARNINGS_FILE"
+    warnings=$(( warnings + 1 ))
+  fi
+}
+
 check_file() {
   local f="$1" kind="$2"
   local rel; rel="${f#"$ROOT"/}"
@@ -176,18 +207,7 @@ check_file() {
   # B1 identity
   if grep -q '<identity>' "$f"; then B1p=$(( B1p + 1 )); else B1f=$(( B1f + 1 )); echo "BLOCKER $rel: B1 missing <identity>" >> "$BLOCKERS_FILE"; blockers=$(( blockers + 1 )); fi
 
-  # B2 Move 1
-  if grep -qE '^\*\*Move 1' "$f"; then B2p=$(( B2p + 1 )); else B2f=$(( B2f + 1 )); echo "BLOCKER $rel: B2 missing 'Move 1' anchor" >> "$BLOCKERS_FILE"; blockers=$(( blockers + 1 )); fi
-
-  # B3 >=3 Moves
-  local mv; mv=$(grep -cE '^\*\*Move [0-9]+' "$f" || true)
-  if [[ "$mv" -ge 3 ]]; then
-    B3p=$(( B3p + 1 ))
-  else
-    B3f=$(( B3f + 1 ))
-    echo "WARNING $rel: B3 only $mv Move(s) — depth shallow" >> "$WARNINGS_FILE"
-    warnings=$(( warnings + 1 ))
-  fi
+  check_move_scaffold "$f" "$rel"
 
   [[ "$kind" == "genius" ]] && check_genius_extras "$f" "$rel"
 
