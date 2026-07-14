@@ -181,8 +181,19 @@ should_skip_file() {
   if [[ "${CRAFTSMANSHIP_CHECK_DATA:-false}" != "true" ]]; then
     [[ "$f" =~ $CRAFT_SKIP_EXT_DATA ]] && return 0
   fi
+  # Binary detection via --mime-encoding, NOT --mime-type: libmagic names
+  # source text inconsistently across versions — file-5.45 (ubuntu-24.04)
+  # types a `(function () {`-opening JS module as application/javascript
+  # while file-5.41 (macOS) says text/plain — so a `^text/` TYPE filter
+  # silently skipped real source files on Linux CI (0 findings, exit 0).
+  # ENCODING answers the actual question ("is this binary?") and is
+  # version-stable: non-text content reports exactly `binary`. A missing or
+  # failing `file` binary now means "do not skip" — a hard gate that
+  # silently skips every file is worse than occasionally scanning a binary.
+  # source: measured 2026-07-14, file-5.41 (macOS) vs file-5.45
+  # (ubuntu:24.04), zetetic-team-subagents PR #17 CI run 29297173451.
   if [[ -f "$f" ]]; then
-    file -b --mime-type "$f" 2>/dev/null | grep -q "^text/" || return 0
+    [[ "$(file -b --mime-encoding "$f" 2>/dev/null)" == "binary" ]] && return 0
   fi
   return 1
 }

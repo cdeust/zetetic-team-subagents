@@ -96,9 +96,17 @@ should_skip_file() {
   if [[ "${ZETETIC_CHECK_DATA_FORMATS:-false}" != "true" ]]; then
     [[ "$f" =~ $ZETETIC_SKIP_EXT_DEFAULT ]] && return 0
   fi
-  # Binary detection
+  # Binary detection via --mime-encoding, NOT --mime-type: libmagic TYPE
+  # names for source text vary by version (file-5.45 on ubuntu-24.04 types
+  # IIFE-opening JS as application/javascript; file-5.41 on macOS says
+  # text/plain), so a `^text/` type filter silently skipped real source on
+  # Linux CI. Encoding is version-stable: non-text reports exactly `binary`.
+  # Missing/failing `file` means "do not skip" — never silently disarm the gate.
+  # source: measured 2026-07-14, file-5.41 vs file-5.45,
+  # zetetic-team-subagents PR #17 CI run 29297173451 (same fix as
+  # craftsmanship-checker.sh should_skip_file).
   if [[ -f "$f" ]]; then
-    file -b --mime-type "$f" 2>/dev/null | grep -q "^text/" || return 0
+    [[ "$(file -b --mime-encoding "$f" 2>/dev/null)" == "binary" ]] && return 0
   fi
   return 1
 }
@@ -160,29 +168,28 @@ collect_lines_full() {
 ERRORS=0
 WARNINGS=0
 
-check_line() {
+# UNSOURCED — unsourced claims of correctness or universality. Always an error.
+#
+# Fires only inside comments / string literals. Two shapes are flagged:
+#   1. an absolute quantifier or self-evidence adverb, paired (same comment,
+#      within ~40 chars) with an evaluative word from the claim group below;
+#   2. a bare rhetorical appeal from the self-evidence group below.
+# The pairing is what turns it into a *claim about the world* rather than a
+# *description of code*. Behavioral comments are deliberately NOT flagged,
+# because the absolute word stands alone with no claim word nearby:
+#   "this hook never blocks", "permissive always exits 0", instruction prose.
+# source: measured on 2026-06-23 against a full-repo --full scan — the prior
+#   bare-absolute-word trigger produced 64 findings, all 64 false positives
+#   (behavioral comments); claim-pairing drops that to 0 while the
+#   true-positive fixture still fires. Regression fixtures live in
+#   tools/tests/zetetic-checker/fixture-behavioral-negative.py and
+#   fixture-selfevident-claim.py.
+# Known limitation (precision over recall — a commit gate must not cry wolf):
+#   claims phrased with ambiguous words are NOT caught, e.g. "always faster",
+#   "clearly the best", "never deadlocks", "clearly O(1)". A noisy gate gets
+#   bypassed; review/PR is the backstop for those. Widen only with new fixtures.
+check_unsourced() {
   local file="$1" line_num="$2" line="$3"
-
-  # UNSOURCED — unsourced claims of correctness or universality. Always an error.
-  #
-  # Fires only inside comments / string literals. Two shapes are flagged:
-  #   1. an absolute quantifier or self-evidence adverb, paired (same comment,
-  #      within ~40 chars) with an evaluative word from the claim group below;
-  #   2. a bare rhetorical appeal from the self-evidence group below.
-  # The pairing is what turns it into a *claim about the world* rather than a
-  # *description of code*. Behavioral comments are deliberately NOT flagged,
-  # because the absolute word stands alone with no claim word nearby:
-  #   "this hook never blocks", "permissive always exits 0", instruction prose.
-  # source: measured on 2026-06-23 against a full-repo --full scan — the prior
-  #   bare-absolute-word trigger produced 64 findings, all 64 false positives
-  #   (behavioral comments); claim-pairing drops that to 0 while the
-  #   true-positive fixture still fires. Regression fixtures live in
-  #   tools/tests/zetetic-checker/fixture-behavioral-negative.py and
-  #   fixture-selfevident-claim.py.
-  # Known limitation (precision over recall — a commit gate must not cry wolf):
-  #   claims phrased with ambiguous words are NOT caught, e.g. "always faster",
-  #   "clearly the best", "never deadlocks", "clearly O(1)". A noisy gate gets
-  #   bypassed; review/PR is the backstop for those. Widen only with new fixtures.
   local _u_mark='(#|//|/\*|\*|"|'"'"')'
   local _u_assert='(always|never|obviously|clearly)'
   # Claim group = words that are unambiguously quality judgments. Direction /
@@ -202,9 +209,12 @@ check_line() {
       ERRORS=$((ERRORS + 1))
     fi
   fi
+}
 
-  # MAGIC_NUMBER — floats with 3+ decimals (the canonical unsourced-literal smell).
-  # Integer tuning params (batch_size=128, epochs=50) are NOT flagged — use review + naming conventions.
+# MAGIC_NUMBER — floats with 3+ decimals (the canonical unsourced-literal smell).
+# Integer tuning params (batch_size=128, epochs=50) are NOT flagged — use review + naming conventions.
+check_magic_number() {
+  local file="$1" line_num="$2" line="$3"
   if echo "$line" | grep -qE '[^a-zA-Z_0-9."]([0-9]+\.[0-9]{3,})' 2>/dev/null; then
     if ! echo "$line" | grep -qiE 'source:|ref:|#.*from|//.*from|version|test|assert|approx|expect|tolerance|epsilon|pi|tau|e_|ln|log' 2>/dev/null; then
       local severity="warn"
@@ -217,8 +227,11 @@ check_line() {
       fi
     fi
   fi
+}
 
-  # TODO_NO_REF — TODO/FIXME/HACK without difficulty-book or issue reference.
+# TODO_NO_REF — TODO/FIXME/HACK without difficulty-book or issue reference.
+check_todo_no_ref() {
+  local file="$1" line_num="$2" line="$3"
   if echo "$line" | grep -qiE '\b(TODO|FIXME|HACK|XXX)\b' 2>/dev/null; then
     if ! echo "$line" | grep -qiE 'difficulty.book|DB#|db-entry|tracked|issue|#[0-9]|[A-Z]+-[0-9]+' 2>/dev/null; then
       local severity="warn"
@@ -231,6 +244,15 @@ check_line() {
       fi
     fi
   fi
+}
+
+# One line through every rule. Runs in the main shell so the rule functions'
+# ERRORS/WARNINGS increments are visible to the final summary.
+check_line() {
+  local file="$1" line_num="$2" line="$3"
+  check_unsourced "$file" "$line_num" "$line"
+  check_magic_number "$file" "$line_num" "$line"
+  check_todo_no_ref "$file" "$line_num" "$line"
 }
 
 # ── Project-local extension (optional) ────────────────────────────────
