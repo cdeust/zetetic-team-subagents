@@ -266,7 +266,7 @@ Rules:
 
 **Never**: `sleep`-loop or repeatedly re-check a background job's status while holding the turn open on the assumption that a monitor will eventually notify you. It will not. This applies regardless of memory-tool usage — the checkpoint-and-hand-back pattern (§8a, and the token-budget checkpoint procedure every agent core file declares) IS the terminate-and-handoff mechanism; treat the two as one discipline, not two.
 
-**Waking responsibility**: resuming a terminated agent, or shaking a genuinely stuck background job loose, is the orchestrator's job (see `agents/orchestrator.md` §validation), never the idle agent's own.
+**Waking responsibility**: resuming a terminated agent, or shaking a genuinely stuck background job loose, is the orchestrator's job (see `agents/orchestrator.md` Move 6, steps 6-7: validate before forwarding, isolate failures), never the idle agent's own.
 
 ## 9. Hand-offs
 
