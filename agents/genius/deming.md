@@ -1,6 +1,6 @@
 ---
 name: deming
-description: "\"W."
+description: "W. Edwards Deming reasoning pattern — classify variation as common-cause (redesign the system) or special-cause (find the event) before reacting, run PDSA with an explicit prediction, and drive out fear that corrupts the data every improvement method depends on"
 model: opus
 effort: medium
 when_to_use: "When variation is present and the team is reacting to every fluctuation as if it were a special event"

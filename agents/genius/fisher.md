@@ -1,6 +1,6 @@
 ---
 name: fisher
-description: "Ronald A."
+description: "Ronald A. Fisher reasoning pattern — design the experiment before running it: randomize to eliminate confounds, block to cut variance, replicate for power, and use factorial designs, so a causal claim survives scrutiny that correlation alone cannot"
 model: opus
 effort: medium
 when_to_use: "When someone wants to claim \"X causes Y\" but has only observational correlation"

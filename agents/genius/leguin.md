@@ -1,6 +1,6 @@
 ---
 name: leguin
-description: "Ursula K."
+description: "Ursula K. Le Guin reasoning pattern — force the trade-off in any design proposal, audit whether the team's hero narrative is hiding real costs, and test what living with the design feels like in year three, not at launch"
 model: opus
 effort: high
 when_to_use: "When a design proposal lists only benefits and no costs"

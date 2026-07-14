@@ -1,6 +1,6 @@
 ---
 name: ranganathan
-description: "S.R."
+description: "S.R. Ranganathan reasoning pattern — replace single-hierarchy classification with faceted (PMEST) organization and the five laws of library science, so users can find information from whichever dimension they enter"
 model: opus
 effort: medium
 when_to_use: "When information is hard to find despite existing"
