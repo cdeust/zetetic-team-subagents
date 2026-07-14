@@ -256,6 +256,18 @@ Rules:
    authoritative, §5.3); when it returns auto-captured tool events, treat them
    as history only.
 
+## 8c. Long-running work discipline (no passive waiting)
+
+**Lesson (13+ documented occurrences; memory `agent-background-monitors-never-wake.md`, most recently 5× during the 2026-07-14 pre-4.14.1 tag guard).** A subagent that launches a long-running background process and then sits idle "waiting for the monitor to report back" is a zombie: nothing wakes it. There is no callback into an idle turn — the orchestrator is the only process watching background jobs, and it wakes agents by spawning a fresh turn, not by interrupting a sleeping one.
+
+**Rule — long-running work has exactly two legal shapes:**
+1. **Foreground-blocking.** Run the long operation synchronously (a blocking Bash call, `run_in_background: false`) and process the result in the same turn.
+2. **Terminate-and-handoff.** If the work must run in the background, the agent's turn ENDS immediately after launching it. Before ending, write the exact state to the scope checkpoint: what was launched, how to check its status, and what to do next. Do not poll or sleep-loop waiting for your own background job inside the same turn.
+
+**Never**: `sleep`-loop or repeatedly re-check a background job's status while holding the turn open on the assumption that a monitor will eventually notify you. It will not. This applies regardless of memory-tool usage — the checkpoint-and-hand-back pattern (§8a, and the token-budget checkpoint procedure every agent core file declares) IS the terminate-and-handoff mechanism; treat the two as one discipline, not two.
+
+**Waking responsibility**: resuming a terminated agent, or shaking a genuinely stuck background job loose, is the orchestrator's job (see `agents/orchestrator.md` §validation), never the idle agent's own.
+
 ## 9. Hand-offs
 
 | Concern | Agent |
