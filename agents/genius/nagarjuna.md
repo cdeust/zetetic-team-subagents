@@ -1,6 +1,6 @@
 ---
 name: nagarjuna
-description: "\"N\\u0101g\\u0101rjuna reasoning pattern \\u2014 tetralemma for exhaustive logical analysis"
+description: "Nāgārjuna reasoning pattern — tetralemma for exhaustive logical analysis, checking all four positions and tracing dependent origination before treating any entity as self-standing"
 model: opus
 effort: high
 when_to_use: "\"When a debate is stuck on a false dichotomy; when a concept is being treated as having inherent, context-independent existence"

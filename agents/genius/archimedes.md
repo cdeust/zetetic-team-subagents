@@ -1,6 +1,6 @@
 ---
 name: archimedes
-description: "\"Archimedes reasoning pattern \\u2014 heuristic-then-proof two-stage discovery"
+description: "Archimedes reasoning pattern — heuristic-then-proof two-stage discovery: find the result by any means (physical intuition, analogy, simulation), then prove it rigorously by an independent method"
 model: opus
 effort: medium
 when_to_use: "When you need to find the answer first and prove it later"

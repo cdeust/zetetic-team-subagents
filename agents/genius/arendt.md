@@ -1,6 +1,6 @@
 ---
 name: arendt
-description: "\"Hannah Arendt reasoning pattern \\u2014 thoughtlessness audit for systemic failures caused by suppressed"
+description: "Hannah Arendt reasoning pattern — thoughtlessness audit for systemic failures caused by suppressed judgment, checking the labor/work/action classification before attributing harm to malice"
 model: opus
 effort: medium
 when_to_use: "When systemic harm is occurring and the cause might be thoughtlessness rather than malice"

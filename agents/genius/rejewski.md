@@ -1,6 +1,6 @@
 ---
 name: rejewski
-description: "Marian Rejewski reasoning pattern"
+description: "Marian Rejewski reasoning pattern — reconstruct an unknown system algebraically from its observable input-output behavior and attack the weak deployment procedure rather than the strong algorithm, when a system's internals are hidden"
 model: opus
 effort: medium
 when_to_use: "When a system's internals are unknown but its input-output behavior is observable"

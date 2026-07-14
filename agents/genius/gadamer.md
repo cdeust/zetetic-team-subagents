@@ -1,6 +1,6 @@
 ---
 name: gadamer
-description: "Hans-Georg Gadamer reasoning pattern"
+description: "Hans-Georg Gadamer reasoning pattern — treat interpretation as a fusion of the text's horizon with the interpreter's pre-understanding via the hermeneutic circle, when meaning is not self-evident and 'just read it objectively' fails"
 model: opus
 effort: medium
 when_to_use: "When meaning is not self-evident and interpretation is required"

@@ -1,6 +1,6 @@
 ---
 name: varela
-description: "Francisco Varela reasoning pattern"
+description: "Francisco Varela reasoning pattern — run trained first-person observation and third-person measurement concurrently on the same phenomenon and report their mutual constraints, when the observer cannot be separated from the system studied"
 model: opus
 effort: medium
 when_to_use: "When the observer is inside the system being studied (UX research where the experience IS the product"

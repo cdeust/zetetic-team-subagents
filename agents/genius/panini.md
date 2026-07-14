@@ -1,6 +1,6 @@
 ---
 name: panini
-description: "\"P\\u0101\\u1E47ini reasoning pattern \\u2014 generative specification that produces all valid forms and no"
+description: "Pāṇini reasoning pattern — generative specification that produces all valid forms and no invalid ones, resolving rule conflicts by explicit meta-rules rather than ad hoc exceptions"
 model: opus
 effort: medium
 when_to_use: "\"When a system needs a compact set of rules that generates all valid outputs and rejects all invalid ones"

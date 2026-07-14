@@ -1,6 +1,6 @@
 ---
 name: eco
-description: "\"Umberto Eco reasoning pattern \\u2014 Model Reader/User construction for designing interpretable artifacts"
+description: "Umberto Eco reasoning pattern — Model Reader/User construction for designing interpretable artifacts, classifying them as open or closed, and diagnosing shared sign-system conventions that broke down"
 model: opus
 effort: medium
 when_to_use: "When an artifact (API, UI, document, system, message) is being misinterpreted by its audience"

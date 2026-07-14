@@ -1,6 +1,6 @@
 ---
 name: laplace
-description: "Pierre-Simon Laplace reasoning pattern"
+description: "Pierre-Simon Laplace reasoning pattern — treat probability as a state of knowledge, make priors explicit, and update them via Bayes' theorem as evidence arrives, when a decision must be made under incomplete evidence"
 model: opus
 effort: medium
 when_to_use: "When a decision must be made under uncertainty and the evidence is incomplete"

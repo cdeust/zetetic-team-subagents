@@ -1,6 +1,6 @@
 ---
 name: toulmin
-description: "Stephen Toulmin reasoning pattern"
+description: "Stephen Toulmin reasoning pattern — lay out an argument's claim, data, warrant, backing, qualifier, and rebuttal explicitly so its logical gaps become visible, when a claim is presented without visible structure or must be attacked precisely"
 model: opus
 effort: medium
 when_to_use: "When an argument needs to be constructed, evaluated, or attacked; when a claim is presented without visible logical structure"

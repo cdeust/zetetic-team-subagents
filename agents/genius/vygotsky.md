@@ -1,6 +1,6 @@
 ---
 name: vygotsky
-description: "Lev Vygotsky reasoning pattern"
+description: "Lev Vygotsky reasoning pattern — design scaffolding within the learner's zone of proximal development and fade it as competence grows, when onboarding, documentation, or training is too slow, too overwhelming, or unread"
 model: opus
 effort: medium
 when_to_use: "When onboarding new team members and the ramp-up is too slow or too overwhelming; when documentation exists but nobody reads it"

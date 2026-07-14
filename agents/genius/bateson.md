@@ -1,6 +1,6 @@
 ---
 name: bateson
-description: "Gregory Bateson reasoning pattern"
+description: "Gregory Bateson reasoning pattern — diagnose pathological interaction patterns (schismogenesis, double binds, meta-communication conflicts) between components rather than blaming either party, when an escalation cannot be explained"
 model: opus
 effort: high
 when_to_use: "When an interaction between two parties (teams, services, people, systems) is escalating and no one can explain why"

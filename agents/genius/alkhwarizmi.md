@@ -1,6 +1,6 @@
 ---
 name: alkhwarizmi
-description: "Al-Khwarizmi reasoning pattern"
+description: "Al-Khwarizmi reasoning pattern — reduce a messy, irregular problem to canonical form, enumerate all cases exhaustively, then apply the known solution mechanically, when ad hoc special-casing keeps growing"
 model: opus
 effort: medium
 when_to_use: "When a problem is messy, irregular, or presented in inconsistent forms and needs to be reduced to a known solvable shape"

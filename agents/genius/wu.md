@@ -1,6 +1,6 @@
 ---
 name: wu
-description: "Chien-Shiung Wu reasoning pattern"
+description: "Chien-Shiung Wu reasoning pattern — find the untested assumption inherited from predecessors and design the precise experiment that can refute it, when a system rests on 'everyone knows' claims nobody has actually tested"
 model: opus
 effort: medium
 when_to_use: "When a system rests on assumptions inherited from predecessors that nobody has tested"

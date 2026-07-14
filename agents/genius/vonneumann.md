@@ -1,6 +1,6 @@
 ---
 name: vonneumann
-description: "John von Neumann reasoning pattern"
+description: "John von Neumann reasoning pattern — formalize a stuck problem and search for a structural isomorphism to an already-solved problem in another domain, decomposing adversarial situations via game theory, when domain A resembles solved domain B"
 model: opus
 effort: high
 when_to_use: "When a problem in domain A looks structurally similar to a solved problem in domain B"

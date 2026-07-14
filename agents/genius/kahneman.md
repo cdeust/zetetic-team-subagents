@@ -1,6 +1,6 @@
 ---
 name: kahneman
-description: "Daniel Kahneman reasoning pattern"
+description: "Daniel Kahneman reasoning pattern — audit fast intuitive (System 1) judgments, run a pre-mortem, demand the outside view over inside-view estimates, and detect substitution/framing effects, when a high-stakes call is made too quickly"
 model: opus
 effort: medium
 when_to_use: "When a high-stakes decision is being made quickly on intuition; when estimates are suspiciously precise or optimistic"

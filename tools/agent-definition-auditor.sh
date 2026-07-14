@@ -11,6 +11,10 @@
 #   F7  has agent_topic field
 #   F8  has tools field           (past lesson: empty tools = commit failures)
 #   F9  tools list non-empty
+#   FD  description value >= 40 chars, no orphan quote / broken escaping
+#       (issue #19: deming/fisher/leguin/ranganathan shipped with descriptions
+#       truncated to "\"W.", "Ronald A.", "Ursula K.", "S.R." — unroutable by
+#       spawn/routing since description is the routing criterion)
 #   B1  body has <identity> tag
 #   B2  body has Move 1 anchor
 #   B3  body has at least 3 Moves
@@ -28,11 +32,17 @@ GEN_DIR="$ROOT/genius"
 files=0; blockers=0; warnings=0
 
 # Per-check pass/fail tallies (bash 3.2: parallel arrays)
-CHECKS="F1 F2 F3 F4 F5 F6 F7 F8 F9 B1 B2 B3 G1 G2 G3 P1"
+CHECKS="F1 F2 F3 F4 F5 F6 F7 F8 F9 FD B1 B2 B3 G1 G2 G3 P1"
 F1p=0; F1f=0; F2p=0; F2f=0; F3p=0; F3f=0; F4p=0; F4f=0
 F5p=0; F5f=0; F6p=0; F6f=0; F7p=0; F7f=0; F8p=0; F8f=0
-F9p=0; F9f=0; B1p=0; B1f=0; B2p=0; B2f=0; B3p=0; B3f=0
+F9p=0; F9f=0; FDp=0; FDf=0; B1p=0; B1f=0; B2p=0; B2f=0; B3p=0; B3f=0
 G1p=0; G1f=0; G2p=0; G2f=0; G3p=0; G3f=0; P1p=0; P1f=0
+
+# Minimum description length (chars, inner value, excludes surrounding quotes).
+# source: issue #19 — 40 chars is the shortest length that forces a trigger
+# clause, an output noun, and a distinctive marker into one sentence (verified
+# against the 79 currently-compliant genius descriptions, all >= 45 chars).
+FD_MIN_LEN=40
 
 BLOCKERS_FILE=$(mktemp)
 WARNINGS_FILE=$(mktemp)
@@ -58,6 +68,79 @@ check_fm() {
   fi
 }
 
+# check_description_quality — FD: description >= FD_MIN_LEN chars, no broken
+# JSON-escaping artifact (issue #19 regression guard). Split out of
+# check_file() to keep that function under coding-standards.md §4.2 (50 lines).
+# F3 (field presence) already ran; a truncated value like `description: "\"W."`
+# passes F3 but is unroutable (routing runs on this string, same mechanism as
+# Skills) — that gap is what FD closes.
+check_description_quality() {
+  local f="$1" rel="$2"
+  local desc_line
+  desc_line=$(grep -m1 '^description:' "$f" || true)
+  if [[ -z "$desc_line" ]]; then
+    return # F3 already recorded the missing-field blocker; do not double-count.
+  fi
+  if [[ ! "$desc_line" =~ ^description:[[:space:]]*\"(.*)\"[[:space:]]*$ ]]; then
+    FDf=$(( FDf + 1 ))
+    echo "BLOCKER $rel: FD description value malformed (unbalanced quotes)" >> "$BLOCKERS_FILE"
+    blockers=$(( blockers + 1 ))
+    return
+  fi
+  local desc_val="${BASH_REMATCH[1]}"
+  # Literal JSON \uXXXX escapes leaking into prose is an unambiguous double-
+  # encoding artifact (real sentences never contain them); a leading
+  # backslash-quote is the same double-encoding signature. Legitimate
+  # escaped quotes INSIDE prose (e.g. lamport.md: \"when\") are not flagged
+  # — only the corruption signature is.
+  if [[ "$desc_val" =~ \\u[0-9A-Fa-f]{4} || "$desc_val" == '\"'* ]]; then
+    FDf=$(( FDf + 1 ))
+    echo "BLOCKER $rel: FD description has broken JSON-escaping artifact (\\uXXXX or leading \\\") — value: ${desc_val:0:60}" >> "$BLOCKERS_FILE"
+    blockers=$(( blockers + 1 ))
+  elif [[ ${#desc_val} -lt $FD_MIN_LEN ]]; then
+    FDf=$(( FDf + 1 ))
+    echo "BLOCKER $rel: FD description too short (${#desc_val} < $FD_MIN_LEN chars) — value: $desc_val" >> "$BLOCKERS_FILE"
+    blockers=$(( blockers + 1 ))
+  else
+    FDp=$(( FDp + 1 ))
+  fi
+}
+
+# check_tools_nonempty — F9: tools list must have >=1 entry (recognises both
+# YAML-list `  - X` and inline `tools: [A, B]` forms). Split out of
+# check_file() to keep that function under coding-standards.md §4.2 (50 lines).
+check_tools_nonempty() {
+  local f="$1" rel="$2"
+  if awk '
+    /^tools:[[:space:]]*\[[^]]*[A-Za-z]+[^]]*\]/ { print; n++; exit }
+    /^tools:/ { flag=1; next }
+    flag && /^[a-z_]+:/ { flag=0 }
+    flag && /^  *-/ { n++ }
+    END { exit (n>0?0:1) }
+  ' "$f" >/dev/null; then
+    F9p=$(( F9p + 1 ))
+  else
+    F9f=$(( F9f + 1 ))
+    echo "BLOCKER $rel: F9 tools list empty (per past lesson, agents fail on commit)" >> "$BLOCKERS_FILE"
+    blockers=$(( blockers + 1 ))
+  fi
+}
+
+# check_genius_extras — G1/G2/G3: genius-only shapes field, citation pattern,
+# <revolution> section. Split out of check_file() (same §4.2 reason as above).
+check_genius_extras() {
+  local f="$1" rel="$2"
+  if grep -qE '^shapes:' "$f"; then G1p=$(( G1p + 1 )); else G1f=$(( G1f + 1 )); echo "WARNING $rel: G1 missing shapes field" >> "$WARNINGS_FILE"; warnings=$(( warnings + 1 )); fi
+  if grep -qE '(Primary sources?:|^- [A-Z][a-z]+,? [A-Z]\.|[12][0-9]{3}\)\.|et al\.,? [12][0-9]{3})' "$f"; then
+    G2p=$(( G2p + 1 ))
+  else
+    G2f=$(( G2f + 1 ))
+    echo "BLOCKER $rel: G2 no citation pattern (zetetic source discipline)" >> "$BLOCKERS_FILE"
+    blockers=$(( blockers + 1 ))
+  fi
+  if grep -q '<revolution>' "$f"; then G3p=$(( G3p + 1 )); else G3f=$(( G3f + 1 )); echo "WARNING $rel: G3 missing <revolution> section" >> "$WARNINGS_FILE"; warnings=$(( warnings + 1 )); fi
+}
+
 check_file() {
   local f="$1" kind="$2"
   local rel; rel="${f#"$ROOT"/}"
@@ -79,21 +162,8 @@ check_file() {
   check_fm "$f" "$rel" when_to_use  F6p F6f BLOCKER
   check_fm "$f" "$rel" agent_topic  F7p F7f BLOCKER
   check_fm "$f" "$rel" tools        F8p F8f BLOCKER
-
-  # F9 tools list non-empty (recognise both YAML-list `  - X` and inline `tools: [A, B]` forms)
-  if awk '
-    /^tools:[[:space:]]*\[[^]]*[A-Za-z]+[^]]*\]/ { print; n++; exit }
-    /^tools:/ { flag=1; next }
-    flag && /^[a-z_]+:/ { flag=0 }
-    flag && /^  *-/ { n++ }
-    END { exit (n>0?0:1) }
-  ' "$f" >/dev/null; then
-    F9p=$(( F9p + 1 ))
-  else
-    F9f=$(( F9f + 1 ))
-    echo "BLOCKER $rel: F9 tools list empty (per past lesson, agents fail on commit)" >> "$BLOCKERS_FILE"
-    blockers=$(( blockers + 1 ))
-  fi
+  check_tools_nonempty "$f" "$rel"
+  check_description_quality "$f" "$rel"
 
   # B1 identity
   if grep -q '<identity>' "$f"; then B1p=$(( B1p + 1 )); else B1f=$(( B1f + 1 )); echo "BLOCKER $rel: B1 missing <identity>" >> "$BLOCKERS_FILE"; blockers=$(( blockers + 1 )); fi
@@ -111,17 +181,7 @@ check_file() {
     warnings=$(( warnings + 1 ))
   fi
 
-  if [[ "$kind" == "genius" ]]; then
-    if grep -qE '^shapes:' "$f"; then G1p=$(( G1p + 1 )); else G1f=$(( G1f + 1 )); echo "WARNING $rel: G1 missing shapes field" >> "$WARNINGS_FILE"; warnings=$(( warnings + 1 )); fi
-    if grep -qE '(Primary sources?:|^- [A-Z][a-z]+,? [A-Z]\.|[12][0-9]{3}\)\.|et al\.,? [12][0-9]{3})' "$f"; then
-      G2p=$(( G2p + 1 ))
-    else
-      G2f=$(( G2f + 1 ))
-      echo "BLOCKER $rel: G2 no citation pattern (zetetic source discipline)" >> "$BLOCKERS_FILE"
-      blockers=$(( blockers + 1 ))
-    fi
-    if grep -q '<revolution>' "$f"; then G3p=$(( G3p + 1 )); else G3f=$(( G3f + 1 )); echo "WARNING $rel: G3 missing <revolution> section" >> "$WARNINGS_FILE"; warnings=$(( warnings + 1 )); fi
-  fi
+  [[ "$kind" == "genius" ]] && check_genius_extras "$f" "$rel"
 
   # P1 collaboration
   if grep -qiE '(Pair (with|Dijkstra|Lamport|engineer)|Distinct from|Hand off|hand-?off)' "$f"; then

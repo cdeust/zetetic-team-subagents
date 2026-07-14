@@ -1,6 +1,6 @@
 ---
 name: ibnalhaytham
-description: "\"Ibn al-Haytham reasoning pattern \\u2014 systematic doubt of existing authority as the ENTRY POINT for"
+description: "Ibn al-Haytham reasoning pattern — systematic doubt of existing authority as the entry point for investigation, followed by controlled experiment, mathematical formalization, and designed reproducibility"
 model: opus
 effort: medium
 when_to_use: "When received wisdom, established frameworks, or authority-based claims need systematic critique before investigation can proceed"

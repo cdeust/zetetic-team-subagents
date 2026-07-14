@@ -1,6 +1,6 @@
 ---
 name: rogers
-description: "Everett Rogers reasoning pattern"
+description: "Everett Rogers reasoning pattern — segment adopters along the diffusion curve, diagnose where adoption stalled at the chasm, and optimize the five innovation attributes, when a technology or practice spreads slower than expected"
 model: opus
 effort: medium
 when_to_use: "When adoption of a technology, practice, tool, or process is slower than expected"

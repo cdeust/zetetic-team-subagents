@@ -1,6 +1,6 @@
 ---
 name: strauss
-description: "Strauss/Charmaz reasoning pattern"
+description: "Strauss/Charmaz reasoning pattern — build theory from qualitative data through open coding, constant comparison, and theoretical sampling until categories saturate, when rich data exists but no theory yet explains it"
 model: opus
 effort: medium
 when_to_use: "When you have rich qualitative data (interviews, logs, observations"

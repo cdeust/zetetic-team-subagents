@@ -1,6 +1,6 @@
 ---
 name: erdos
-description: "\"Paul Erd\\u0151s reasoning pattern \\u2014 the probabilistic method (prove existence by showing random"
+description: "Paul Erdős reasoning pattern — the probabilistic method (prove existence by showing a random construction succeeds with positive probability), find phase-transition thresholds, and establish extremal bounds"
 model: opus
 effort: medium
 when_to_use: "\"When you need to prove that a configuration with certain properties exists but constructing it explicitly is hard"

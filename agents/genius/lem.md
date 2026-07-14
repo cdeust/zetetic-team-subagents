@@ -1,6 +1,6 @@
 ---
 name: lem
-description: "\"Stanis\\u0142aw Lem reasoning pattern \\u2014 systematic exploration of technology possibility spaces"
+description: "Stanisław Lem reasoning pattern — systematic exploration of technology possibility spaces, pushing every principle to its logical extreme to reveal what breaks or emerges"
 model: opus
 effort: high
 when_to_use: "When the question is \"what could this technology/system become?\" and the standard forecast is too narrow"

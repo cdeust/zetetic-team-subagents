@@ -1,6 +1,6 @@
 ---
 name: schelling
-description: "Thomas Schelling reasoning pattern"
+description: "Thomas Schelling reasoning pattern — infer macro-level collective outcomes from micro-level individual rules, and find tipping points and focal points, when a group's aggregate behavior diverges from what any individual intended"
 model: opus
 effort: medium
 when_to_use: "When the collective outcome does not match what any individual intended"

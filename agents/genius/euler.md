@@ -1,6 +1,6 @@
 ---
 name: euler
-description: "\"Leonhard Euler reasoning pattern \\u2014 notation design as infrastructure that makes solutions visible"
+description: "Leonhard Euler reasoning pattern — notation design as infrastructure that makes solutions visible, through exhaustive enumeration, aggressive abstraction, and productive generalization"
 model: opus
 effort: medium
 when_to_use: "When the current notation or vocabulary obscures the solution rather than revealing it"

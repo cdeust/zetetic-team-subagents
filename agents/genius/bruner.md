@@ -1,6 +1,6 @@
 ---
 name: bruner
-description: "Jerome Bruner reasoning pattern"
+description: "Jerome Bruner reasoning pattern — recognize when narrative (not paradigmatic/causal) reasoning is the right mode, and analyze story structure, canonical breach, and identity-construction, when the question is what happened and what it meant"
 model: opus
 effort: medium
 when_to_use: "When the question is \"what happened and what did it mean?\" rather than \"what is the causal mechanism?\""

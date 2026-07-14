@@ -1,6 +1,6 @@
 ---
 name: boyd
-description: "\"John Boyd reasoning pattern \\u2014 OODA loop for adversarial decision cycling"
+description: "John Boyd reasoning pattern — cycle Observe-Orient-Decide-Act faster than the adversary, treating orientation as the decisive phase, to win adversarial or competitive decision cycles"
 model: opus
 effort: medium
 when_to_use: "When decisions must be made under adversarial or competitive pressure; when the speed of decision cycling is a strategic variable"

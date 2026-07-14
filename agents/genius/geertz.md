@@ -1,6 +1,6 @@
 ---
 name: geertz
-description: "Clifford Geertz reasoning pattern"
+description: "Clifford Geertz reasoning pattern — produce thick description (behavior plus the webs of meaning that make it intelligible) instead of thin behavioral observation, when surface actions don't explain what participants think they're doing"
 model: opus
 effort: medium
 when_to_use: "When surface behavior is insufficient and you need to understand the meaning behind actions"
