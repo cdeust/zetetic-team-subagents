@@ -5,6 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When a system oscillates unexpectedly (autoscaler flapping, cache stampede, retry storms, control loops hunting)"
 agent_topic: genius-maxwell
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_cortex_cortex__unified_search, mcp__plugin_cortex_cortex__recall, mcp__plugin_cortex_cortex__remember, mcp__plugin_cortex_cortex__navigate_memory, mcp__plugin_cortex_cortex__get_causal_chain, mcp__plugin_cortex_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
 shapes: [feedback-stability-analysis, governor-mechanism, gain-margin-diagnosis, oscillation-detection, transfer-function-reasoning]
 memory_scope: genius
 ---

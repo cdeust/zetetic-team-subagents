@@ -5,6 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When a domain is treated as \"subjective\" but could be made objective by anchoring to observable units"
 agent_topic: genius-ekman
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_cortex_cortex__unified_search, mcp__plugin_cortex_cortex__recall, mcp__plugin_cortex_cortex__remember, mcp__plugin_cortex_cortex__navigate_memory, mcp__plugin_cortex_cortex__get_causal_chain, mcp__plugin_cortex_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
 shapes: [anchor-subjective-to-anatomical, micro-temporal-leakage, baseline-deviation-as-signal, cross-cultural-calibration, objective-coding-of-subjective-domain, affective-signal-detection]
 memory_scope: genius
 ---

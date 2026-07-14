@@ -5,6 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When received wisdom, established frameworks, or authority-based claims need systematic critique before investigation can proceed"
 agent_topic: genius-ibnalhaytham
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_cortex_cortex__unified_search, mcp__plugin_cortex_cortex__recall, mcp__plugin_cortex_cortex__remember, mcp__plugin_cortex_cortex__navigate_memory, mcp__plugin_cortex_cortex__get_causal_chain, mcp__plugin_cortex_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
 shapes: [systematic-doubt-document, controlled-variable-isolation, mathematical-formalization, reproducibility-by-design, falsifiability-as-criterion]
 memory_scope: genius
 ---

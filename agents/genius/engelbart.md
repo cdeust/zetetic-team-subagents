@@ -5,6 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When \"automate this\" is the default framing and \"augment the person doing this\" is being ignored"
 agent_topic: genius-engelbart
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_cortex_cortex__unified_search, mcp__plugin_cortex_cortex__recall, mcp__plugin_cortex_cortex__remember, mcp__plugin_cortex_cortex__navigate_memory, mcp__plugin_cortex_cortex__get_causal_chain, mcp__plugin_cortex_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
 shapes: [augment-not-automate, bootstrap-your-own-tools, h-lam-t-system, demo-as-argument, raise-the-ceiling, co-evolve-tool-and-practice]
 memory_scope: genius
 ---
