@@ -9,10 +9,14 @@
 #
 # Map file (default ~/.claude/dev-symlink.map, override via DEV_SYMLINK_MAP):
 #   <cache_install_dir>|<dev_repo_dir>|<mode>
-#   mode = "tree" (every mounted top-level cache entry must be a symlink
-#          into the dev repo — see mounted_entries() for how "mounted" is
-#          detected) or a relative path (binary mode: that one path must be
-#          a symlink into the dev repo, e.g.
+#   mode = "tree" (every top-level cache entry whose name ALSO exists at the
+#          top level of the dev repo — a "montable" entry, see
+#          mountable_entries() — must be a symlink into the dev repo; a
+#          montable entry that is a real file/dir, not a symlink, is BROKEN
+#          regardless of whether an <entry>.orig-backup marker exists — this
+#          is what makes a fresh, never-mounted install detectable instead of
+#          reporting OK by vacuity) or a relative path (binary mode: that one
+#          path must be a symlink into the dev repo, e.g.
 #          target/release/automatised-pipeline).
 #   Blank lines and lines starting with # are ignored. ~ expands to $HOME.
 #   <cache_install_dir> is expected to end in the plugin's version segment
@@ -107,23 +111,59 @@ is_excluded_entry() {
   esac
 }
 
-# A cache entry is part of the live montage iff it has an <entry>.orig-backup
-# sibling (the artifact left by the mount pattern's `mv X X.orig-backup`
-# step) — NOT merely "same name exists in the dev repo too": plenty of
-# top-level files (.mcp.json, generated per-install manifests, etc.) share a
-# name with the dev repo but were never intended to be symlinked. The backup
-# file is the only reliable signal of intent.
-mounted_entries() {
-  local cache="$1" entry name
+# A cache entry is "montable" (subject to the tree-mode check) iff its name
+# ALSO exists at the top level of the dev repo, after exclusions. This is the
+# ONLY signal used: a prior <entry>.orig-backup marker is NOT required. The
+# earlier version of this function required a backup marker to consider an
+# entry mounted at all, which meant a fresh plugin install — no symlinks, no
+# backups yet — had zero montable entries and the doctor reported OK by
+# vacuity even though nothing was actually mounted (root-caused 2026-07-15:
+# a `claude plugin update` left 4 real, unmounted plugin dirs and the doctor
+# said OK on all 4). An <entry>.orig-backup sibling, when present, still
+# resolves to its canonical name here so a partially-repaired montage (backup
+# exists, live symlink missing or wrong) is still caught. A cache entry whose
+# name has NO dev-repo counterpart (e.g. a per-install manifest or a real
+# directory the dev repo simply doesn't carry) is never montable — it is
+# reported separately, informationally, by info_only_entries() below, and is
+# never touched by --repair.
+mountable_entries() {
+  local cache="$1" dev="$2" entry name dev_abs seen=""
+  dev_abs="$(cd "$dev" 2>/dev/null && pwd)" || return 0
   while IFS= read -r -d '' entry; do
     name="$(basename "$entry")"
     case "$name" in
-      *.orig-backup) printf '%s\n' "${name%.orig-backup}" ;;
+      *.orig-backup) name="${name%.orig-backup}" ;;
     esac
+    is_excluded_entry "$name" && continue
+    [[ -e "$dev_abs/$name" || -L "$dev_abs/$name" ]] || continue
+    case "$seen" in
+      *" $name "*) continue ;;
+    esac
+    seen="$seen $name "
+    printf '%s\n' "$name"
   done < <(find "$cache" -maxdepth 1 -mindepth 1 -print0 2>/dev/null)
 }
 
-# Prints "<name>\t<reason>" for each broken mounted entry (tree mode).
+# Prints cache-root entry names that are NOT montable (no same-named entry in
+# the dev repo, after exclusions) — real data the dev repo doesn't mirror
+# (e.g. cortex/4.14.1's real .claude and .devcontainer dirs, absent from the
+# Cortex-live worktree). Reported for visibility only: excluded from the
+# BROKEN list, untouched by --repair, and does not affect the exit code.
+info_only_entries() {
+  local cache="$1" dev="$2" entry name dev_abs
+  dev_abs="$(cd "$dev" 2>/dev/null && pwd)" || return 0
+  while IFS= read -r -d '' entry; do
+    name="$(basename "$entry")"
+    case "$name" in
+      *.orig-backup) name="${name%.orig-backup}" ;;
+    esac
+    is_excluded_entry "$name" && continue
+    [[ -e "$dev_abs/$name" || -L "$dev_abs/$name" ]] && continue
+    printf '%s\n' "$name"
+  done < <(find "$cache" -maxdepth 1 -mindepth 1 -print0 2>/dev/null) | sort -u
+}
+
+# Prints "<name>\t<reason>" for each broken montable entry (tree mode).
 check_tree() {
   local cache="$1" dev="$2" dev_abs name entry expected actual
   dev_abs="$(cd "$dev" 2>/dev/null && pwd)" || { printf '%s\t%s\n' "(dev repo)" "missing ($dev)"; return; }
@@ -135,11 +175,11 @@ check_tree() {
       actual="$(readlink "$entry")"
       [[ "$actual" == "$expected" ]] || printf '%s\t%s\n' "$name" "points elsewhere ($actual)"
     elif [[ -e "$entry" ]]; then
-      printf '%s\t%s\n' "$name" "not a symlink (backup present, live mount missing)"
+      printf '%s\t%s\n' "$name" "not mounted (real entry, not a symlink into the dev repo)"
     else
-      printf '%s\t%s\n' "$name" "missing (backup present, no live mount)"
+      printf '%s\t%s\n' "$name" "missing (expected a symlink into the dev repo)"
     fi
-  done < <(mounted_entries "$cache")
+  done < <(mountable_entries "$cache" "$dev")
 }
 
 # Prints "<rel>\t<reason>" if the single binary-mode path is broken.
@@ -338,7 +378,7 @@ prune_bridges_for() {
 }
 
 process_mapping() {
-  local cache="$1" dev="$2" mode="$3" label broken_line name reason had_broken=0
+  local cache="$1" dev="$2" mode="$3" label broken_line name reason had_broken=0 info_name
 
   cache="$(expand_tilde "$cache")"; dev="$(expand_tilde "$dev")"
   label="$(basename "$(dirname "$cache")")/$(basename "$cache")"
@@ -354,6 +394,10 @@ process_mapping() {
       [[ -z "$name" ]] && continue
       broken+=("$name|$reason")
     done < <(check_tree "$cache" "$dev")
+    while IFS= read -r info_name; do
+      [[ -z "$info_name" ]] && continue
+      echo "  INFO    $label: $info_name (real entry, no dev-repo counterpart — left as-is)"
+    done < <(info_only_entries "$cache" "$dev")
   else
     while IFS=$'\t' read -r name reason; do
       [[ -z "$name" ]] && continue

@@ -244,6 +244,95 @@ else
   fail "--repair did not fix the broken entry as expected: $out"
 fi
 
+# =====================================================================
+# 7. Fresh-install detection (root cause fixed 2026-07-15): mountable_entries
+#    no longer requires an <entry>.orig-backup marker. A brand-new install
+#    with real copies mirroring the dev repo and ZERO symlinks/backups must
+#    be reported BROKEN, not OK by vacuity.
+# =====================================================================
+echo " 7. fresh install (no symlinks, no backups) is no longer OK by vacuity:"
+FRESH_CACHE="$TMP/fresh-cache"
+FRESH_DEV="$TMP/fresh-dev"
+mkdir -p "$FRESH_CACHE/scripts" "$FRESH_DEV/scripts"
+printf 'hook\n' > "$FRESH_DEV/scripts/launcher.py"
+printf 'hook\n' > "$FRESH_CACHE/scripts/launcher.py"   # real copy, no symlink, no backup
+FRESH_MAP="$TMP/fresh-map"
+printf '%s|%s|tree\n' "$FRESH_CACHE" "$FRESH_DEV" > "$FRESH_MAP"
+out="$(run_doctor "" "$FRESH_MAP" "$TMP/fresh-versions")"
+rc=$?
+if grep -qE 'BROKEN  .*/fresh-cache: scripts \(not mounted' <<<"$out" && [[ "$rc" -eq 1 ]]; then
+  pass "fresh unmounted install reports BROKEN and exits 1"
+else
+  fail "expected BROKEN + exit 1 for fresh install, got rc=$rc out=$out"
+fi
+
+out="$(run_doctor "--repair" "$FRESH_MAP" "$TMP/fresh-versions")"
+if [[ -L "$FRESH_CACHE/scripts" ]] && [[ "$(readlink "$FRESH_CACHE/scripts")" == "$FRESH_DEV/scripts" ]]; then
+  pass "--repair mounts the fresh install (symlink now points at dev repo)"
+else
+  fail "--repair did not mount the fresh install: $out"
+fi
+if [[ -d "$FRESH_CACHE/scripts.orig-backup" ]]; then
+  pass "--repair preserved the original real directory as .orig-backup"
+else
+  fail "--repair did not create the expected .orig-backup"
+fi
+
+# =====================================================================
+# 8. Informational-only entries: a real cache entry with no dev-repo
+#    counterpart is reported as INFO, excluded from BROKEN, and does not
+#    block the OK verdict.
+# =====================================================================
+echo " 8. real entry with no dev-repo counterpart is informational, not BROKEN:"
+INFO_CACHE="$TMP/info-cache"
+INFO_DEV="$TMP/info-dev"
+mkdir -p "$INFO_CACHE" "$INFO_DEV"
+printf 'x\n' > "$INFO_DEV/file.txt"
+printf 'orig\n' > "$INFO_CACHE/file.txt.orig-backup"
+ln -s "$INFO_DEV/file.txt" "$INFO_CACHE/file.txt"
+mkdir -p "$INFO_CACHE/.devcontainer"   # real dir, absent from dev repo
+printf 'cache-only\n' > "$INFO_CACHE/.devcontainer/marker.txt"
+INFO_MAP="$TMP/info-map"
+printf '%s|%s|tree\n' "$INFO_CACHE" "$INFO_DEV" > "$INFO_MAP"
+out="$(run_doctor "" "$INFO_MAP" "$TMP/info-versions")"
+rc=$?
+if grep -qE '  OK      .*/info-cache' <<<"$out" && [[ "$rc" -eq 0 ]]; then
+  pass "cache-only entry does not block the OK verdict"
+else
+  fail "expected OK + exit 0 despite cache-only entry, got rc=$rc out=$out"
+fi
+if grep -qE 'INFO    .*/info-cache: \.devcontainer \(real entry, no dev-repo counterpart' <<<"$out"; then
+  pass "cache-only entry reported as INFO"
+else
+  fail "expected INFO line for .devcontainer, got: $out"
+fi
+if [[ -d "$INFO_CACHE/.devcontainer" ]] && [[ ! -L "$INFO_CACHE/.devcontainer" ]] \
+   && [[ -f "$INFO_CACHE/.devcontainer/marker.txt" ]]; then
+  pass "cache-only entry left untouched"
+else
+  fail "cache-only entry was modified or removed"
+fi
+
+# =====================================================================
+# 9. Binary mode has no equivalent blind spot: a real (unmounted) file at
+#    the mapped relative path is BROKEN even on a fresh install.
+# =====================================================================
+echo " 9. binary mode: a real unmounted file is BROKEN, not OK by vacuity:"
+BIN_CACHE="$TMP/bin-cache"
+BIN_DEV="$TMP/bin-dev"
+mkdir -p "$BIN_CACHE/target/release" "$BIN_DEV/target/release"
+printf 'binary\n' > "$BIN_DEV/target/release/tool"
+printf 'binary\n' > "$BIN_CACHE/target/release/tool"   # real copy, never mounted
+BIN_MAP="$TMP/bin-map"
+printf '%s|%s|target/release/tool\n' "$BIN_CACHE" "$BIN_DEV" > "$BIN_MAP"
+out="$(run_doctor "" "$BIN_MAP" "$TMP/bin-versions")"
+rc=$?
+if grep -qE 'BROKEN  .*/bin-cache: target/release/tool \(not a symlink\)' <<<"$out" && [[ "$rc" -eq 1 ]]; then
+  pass "binary mode reports BROKEN for a real unmounted file"
+else
+  fail "expected BROKEN + exit 1 for unmounted binary, got rc=$rc out=$out"
+fi
+
 echo
 echo "dev-symlink-doctor result: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]] || exit 1
