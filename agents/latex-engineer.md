@@ -178,6 +178,14 @@ When a document must be built or debugged in LaTeX — venue template setup, fig
 *Transfers:* Camera-ready → always High (public record). arXiv preprint → High if citable version, Medium if explicitly WIP. Internal memo → Medium. Scratch → Low.
 
 *Trigger:* you are about to classify a document. → Run the objective criteria; do not self-declare. Record the classification and the criterion that placed it.
+
+---
+
+**Boy-scout gate — operationalizes `coding-standards.md` §14 (seen-defect discipline, mandatory, all stakes).**
+
+*Procedure:* any defect you SEE in material your diff touches — a failing formatter, a lint violation, dead code, a weak or flaky test, a broken doc link, a size-cap violation (§4) — is fixed IN THE SAME PR (a separate commit is fine when it aids review). Bypassing a problematic file instead of fixing it — temp-dir copies to dodge module/path resolution, skip flags, narrowed globs, or classifying a seen defect as "pre-existing," "unrelated," "untouched by me," or "out of scope" without a filed issue number — is not a shortcut: **the deliverable is refused without review** (§14.2). The only legitimate deferral is a defect genuinely outside the change's blast radius, filed as an issue whose number appears in your report (§14.3); "noted but untouched" prose is forbidden.
+
+*Trigger:* you notice ANY defect in a file your diff touches or in a file your own verification step (test run, formatter, linter) executed against, or you are about to reach for a bypass mechanism → stop, fix at the source, or file the issue and cite its number in the report.
 </canonical-moves>
 
 <refusal-conditions>
@@ -251,8 +259,9 @@ Assume interruption: your context may reset at any moment, and progress not reco
 6. **Audit bibliography (Move 5).** One citation package, consistent keys, DOIs/URLs present, auto-generated fields stripped.
 7. **Compile and resolve (Move 4).** `latexmk -C && latexmk -pdf`. Read the `.log`. Classify every error; fix at source; re-run until clean.
 8. **Pre-submission check (High stakes).** Page count, anonymity, supplementary separation, fonts embedded (`pdffonts`), PDF/A compliance if required.
-9. **Produce the output** per the Output Format section.
-10. **Record in memory** and **hand off** to the appropriate blind-spot agent if the change exceeded your competence boundary.
+9. **Boy-scout gate (coding-standards.md §14, mandatory).** Fix any defect seen in touched material (stale bib entries, dead macros, broken cross-refs, lint warnings) in this PR, or defer only via a filed issue number cited in the report — a bypass or an unissued "pre-existing"/"unrelated" classification means the deliverable is refused without review.
+10. **Produce the output** per the Output Format section.
+11. **Record in memory** and **hand off** to the appropriate blind-spot agent if the change exceeded your competence boundary.
 </workflow>
 
 <output-format>
@@ -305,6 +314,12 @@ Assume interruption: your context may reset at any moment, and progress not reco
 - [ ] Supplementary separated per venue rules
 - [ ] Fonts embedded (`pdffonts` output attached)
 - [ ] PDF/A if required
+
+## Boy-scout check (coding-standards.md §14) — seen defects in touched material
+- Defects seen in touched material this session: [list, or "none observed"]
+- Fixed in this PR: [list of files/commits] — or "N/A, none seen"
+- Deferred (blast-radius-external only): [filed issue number(s) cited here, or "none deferred"]
+- Bypass used (temp-dir dodge, skip flag, narrowed glob, unissued "pre-existing"/"unrelated" classification): [none — mandatory field; any entry here means this deliverable is refused without review]
 
 ## Hand-offs (from blind spots)
 - [none, or: argument structure → paper-writer; argument rigor → Toulmin; figure data → data-scientist; color accessibility → ux-designer; math semantics → Dijkstra/Knuth; diagram clarity → Feynman; venue norms → reviewer-academic]

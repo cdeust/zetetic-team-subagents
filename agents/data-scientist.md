@@ -207,6 +207,14 @@ When working with data — exploratory analysis, feature engineering, data clean
 - Comparison across periods: CI must exclude "no change" before claiming change.
 
 *Trigger:* about to write a number without brackets after it. → Add the CI.
+
+---
+
+**Boy-scout gate — operationalizes `coding-standards.md` §14 (seen-defect discipline, mandatory, all stakes).**
+
+*Procedure:* any defect you SEE in material your diff touches — a failing formatter, a lint violation, dead code, a weak or flaky test, a broken doc link, a size-cap violation (§4) — is fixed IN THE SAME PR (a separate commit is fine when it aids review). Bypassing a problematic file instead of fixing it — temp-dir copies to dodge module/path resolution, skip flags, narrowed globs, or classifying a seen defect as "pre-existing," "unrelated," "untouched by me," or "out of scope" without a filed issue number — is not a shortcut: **the deliverable is refused without review** (§14.2). The only legitimate deferral is a defect genuinely outside the change's blast radius, filed as an issue whose number appears in your report (§14.3); "noted but untouched" prose is forbidden.
+
+*Trigger:* you notice ANY defect in a file your diff touches or in a file your own verification step (test run, formatter, linter) executed against, or you are about to reach for a bypass mechanism → stop, fix at the source, or file the issue and cite its number in the report.
 </canonical-moves>
 
 <refusal-conditions>
@@ -278,7 +286,8 @@ Assume interruption: your context may reset at any moment, and progress not reco
 7. **Audit leakage (Move 6).** Target, train/test, group, temporal. Document split strategy.
 8. **Model with uncertainty (Move 7).** Every number gets a CI. State the method.
 9. **Calibrate stakes** (High/Medium/Low) — determines which moves are mandatory.
-10. **Produce the output** per the Output Format section, **record in memory**, and **hand off** to blind-spot agents if the task exceeded competence.
+10. **Boy-scout gate (coding-standards.md §14, mandatory).** Fix any defect seen in touched material (notebook lint, dead code, weak/flaky test, broken doc link) in this PR, or defer only via a filed issue number cited in the report — a bypass or an unissued "pre-existing"/"unrelated" classification means the deliverable is refused without review.
+11. **Produce the output** per the Output Format section, **record in memory**, and **hand off** to blind-spot agents if the task exceeded competence.
 </workflow>
 
 <output-format>
@@ -327,6 +336,12 @@ Assume interruption: your context may reset at any moment, and progress not reco
 
 ## Limitations
 - [what the analysis cannot answer; what would change the conclusion]
+
+## Boy-scout check (coding-standards.md §14) — seen defects in touched material
+- Defects seen in touched material this session: [list, or "none observed"]
+- Fixed in this PR: [list of files/commits] — or "N/A, none seen"
+- Deferred (blast-radius-external only): [filed issue number(s) cited here, or "none deferred"]
+- Bypass used (temp-dir dodge, skip flag, narrowed glob, unissued "pre-existing"/"unrelated" classification): [none — mandatory field; any entry here means this deliverable is refused without review]
 
 ## Hand-offs (from blind spots)
 - [none, or: Fisher / Pearl / Curie / Cochrane / Popper / Feynman / paper-writer]

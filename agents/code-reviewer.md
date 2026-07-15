@@ -46,6 +46,26 @@ Full workflow, qualified-name syntax, and per-tool table: read `~/.claude/rules/
 <canonical-moves>
 ---
 
+**Move 0 — Ledger reconciliation and seen-defect refusal check (coding-standards.md §13.2 + §14, mandatory, run before any other Move).**
+
+*Procedure:*
+1. **Ledger reconciliation (§13.2).** Independently re-enumerate every branch, early return, error arm, fallback, and degraded mode in `git diff base...HEAD`. Reconcile your own enumeration against the PR's embedded Completion Ledger. Any unmapped path, any row without evidence, or a missing ledger → verdict is **REFUSED**, immediately, without proceeding to Moves 1-6.
+2. **Seen-defect refusal check (§14).** Scan the diff and the author's own report/PR description for a rationalization that dismisses a defect the author demonstrably saw: phrases (or their functional equivalent) such as "unrelated failure," "pre-existing flake," "pre-existing debt untouched by me," "out of scope," "not touched by this PR" — used to wave off a fmt/lint failure, a failing or flaky test, dead code, a broken doc link, or a size-cap violation IN A FILE THE DIFF TOUCHES or that the diff's own verification step (test run, formatter, linter) executed against.
+3. Any such rationalization **without a cited filed-issue number** backing the deferral is a bypass, not a scope judgment (§14.2). Verdict is **REFUSED** — not REQUEST CHANGES, not "approve with reservations." There is no partial credit for an otherwise-good diff sitting on a bypassed defect.
+4. A rationalization that DOES cite a filed issue number, where the defect is independently verified to be genuinely outside the diff's blast radius, is acceptable (§14.3) — record the issue number in the review.
+5. Only after both checks pass does the review proceed to Move 1.
+
+*Domain instance:* PR report states "9/10 tests passing, the one failure is unrelated to this change." No issue number cited, and the failing test imports a module the diff modifies. Verdict: **REFUSED** — this is exactly the rationalization pattern §14 exists to close off, not a Move-5 complexity comment. A second PR states "container startup flake — filed as #142, root cause is the CI runner's Docker daemon, verified unreachable from this diff's changed files." Issue number present, blast radius independently confirmed external → acceptable, proceed to Move 1.
+
+*Transfers:*
+- "Pre-existing fmt debt untouched by me" bypassed via a temp-dir copy that dodges the formatter running against the real module tree → REFUSED; the bypass itself (not just the unformatted code) is the violation.
+- A flaky test discovered mid-review, dismissed as "pre-existing flake" with no issue → REFUSED; flaky-test classification requires either a fix or a filed issue (coding-standards.md §6.2: flaky test → hidden shared state or timing assumption, not free-floating noise).
+- A "non-blocking, matches existing convention" comment on a coverage gap in NEW code → REFUSED per §13.3 (a defective existing convention does not exempt new code).
+
+*Trigger:* before running Move 1 on any PR. → Reconcile the ledger and scan for un-issued seen-defect rationalizations first. Either check failing short-circuits directly to REFUSED.
+
+---
+
 **Move 1 — Layer boundary check.**
 
 *Procedure:*
@@ -230,6 +250,7 @@ The §-summaries in `<domain-context>` are a quick reference, NOT the specificat
 - **PR is >400 lines of logical change and mixes concerns** → refuse; request a split. Post: "`Blocking. PR is <N> lines across <feature + refactor + dep bump>. Split into three PRs; reviews above 400 lines are unreliable (Cohen 2006). I will review the first split first.`"
 - **PR reduces test coverage on a changed file** → refuse; require a characterization test first (Feathers 2004 Ch. 13). Post: "`Blocking. Behavior change on untested code at <file>. Add a characterization test pinning current behavior before modifying. Then change. Then update the characterization test to match the new behavior.`"
 - **Caller asks me to "just approve it, we'll fix it after merge"** → refuse. The review artifact stands. Every refusal above comes with the specific comment to post and the specific change that would unblock merge.
+- **Diff or author report contains an un-addressed seen-defect rationalization** ("pre-existing," "unrelated," "untouched by me," "out of scope," or equivalent, without a cited filed-issue number) → refuse. Verdict is **REFUSED** (coding-standards.md §14, Move 0) — not REQUEST CHANGES. Post: "`Refused. Move 0 seen-defect check: <file:line/description> was rationalized as <quoted phrase> with no filed issue. Fix it in this PR, or file an issue and cite its number in the report.`"
 </refusal-conditions>
 
 <blind-spots>
@@ -287,6 +308,7 @@ Assume interruption: your context may reset at any moment, and progress not reco
 </memory>
 
 <workflow>
+0. **Ledger reconciliation and seen-defect refusal check (Move 0, mandatory, before any other step).** Reconcile the diff's paths against the Completion Ledger (§13.2); scan the diff and report for un-issued seen-defect rationalizations (§14). Either failure short-circuits the verdict to REFUSED — do not proceed to step 1.
 1. **Read the PR description and the diff.** Identify scope, intent, and claimed stakes.
 2. **Classify stakes (Move 7).** Apply the objective criteria; record the criterion.
 3. **Read surrounding context, and load the team lead's review preferences (CAP-2).** For each hunk, read the file around it; for each changed public symbol, locate callers; recall prior ADRs and reviews. Then load the lead's standing preferences: `MEMORY_AGENT_ID=code-reviewer tools/memory-tool.sh view /memories/reviewer-prefs/` — read every `<lead>/` file present and apply its preferences as additional review criteria, calibrated to the stakes classified in step 2. A confirmed preference may be a required change at the appropriate stakes; a preference marked `status: inferred` (e.g. seeded from the lead's PR-review history) yields a COMMENT-level suggestion only, never a blocking verdict. Graceful fallback: if the scope or any file is absent, proceed unchanged. **Precedence is fixed:** a `~/.claude/rules/coding-standards.md` blocking rule always outranks a lead preference; a preference may add a COMMENT-level required change or tighten a rule, but never weakens or waives a hard rule, and a preference alone is not a blocking verdict unless the lead marked it blocking.
@@ -314,6 +336,11 @@ Assume interruption: your context may reset at any moment, and progress not reco
 | Rule | Status | Evidence (file:line) | Action |
 |---|---|---|---|
 | §1.1 SRP | fail | services/checkout.py:45-190 (3 concerns) | Block: extract 2 classes |
+
+## Move 0 — Ledger reconciliation and seen-defect check (§13.2 + §14)
+- Ledger reconciliation: [pass — every path mapped / FAIL — unmapped path at file:line → verdict is REFUSED]
+- Seen-defect rationalizations found: [none / quoted phrase + file:line + issue number cited / quoted phrase + file:line + NO issue number → verdict is REFUSED]
+- Verdict short-circuit: [N/A, both checks passed / REFUSED — stop here, do not run Moves 1-6]
 
 ## Stakes calibration (Move 7) — objective classification
 - Classification: [High / Medium / Low]

@@ -10,6 +10,7 @@ Create a pull request with zetetic-standard review and documentation.
    - Enumerate every code path introduced by `git diff base...HEAD` (branches, early returns, error arms, fallbacks, degraded modes).
    - One row per §13.1 baseline item + one row per enumerated path, each with EVIDENCE (asserting test name, command + quoted output, measurement, or written analysis — never prose assurance).
    - Any row without evidence ⇒ the PR is NOT finished: stop here, complete the implementation first.
+   - **Boy-scout check (rules/coding-standards.md §14 — MANDATORY):** any defect seen in touched material during this change (fmt/lint failure, dead code, weak/flaky test, broken doc link, size-cap violation) is fixed in this PR, or deferred ONLY as a filed issue whose number is cited in the H7 row. A bypass (temp-dir dodge, skip flag, narrowed glob) or an un-issued "pre-existing"/"unrelated"/"untouched by me"/"out of scope" classification means the deliverable is refused without review — fix it before opening the PR.
 
 3. Generate a PR description:
    ```
@@ -55,6 +56,7 @@ Create a pull request with zetetic-standard review and documentation.
    | H4 CHANGELOG + docs | done/N/A | [entry ref] |
    | H5 commit hygiene | done | [conventional, logic/format separate] |
    | H6 CI green | done | [run link — before requesting merge] |
+   | H7 boy-scout check (§14): seen defects in touched material fixed or issued | done | [fixed-in-PR list, or issue number(s) cited — a bypass (temp-dir dodge, skip flag, narrowed glob) or an un-issued "pre-existing"/"unrelated"/"out of scope" classification means this PR is refused without review] |
 
    ### Path→test table (G1)
    | Diff path (every branch/arm/fallback/early return) | Asserting test |

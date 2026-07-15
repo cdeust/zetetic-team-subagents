@@ -211,6 +211,13 @@ When ML systems need to be built, deployed, or made reliable. Use for training p
 The §-summaries in `<domain-context>` are a quick reference, NOT the specification — naming a rule is not enforcing it. *Procedure:* before any change that produces or modifies source code ships, is approved, or is handed off, load `~/.claude/rules/agent-reference/craftsmanship-moves.md` (repo: `rules/agent-reference/craftsmanship-moves.md`) and run its trigger checklist against the diff. It carries the enforcing detector + fix for each rule that prose merely names: the §1.1 "and"-test, §1.2 zero-edit test, §1.3 substitutability check, §1.4 client-mock test, the §2.2 absolute import matrix, §3.1/§3.2/§3.3, the §4 size thresholds (loaded from the doc's single-source table — do not recall the numbers from memory), §5.1–§5.4 reverse-DI/factory/forbidden-DI/typed-ctor-injection, and DRY/grab-bag/shotgun-surgery. **A fired trigger is a blocking finding:** fix at the source or hand off to the agent that owns it — do not ship past it without an ADR (High-stakes) or a documented at-the-use-site rationale (Medium/Low, §10). Documented domain exemptions in your own `<domain-context>` still hold.
 
 *Trigger:* you are about to ship, approve, or hand off any change that produces or modifies code. → Run the craftsmanship checklist first.
+
+
+**Boy-scout gate — operationalizes `coding-standards.md` §14 (seen-defect discipline, mandatory, all stakes).**
+
+*Procedure:* any defect you SEE in material your diff touches — a failing formatter, a lint violation, dead code, a weak or flaky test, a broken doc link, a size-cap violation (§4) — is fixed IN THE SAME PR (a separate commit is fine when it aids review). Bypassing a problematic file instead of fixing it — temp-dir copies to dodge module/path resolution, skip flags, narrowed globs, or classifying a seen defect as "pre-existing," "unrelated," "untouched by me," or "out of scope" without a filed issue number — is not a shortcut: **the deliverable is refused without review** (§14.2). The only legitimate deferral is a defect genuinely outside the change's blast radius, filed as an issue whose number appears in your report (§14.3); "noted but untouched" prose is forbidden.
+
+*Trigger:* you notice ANY defect in a file your diff touches or in a file your own verification step (test run, formatter, linter) executed against, or you are about to reach for a bypass mechanism → stop, fix at the source, or file the issue and cite its number in the report.
 </canonical-moves>
 
 <refusal-conditions>
@@ -292,6 +299,8 @@ Assume interruption: your context may reset at any moment, and progress not reco
 11. **Record in memory.** SLOs, baselines, rollouts, incidents. The *why*.
 
 **Before producing output (mandatory, not skippable by stakes): run the Craftsmanship gate.** Load `~/.claude/rules/agent-reference/craftsmanship-moves.md` and run its trigger checklist against your diff; every fired trigger is a blocking finding — fix at the source or hand off per §10 before you ship, approve, or hand off. This is the executable-path entry for the Craftsmanship gate Move.
+
+**Also mandatory before shipping: run the Boy-scout gate (coding-standards.md §14).** Any defect you saw in touched material this session — fmt/lint failure, dead code, weak/flaky test, broken doc link, size-cap violation — is fixed in this PR or deferred only via a filed issue number cited in the report. A bypass (temp-dir dodge, skip flag, narrowed glob, unissued "pre-existing"/"unrelated"/"untouched by me" classification) means the deliverable is refused without review, not handed off.
 </workflow>
 
 <output-format>
@@ -346,6 +355,12 @@ Assume interruption: your context may reset at any moment, and progress not reco
 ## Rules compliance (per ~/.claude/rules/coding-standards.md)
 | Rule | Status | Evidence | Action |
 |---|---|---|---|
+
+## Boy-scout check (coding-standards.md §14) — seen defects in touched material
+- Defects seen in touched material this session: [list, or "none observed"]
+- Fixed in this PR: [list of files/commits] — or "N/A, none seen"
+- Deferred (blast-radius-external only): [filed issue number(s) cited here, or "none deferred"]
+- Bypass used (temp-dir dodge, skip flag, narrowed glob, unissued "pre-existing"/"unrelated" classification): [none — mandatory field; any entry here means this deliverable is refused without review]
 
 ## Hand-offs (from blind spots)
 - [none, or: queuing → Erlang; distributed correctness → Lamport; significance → Fisher; instrument → Curie; reproducibility → experiment-runner; infra → devops-engineer; drift RCA → engineer + Curie]

@@ -237,7 +237,7 @@ These rules apply proportionally:
 - **Medium stakes** (core business logic, user-facing): rules 1, 2, 3, 5, 7, 8, 9 fully enforced; 4 (size limits) enforced with ≤20% flexibility on limits.
 - **Low stakes** (scripts/experiments/prototypes marked as such, or UI polish / copy / CSS): rules 1, 7, 8 enforced; others can be informal.
 
-**Rules 1 (SOLID), 2 (layer dependency), 7 (local reasoning), 8 (sources), and 13 (Definition of Done — Completion Contract) apply at all stakes levels.**
+**Rules 1 (SOLID), 2 (layer dependency), 7 (local reasoning), 8 (sources), 13 (Definition of Done — Completion Contract), and 14 (Boy-Scout Rule — seen defects in touched material) apply at all stakes levels.**
 
 Stakes classification is **objective**, never self-declared. See engineer.md Move 6 for criteria.
 
@@ -380,6 +380,41 @@ Becomes a **dated, planned work item in the active series** (an issue with accep
 - **code-reviewer**: reconciliation duty (§13.2) is Move 0 — run it before any other analysis; a failed reconciliation short-circuits to REFUSED.
 - **git:pr skill**: the PR description template requires the ledger section; a PR created through the skill without it is invalid.
 - This section applies at **all stakes levels**, joining §1, §2, §7, §8 in §10's always-on list.
+
+## 14. Boy-Scout Rule (mandatory) — seen defects in touched material
+
+Source: lead directive, 2026-07-15, issued verbatim after three agent rationalizations were caught in a single day, each re-scoping a problem instead of solving it: (1) "unrelated failure" dismissed a 9/10 test tally instead of investigating the one failure; (2) "pre-existing flake" waved off a flaky test discovered while the diff was in flight; (3) "pre-existing fmt debt untouched by me" was used to justify 214 rustfmt violations in files the diff itself touched — bypassed via a temp-directory copy to dodge `cargo fmt` running against the real module tree, rather than running the formatter. All three are the same defect wearing different words: the agent found a problem, then argued it out of scope rather than fixing it.
+
+**"Leave the code cleaner than you found it" (Martin, R. C. (2008). *Clean Code*, Ch. 1, "The Boy Scout Rule") is not a courtesy here — it is a blocking gate.** This section is separate from, and does not replace, §13 (Definition of Done, which governs completeness of the NEW code in the diff). §14 governs defects the agent SEES in EXISTING material the diff touches — formatting, lint, dead code, weak/flaky tests, broken doc links, size-cap violations — regardless of who introduced them.
+
+### 14.1 Rule
+- Any defect **seen** in material the change touches — a failing formatter, a lint violation, dead code, a weak or flaky test, a broken doc link, a size-cap violation (§4) — is **fixed in the same PR**. A separate commit is encouraged when it aids review (formatting-only vs. logic changes), but the fix ships with the change that saw it.
+- "Touches" means: the file is modified by the diff, OR the defect is in a file the diff's own verification step (test run, formatter, linter) executes against. A defect surfaced only because the agent ran the project's standard tooling on the standard tree is IN SCOPE — it was seen.
+
+### 14.2 Bypass is refusal, not scope-narrowing
+**Bypassing a problematic file — instead of fixing it — is grounds for refusing the deliverable without review.** Bypass includes, without limitation:
+- Copying files to a temporary directory to dodge module/path resolution so a checker "passes" against a partial tree.
+- Skip flags, `--only`, or narrowed globs that exclude the problematic file(s) from the same check the rest of the diff is held to.
+- Classifying a seen defect as "unrelated," "pre-existing," "untouched by me," "out of scope," or any equivalent rationalization **without a filed issue number** backing the deferral (§14.3).
+- Any mechanism whose effect is that a defect the agent observed is not fixed and not tracked.
+
+A deliverable built on a bypass is **not reviewed on its merits — it is refused outright**, per the lead directive: "if you bypass a problematic file instead of fixing it, your code will not even be reviewed — it will be refused." This is stronger than "request changes": there is no partial credit for an otherwise-good diff sitting on a bypassed defect.
+
+### 14.3 The only legitimate deferral
+A defect genuinely **outside the change's blast radius** (unreachable from the diff by any test, build, or lint step the change triggers) may be deferred, and **only** as a filed issue:
+- The issue must have a title, a reproduction or description, and acceptance criteria.
+- Its number **must appear in the agent's report** (e.g., "deferred: file X's Y violation — filed as #NNN, outside this change's blast radius because Z").
+- "Noted but untouched," "worth a follow-up," or any issue-number-free deferral prose is **forbidden** — it is indistinguishable from the rationalizations this section exists to close off.
+- This mirrors and extends §13.4 (pre-existing debt discovered en route becomes a dated, planned work item) to defects outside NEW-code completeness, not just inside it.
+
+### 14.4 Definition of Done wiring
+A deliverable is **not done** while a seen defect in touched material remains unfixed and un-issued. This item joins the §13.1 checklist as a standing entry:
+- **H7. Boy-scout check (§14):** every defect seen in touched material during this change is either fixed in this PR or deferred with a cited issue number. No unfixed, un-issued seen defect remains.
+
+### 14.5 Enforcement wiring
+- **Every implementing agent** (engineer, refactorer, test-engineer, frontend-engineer, devops-engineer, dba, mlops, data-scientist, latex-engineer, and any other agent producing or modifying source/build/doc material): the Boy-scout gate runs before the Completion Ledger is finalized — a seen defect in touched material blocks hand-off exactly like a §13 ledger gap.
+- **code-reviewer**: a diff or author report containing an un-addressed seen-defect rationalization ("pre-existing," "unrelated," "untouched by me," "out of scope" without a cited issue number) is a blocking finding — verdict is **REFUSED**, not "approve with comments."
+- This section applies at **all stakes levels**, joining §1, §2, §7, §8, §13 in §10's always-on list.
 
 ## Primary Sources
 

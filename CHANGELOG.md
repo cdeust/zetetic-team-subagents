@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **§14 Boy-Scout Rule (mandatory, all stakes)** in `rules/coding-standards.md` — any defect *seen* in material a change touches (fmt, lint, dead code, weak/flaky test, broken doc link, size-cap violation) must be fixed in the same PR; bypassing it (temp-dir dodges, skip flags, narrowed globs, or an un-issued "pre-existing"/"unrelated"/"untouched by me" classification) means the deliverable is refused without review. Only a defect genuinely outside the change's blast radius may be deferred, and only as a filed issue whose number is cited in the report. Wired as a Boy-scout gate into `engineer`, `refactorer`, `test-engineer`, `frontend-engineer`, `devops-engineer`, `dba`, `mlops`, `data-scientist`, and `latex-engineer`, and as a blocking Move 0 (ledger reconciliation + seen-defect refusal check) in `code-reviewer` — a diff or report with an un-issued rationalization is REFUSED, not requested-changes. `commands/git/pr.md`'s Completion Ledger template gained an H7 row for the check. Issued after three same-day agent rationalizations ("unrelated failure" on a 9/10 test tally, "pre-existing flake," and "pre-existing fmt debt untouched by me" bypassed via temp-dir gymnastics instead of running the formatter) were caught re-scoping problems instead of solving them.
+
 ## [2.28.1] — CI audit gate fix + subagent alignment
 
 ### Fixed
