@@ -306,19 +306,57 @@ Source: lead directive, 2026-07-15 (recorded after the AP #13–#18 series, wher
 
 **An implementation is complete and without remainder, or it does not exist.** A PR is a claim of completeness; this section defines what makes that claim verifiable and what happens when it is not.
 
-### 13.1 The baseline (the FLOOR — explicitly non-exhaustive)
+### 13.1 The exhaustive checklist — every item is HANDLED or N/A-with-justification, nothing else
 
-These are the most basic rules of software engineering, not a high bar. §10 stakes calibration may ADD requirements on top; nothing may subtract from this floor. Each item carries its own verification standard — prose assurance is never evidence.
+Every item below has exactly two acceptable states in a finished PR: **done, with evidence** (test name, command + quoted output, measurement, or written analysis) or **N/A, with a one-line justification** that a reviewer can refute. An item that is neither is an unfinished implementation. §10 stakes calibration may ADD requirements on top; nothing may subtract.
 
-| Item | Verification standard |
-|---|---|
-| **All edge cases covered** | Edge cases enumerated explicitly in the change report; each maps to a test. An unlisted edge case is an unhandled one. |
-| **Failure paths tested like happy paths** | Every error arm, fallback, early return, and degraded mode introduced by the diff maps to a test asserting its OBSERVABLE effect — including the emission of the signal itself (log line, error value, notice), not merely a downstream side effect. An unexercised path is a latent silent failure. |
-| **Deadlocks eliminated** | Written lock-ordering/blocking analysis when the diff touches locks, channels, pools, or cross-process waits: what is held, what is awaited, why it cannot cycle; timeouts on external waits. "No concurrency touched" is an acceptable analysis when true. |
-| **Scalability addressed** | Growth dimensions of every new loop/collection/query named; no O(n²) on unbounded inputs, no unbounded memory growth, no per-item I/O where batching exists — or a measured justification. |
-| **Functionally tested** | The behavior is proven by EXECUTING it (test run output quoted), never by reading the code. |
-| **Readable and simplified** | The next reader understands each function from itself plus its contract (§7.3); no needless indirection (simplifier's bar). |
-| **Norms and conventions** | This file's rules pass; the project's naming and structural conventions followed (checked against neighboring code, not assumed). |
+**A. Correctness & behavior**
+- A1. Happy paths implemented and tested end-to-end (run output quoted, not code read).
+- A2. Edge cases enumerated and each mapped to a test: empty/zero/one/many/max, boundary values, duplicates, ordering, unicode/encoding, oversized input, absent/null/malformed data. An unlisted edge case is an unhandled one.
+- A3. Every failure path tested like a happy path: every error arm, fallback, early return, and degraded mode maps to a test asserting its OBSERVABLE effect — including the emission of the signal itself (log line, error value, notice), never only a downstream side effect.
+- A4. Input validated at trust boundaries; internal contracts trusted (§3.2). Malformed and adversarial inputs have tests.
+- A5. Invariants and pre/postconditions stated for new/changed functions; partial-failure behavior defined (what state remains after an interrupted operation).
+- A6. Idempotency/retry semantics defined where the operation can be re-invoked (or N/A: single-shot by construction).
+
+**B. Concurrency**
+- B1. Deadlocks eliminated: written lock-ordering/blocking analysis (what is held, what is awaited, why it cannot cycle); timeouts on external waits. "No concurrency touched" is acceptable when true.
+- B2. Race conditions: shared mutable state identified; atomicity of read-modify-write guaranteed or the absence of sharing demonstrated.
+- B3. Cancellation/interruption safety: resources released and state consistent when the operation is aborted mid-flight.
+
+**C. Resources & performance**
+- C1. Scalability: growth dimensions of every new loop/collection/query named; no O(n²) on unbounded inputs; batching/pagination where per-item I/O would occur — or a measured justification.
+- C2. Resource lifecycle: no leaked memory/file descriptors/connections/processes; pools and queues bounded; temp artifacts cleaned up.
+- C3. Hot paths measured when touched (before/after numbers committed); no unexplained regression.
+
+**D. Security**
+- D1. Injection-class defects excluded via the project's vetted helpers (SQL/Cypher/shell/path); never hand-rolled escaping. Adversarial-payload test present when the diff builds queries/commands from data.
+- D2. Untrusted data (user, network, file, AND LLM-generated content) treated as untrusted wherever the diff consumes it.
+- D3. No secrets in code, logs, or commits; least privilege on any new access.
+
+**E. Interfaces & compatibility**
+- E1. API/schema changes are additive, or the break is versioned + documented; version markers bumped.
+- E2. Downstream consumers identified BY NAME and their read paths verified against the change (empty/absent-field cases included).
+- E3. Persisted-data compatibility: one-shot migration for format changes (no back-compat shims — standing lead rule); old-data-in/new-code tested.
+- E4. Cross-platform behavior addressed where the diff touches paths, encoding, process spawning, or OS services (or N/A: platform-independent logic).
+
+**F. Observability & operations**
+- F1. Every failure mode emits an actionable signal (enough context to debug), and that emission is asserted by a test; nominal path stays quiet (asserted too).
+- F2. Degraded modes are explicit, named in the output/schema, and documented — never a silent default.
+
+**G. Tests themselves**
+- G1. The path→test ledger (§13.2) is complete: every diff path mapped.
+- G2. Every bug fixed in this PR has a regression test that fails on the pre-fix code.
+- G3. Tests are deterministic and isolated: unique temp dirs, no shared fixed paths, no order dependence, no sleeps-as-synchronization; suite passes repeatedly in default parallelism.
+- G4. Negative assertions present where absence IS the behavior (no emission, no write, no cross-access).
+- G5. Full suite executed locally, output quoted; lint/format/type gates pass on touched files.
+
+**H. Code quality & delivery**
+- H1. This file's rules pass: SOLID (§1), layering (§2), sizes (§4), DI (§5), local reasoning (§7), sourced constants (§8), no anti-patterns (§9).
+- H2. Readable and simplified: next reader understands each function from itself plus its contract; no needless indirection, no dead code, no debug leftovers, no commented-out code.
+- H3. Naming and structural conventions match neighboring code; ONE language per file (repo language for repo files).
+- H4. CHANGELOG entry for any behavior/contract change a consumer can observe; affected docs/tool descriptions updated in the same PR.
+- H5. Commit hygiene: conventional messages, logic commits separate from formatting noise.
+- H6. CI green on the exact pushed tree before requesting merge.
 
 ### 13.2 The Completion Ledger — no finished PR without it
 
