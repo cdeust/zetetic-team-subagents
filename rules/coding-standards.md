@@ -300,6 +300,28 @@ Mutation enforcement is split, because the two jobs have opposite failure costs:
 - The **sweep** tier is wide but report-only: a broad mutation run surfaces a long tail of survivors at once, and gating commits on it would freeze the team for months. It **always exits 0** and emits a per-zone report; we ratchet coverage up **one zone per iteration**, triaging that zone's survivors with evidence. Making the wide sweep block by default would repeat the product-safety anti-pattern (heavy/broad automation must be report-only unless explicitly opted in).
 - A surviving mutant migrates from the sweep's backlog into the blocking tier organically: once a critical zone is wired and clean, any later change to it is gated per-commit.
 
+## 13. Definition of Done — an implementation is complete and without remainder, or it does not exist
+
+Source: lead directive, 2026-07-15 (recorded after the AP #13–#18 series, where a reviewer classified an unasserted fallback-signal path as "non-blocking, repo convention"). Empirical backing: the FlashRank silent-failure incident (2026-07-11) — an unexercised error path degraded six benchmarks and production without a single signal.
+
+**The non-exhaustive BASELINE of any implementation.** A feature is developed entirely, or not at all:
+
+- **All edge cases covered.** Enumerate them explicitly; an unlisted edge case is an unhandled one.
+- **Failure paths tested with the same rigor as happy paths** — including the emission of the signal itself (log line, error return, degraded-mode notice), not merely its downstream effect. A code path that exists but is never exercised by a test is a latent silent failure.
+- **Possible deadlocks eliminated** (lock ordering audited, no blocking calls under locks, timeouts on external waits).
+- **Possible scalability problems addressed** (no O(n²) on unbounded inputs, no unbounded memory growth, no per-item I/O where batching exists).
+- **Functionally tested** — the behavior is proven by executing it, not by reading the code.
+- **Readable and simplified** — the next reader understands it from the function plus its contract (§7).
+- **Norms and conventions respected** — code standards (this file) and the project's naming conventions.
+
+### 13.1 Enumerated refusals
+- Classifying a coverage gap in NEW code as "non-blocking", "follow-up", "future evolution", or "matches existing convention". It is **blocking**. A defective existing convention does not exempt new code from being hardened.
+- Shipping the happy path with failure paths "to be covered later".
+- Reviews: a reviewer who finds an unasserted path introduced by the diff MUST classify it blocking (this overrides any leniency in §10 stakes calibration for coverage of new code).
+
+### 13.2 Pre-existing debt discovered en route
+Becomes a **dated, planned work item in the active series** (an issue with acceptance criteria), never a free-floating "worth a follow-up" note. Discovering debt creates an obligation to schedule it, not permission to ignore it.
+
 ## Primary Sources
 
 - Martin, R. C. (2000). "Design Principles and Design Patterns." *Object Mentor.*
