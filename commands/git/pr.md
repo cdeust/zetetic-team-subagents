@@ -17,15 +17,15 @@ Create a pull request with zetetic-standard review and documentation.
    [1-3 bullet points of what changed and why]
 
    ## Completion Ledger (§13)
-   | Item / chemin du diff | Preuve (test / commande+sortie / mesure / analyse) |
+   | Item / diff path | Evidence (test / command+output / measurement / analysis) |
    |---|---|
-   | edge cases: [énumérés] | [tests] |
-   | failure paths: [chaque bras/fallback/early-return] | [test assertant l'effet observable, émission du signal incluse] |
-   | deadlocks | [analyse écrite ou « no concurrency touched » si vrai] |
-   | scalability | [dimensions de croissance nommées / mesure] |
-   | fonctionnel exécuté | [sortie de run citée] |
-   | lisibilité/simplicité | [passe faite, indirections retirées] |
-   | normes/conventions | [règles passées, conventions voisines vérifiées] |
+   | edge cases: [enumerated] | [tests] |
+   | failure paths: [every arm/fallback/early return] | [test asserting the observable effect, signal emission included] |
+   | deadlocks | [written analysis, or "no concurrency touched" when true] |
+   | scalability | [growth dimensions named / measurement] |
+   | functional run | [quoted run output] |
+   | readability/simplicity | [pass done, needless indirection removed] |
+   | norms/conventions | [rules pass, neighboring conventions checked] |
 
    ## Zetetic Checklist
    - [ ] No invented constants (zetetic-checker passed)
