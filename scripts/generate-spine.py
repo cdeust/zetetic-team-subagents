@@ -68,11 +68,11 @@ def spine_block(strong: bool) -> str:
     return "\n".join([
         BEGIN,
         "<zetetic-spine>",
-        "**Per-task spine — run in order; depth scales with stakes "
-        "(coding-standards.md §10): recall → evidence/sources → "
+        "**Per-task spine — run in order; depth scales with stakes " +
+        "(coding-standards.md §10): recall → evidence/sources → " +
         "adversarial-verify → remember.**",
-        "1. **Recall** before acting — `cortex:recall` scoped to your "
-        "`agent_topic` + your memory scope. If recall contradicts the plan, "
+        "1. **Recall** before acting — `cortex:recall` scoped to your " +
+        "`agent_topic` + your memory scope. If recall contradicts the plan, " +
         "stop and reconcile before proceeding.",
         "2. **Evidence/sources** — *the source precedes the implementation, "
         "never the reverse.* Every claim, constant, threshold, and algorithm is "
@@ -83,26 +83,26 @@ def spine_block(strong: bool) -> str:
         "conditions match yours. No source → say \"I don't know\" and stop; do "
         "not ship, then justify (coding-standards.md §8). " + resource +
         " — `~/.claude/rules/agent-reference/research-resources.md`.",
-        "3. **Adversarial-verify** before \"done\" — design the test that "
-        "catches the error *if it exists* (severity, not ceremony); reproduce "
-        "before claiming a fix. **For code changes at High/Medium stakes, prove "
-        "the suite KILLS mutants, not just covers lines** — mutation testing on "
-        "the changed lines (`tools/mutation_check.sh`; test-engineer Move 8 / "
-        "coding-standards.md §12): kill or document-as-equivalent every "
+        "3. **Adversarial-verify** before \"done\" — design the test that " +
+        "catches the error *if it exists* (severity, not ceremony); reproduce " +
+        "before claiming a fix. **For code changes at High/Medium stakes, prove " +
+        "the suite KILLS mutants, not just covers lines** — mutation testing on " +
+        "the changed lines (`tools/mutation_check.sh`; test-engineer Move 8 / " +
+        "coding-standards.md §12): kill or document-as-equivalent every " +
         "survivor. Bound the thesis to its evidence regime.",
-        "4. **Remember** after acting — persist WHY-level outcomes "
-        "(decision+rationale, rejected approach+root cause, benchmark deltas "
+        "4. **Remember** after acting — persist WHY-level outcomes " +
+        "(decision+rationale, rejected approach+root cause, benchmark deltas " +
         "before AND after); code stays in the repo.",
         "",
-        "**Stamp the standard you were judged against.** Any rule-compliance "
-        "report you emit states the rules version it was evaluated under — "
-        "`tools/plugin-version-check.sh --rules-version` (and "
-        "`--version` for the plugin build). A compliance verdict read later is "
-        "uninterpretable without it, and a stale plugin can enforce a "
+        "**Stamp the standard you were judged against.** Any rule-compliance " +
+        "report you emit states the rules version it was evaluated under — " +
+        "`tools/plugin-version-check.sh --rules-version` (and " +
+        "`--version` for the plugin build). A compliance verdict read later is " +
+        "uninterpretable without it, and a stale plugin can enforce a " +
         "superseded standard while certifying the result (issue #52).",
         "",
-        "Failed gate ⇒ **STOP** and surface the gap; never paper over a missing "
-        "source with confidence. Full procedure: "
+        "Failed gate ⇒ **STOP** and surface the gap; never paper over a missing " +
+        "source with confidence. Full procedure: " +
         "`~/.claude/rules/agent-reference/zetetic-spine.md`.",
         "</zetetic-spine>",
         END,
@@ -153,7 +153,8 @@ def main():
     check = "--check" in sys.argv
     stale, changed, no_anchor = [], [], []
     for f in agent_files():
-        text = open(f).read()
+        with open(f, encoding="utf-8") as fh:
+            text = fh.read()
         name = slug(text, os.path.splitext(os.path.basename(f))[0])
         if name in EXCLUDE:
             continue

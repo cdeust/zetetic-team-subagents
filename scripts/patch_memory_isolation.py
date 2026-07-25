@@ -18,7 +18,6 @@ convention only — meaning memory-tool.sh search --scope genius returns
 ALL genius agents' files. Agents must always pass their subpath explicitly.
 """
 import os
-import re
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agents")
 

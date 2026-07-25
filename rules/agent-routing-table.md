@@ -113,6 +113,7 @@ human deep-dives and targeted `grep` (via `tools/shape-router.sh` /
 
 | Agent | When to use | Description |
 |---|---|---|
+| advisor | When the main session runs on Sonnet (or cheaper) and a decision point or completion check warrants one frontier-model consultation — plan review before implementation, a hard architectural fork, or final verification of a finished task. | Frontier-model consultant for the Advisor loop — reviews plans at decision points and verifies completion while a cheaper model executes |
 | architect | When planning structural changes, decomposing large modules, designing new layers, analyzing dependencies | Proactively analyze structural changes, decomposition decisions |
 | code-reviewer | When a change set (PR, patch, staged diff) needs review before it merges. | Proactively review code changes for Clean Architecture, SOLID, size limits |
 | data-scientist | When working with data — exploratory analysis, feature engineering, data cleaning, modeling decisions, dataset documentation | Data scientist specializing in profile-first EDA, distribution-aware modeling, missingness classification |

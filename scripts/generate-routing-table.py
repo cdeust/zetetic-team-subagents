@@ -21,7 +21,8 @@ OUT = os.path.join(REPO, "rules", "agent-routing-table.md")
 
 
 def frontmatter(path):
-    text = open(path).read()
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
     m = re.match(r"---\n(.*?)\n---\n", text, re.S)
     if not m:
         return None
@@ -101,7 +102,11 @@ def build():
 def main():
     content = build()
     if "--check" in sys.argv:
-        on_disk = open(OUT).read() if os.path.exists(OUT) else ""
+        if os.path.exists(OUT):
+            with open(OUT, encoding="utf-8") as fh:
+                on_disk = fh.read()
+        else:
+            on_disk = ""
         if on_disk != content:
             print("agent-routing-table.md is stale — run scripts/generate-routing-table.py", file=sys.stderr)
             sys.exit(1)

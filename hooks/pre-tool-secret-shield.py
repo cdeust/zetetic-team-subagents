@@ -64,9 +64,9 @@ BLOCKED_PATH_PATTERNS: list[str] = [
     # `.key`/`.keystore` are ambiguous (i18n `de.key`, `config.key`,
     # `data.keystore`). Block only inside a credential/PKI location or when
     # the stem itself names a key/cert (server.key, tls.key, private.key).
-    r"(^|/)(ssl|tls|certs?|keys?|pki|private|secrets?|vault|\.ssh)/"
+    r"(^|/)(ssl|tls|certs?|keys?|pki|private|secrets?|vault|\.ssh)/" +
     r"[^/]*\.(key|keystore)$",
-    r"(^|/)(server|client|tls|ssl|private|priv|ca|cert|rsa|ed25519|"
+    r"(^|/)(server|client|tls|ssl|private|priv|ca|cert|rsa|ed25519|" +
     r"id_[a-z0-9]+)\.(key|keystore)$",
     # Secret/vault *stores* — but not documentation *about* secrets. A
     # `docs/`/`documentation/`/`doc/` ancestor marks prose, not a store.

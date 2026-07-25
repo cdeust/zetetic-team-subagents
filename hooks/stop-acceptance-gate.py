@@ -31,6 +31,19 @@ import os
 import subprocess
 import sys
 
+_TOOL = "acceptance-gate"
+
+def _note(what: str, exc: BaseException) -> None:
+    """One-line stderr note for a deliberately non-fatal failure.
+
+    The hook still degrades open (that contract is what keeps a broken guard
+    from breaking the session), but degrading SILENTLY is how a guard stops
+    working without anyone noticing. stderr keeps the nominal path quiet while
+    making the degraded path visible in hook logs.
+    """
+    print(f"[{_TOOL}] {what}: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+
+
 # The full gate runs test suites + the zetetic checker; 15 min bounds a stuck gate.
 # source: operational default (>= acceptance_gate.py per-gate ceiling x a few gates).
 GATE_TIMEOUT_S = 900
@@ -95,8 +108,8 @@ def run_gate(args: list, root: str, timeout: int):
     unmet = []
     try:
         unmet = json.loads(proc.stdout).get("unmet", [])
-    except ValueError:
-        pass
+    except ValueError as exc:
+        _note("acceptance-gate output was not JSON; treating as no unmet criteria", exc)
     return proc.returncode, unmet
 
 
@@ -126,7 +139,8 @@ def main() -> None:
     if os.path.isfile(marker):
         # BLOCK tier — an autonomous build run opted in to hard gating.
         try:
-            cfg = json.load(open(marker))
+            with open(marker, encoding="utf-8") as fh:
+                cfg = json.load(fh)
         except (OSError, ValueError):
             allow()
         if not isinstance(cfg, dict):  # hand-edited non-object marker -> fail open

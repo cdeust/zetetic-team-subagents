@@ -10,7 +10,6 @@ Clarifies the three-tier memory model (from Letta/MemGPT context engineering):
 Injected BEFORE the existing <memory> section in each agent file.
 """
 import os
-import re
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agents")
 

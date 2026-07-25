@@ -59,6 +59,20 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
+from typing import NoReturn
+
+_TOOL = "ctxguard"
+
+def _note(what: str, exc: BaseException) -> None:
+    """One-line stderr note for a deliberately non-fatal failure.
+
+    The hook still degrades open (that contract is what keeps a broken guard
+    from breaking the session), but degrading SILENTLY is how a guard stops
+    working without anyone noticing. stderr keeps the nominal path quiet while
+    making the degraded path visible in hook logs.
+    """
+    print(f"[{_TOOL}] {what}: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+
 
 # --- Thresholds (tokens) -----------------------------------------------------
 # Single source of truth shared with statusline-command.sh. First substring
@@ -91,8 +105,8 @@ def _thresholds(model_id: str):
             loaded = json.load(fh)
         if isinstance(loaded, dict) and isinstance(loaded.get("models"), list):
             table = loaded
-    except (OSError, json.JSONDecodeError, ValueError):
-        pass
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        _note("ctxguard threshold config unreadable; using built-in defaults", exc)
 
     mid = (model_id or "").lower()
     chosen = table.get("default") or FALLBACK_THRESHOLDS["default"]
@@ -107,8 +121,8 @@ def _thresholds(model_id: str):
         warn, hard = int(chosen["warn"]), int(chosen["hard"])
         if 0 < warn < hard:
             return warn, hard
-    except (KeyError, TypeError, ValueError):
-        pass
+    except (KeyError, TypeError, ValueError) as exc:
+        _note("ctxguard threshold entry malformed; using built-in defaults", exc)
     d = FALLBACK_THRESHOLDS["default"]
     return d["warn"], d["hard"]
 
@@ -135,8 +149,14 @@ TAIL_CHUNK = 64 * 1024          # 65536 bytes
 TAIL_MAX_BYTES = 4 * 1024 * 1024  # cap total bytes scanned at 4 MiB
 
 
-def _exit(payload=None):
-    """Emit optional JSON to stdout and exit 0. A Stop hook must not fail hard."""
+def _exit(payload=None) -> NoReturn:
+    """Emit optional JSON to stdout and exit 0. A Stop hook must not fail hard.
+
+    Annotated ``NoReturn`` deliberately: this never returns, and saying so is
+    what lets a reader (and any analyser) see that the ``_exit()`` calls in
+    ``main()`` are terminal. Without it, every branch that ends in ``_exit()``
+    looks like a fall-through and the locals after it look possibly-unbound
+    (CodeQL py/uninitialized-local-variable, 2 errors)."""
     if payload:
         sys.stdout.write(json.dumps(payload))
     sys.exit(0)
@@ -325,8 +345,8 @@ def _save_level(session_id: str, level: str) -> None:
     try:
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"level": level}, fh)
-    except OSError:
-        pass
+    except OSError as exc:
+        _note("ctxguard level-state write failed; the guard may re-fire this session", exc)
 
 
 SCHEMA = (

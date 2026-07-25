@@ -30,6 +30,19 @@ import re
 import subprocess
 import sys
 
+_TOOL = "zetetic-spine"
+
+def _note(what: str, exc: BaseException) -> None:
+    """One-line stderr note for a deliberately non-fatal failure.
+
+    The hook still degrades open (that contract is what keeps a broken guard
+    from breaking the session), but degrading SILENTLY is how a guard stops
+    working without anyone noticing. stderr keeps the nominal path quiet while
+    making the degraded path visible in hook logs.
+    """
+    print(f"[{_TOOL}] {what}: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+
+
 STATE_DIR = "/tmp"
 # Bounded reverse-tail read of the transcript. The spine's beats normally fall
 # within a recent window; a 1 MiB cap keeps the hook cheap on multi-100MB
@@ -108,8 +121,8 @@ def mark_warned(session_id: str) -> None:
     try:
         with open(os.path.join(STATE_DIR, f"zetetic-spine-{session_id}.json"), "w") as fh:
             json.dump({"warned": True}, fh)
-    except OSError:
-        pass
+    except OSError as exc:
+        _note("spine warn-state write failed; the reminder may repeat", exc)
 
 
 REASON = (

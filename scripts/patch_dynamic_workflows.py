@@ -11,7 +11,6 @@ Changes:
 2. Add a specific callout in orchestrator.md's parallelism section
 """
 import os
-import re
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agents")
 

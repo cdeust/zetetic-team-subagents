@@ -50,13 +50,25 @@ Complexity analysis:
 import sys
 import os
 import re
+import contextlib
 import json
 import math
 import socket
 import signal
-import threading
-import time
 import pathlib
+
+_TOOL = "pii-daemon"
+
+def _note(what: str, exc: BaseException) -> None:
+    """One-line stderr note for a deliberately non-fatal failure.
+
+    The hook still degrades open (that contract is what keeps a broken guard
+    from breaking the session), but degrading SILENTLY is how a guard stops
+    working without anyone noticing. stderr keeps the nominal path quiet while
+    making the degraded path visible in hook logs.
+    """
+    print(f"[{_TOOL}] {what}: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
@@ -227,10 +239,10 @@ def _serve(sock_path: str) -> None:
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    try:
+    # A missing stale socket is the NORMAL case on a clean start, so this is
+    # an expected condition rather than a swallowed error.
+    with contextlib.suppress(FileNotFoundError):
         os.unlink(sock_path)
-    except FileNotFoundError:
-        pass
 
     server.bind(sock_path)
     server.listen(BACKLOG)
@@ -259,25 +271,24 @@ def _serve(sock_path: str) -> None:
             result = _handle_request(buf.rstrip(b"\n"))
             conn.sendall((result + "\n").encode("utf-8"))
         except Exception:
-            try:
+            # Best-effort courtesy reply. If this fails the peer is already
+            # gone, so there is no channel left on which to report anything.
+            with contextlib.suppress(OSError):
                 conn.sendall(b"pii_scan_error\n")
-            except Exception:
-                pass
         finally:
-            try:
+            # Closing an already-closed/reset socket is not an error worth
+            # reporting; the fd is released either way.
+            with contextlib.suppress(OSError):
                 conn.close()
-            except Exception:
-                pass
 
     server.close()
 
 
 def _cleanup(sock_path: str, pid_path: str) -> None:
     for p in (sock_path, pid_path):
-        try:
+        # Already absent means cleanup's goal is met.
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(p)
-        except FileNotFoundError:
-            pass
 
 
 def main() -> None:

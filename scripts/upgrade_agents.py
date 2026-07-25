@@ -7,7 +7,6 @@ Upgrade all agent/genius files with:
 """
 import os
 import re
-import sys
 
 AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agents")
 
