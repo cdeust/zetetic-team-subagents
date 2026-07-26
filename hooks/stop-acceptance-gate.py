@@ -30,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+from typing import NoReturn
 
 _TOOL = "acceptance-gate"
 
@@ -52,18 +53,24 @@ GATE_TIMEOUT_S = 900
 WARN_TIMEOUT_S = 120
 
 
-def allow() -> None:
-    """Let the turn end. A Stop hook signals 'no objection' by exiting 0 silently."""
+def allow() -> NoReturn:
+    """Let the turn end. A Stop hook signals 'no objection' by exiting 0 silently.
+
+    ``NoReturn`` for the same reason as ctxguard's ``_exit()``: every caller
+    ends a branch with it, so a reader (and any analyser) must be able to see
+    that control does not fall through — otherwise the locals assigned in the
+    sibling ``try`` look possibly-unbound.
+    """
     sys.exit(0)
 
 
-def block(reason: str) -> None:
+def block(reason: str) -> NoReturn:
     """Block the stop so the model keeps working until the real gate passes."""
     sys.stdout.write(json.dumps({"decision": "block", "reason": reason}))
     sys.exit(0)
 
 
-def warn(reason: str) -> None:
+def warn(reason: str) -> NoReturn:
     """Surface the gate result without blocking (stderr shows in the transcript)."""
     sys.stderr.write(reason + "\n")
     sys.exit(0)

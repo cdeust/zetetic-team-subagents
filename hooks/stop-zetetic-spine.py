@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import NoReturn
 
 _TOOL = "zetetic-spine"
 
@@ -63,17 +64,22 @@ EVIDENCE_RE = re.compile(
 MEMORY_CMD_RE = re.compile(r"memory-tool\.sh\s+(view|search)")
 
 
-def allow():
-    """A Stop hook signals 'no objection' by exiting 0 silently."""
+def allow() -> NoReturn:
+    """A Stop hook signals 'no objection' by exiting 0 silently.
+
+    ``NoReturn`` for the same reason as ctxguard's ``_exit()``: these end
+    branches, and stating that control does not fall through is what keeps a
+    reader (and any analyser) from treating the following code as reachable.
+    """
     sys.exit(0)
 
 
-def block(reason: str):
+def block(reason: str) -> NoReturn:
     sys.stdout.write(json.dumps({"decision": "block", "reason": reason}))
     sys.exit(0)
 
 
-def warn(reason: str):
+def warn(reason: str) -> NoReturn:
     sys.stderr.write(reason + "\n")
     sys.exit(0)
 
