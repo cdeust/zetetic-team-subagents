@@ -13,6 +13,42 @@ adheres to [Semantic Versioning](https://semver.org/).
 > no longer evidence of what was said at the time; the record should be honest
 > about having been edited. The pre-edit text is in git history.
 
+## [2.36.0]: follow the Cortex plugin rename, and gate the tool names that broke
+
+### Fixed
+- **Every agent's memory tools resolve again.** Cortex renamed its plugin from
+  `cortex` to `hypermnesia-mcp` in 4.15.0 (community-directory name collision;
+  the MCP server key stays `cortex`). The host derives a tool's name as
+  `mcp__plugin_<plugin-name>_<mcp-server-key>__<tool>`, so the rename changed
+  every Cortex tool name this plugin declares. 122 files still named the old
+  `mcp__plugin_cortex_cortex__*`: 97 genius agents, 22 team agents,
+  `hooks/stop-zetetic-spine.py`, and `commands/session/memory-sync.md`. All are
+  rewritten to `mcp__plugin_hypermnesia-mcp_cortex__*`, verified against the
+  installed 4.16.0 tool registry rather than assumed: `remember`, `recall`,
+  `unified_search`, `memory_stats` (`tool_registry_memory.py`),
+  `navigate_memory`, `get_causal_chain` (`tool_registry_nav.py`).
+- **The failure mode was silence, not an error.** An unresolvable MCP tool name
+  in an agent's `tools:` list is dropped by the host, so the whole fleet lost
+  recall and remember with no message anywhere. `hooks/stop-zetetic-spine.py`
+  was worse than silent: its `EVIDENCE_RE` matched the dead names, so no
+  transcript could ever satisfy the spine's evidence beat.
+
+### Added
+- **Check `FP` in `tools/agent-definition-auditor.sh`**: every
+  `mcp__plugin_..__` prefix an agent names must appear in
+  `KNOWN_MCP_PREFIXES`. A file naming no MCP tool is not tallied, so the check
+  cannot pass by vacuity. The auditor already runs as a hard gate in `ci.yml`
+  and `release.yml`, which makes the next rename a failing check instead of a
+  quiet degradation. Whole prefixes are matched rather than parsed into
+  plugin and server halves, because `_` is legal inside both.
+- **`tests/test_stop_zetetic_spine.py`** (21 assertions) pins the hook's three
+  patterns: `EVIDENCE_RE` matches each current memory tool and both web tools,
+  rejects the pre-rename prefix, tolerates JSON whitespace, and treats
+  `remember` as a write rather than evidence; `CHANGE_RE` matches the four
+  state-producing tools and ignores read-only ones; `MEMORY_CMD_RE` matches
+  `view`/`search` and not `append`. Reintroducing the old prefix fails 7 of
+  them, so they kill the mutant rather than merely executing the lines.
+
 ## [2.35.0]: plugin currency, attested releases, zero open static-analysis alerts
 
 ### Added
