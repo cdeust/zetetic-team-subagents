@@ -5,7 +5,8 @@
 # Usage:
 #   tools/redaction-checker.sh --staged              # check staged .md changes (commit hook, warn-only)
 #   tools/redaction-checker.sh --files <f1> <f2> ... # check specific files (review / CI)
-#   tools/redaction-checker.sh --full                # scan all tracked copy paths (audit sweep)
+#   tools/redaction-checker.sh --full                # audit sweep: all tracked
+#                                                    #   AND untracked-not-ignored copy paths
 #
 # Checks (the greppable subset of skills/writing/redaction.md; judgment-level
 # patterns — puffery, -ing analysis, colon reveals in context — stay with the
@@ -78,11 +79,19 @@ case "$mode" in
     done
     ;;
   --full)
+    # Tracked copy paths (--cached) PLUS untracked-but-not-ignored files
+    # (--others --exclude-standard). A NEW file not yet committed was invisible
+    # to a plain `git ls-files`, so a local --full passed while CI's Redaction
+    # Sweep — which sees the committed tree once the file lands — failed: a false
+    # local pass (issue #64). --exclude-standard honours .gitignore, so ignored
+    # artifacts stay out. The two sets are disjoint (untracked ≠ in-index), so no
+    # file is scanned twice; tracked-file behaviour is byte-for-byte unchanged.
     while IFS= read -r f; do files+=("$f"); done \
-      < <(git ls-files 2>/dev/null | grep -E "$COPY_INCLUDE" | grep -Ev "$COPY_EXCLUDE" || true)
+      < <(git ls-files --cached --others --exclude-standard 2>/dev/null | grep -E "$COPY_INCLUDE" | grep -Ev "$COPY_EXCLUDE" || true)
     ;;
   *)
     echo "usage: $0 --staged | --files <f...> | --full" >&2
+    echo "  --full scans tracked AND untracked-not-ignored copy paths" >&2
     exit 2
     ;;
 esac

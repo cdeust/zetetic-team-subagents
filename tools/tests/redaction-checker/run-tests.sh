@@ -21,7 +21,7 @@ run_case() {
 }
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-cd "$tmp"
+cd "$tmp" || { echo "FAIL: could not cd to temp dir" >&2; exit 1; }
 git init -q .
 mkdir -p docs skills/writing
 
@@ -89,6 +89,7 @@ run_case "T12 technical prose stays silent" test -z "$out"
 # T13 inline code spans are identifiers, not copy (issue #52 follow-on).
 # `systems-leverage` is a shipped skill NAME; renaming an artifact to satisfy
 # a prose rule is the tail wagging the dog, so spans are stripped before match.
+# shellcheck disable=SC2016  # backticks are literal Markdown, not expansion
 printf 'The [`systems-leverage`](skills/systems-leverage/SKILL.md) skill routes it.\n' > docs/span.md
 out=$("$CHECKER" --files docs/span.md)
 run_case "T13 banned word inside an inline code span: NOT flagged" test -z "$out"
@@ -122,6 +123,19 @@ run_case "T14 banned word at end-of-line flagged" grep -q "BANNED_WORD" <<<"$out
 printf 'A plain sentence with nothing to report.\n' > docs/exit0.md
 "$CHECKER" --files docs/exit0.md >/dev/null 2>&1
 run_case "T15 clean file exits 0 (set -e trap)" test "$?" -eq 0
+
+# T16 REGRESSION (#64): --full must scan untracked-but-not-ignored copy, not
+# only what `git ls-files` reports. A NEW file created but not yet committed was
+# invisible to --full, so a local run passed while CI's committed-tree Redaction
+# Sweep failed on the same content — a false local pass. The file is deliberately
+# NOT git-added; under strict profile a finding must fail (exit 1) and name it.
+# Pre-fix (plain `git ls-files`, nothing committed) --full scanned nothing:
+# empty output, exit 0 — both assertions below fail, proving the test bites.
+printf 'We leverage a robust pipeline.\n' > docs/untracked-64.md
+out=$(ZETETIC_PROFILE=strict "$CHECKER" --full 2>&1); rc=$?
+run_case "T16 untracked banned file scanned by --full (#64)" grep -q "docs/untracked-64.md" <<<"$out"
+run_case "T16 untracked finding fails strict --full, exit 1 (#64)" test "$rc" -eq 1
+rm -f docs/untracked-64.md
 
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"
