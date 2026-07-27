@@ -1,0 +1,27 @@
+version: 2
+
+# Dependabot config — satisfies OpenSSF Scorecard's Dependency-Update-Tool check
+# (issue #59, DependencyUpdateToolID). The repo's only external supply-chain
+# surface is the GitHub Actions pinned in .github/workflows/*.yml: every `uses:`
+# is pinned to a full commit SHA with a trailing `# vN` comment (see
+# scorecard.yml / codeql.yml). Dependabot updates the SHA and rewrites the
+# version comment in place, so pinning discipline is preserved automatically
+# instead of drifting until Scorecard flags a stale action.
+#
+# No pip/npm ecosystem is declared: there is no installable package and no
+# pinned dependency manifest (pyproject.toml wires only pytest + mutmut tooling,
+# no runtime deps to update). Adding an ecosystem with nothing to update would
+# be dead configuration (rules/coding-standards.md §9).
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"   # aligns with the Tuesday Scorecard run in scorecard.yml
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
