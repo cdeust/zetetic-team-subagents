@@ -11,6 +11,12 @@
 #   F7  has agent_topic field
 #   F8  has tools field           (past lesson: empty tools = commit failures)
 #   F9  tools list non-empty
+#   FP  every mcp__plugin_<id>_<server>__ prefix is a known, current one
+#       (issue: Cortex renamed its plugin cortex -> hypermnesia-mcp in 4.15.0;
+#       the host derives tool names as mcp__plugin_<plugin>_<server>__<tool>,
+#       so all 122 files naming the old prefix declared tools that no longer
+#       existed — silently, since an unresolvable tool name is dropped, not
+#       an error)
 #   FD  description value >= 40 chars, no orphan quote / broken escaping
 #       (issue #19: deming/fisher/leguin/ranganathan shipped with descriptions
 #       truncated to "\"W.", "Ronald A.", "Ursula K.", "S.R." — unroutable by
@@ -40,10 +46,11 @@ GEN_DIR="$ROOT/genius"
 files=0; blockers=0; warnings=0
 
 # Per-check pass/fail tallies (bash 3.2: parallel arrays)
-CHECKS="F1 F2 F3 F4 F5 F6 F7 F8 F9 FD B1 B2 B3 G1 G2 G3 P1"
+CHECKS="F1 F2 F3 F4 F5 F6 F7 F8 F9 FD FP B1 B2 B3 G1 G2 G3 P1"
 F1p=0; F1f=0; F2p=0; F2f=0; F3p=0; F3f=0; F4p=0; F4f=0
 F5p=0; F5f=0; F6p=0; F6f=0; F7p=0; F7f=0; F8p=0; F8f=0
-F9p=0; F9f=0; FDp=0; FDf=0; B1p=0; B1f=0; B2p=0; B2f=0; B3p=0; B3f=0
+F9p=0; F9f=0; FDp=0; FDf=0; FPp=0; FPf=0
+B1p=0; B1f=0; B2p=0; B2f=0; B3p=0; B3f=0
 G1p=0; G1f=0; G2p=0; G2f=0; G3p=0; G3f=0; P1p=0; P1f=0
 
 # Minimum description length (chars, inner value, excludes surrounding quotes).
@@ -51,6 +58,18 @@ G1p=0; G1f=0; G2p=0; G2f=0; G3p=0; G3f=0; P1p=0; P1f=0
 # clause, an output noun, and a distinctive marker into one sentence (verified
 # against the 79 currently-compliant genius descriptions, all >= 45 chars).
 FD_MIN_LEN=40
+
+# Every MCP tool prefix an agent is allowed to name. The host builds a tool's
+# name as mcp__plugin_<plugin-name>_<mcp-server-key>__<tool>, so BOTH halves are
+# load-bearing: a plugin rename invalidates every agent that named the old one,
+# and the host drops an unresolvable tool name silently rather than erroring.
+# Whole prefixes are matched (not parsed into plugin/server) because '_' is
+# legal inside both halves, which makes the split ambiguous.
+# source: hypermnesia-mcp 4.16.0 marketplace entry — "plugin renamed cortex ->
+# hypermnesia-mcp" (Cortex 4.15.0), MCP server key stays "cortex"; verified
+# against the installed 4.16.0 tool registry (tool_registry_memory.py,
+# tool_registry_nav.py) on 2026-07-27.
+KNOWN_MCP_PREFIXES="mcp__plugin_hypermnesia-mcp_cortex__ mcp__plugin_automatised-pipeline_automatised-pipeline__"
 
 BLOCKERS_FILE=$(mktemp)
 WARNINGS_FILE=$(mktemp)
@@ -134,6 +153,32 @@ check_tools_nonempty() {
   fi
 }
 
+# check_mcp_prefixes — FP: every mcp__plugin_..__ prefix the file names must be
+# in KNOWN_MCP_PREFIXES. A file naming zero MCP tools is not tallied (nothing to
+# ground), which keeps the check honest instead of passing by vacuity. Split out
+# of check_file() to keep that function under coding-standards.md §4.2.
+check_mcp_prefixes() {
+  local f="$1" rel="$2"
+  local found stale=0
+  found=$(grep -oh 'mcp__plugin_[A-Za-z0-9_-]*__' "$f" | sort -u)
+  [[ -z "$found" ]] && return
+
+  local prefix known
+  while IFS= read -r prefix; do
+    known=0
+    for k in $KNOWN_MCP_PREFIXES; do
+      [[ "$prefix" == "$k" ]] && known=1 && break
+    done
+    if [[ "$known" -eq 0 ]]; then
+      stale=1
+      echo "BLOCKER $rel: FP unknown MCP tool prefix '$prefix' (not in KNOWN_MCP_PREFIXES — renamed or uninstalled plugin; the host drops such tools silently)" >> "$BLOCKERS_FILE"
+      blockers=$(( blockers + 1 ))
+    fi
+  done <<< "$found"
+
+  if [[ "$stale" -eq 0 ]]; then FPp=$(( FPp + 1 )); else FPf=$(( FPf + 1 )); fi
+}
+
 # check_genius_extras — G1/G2/G3: genius-only shapes field, citation pattern,
 # <revolution> section. Split out of check_file() (same §4.2 reason as above).
 check_genius_extras() {
@@ -203,6 +248,7 @@ check_file() {
   check_fm "$f" "$rel" tools        F8p F8f BLOCKER
   check_tools_nonempty "$f" "$rel"
   check_description_quality "$f" "$rel"
+  check_mcp_prefixes "$f" "$rel"
 
   # B1 identity
   if grep -q '<identity>' "$f"; then B1p=$(( B1p + 1 )); else B1f=$(( B1f + 1 )); echo "BLOCKER $rel: B1 missing <identity>" >> "$BLOCKERS_FILE"; blockers=$(( blockers + 1 )); fi
