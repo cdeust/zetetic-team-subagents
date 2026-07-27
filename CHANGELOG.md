@@ -13,7 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 > no longer evidence of what was said at the time; the record should be honest
 > about having been edited. The pre-edit text is in git history.
 
-## [Unreleased]: plugin-currency check (three-value staleness)
+## [2.35.0]: plugin currency, attested releases, zero open static-analysis alerts
 
 ### Added
 - **`tools/plugin-version-check.sh`** answers "is the plugin I am running the one that was published?" by comparing **three** values, not two: what is **installed**, what the marketplace **pins**, and what the repo has **released**. It names two defects with different owners: `INSTALL_LAG` (`installed < pinned`, which the user fixes) and `PIN_LAG` (`pinned < released`, meaning **the release was never delivered**, fixed in the marketplace-owning repo, which the message names). A two-value check reports "up to date" against a stale pin, which for a rules-enforcement plugin is a false compliance statement one level up (issue #52; counterpart publishing-side gate: cdeust/Cortex#179).
@@ -23,8 +23,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 - **Compliance reports now stamp their standard**: the generated zetetic-spine (118 agents) requires any rule-compliance verdict to state the rules version it was evaluated under. A verdict read later is uninterpretable without it.
 - **`tools/tests/plugin-version-check/`**: 31 hermetic assertions covering every arm: current (silent, negative assertion), install lag, pin lag with the owning repo named, rules-changed vs rules-unchanged, both lags at once, undeterminable version, offline probe, malformed release tag, no-marketplace, usage error, withheld-release count, and a regression test pinning that releases are probed from the **plugin's** repo rather than the marketplace owner's.
 
+- **Attested release bundle** (#53): a release now delivers a deterministic tarball of exactly what it ships, an `EXECUTABLE-MANIFEST` hashing every hook and every shell/python tool, and a CycloneDX SBOM. All three are attested through Sigstore, self-verified before publishing, and uploaded with checksums; the workflow's actions are SHA-pinned with least-privilege OIDC. Everything this plugin ships executes in the user's session with no sandbox, and until now it shipped unattested: #52 showed that a five-releases-stale bundle went unnoticed, and a modified one would have too. Verify a download with `gh attestation verify zetetic-team-subagents.tar.gz --repo cdeust/zetetic-team-subagents`.
+- **`tools/verify-release-bundle.sh`** (+ `tools/tests/release-verify`): an install-path verifier that rejects a tampered tarball before unpacking it and a swapped executable before running it. 5 tamper-rejection tests, run by the existing tools-tests hard gate.
+- **`tools/build-release-bundle.sh` and `tools/gen-bundle-sbom.py`** assemble those artifacts.
+- **Shellcheck hard gate** (`.github/workflows/shellcheck.yml`): error severity over `hooks/` and `tools/`, with the tree measured and fixed to zero errors first, plus informational warnings. `codeql.yml` covers the python hooks and tools.
+- **`.github/dependabot.yml`** (github-actions ecosystem) and **`docs/SCORECARD.md`**, which records a written, source-controlled disposition for each repository-policy finding that a diff cannot resolve.
+
 ### Fixed
 - Release probing targeted the marketplace owner's repo instead of the plugin's own. Since `cortex-plugins` is a clone of `cdeust/Cortex` but serves `cdeust/zetetic-team-subagents`, this compared 2.34.0 against Cortex's 4.16.0 and produced a spurious `PIN_LAG`. Caught by running the tool against the live environment before it shipped; regression-tested as T14.
+- **All 33 CodeQL alerts cleared at the source** (#60), with no suppressions. The last two (`py/uninitialized-local-variable`, error severity) needed a structural fix rather than an annotation: `_read_payload()` and `_level_for()` are now total functions, so every caller local is assigned on every path. Annotating `_exit() -> NoReturn` was correct documentation and stays, but that check is intraprocedural and never consulted it, so the annotation was never going to close the alerts.
+- **Scorecard runs as an in-repo canonical workflow** (#58). A cross-repo reusable call produced `startup_failure` on main with 0 jobs, and OSSF `publish_results` additionally requires the analyzed repo's own workflow as the OIDC subject. This workflow class only triggers on main or on schedule, so PR CI structurally cannot validate it; `workflow_dispatch` is retained for post-merge verification.
+- **The 6 open Scorecard code-scanning findings closed** (#59).
+- **`redaction-checker.sh --full` now scans untracked files** (#64). It enumerated through `git ls-files`, so a new file that was not yet committed was never scanned: a local sweep passed while CI's committed-tree sweep correctly failed on the same content. It now uses `git ls-files --cached --others --exclude-standard`, which adds untracked-but-not-ignored copy paths and leaves tracked-file behaviour byte for byte unchanged. Regression test T16 fails on the pre-fix code and passes after it.
+- **Redaction groomed to zero across the tree** (#56) and gated so it stays there: 189 findings across 13 files, treated by shape rather than by find-and-replace. The README's 50 findings were rewritten as authored sentences. The checker itself was repaired in the process: `leverage` fired on `systems-leverage`, a shipped skill name in backticks, so inline code spans and link targets are now stripped before matching, at the same granularity fenced blocks already were, while link text is kept because the reader reads it.
+
+### Changed
+- **github-actions dependencies bumped** (#63): 9 updates.
 
 ## [2.34.0]: §15 No-Deviation Rule
 
