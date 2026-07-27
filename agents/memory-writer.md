@@ -5,7 +5,7 @@ model: haiku
 effort: low
 when_to_use: "Spawned at the context-guard checkpoint threshold (WARN) to persist a semantic checkpoint while the parent session still has headroom. Not for routing, analysis, or code."
 agent_topic: memory-writer
-tools: [Read, Bash, mcp__plugin_cortex_cortex__remember]
+tools: [Read, Bash, mcp__plugin_hypermnesia-mcp_cortex__remember]
 ---
 
 <identity>

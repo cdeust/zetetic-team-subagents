@@ -26,7 +26,7 @@ See `memory/contract.md §5.3`. Local FS is authoritative; Cortex is an eventual
 
 3. For each claimed job:
    - Base64-decode `content_b64` to get the post-op file contents (or skip for `op: "delete"`).
-   - Call `mcp__plugin_cortex_cortex__remember` with:
+   - Call `mcp__plugin_hypermnesia-mcp_cortex__remember` with:
      - `content`: the decoded contents (or a deletion marker `"__deleted__ <vpath>"` for deletes)
      - `tags`: `["memory-replica", "scope:<scope>", "agent:<agent_id>", "vpath:<vpath>"]` — the `vpath:` tag is the block's identity: Cortex upserts replica writes keyed on it (one memory row per block file, updated per drain), instead of appending a new near-duplicate snapshot each time (contract §8b; letta-code analog: one file, many commits)
      - `agent_topic`: `<scope>` — the job's `scope` field verbatim. This maps to `agent_context` in Cortex's DB (see `mcp_server/handlers/remember.py:351`), enabling `agent_briefing.py` to filter memories by agent at SubagentStart.
@@ -42,6 +42,6 @@ See `memory/contract.md §5.3`. Local FS is authoritative; Cortex is an eventual
 - **Local FS is authoritative.** Never re-read from Cortex and overwrite local files during a drain — this is a one-way replica.
 - **Never retry indefinitely in this command.** If a job fails twice in the same drain, release it and move on; surface the failure in the report.
 - **Quarantine jobs are not excluded.** Quarantine scope still replicates to Cortex but with the quarantine tag — Cortex consumers must honor the tag.
-- **Do not drain if Cortex MCP is unavailable.** Check `mcp__plugin_cortex_cortex__memory_stats` (or any Cortex tool) first; if it errors, tell the user and stop — leaving jobs in the queue is the correct behavior.
+- **Do not drain if Cortex MCP is unavailable.** Check `mcp__plugin_hypermnesia-mcp_cortex__memory_stats` (or any Cortex tool) first; if it errors, tell the user and stop — leaving jobs in the queue is the correct behavior.
 
 $ARGUMENTS

@@ -55,9 +55,9 @@ TAIL_BYTES = 1024 * 1024
 # tool calls; spine-evidence = recall / memory / web-evidence activity.
 CHANGE_RE = re.compile(r'"name"\s*:\s*"(Edit|Write|MultiEdit|NotebookEdit)"')
 EVIDENCE_RE = re.compile(
-    r'"name"\s*:\s*"(mcp__plugin_cortex_cortex__recall'
-    r'|mcp__plugin_cortex_cortex__unified_search'
-    r'|mcp__plugin_cortex_cortex__navigate_memory'
+    r'"name"\s*:\s*"(mcp__plugin_hypermnesia-mcp_cortex__recall'
+    r'|mcp__plugin_hypermnesia-mcp_cortex__unified_search'
+    r'|mcp__plugin_hypermnesia-mcp_cortex__navigate_memory'
     r'|WebSearch|WebFetch)"'
 )
 # memory-tool.sh view/search appears inside a Bash tool_input command string.
