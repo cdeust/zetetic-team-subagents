@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/skills-75-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-19_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+  <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
 > **11 problem-shaped skills backed by 97 sourced reasoning patterns, and commits are blocked when constants lack source citations.**
