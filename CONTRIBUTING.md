@@ -20,14 +20,14 @@ architecture.
 
 ## Dev setup
 
-**Prerequisites:** bash 4+, GNU coreutils, ripgrep (`rg`), python3 (for
-some tooling utilities).
+**Prerequisites:** bash 4+, GNU coreutils, ripgrep (`rg`), `jq`, python3 with
+`pytest` (`pip install pytest`).
 
 ```bash
 git clone https://github.com/cdeust/zetetic-team-subagents.git
 cd zetetic-team-subagents
 
-# Run the test suite (functional, ACL, concurrency, stale-lock, MCP, PII)
+# Run every suite in the repo (see Testing below)
 bash tests/run-all.sh
 
 # Try the zetetic-checker on a sample file
@@ -132,16 +132,42 @@ Full text in [`rules/coding-standards.md`](rules/coding-standards.md). Key load-
 
 ## Testing
 
+One command runs everything:
+
 ```bash
-bash tests/run-all.sh          # full suite
-bash tests/test-functional.sh  # agent invocation paths
-bash tests/test-acl.sh         # memory-tool ACL boundaries
-bash tests/test-concurrency.sh # stale-lock + concurrent-write
-bash tests/test-pii.sh         # secret-shield hook coverage
+bash tests/run-all.sh
 ```
 
-Tests are bash-driven and require no network access. A failing test
-must be fixed before merge.
+It discovers the suites rather than listing them, so this page cannot go stale
+as suites are added or renamed. To see what it will run without running it:
+
+```bash
+bash tests/run-all.sh --list
+```
+
+Three families are discovered:
+
+| family | what it covers |
+|---|---|
+| `python3 -m pytest` (`tests/`) | the Python gate cores: acceptance gate, manifest gate, semantic layer, context guard, zetetic spine |
+| `tools/tests/*/run-tests.sh` | one suite per tool: checkers, auditors, release verification, plugin sync, mutation gate |
+| `scripts/test-*.sh` | memory tool end-to-end, ACL, concurrency, stale-lock, MCP, PII, agent-id propagation, worktree sweep safety, agent spawn |
+
+To run a single suite while iterating, invoke it directly. The path is what
+`--list` printed, for example `bash tools/tests/zetetic-checker/run-tests.sh`.
+
+Suites require no network access and clean up after themselves. If your default
+`python3` has no `pytest`, point the runner at one that does:
+`PYTHON_BIN=/usr/bin/python3 bash tests/run-all.sh`. A missing `pytest` is
+reported as a failure, not skipped: a green run that silently omitted 334 tests
+is worse than a red one.
+
+A failing test must be fixed before merge.
+
+`tools/doc-command-check.sh` runs in CI and fails the build if any command in
+this file, README, `CODE_OF_CONDUCT.md`, `SECURITY.md` or `docs/` names a file
+the repo does not ship. That gate exists because this section once documented
+five test scripts, none of which existed (issue #73).
 
 ---
 

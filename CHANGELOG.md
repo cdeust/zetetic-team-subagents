@@ -15,6 +15,30 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`tests/run-all.sh`: one command that runs every suite.** It DISCOVERS the
+  suites by glob (pytest under `tests/`, `tools/tests/*/run-tests.sh`,
+  `scripts/test-*.sh`) instead of listing them, so adding or renaming a suite
+  cannot make the docs stale. `--list` prints what it would run. 26 suites,
+  fails closed: a missing `pytest` is reported as a failure, never skipped.
+- **`tools/doc-command-check.sh`: a hard CI gate** asserting that every command
+  a contributor-facing document tells the reader to run names a file this repo
+  actually ships. Scoped to runnable positions inside fenced blocks; host paths,
+  placeholders, `-m`/`-c` invocations and prompt-prefixed session transcripts
+  are not path claims. 14-case regression suite under `tools/tests/`.
+
+### Fixed
+- **CONTRIBUTING.md's five test commands all pointed at files that did not
+  exist** (issue #73): `tests/run-all.sh`, `tests/test-functional.sh`,
+  `tests/test-acl.sh`, `tests/test-concurrency.sh` and `tests/test-pii.sh`. A
+  first-time contributor's first command failed with "No such file or
+  directory". The Testing section now names the runner that exists, and the new
+  gate fails the build if it drifts again.
+- **CODE_OF_CONDUCT.md pointed conduct reports at a `package.json`** this repo
+  does not have. It now names `admin@ai-architect.tools`, the maintainer address
+  recorded in `.claude-plugin/plugin.json`, and states the escalation route when
+  a report concerns the maintainer.
+
 ### Changed
 - **The shellcheck warning-severity sweep is now a hard gate, and shellcheck is
   pinned.** Issue #74 measured 26 warning-severity findings across `hooks/` and

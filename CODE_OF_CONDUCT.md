@@ -19,9 +19,14 @@ faith. Contributors are expected to:
 ## Reporting
 
 If you observe behavior that falls short of this standard, contact the
-maintainer privately at the email listed in the project's `package.json`
-or via the disclosure channel in [`SECURITY.md`](SECURITY.md). Reports are
-treated confidentially.
+maintainer privately at **admin@ai-architect.tools** (the maintainer address
+recorded in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json)), or use
+the disclosure channel in [`SECURITY.md`](SECURITY.md). Reports are treated
+confidentially.
+
+Reports are read by the maintainer, who is also the sole enforcer of this
+document. If your report concerns the maintainer, the escalation route is
+GitHub's own abuse reporting, since there is no second person to appeal to.
 
 ## Enforcement
 
