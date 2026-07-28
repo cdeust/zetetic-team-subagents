@@ -18,6 +18,12 @@ This is the ecosystem's shortest path from a compromised artifact to code
 execution, because the payload does not even need to be compiled. That is the
 threat model the assurance below is built for.
 
+The full assurance case is [`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md):
+the threat model with its adversaries, the five trust boundaries this project
+has, the argument that secure design principles were applied, and the argument
+that common implementation weaknesses are countered. Every claim there carries
+its limit, including the boundaries where a control is weaker than it looks.
+
 ## Supply-chain assurance
 
 As of issue #53, every release (`.github/workflows/release.yml`) builds and

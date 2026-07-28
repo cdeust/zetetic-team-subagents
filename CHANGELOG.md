@@ -16,6 +16,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`docs/ASSURANCE-CASE.md`: the security argument, with its limits.** All four
+  parts the OpenSSF criterion requires, each individually identifiable: the
+  threat model with four tabulated adversaries; five trust boundaries enumerated
+  concretely (release bundle to install path, marketplace install, hook
+  invocation, tool invocation with model-supplied arguments, memory scope ACL);
+  the secure-design argument; and eleven weakness classes against their
+  counters. Three places where a control is weaker than it looks are stated
+  rather than omitted: the secret shield fails open on malformed input by
+  design, the memory ACL is permissive with no registry present and bypassable
+  by environment, and the fetch path does not restrict the URL scheme. Linked
+  from `SECURITY.md` and README.
 - **`GOVERNANCE.md`: who decides, and what happens if they stop.** A decision
   model (the maintainer merges; a change needs every hard gate green plus a
   completion ledger; disagreements resolve on evidence in the open), a roles
