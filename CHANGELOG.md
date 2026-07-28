@@ -16,6 +16,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`docs/ROADMAP.md`: a documented 12-month plan** (2026-07-28 to 2027-07-28)
+  with both halves the OpenSSF `documentation_roadmap` criterion asks for. Will
+  do: finish silver then the four unmet-but-fixable criteria named individually;
+  Python coverage to a blocking 80 percent then mutation testing as the strength
+  measure; a recorded end-to-end autonomous-build-loop run on a foreign repo;
+  roster growth under the counting gate. Will not do: sandboxing or runtime
+  enforcement of refusals, hosts other than Claude Code, any hosted service or
+  telemetry, localization. Every item states a Done-when condition naming the
+  artifact that would exist or the number that would move.
 - **`docs/COUNTING.md`: the counting convention.** Every quantity this project
   states about itself is defined once, with the exact command that produces it,
   plus the judgement calls it settles: an agent is a file carrying a `name:`
