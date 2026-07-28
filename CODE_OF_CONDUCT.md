@@ -25,8 +25,9 @@ the disclosure channel in [`SECURITY.md`](SECURITY.md). Reports are treated
 confidentially.
 
 Reports are read by the maintainer, who is also the sole enforcer of this
-document. If your report concerns the maintainer, the escalation route is
-GitHub's own abuse reporting, since there is no second person to appeal to.
+document. [`GOVERNANCE.md`](GOVERNANCE.md) records who that is and why there is
+no second person. If your report concerns the maintainer, the escalation route
+is GitHub's own abuse reporting.
 
 ## Enforcement
 

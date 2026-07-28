@@ -337,6 +337,7 @@ A team that never writes the file gets the strict defaults; a team that disagree
 - [`docs/AGENT-INTERNALS.md`](docs/AGENT-INTERNALS.md): agent file shape, frontmatter, routing
 - [`docs/COUNTING.md`](docs/COUNTING.md): how every number this project states about itself is defined and measured
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): what the project intends to do, and not do, over the next 12 months
+- [`GOVERNANCE.md`](GOVERNANCE.md): who decides, what a change needs to land, and what happens if the maintainer stops
 - [`agents/genius/INDEX.md`](agents/genius/INDEX.md): 400+ problem shapes → agent routing table
 - [`rules/coding-standards.md`](rules/coding-standards.md): the engineering standard agents enforce
 

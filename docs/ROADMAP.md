@@ -7,8 +7,8 @@ Written so that a reader can tell later whether it happened. Every item names
 the artifact that would exist, or the number that would move, if it did. Items
 without that are opinions, not plans, and are not listed.
 
-This is a single-maintainer project, so this page is one person's intent. It
-carries no delivery dates, because a date nobody is accountable to is
+This is a single-maintainer project ([`GOVERNANCE.md`](../GOVERNANCE.md)), so
+this page is one person's intent. It carries no delivery dates, because a date nobody is accountable to is
 decoration. It is revised when something lands or when an intent changes, and
 the change says which.
 
@@ -149,9 +149,10 @@ an oversight waiting to be corrected.
 
 ## How this page stays honest
 
-It is linked from [`README.md`](../README.md), and the commands and files it
-names are covered by `tools/doc-command-check.sh`, so a pointer that goes stale
-fails the build.
+It is linked from [`README.md`](../README.md) and from
+[`GOVERNANCE.md`](../GOVERNANCE.md), and the commands and files it names are
+covered by `tools/doc-command-check.sh`, so a pointer that goes stale fails the
+build.
 
 The dates at the top are the window this revision describes. A reader arriving
 after 2027-07-28 should treat an unrevised page as evidence that the roadmap was

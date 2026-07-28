@@ -16,6 +16,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`GOVERNANCE.md`: who decides, and what happens if they stop.** A decision
+  model (the maintainer merges; a change needs every hard gate green plus a
+  completion ledger; disagreements resolve on evidence in the open), a roles
+  table naming each role and its holder, and a continuity section that separates
+  what survives the maintainer becoming unavailable (MIT source, public history,
+  Sigstore attestations anchored in a transparency log rather than a held key)
+  from what stops (issue triage, merging, releases, the marketplace entry, the
+  reporting domain). The bus factor is stated as 1 rather than softened, and
+  fork-and-continue is described as weaker than a second maintainer rather than
+  argued into sufficiency.
 - **`docs/ROADMAP.md`: a documented 12-month plan** (2026-07-28 to 2027-07-28)
   with both halves the OpenSSF `documentation_roadmap` criterion asks for. Will
   do: finish silver then the four unmet-but-fixable criteria named individually;
