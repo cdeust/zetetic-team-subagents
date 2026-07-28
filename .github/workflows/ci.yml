@@ -50,6 +50,39 @@ jobs:
       - name: Run PII expanded suite
         run: bash scripts/test-memory-pii-expanded.sh
 
+  pytest:
+    name: Python Suite + Coverage Gate (hard gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest and coverage
+        run: python -m pip install --disable-pip-version-check pytest coverage
+
+      # HARD gate. Before issue #71 the four suites under tests/ ran NOWHERE in
+      # CI (`grep -rn pytest .github/` returned nothing), so a change that broke
+      # all of them landed green. pyproject.toml declared testpaths for a runner
+      # nothing called.
+      #
+      # Coverage runs in the SAME step as the suite because a coverage number
+      # measured from a different invocation than the one that gates is not a
+      # measurement of the gated thing. Scope, exclusions and the fail_under
+      # floor are declared in pyproject.toml, so CI and a local run cannot
+      # diverge — there are no --source or --fail-under flags here on purpose.
+      - name: Run pytest under coverage
+        run: python -m coverage run -m pytest -q
+
+      # `coverage report` exits non-zero below fail_under (80, over hooks/ +
+      # tools/). Verified to bite: raising the bar to 100 against the measured
+      # 99% exits 2. No "|| true" — that is the whole point of this job.
+      - name: Enforce the coverage floor
+        run: python -m coverage report
+
   agent-audit:
     name: Agent Definition Auditor
     runs-on: ubuntu-latest

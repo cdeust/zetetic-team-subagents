@@ -30,7 +30,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-import web_extract
+try:  # imported under its package path (test suite, mutation runs)
+    from tools import web_extract
+except ImportError:  # run as a script with tools/ on PYTHONPATH (web-ingest.sh)
+    import web_extract
 
 
 def _ssl_context() -> ssl.SSLContext:

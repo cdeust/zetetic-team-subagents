@@ -1,12 +1,56 @@
 # pyproject.toml — Python tooling config for zetetic-team-subagents.
 #
-# This repo's payload is agents + shell tools; the only Python is the gate cores
-# under tools/ (acceptance_gate.py, manifest_gate.py, semantic_layer.py). This
-# file exists to wire mutation testing (rules/coding-standards.md §12) and pytest
-# for those cores. There is no installable package.
+# This repo's payload is agents + shell tools; the Python is the gate cores and
+# hooks under tools/ and hooks/. This file wires pytest, the coverage gate
+# (issue #71) and mutation testing (rules/coding-standards.md §12). There is no
+# installable package.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# ── Coverage gate (issue #71) ────────────────────────────────────────────────
+# The source set is declared here rather than passed on a command line, so the
+# number CI enforces and the number a contributor measures locally cannot
+# diverge: `python3 -m coverage run -m pytest` reads this.
+#
+# SCOPE: hooks/ + tools/ — the shipped Python surface. These are the files the
+# marketplace install copies into ~/.claude and that then execute in the user's
+# session on lifecycle events and pre-commit gates, so they are exactly the
+# files whose untested lines are a user-facing risk.
+#
+# EXCLUDED, and why (the criterion asks for exclusions to be written down and
+# justified rather than left implicit):
+#
+#   scripts/         One-shot migrations (patch_dynamic_workflows.py,
+#                    patch_memory_architecture.py, patch_model_specs.py,
+#                    upgrade_agents.py, ...) that were run ONCE against this
+#                    tree to perform a rewrite and are kept as a record of what
+#                    was done. They ship to nobody, are invoked by nothing, and
+#                    have no current caller. Testing them would pin the shape of
+#                    a migration that has already happened. They are not in the
+#                    denominator because they are not in the product; if one is
+#                    ever re-run it is a new migration and gets a new script.
+#
+#   tests/           The suite measures the product, not itself.
+#
+# Measured on 2026-07-28 at 99% (1564 statements, 23 missed, 949 tests). The
+# floor is set at 80 rather than at the measured value on purpose: it is the
+# criterion's bar and a real bound, not a ratchet that turns any refactor red.
+[tool.coverage.run]
+source = ["hooks", "tools"]
+branch = false
+
+[tool.coverage.report]
+# A GATE, not a report: coverage exits non-zero below this, so CI fails.
+fail_under = 80
+show_missing = true
+skip_covered = false
+exclude_also = [
+    # The script entry point of every hook and tool. Executing it would run the
+    # hook against the test runner's own stdin; the functions it calls are
+    # covered directly instead.
+    "if __name__ == .__main__.:",
+]
 
 # Mutation testing — mutmut 3.x (boxed.gg/mutmut). The two keys below
 # (only_mutate, pytest_add_cli_args_test_selection) are REWRITTEN in place by

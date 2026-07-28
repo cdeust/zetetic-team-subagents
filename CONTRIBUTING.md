@@ -149,7 +149,7 @@ Three families are discovered:
 
 | family | what it covers |
 |---|---|
-| `python3 -m pytest` (`tests/`) | the Python gate cores: acceptance gate, manifest gate, semantic layer, context guard, zetetic spine |
+| `python3 -m pytest` (`tests/`) | every shipped Python file: the gate cores (acceptance gate, manifest gate, semantic layer), the hooks (context guard, zetetic spine, acceptance-gate stop hook, credential shield) and the tools (memory MCP server, web extract, web ingest, bundle SBOM) |
 | `tools/tests/*/run-tests.sh` | one suite per tool: checkers, auditors, release verification, plugin sync, mutation gate |
 | `scripts/test-*.sh` | memory tool end-to-end, ACL, concurrency, stale-lock, MCP, PII, agent-id propagation, worktree sweep safety, agent spawn |
 
@@ -168,6 +168,13 @@ A failing test must be fixed before merge.
 this file, README, `CODE_OF_CONDUCT.md`, `SECURITY.md` or `docs/` names a file
 the repo does not ship. That gate exists because this section once documented
 five test scripts, none of which existed (issue #73).
+
+The Python suite is a hard CI gate, and so is its coverage floor: `coverage.py`
+fails the build below **80%** statement coverage over `hooks/` plus `tools/`.
+Scope, floor and exclusions live in `pyproject.toml`, so a local
+`python3 -m coverage run -m pytest && python3 -m coverage report` measures
+exactly what CI enforces. Adding a shipped Python file without tests will turn
+the build red (issue #71).
 
 ---
 

@@ -16,6 +16,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **The Python suite runs in CI, gated on 80 percent coverage.** Before this,
+  `grep -rn pytest .github/` returned nothing: the suites under `tests/` ran
+  nowhere in CI, so a change that broke all of them landed green, and
+  `pyproject.toml` declared `testpaths` for a runner nothing called. pytest now
+  runs on push and pull_request as a hard gate, with `coverage.py` in the same
+  job and `fail_under = 80` over the shipped Python surface (`hooks/` plus
+  `tools/`). Scope, floor and exclusions are declared in `pyproject.toml` rather
+  than in flags, so a local run and CI cannot measure different things.
+- **625 new tests, taking Python coverage from 21 percent to 99.** Every shipped
+  Python file is now at 97 percent or above. The two the issue named as
+  highest-consequence and at zero, the credential denylist
+  `hooks/pre-tool-secret-shield.py` and the memory ACL surface
+  `tools/memory-mcp-server.py`, are at 98 and 99 percent. Also newly covered:
+  `web_extract` (100), `web_ingest` (98, driven entirely offline through a fake
+  `urlopen`), `stop-acceptance-gate` (99), `stop-context-guard` (97, previously
+  20 because the only exercise it got was a subprocess run),
+  `stop-zetetic-spine` (99) and `gen-bundle-sbom` (98).
 - **`docs/ASSURANCE-CASE.md`: the security argument, with its limits.** All four
   parts the OpenSSF criterion requires, each individually identifiable: the
   threat model with four tabulated adversaries; five trust boundaries enumerated
@@ -68,6 +85,18 @@ adheres to [Semantic Versioning](https://semver.org/).
   are not path claims. 14-case regression suite under `tools/tests/`.
 
 ### Fixed
+- **`tools/web_ingest.py` could not be imported under its package path.** A bare
+  `import web_extract` worked only because `tools/web-ingest.sh` sets
+  `PYTHONPATH`; `from tools import web_ingest` failed. It now tries the package
+  import first and falls back, so both the shipped invocation and the dotted
+  import (which the test suite and mutmut need) work.
+- **Two test-isolation defects, both found by measuring rather than reading.**
+  A `stop-acceptance-gate` test reached the REAL repository, ran the real
+  acceptance gate for ~50 seconds, and passed for the wrong reason (the real
+  gate happened to be green, not the code under test). A `stop-context-guard`
+  test would have written to the developer's real
+  `~/.claude/memories/checkpoints`. Both suites now redirect `HOME`, the state
+  directory and the repo root into a per-test tmp tree.
 - **Four files gave four different agent, skill and hook totals, and none
   matched the tree** (issue #72). README's badge claimed 119 agents while its
   footer claimed 118; CONTRIBUTING claimed 22 team agents, 64 skills and 18
