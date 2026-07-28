@@ -75,7 +75,10 @@ EOF
     echo "Verifying sources for: $(basename "$TARGET")"
     echo ""
     stale_count=0
-    while IFS='|' read -r _ num url status rest; do
+    # Columns: leading empty field, source number, URL, recorded status, rest.
+    # Only the URL is consulted — verify re-derives liveness from the network,
+    # so the recorded status is deliberately not trusted here.
+    while IFS='|' read -r _ _ url _ _; do
       url="$(echo "$url" | xargs)"
       [[ -z "$url" || "$url" == "URL" || "$url" == "..." ]] && continue
       http_code=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")

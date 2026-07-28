@@ -928,7 +928,14 @@ cmd_release_sync() {
 cmd_scopes() {
   # Per-scope summary: name, file count, total bytes, access role of current agent.
   # No file contents. Safe to auto-inject at spawn.
-  if [[ ! -d "$MEMORY_ROOT" ]] || [[ -z "$(ls -A "$MEMORY_ROOT" 2>/dev/null | grep -v '^\.' || true)" ]]; then
+  # Emptiness test by glob rather than `ls | grep` (SC2010): a plain * already
+  # skips dotfiles, which is what the old `ls -A ... | grep -v '^\.'` pipeline
+  # was doing, and it survives scope names containing whitespace or newlines.
+  local entry has_entry=0
+  for entry in "$MEMORY_ROOT"/*; do
+    if [[ -e "$entry" || -L "$entry" ]]; then has_entry=1; break; fi
+  done
+  if [[ ! -d "$MEMORY_ROOT" ]] || [[ "$has_entry" -eq 0 ]]; then
     echo "(memory is empty — use 'memory-tool.sh create /memories/<scope>/<file> <text>' to start)"
     return 0
   fi
@@ -941,8 +948,8 @@ cmd_scopes() {
     local files; files=$(find "$d" -type f ! -name '.*' 2>/dev/null | wc -l | tr -d ' ')
     local bytes; bytes=$(find "$d" -type f ! -name '.*' -exec wc -c {} + 2>/dev/null | awk 'END{print $1+0}')
     local access="none"
-    local r="$(acl_check "$scope" read)"
-    local w="$(acl_check "$scope" write)"
+    local r; r="$(acl_check "$scope" read)"
+    local w; w="$(acl_check "$scope" write)"
     if [[ "$r" == "allow" && "$w" == "allow" ]]; then access="rw"
     elif [[ "$r" == "allow" ]]; then access="r"
     elif [[ "$w" == "allow" ]]; then access="w"

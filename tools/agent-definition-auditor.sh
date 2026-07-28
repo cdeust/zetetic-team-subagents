@@ -45,13 +45,22 @@ GEN_DIR="$ROOT/genius"
 
 files=0; blockers=0; warnings=0
 
-# Per-check pass/fail tallies (bash 3.2: parallel arrays)
+# Per-check pass/fail tallies (bash 3.2: no associative arrays and no namerefs,
+# so the counters are plain variables reached by name through eval — check_fm
+# increments <CHK>p / <CHK>f given the name, and the summary loop reads them back
+# the same way).
+#
+# The tallies are derived FROM the CHECKS list rather than written out beside it.
+# Hand-written initialisers had drifted from it once already: F2p..F8f were
+# declared and never referenced by any statement shellcheck could see (SC2034 x14
+# in issue #74), and a check added to CHECKS without a matching pair would have
+# printed an unset value under `set -u`. One list, one loop, no second place to
+# forget.
 CHECKS="F1 F2 F3 F4 F5 F6 F7 F8 F9 FD FP B1 B2 B3 G1 G2 G3 P1"
-F1p=0; F1f=0; F2p=0; F2f=0; F3p=0; F3f=0; F4p=0; F4f=0
-F5p=0; F5f=0; F6p=0; F6f=0; F7p=0; F7f=0; F8p=0; F8f=0
-F9p=0; F9f=0; FDp=0; FDf=0; FPp=0; FPf=0
-B1p=0; B1f=0; B2p=0; B2f=0; B3p=0; B3f=0
-G1p=0; G1f=0; G2p=0; G2f=0; G3p=0; G3f=0; P1p=0; P1f=0
+for _chk in $CHECKS; do
+  eval "${_chk}p=0; ${_chk}f=0"
+done
+unset _chk
 
 # Minimum description length (chars, inner value, excludes surrounding quotes).
 # source: issue #19 — 40 chars is the shortest length that forces a trigger
@@ -295,7 +304,11 @@ echo "AGENT DEFINITION AUDIT  ($files files)"
 echo "============================================================"
 printf "%-4s %-7s %-7s\n" "CHK" "PASS" "FAIL"
 for c in $CHECKS; do
+  # p and f ARE assigned — by the eval on the line above, which shellcheck does
+  # not follow (SC2154). See the tally declarations near the top for why the
+  # indirection exists.
   eval "p=\$${c}p; f=\$${c}f"
+  # shellcheck disable=SC2154
   printf "%-4s %-7d %-7d\n" "$c" "$p" "$f"
 done
 echo ""

@@ -41,7 +41,7 @@
 #
 # Exit non-zero if any assertion fails. Run AFTER all hook-layer fixes land.
 set -uo pipefail   # NOT -e: we deliberately run hooks expecting non-zero codes.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || { echo "FATAL: cannot cd to suite directory $(dirname "$0")" >&2; exit 1; }
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || (cd ../../.. && pwd))"
 HOOKS="$REPO/hooks"

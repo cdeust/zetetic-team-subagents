@@ -21,7 +21,7 @@
 # DEV_SYMLINK_MAP / DEV_SYMLINK_VERSIONS, never touches ~/.claude or any
 # real plugin cache. Exit non-zero if any assertion fails.
 set -uo pipefail   # NOT -e: some doctor invocations are expected to exit 1.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || { echo "FATAL: cannot cd to suite directory $(dirname "$0")" >&2; exit 1; }
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || (cd ../../.. && pwd))"
 DOCTOR="$REPO/tools/dev-symlink-doctor.sh"

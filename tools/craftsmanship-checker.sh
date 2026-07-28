@@ -267,13 +267,24 @@ craft_size_finding() {
   threshold=$(awk -v l="$limit" -v b="$band" 'BEGIN{ printf "%d", l*b }')
   [[ -z "$raw" ]] && raw="$msg"
   if [[ "$val" -le "$threshold" ]]; then
-    craft_emit "$rule" "__ADVISE_BAND__" "$f" "$ln" "$raw" "$msg (within ${band}x flex band — advisory)"
+    craft_emit "$rule" "SEV___ADVISE_BAND__" "$f" "$ln" "$raw" "$msg (within ${band}x flex band — advisory)"
   else
     craft_emit "$rule" "$sevvar" "$f" "$ln" "$raw" "$msg"
   fi
 }
 
 # Synthetic SEV var for the flex band: always advise (unless strict promotes it).
+# craft_size_finding passes this NAME to craft_emit, and craft_effective_sev
+# resolves it by indirection, exactly like every real rule's SEV_* variable.
+# Assigned unconditionally (not `${SEV___ADVISE_BAND__:-advise}`) because the
+# flex band is not an operator-tunable rule: it is the §10 tolerance around a
+# rule that already has its own severity knob.
+#
+# Reported unused (SC2034) because its only reader is the indirect expansion
+# ${!1} in craft_effective_sev, reached via a string-literal argument. Every
+# other SEV_* escapes the same report only by self-referencing inside its own
+# `${SEV_X:-block}` default.
+# shellcheck disable=SC2034
 SEV___ADVISE_BAND__="advise"
 
 # ── Per-file driver ────────────────────────────────────────────────────

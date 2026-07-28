@@ -18,12 +18,12 @@ if ! [ -t 0 ]; then
 fi
 [[ -z "$HOOK_INPUT" ]] && exit 0
 
-# Extract tool name and error from stdin JSON
+# Extract the error from stdin JSON. Only the error text is extracted: routing
+# scores the error string alone (see score_category below), so the tool name was
+# computed and never consulted — removed rather than left as a dead subprocess.
 if command -v jq &>/dev/null; then
-  TOOL=$(echo "$HOOK_INPUT" | jq -r '.tool_name // empty' 2>/dev/null || echo "")
   ERROR=$(echo "$HOOK_INPUT" | jq -r '.error // .tool_error // empty' 2>/dev/null || echo "")
 else
-  TOOL=$(echo "$HOOK_INPUT" | grep -oE '"tool_name":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"tool_name":\s*"//' | sed 's/"$//' || echo "")
   ERROR=$(echo "$HOOK_INPUT" | grep -oE '"error":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"error":\s*"//' | sed 's/"$//' || echo "")
 fi
 

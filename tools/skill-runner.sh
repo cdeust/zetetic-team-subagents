@@ -34,7 +34,7 @@ if [[ -z "$SKILL_FILE" ]]; then
   echo "Skill not found: $NAME" >&2
   echo "" >&2
   echo "Available skills:" >&2
-  find "$SKILLS_DIR" -name "*.md" -not -name "_*" | xargs -I{} basename {} .md | sort | sed 's/^/  /' >&2
+  find "$SKILLS_DIR" -name "*.md" -not -name "_*" -exec basename {} .md \; | sort | sed 's/^/  /' >&2
   exit 1
 fi
 

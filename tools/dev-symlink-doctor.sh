@@ -227,7 +227,7 @@ repair_entry() {
 # (may be empty string) and returns 0; prints nothing and returns 0 if no
 # record or no state file exists yet (not an error — first run for a plugin).
 versions_history_get() {
-  local plugin_dir="$1" line p_dir hist
+  local plugin_dir="$1" p_dir hist
   [[ -f "$VERSIONS_FILE" ]] || return 0
   while IFS='|' read -r p_dir hist || [[ -n "$p_dir" ]]; do
     p_dir="$(trim "$p_dir")"

@@ -21,7 +21,7 @@
 # under test. Self-contained: builds throwaway fixture trees in a tmpdir,
 # never touches agents/. Exit non-zero if any assertion fails.
 set -uo pipefail   # NOT -e: the stale-prefix invocations are expected to exit 1.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || { echo "FATAL: cannot cd to suite directory $(dirname "$0")" >&2; exit 1; }
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || (cd ../../.. && pwd))"
 AUDITOR="$REPO/tools/agent-definition-auditor.sh"

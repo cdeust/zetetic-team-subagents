@@ -13,6 +13,40 @@ adheres to [Semantic Versioning](https://semver.org/).
 > no longer evidence of what was said at the time; the record should be honest
 > about having been edited. The pre-edit text is in git history.
 
+## [Unreleased]
+
+### Changed
+- **The shellcheck warning-severity sweep is now a hard gate, and shellcheck is
+  pinned.** Issue #74 measured 26 warning-severity findings across `hooks/` and
+  `tools/` and dispositioned every one: 3 `SC2164` (`cd` without `|| exit`, the
+  one finding with a real failure mode: a failed `cd` ran the rest of a suite
+  against the wrong tree), 2 `SC2155`, 1 `SC2038`, 1 `SC2010`, 1 `SC2154` and
+  19 `SC2034`. The tree is at zero, so `.github/workflows/shellcheck.yml` gates
+  warning severity the way it already gated error severity.
+- **`shellcheck` is installed from the pinned upstream release (0.11.0) and
+  checksum-verified**, not from `apt-get`. The same tree measured 31 findings
+  on 2026-07-25 and 26 on 2026-07-27 because the runner's package moved under
+  the gate; a scheduled run can no longer change what counts as a finding.
+
+### Fixed
+- **`tools/craftsmanship-checker.sh` flex-band severity is resolved, not
+  defaulted.** `craft_size_finding` emitted the sevvar `__ADVISE_BAND__`, which
+  named no variable, so `craft_effective_sev` fell through to its `:-advise`
+  default while the `SEV___ADVISE_BAND__` defined for that purpose sat unread.
+  Behaviour is unchanged (advisory inside the §10 band, promoted to blocking
+  under `strict`, both re-verified) and the mechanism now matches every other
+  rule.
+- **`tools/memory-tool.sh scopes` no longer tests emptiness with `ls | grep`.**
+  A glob replaces the pipeline, so a scope whose name contains whitespace is
+  listed correctly instead of being miscounted.
+- **`tools/agent-definition-auditor.sh` derives its tallies from `CHECKS`.**
+  The hand-written counter initialisers had drifted from the check list; a
+  check added to `CHECKS` without a matching pair would have printed an unset
+  value. One list, one loop.
+- **`hooks/post-tool-error-routing.sh` no longer extracts a tool name it never
+  reads.** Routing scores the error string alone; the extraction was a dead
+  subprocess on every tool error.
+
 ## [2.36.0]: follow the Cortex plugin rename, and gate the tool names that broke
 
 ### Fixed
