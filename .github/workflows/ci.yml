@@ -61,8 +61,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pytest and coverage
-        run: python -m pip install --disable-pip-version-check pytest coverage
+      # From requirements-dev.txt, not an inline list: the first run of this job
+      # failed because PyYAML was missing (tools/acceptance_gate.py and
+      # tools/semantic_layer.py import it at module load), which an inline list
+      # would let drift again. One file, installed by CI and by a contributor.
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
 
       # HARD gate. Before issue #71 the four suites under tests/ ran NOWHERE in
       # CI (`grep -rn pytest .github/` returned nothing), so a change that broke

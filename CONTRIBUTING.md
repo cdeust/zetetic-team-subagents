@@ -20,8 +20,10 @@ architecture.
 
 ## Dev setup
 
-**Prerequisites:** bash 4+, GNU coreutils, ripgrep (`rg`), `jq`, python3 with
-`pytest` (`pip install pytest`).
+**Prerequisites:** bash 4+, GNU coreutils, ripgrep (`rg`), `jq`, and python3
+with the test dependencies: `pip install -r requirements-dev.txt`. That file is
+the same one CI installs, so a green run locally means the same thing it means
+in CI.
 
 ```bash
 git clone https://github.com/cdeust/zetetic-team-subagents.git

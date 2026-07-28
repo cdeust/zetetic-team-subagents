@@ -1,0 +1,26 @@
+# Python dependencies for running this repository's test suite.
+#
+# There is no installable package here (see pyproject.toml): the plugin's Python
+# is hooks and tools that run from source. This file exists so CI and a
+# contributor install the SAME set, because the coverage gate compares against a
+# floor and a missing optional dependency silently changes which branches run.
+#
+# Everything else the tree imports is standard library, deliberately: the
+# shipped surface is stdlib-only apart from the two entries marked "runtime"
+# below, which keeps the install path free of a dependency tree.
+
+# Runtime — imported by tools/acceptance_gate.py and tools/semantic_layer.py to
+# read the gate configuration files. Not optional: without it, both modules fail
+# at import.
+PyYAML
+
+# Runtime, optional by construction — tools/web_ingest.py prefers certifi's CA
+# bundle and falls back to the system store inside a try/except. Pinned into the
+# dev set anyway so CI exercises the SAME branch a developer does; otherwise the
+# two environments measure different lines and the coverage number drifts
+# between them for no reason anyone can see.
+certifi
+
+# Test tooling.
+pytest
+coverage
