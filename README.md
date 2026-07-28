@@ -4,16 +4,16 @@
 
 <p align="center">
   <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-288-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/agents-119-8A2BE2" alt="Agents">
-  <img src="https://img.shields.io/badge/skills-75-green" alt="Skills">
+  <img src="https://img.shields.io/badge/suites-28-brightgreen" alt="Test suites">
+  <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
+  <img src="https://img.shields.io/badge/skills-76-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-19_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
 > **11 problem-shaped skills backed by 97 sourced reasoning patterns, and commits are blocked when constants lack source citations.**
-> You invoke a skill named after your problem's shape (`causal-audit`, `failure-forensics`, `estimation`, ...); it routes to the reasoning procedure that fits. 97 genius agents (plus 22 team-role agents = 119 total) each cite their primary paper and document their refusal conditions, paired with a pre-commit hook that blocks any floating-point constant with 3+ significant digits that lacks a `source:` annotation.
+> You invoke a skill named after your problem's shape (`causal-audit`, `failure-forensics`, `estimation`, ...); it routes to the reasoning procedure that fits. 97 genius agents (plus 23 team-role agents = 120 total) each cite their primary paper and document their refusal conditions, paired with a pre-commit hook that blocks any floating-point constant with 3+ significant digits that lacks a `source:` annotation.
 > Not a prompt library. A methodology with **commit-time enforcement**.
 
 ---
@@ -153,7 +153,7 @@ Agents, rules, skills, and commands are static Markdown and work natively. The
 | Capability | What it gives you (concretely) |
 |---|---|
 | **97 documented refusals** | Each genius agent's body documents conditions under which it refuses (when to stop, what to cite, when to hand off). Refusal conditions are intent statements, not enforced contracts. |
-| **75 multi-step workflows** | 11 problem-shaped skills route you to the right reasoning procedure; 64 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
+| **76 multi-step workflows** | 11 problem-shaped skills route you to the right reasoning procedure; 65 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
 | **Commit-time gates** | `pre-commit-zetetic.sh` blocks commits with `UNSOURCED` keywords (always/never/obviously) at any profile. `MAGIC_NUMBER` floats (3+ decimals without `source:`) and `TODO_NO_REF` warn at default profile, block under `ZETETIC_PROFILE=strict`. Active only when `git commit` is invoked through Claude Code's hook system. |
 | **Craftsmanship gate** | `tools/craftsmanship-checker.sh` mechanically enforces `coding-standards.md` §4 size limits + select structural rules. `FILE_TOO_LONG` (>500 lines) blocks; function/class/parameter/nesting block for recognized languages; grab-bag module names and layer-direction advise. Every threshold and per-rule severity (`block`/`advise`/`off`) is tunable per-repo via `.craftsmanship.conf`; defaults are the sourced §4 numbers. Runs at commit (local hook, changed files) and in CI (hard on newly-added files, informational full-tree sweep). Judgment rules (SRP/OCP/LSP/ISP, rule-of-three) are deliberately **not** mechanized, because a hook that fakes a verdict it can't reach just trains you to ignore it. |
 | **650+ problem-shape triggers** | [`agents/genius/INDEX.md`](agents/genius/INDEX.md) maps natural-language problem descriptions to reasoning methods. <!-- source: 759 table content rows (grep -cE '^\|' agents/genius/INDEX.md = 843, minus 84 separator rows), counted 2026-06-23; "650+" is a conservative floor. --> |
@@ -264,7 +264,7 @@ These are documented because the gates are real, the limits are real, and overcl
 
 ## Memory that survives sessions
 
-Ships a local replica of Anthropic's [`memory_20250818`](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool) tool with scope-based ACL: agents persist decisions, lessons, and project context to `/memories/<scope>/<file>` and recall them on every spawn. **241 tests passing** across functional, ACL, concurrency, stale-lock, MCP, and PII suites.
+Ships a local replica of Anthropic's [`memory_20250818`](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool) tool with scope-based ACL: agents persist decisions, lessons, and project context to `/memories/<scope>/<file>` and recall them on every spawn. **6 memory suites** cover functional, ACL, concurrency, stale-lock, MCP and PII, and all of them run in CI on every push.
 
 A `pre-tool-secret-shield` hook blocks any agent from reading `.env`, `.aws/credentials`, `*.pem`, `*.key`, or shell-history files, credentials the agent *can never need to read*. Full architecture: [`docs/MEMORY-MCP.md`](docs/MEMORY-MCP.md), contract: [`memory/contract.md`](memory/contract.md).
 
@@ -335,6 +335,7 @@ A team that never writes the file gets the strict defaults; a team that disagree
 - [`docs/MIGRATION.md`](docs/MIGRATION.md): adopting in an existing non-compliant project
 - [`docs/MEMORY-MCP.md`](docs/MEMORY-MCP.md): memory tool architecture + MCP server
 - [`docs/AGENT-INTERNALS.md`](docs/AGENT-INTERNALS.md): agent file shape, frontmatter, routing
+- [`docs/COUNTING.md`](docs/COUNTING.md): how every number this project states about itself is defined and measured
 - [`agents/genius/INDEX.md`](agents/genius/INDEX.md): 400+ problem shapes → agent routing table
 - [`rules/coding-standards.md`](rules/coding-standards.md): the engineering standard agents enforce
 
@@ -361,4 +362,4 @@ publications.
 
 ---
 
-<p align="center"><sub>Built by <a href="https://github.com/cdeust">cdeust</a>. All 118 agent files pass the <a href="tools/agent-definition-auditor.sh">structural auditor</a>. The system enforces source-citation discipline on the constants in its own commits.</sub></p>
+<p align="center"><sub>Built by <a href="https://github.com/cdeust">cdeust</a>. All 120 agent files pass the <a href="tools/agent-definition-auditor.sh">structural auditor</a>. The system enforces source-citation discipline on the constants in its own commits.</sub></p>

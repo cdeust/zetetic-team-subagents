@@ -16,6 +16,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`docs/COUNTING.md`: the counting convention.** Every quantity this project
+  states about itself is defined once, with the exact command that produces it,
+  plus the judgement calls it settles: an agent is a file carrying a `name:`
+  field (so `agents/genius/INDEX.md`, a routing table, is not one); skills are
+  11 problem-shaped entry points plus 65 category procedures; hooks are two
+  distinct quantities, 19 lifecycle registrations and 20 scripts on disk.
+- **`tools/doc-count-check.sh`: a hard CI gate** that recomputes all 25 claim
+  instances in README, CONTRIBUTING and `marketplace.json` and fails on drift.
+  It also fails when a registered pattern matches nothing, so rewording copy
+  cannot silently leave a claim unchecked. 22-case regression suite.
 - **`tests/run-all.sh`: one command that runs every suite.** It DISCOVERS the
   suites by glob (pytest under `tests/`, `tools/tests/*/run-tests.sh`,
   `scripts/test-*.sh`) instead of listing them, so adding or renaming a suite
@@ -28,6 +38,18 @@ adheres to [Semantic Versioning](https://semver.org/).
   are not path claims. 14-case regression suite under `tools/tests/`.
 
 ### Fixed
+- **Four files gave four different agent, skill and hook totals, and none
+  matched the tree** (issue #72). README's badge claimed 119 agents while its
+  footer claimed 118; CONTRIBUTING claimed 22 team agents, 64 skills and 18
+  hooks; `marketplace.json` claimed 78 skills and 42 tools. The tree holds 97
+  genius agents, 23 team agents, 76 skills, 19 hook registrations, 20 hook
+  scripts, 26 commands and 44 tools. Every claim is regenerated from the
+  convention and gated.
+- **Two test-count claims were not reproducible by any command**: a `tests-288`
+  badge and "241 tests passing" in the memory section. The bash suites report
+  their tallies in incompatible formats, so no total was derivable. Both are
+  replaced by counts a command actually prints: the suite count, and the number
+  of memory suites.
 - **CONTRIBUTING.md's five test commands all pointed at files that did not
   exist** (issue #73): `tests/run-all.sh`, `tests/test-functional.sh`,
   `tests/test-acl.sh`, `tests/test-concurrency.sh` and `tests/test-pii.sh`. A

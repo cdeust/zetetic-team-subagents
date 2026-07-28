@@ -150,8 +150,20 @@ jobs:
       # no legacy backlog to report-only around. CONTRIBUTING.md told every new
       # contributor to run five scripts that did not exist, and nothing noticed
       # because nothing checked.
+      - name: Install jq (used to count hook registrations)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Every documented command names a file that exists
         run: bash tools/doc-command-check.sh
+
+      # HARD gate: every number README, CONTRIBUTING and marketplace.json state
+      # about this project is recomputed from the tree. The convention the
+      # commands implement is docs/COUNTING.md. Four files previously gave four
+      # different totals and none matched the tree (issue #72), and one of those
+      # discrepancies had already been written down in memory/scope-coverage.md
+      # and then re-accumulated, because noticing is not measuring.
+      - name: Every documented count matches the tree
+        run: bash tools/doc-count-check.sh
 
   redaction-sweep:
     name: Redaction Sweep (hard gate)
