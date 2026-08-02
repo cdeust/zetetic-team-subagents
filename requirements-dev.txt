@@ -12,15 +12,19 @@
 # Runtime — imported by tools/acceptance_gate.py and tools/semantic_layer.py to
 # read the gate configuration files. Not optional: without it, both modules fail
 # at import.
-PyYAML
+PyYAML==6.0.3
 
 # Runtime, optional by construction — tools/web_ingest.py prefers certifi's CA
 # bundle and falls back to the system store inside a try/except. Pinned into the
 # dev set anyway so CI exercises the SAME branch a developer does; otherwise the
 # two environments measure different lines and the coverage number drifts
 # between them for no reason anyone can see.
-certifi
+certifi==2026.7.22
 
 # Test tooling.
-pytest
-coverage
+# Pin every direct requirement to the version whose hashes are committed in
+# requirements-dev.lock. Otherwise the CI lock-consistency check changes when
+# an upstream release appears even though this repository changed nothing
+# (reproduced 2026-08-02: coverage 7.15.3 superseded the locked 7.15.2).
+pytest==9.1.1
+coverage==7.15.2
