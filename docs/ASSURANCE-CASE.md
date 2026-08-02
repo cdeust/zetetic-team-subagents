@@ -17,11 +17,18 @@ hard enough, and this project gates user code on exactly that principle.
 
 ### What an attacker gains
 
-Installing this plugin grants **session-execution rights**. Everything shipped is
-source that runs with the user's own permissions, and there is no sandbox
-between a modified file and the machine. `hooks/` run automatically on session
-lifecycle events; `tools/*.sh` and `tools/*.py` run inside pre-commit and
-pre-push gates; `agents/` define what the assistant is permitted to do.
+Installing the full Claude Code plugin grants **session-execution rights**.
+Its hooks and tools run with the user's own permissions, and there is no sandbox
+between a modified executable file and the machine. `hooks/` run automatically
+on session lifecycle events; `tools/*.sh` and `tools/*.py` run inside pre-commit
+and pre-push gates; `agents/` define what the assistant is permitted to do.
+
+The isolated `plugins/zetetic-reasoning` package for Codex and Gemini CLI has a
+smaller boundary: it contains declarative manifests, one Markdown skill and
+Markdown references. It declares no executable component or server. Its host
+can still act on the skill's instructions, so source integrity and prompt
+content remain trust concerns, but installing that package does not register
+this repository's lifecycle code.
 
 This is the ecosystem's shortest path from a compromised artifact to code
 execution, because **the payload does not need to be compiled**. A one-line edit
@@ -81,7 +88,7 @@ before publishing, so the verifier is exercised on the path it guards.
 that the scripts are free of defects. It is worth nothing to a user who never
 runs the verification, and the verification is not automatic.
 
-### 2.2 Marketplace install into `~/.claude`
+### 2.2 Marketplace installs
 
 **Crossing:** `claude plugin install` copies agents, skills, hooks and tools into
 the host's plugin directory, from which they execute.
@@ -97,6 +104,13 @@ per-file manifest to verify and no signed tag to check. Closing this is a
 roadmap item (`version_tags_signed` in [`ROADMAP.md`](ROADMAP.md)). Until then,
 the honest statement is that marketplace installs rest on GitHub account
 security.
+
+The Codex marketplace and Gemini CLI install paths select only
+`plugins/zetetic-reasoning`. Their integrity anchor is likewise the repository
+commit, but their payload is static skill content and carries no executable
+entry point. The contract test rejects host-specific runtime declarations from
+that package. This does not prove the instructions are correct; it proves the
+declared package boundary is static and reviewable.
 
 ### 2.3 Hook invocation from the Claude Code lifecycle
 

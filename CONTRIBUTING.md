@@ -9,9 +9,10 @@ same standard the agents enforce on user code.
 
 ## What this project is
 
-A Claude Code plugin: agents (markdown files with frontmatter), skills
+A full Claude Code plugin: agents (markdown files with frontmatter), skills
 (slash commands), hooks (bash scripts that fire on git events), and tools
-(bash utilities the agents call). The pre-commit hook
+(bash utilities the agents call), plus an isolated static evidence-synthesis
+package for Codex and Gemini CLI. The pre-commit hook
 (`hooks/pre-commit-zetetic.sh`) blocks magic numbers, unsourced absolute
 claims, and ticket-less TODOs. See [README](README.md) for the full
 architecture.
@@ -41,6 +42,18 @@ Install the plugin into your local Claude Code instance:
 ```bash
 claude plugin marketplace add cdeust/zetetic-team-subagents
 claude plugin install zetetic-team-subagents
+```
+
+For changes under `plugins/zetetic-reasoning`, preserve the isolation boundary:
+the package may contain skills and references, but no Claude-specific paths,
+hooks or server dependency. Run its contract test and both manifest validators:
+
+```bash
+python3 -m pytest tests/test_portable_package.py
+python3 /path/to/plugin-creator/scripts/validate_plugin.py \
+  plugins/zetetic-reasoning
+python3 /path/to/skill-creator/scripts/quick_validate.py \
+  plugins/zetetic-reasoning/skills/evidence-synthesis
 ```
 
 ---

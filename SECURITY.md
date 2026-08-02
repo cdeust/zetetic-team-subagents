@@ -2,9 +2,9 @@
 
 ## What this plugin installs and executes
 
-Installing this plugin grants **session-execution rights**. Everything it ships
-is source that runs with your permissions. There is no sandbox between a
-modified file and your machine:
+Installing the full Claude Code plugin grants **session-execution rights**.
+Its executable source runs with your permissions. There is no sandbox between
+a modified executable file and your machine:
 
 - **`hooks/`** run automatically on Claude Code session-lifecycle events
   (session start/end, pre/post tool use, pre-commit, pre-push). A modified hook
@@ -17,6 +17,13 @@ modified file and your machine:
 This is the ecosystem's shortest path from a compromised artifact to code
 execution, because the payload does not even need to be compiled. That is the
 threat model the assurance below is built for.
+
+The isolated `plugins/zetetic-reasoning` package for Codex and Gemini CLI has a
+narrower trust boundary. It contains declarative manifests, one Markdown skill
+and Markdown references; it registers no repository executable or server. The
+host may still act on its instructions, so review the source and repository
+commit before installation. The portable-package contract test mechanically
+checks this static boundary.
 
 The full assurance case is [`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md):
 the threat model with its adversaries, the five trust boundaries this project
@@ -55,7 +62,8 @@ attests a bundle of exactly what it delivers:
   ```
 
 - **SBOM.** `zetetic-team-subagents.cdx.json` (CycloneDX) inventories every
-  bundled file with its hash, including vendored third-party skill material.
+  bundled file with its hash, including vendored third-party skill material and
+  the isolated portable package.
 
 - **Continuous analysis.** shellcheck over `hooks/` and `tools/`
   (`shellcheck.yml`, error-severity hard gate), CodeQL for the python

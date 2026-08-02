@@ -1,6 +1,29 @@
 # Install: manual + advanced configuration
 
-## Plugin install (one-line, recommended)
+## Portable evidence-synthesis install
+
+The portable package is intentionally smaller than the full distribution. It
+contains the `evidence-synthesis` skill and its sourced references, with no
+runtime enforcement or team-agent roster.
+
+### Codex
+
+```bash
+codex plugin marketplace add cdeust/zetetic-team-subagents
+codex plugin add zetetic-reasoning@zetetic-marketplace
+```
+
+### Gemini CLI
+
+```bash
+gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
+  --path plugins/zetetic-reasoning/skills/evidence-synthesis
+```
+
+The package also carries `gemini-extension.json` for installation from a local
+clone with `gemini extensions install ./plugins/zetetic-reasoning`.
+
+## Full Claude Code plugin install (one-line, recommended)
 
 ```bash
 claude plugin marketplace add cdeust/zetetic-team-subagents

@@ -1,0 +1,37 @@
+{
+  "name": "zetetic-reasoning",
+  "version": "1.0.0",
+  "description": "Synthesize conflicting evidence into a sourced, qualified conclusion with explicit counter-evidence and uncertainty.",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools",
+    "url": "https://github.com/cdeust"
+  },
+  "homepage": "https://github.com/cdeust/zetetic-team-subagents/tree/main/plugins/zetetic-reasoning",
+  "repository": "https://github.com/cdeust/zetetic-team-subagents",
+  "license": "MIT",
+  "keywords": [
+    "evidence-synthesis",
+    "research",
+    "reasoning",
+    "uncertainty"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Zetetic Reasoning",
+    "shortDescription": "Synthesize evidence without hiding uncertainty",
+    "longDescription": "Audit primary sources, expose warrants and counter-evidence, and produce a qualified synthesis that distinguishes observation from inference.",
+    "developerName": "Clement Deust",
+    "category": "Research",
+    "capabilities": [
+      "Read",
+      "Web"
+    ],
+    "websiteURL": "https://github.com/cdeust/zetetic-team-subagents",
+    "privacyPolicyURL": "https://github.com/cdeust/zetetic-team-subagents/blob/main/PRIVACY.md",
+    "defaultPrompt": [
+      "Synthesize these conflicting sources and grade the conclusion.",
+      "Audit the evidence and state what remains uncertain."
+    ]
+  }
+}

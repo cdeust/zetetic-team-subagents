@@ -124,11 +124,15 @@ will keep being stated.
 
 ### Support hosts other than Claude Code
 
-The hook lifecycle this depends on is Claude Code's: hooks fire inside its
+One bounded, static slice is now portable: `plugins/zetetic-reasoning` exposes
+the evidence-synthesis skill to Codex and Gemini CLI without claiming that the
+rest of the system moved with it.
+
+The full hook lifecycle remains Claude Code-specific: hooks fire inside its
 invocation path, and direct terminal commits, CI scripts and other editors
-bypass them. Porting to another IDE, CLI or agent runtime would mean either
-reimplementing that lifecycle or shipping a version whose gates silently do not
-fire, and a gate that silently does not fire is worse than no gate.
+bypass them. Porting the gates to another host would require a verified native
+lifecycle. The portable slice therefore ships no gates, agent roster or runtime
+enforcement, and its documentation states that limit at every install path.
 
 ### Run a hosted service, collect telemetry, or hold user accounts
 

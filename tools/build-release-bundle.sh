@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # build-release-bundle.sh — assemble the attestable release bundle (issue #53).
 #
-# This plugin ships NO compiled binary: every artifact is source that executes
-# in the user's session — hooks/ run on lifecycle events, tools/*.sh run in
-# pre-commit gates, agents/ define assistant permissions. There is no sandbox
-# between a tampered bundle and the machine, so the honest unit of provenance
-# is "the exact set of source files a release delivers", captured as a
+# This plugin ships NO compiled binary. The full host integration includes
+# source that executes in the user's session: hooks/ run on lifecycle events,
+# tools/*.sh run in pre-commit gates, and agents/ define assistant permissions.
+# The isolated portable package is static skill content. There is no sandbox
+# between a tampered executable and the machine, so the honest unit of
+# provenance is "the exact set of source files a release delivers", captured as a
 # deterministic tarball plus two side artifacts:
 #
 #   zetetic-team-subagents.tar.gz         the bundle (attested + checksummed)
@@ -29,13 +30,15 @@ cd "$REPO_ROOT"
 OUT_DIR="${1:-dist}"
 BUNDLE_NAME="zetetic-team-subagents"
 
-# The shipped surface: definition + session-executing content + the config a
-# marketplace install consumes. Deliberately excludes tests/, docs/, enterprise/
-# and dev scaffolding — a user does not execute those, and keeping them out
-# makes the executable manifest below the whole answer to "what runs".
+# The shipped surface: definition + session-executing content + the configs and
+# static skills marketplace installs consume. Deliberately excludes tests/,
+# docs/, enterprise/ and dev scaffolding. Keeping those out makes the executable
+# manifest below the whole answer to "what runs" while the SBOM inventories the
+# complete delivered payload.
 BUNDLE_PATHS=(
   agents hooks tools rules skills commands
   .claude-plugin/plugin.json .mcp.json
+  .agents/plugins/marketplace.json plugins/zetetic-reasoning
   README.md LICENSE PRIVACY.md SECURITY.md CHANGELOG.md
 )
 

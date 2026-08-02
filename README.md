@@ -97,6 +97,24 @@ These aren't prompts dressed up as commands. Each is a **multi-step pipeline** t
 
 ## Install
 
+### Portable evidence synthesis for Codex and Gemini CLI
+
+The isolated [`zetetic-reasoning`](plugins/zetetic-reasoning/README.md) package
+ships one evidence-synthesis skill and eight sourced reasoning references. It
+does not install the agent roster, lifecycle hooks or mechanical gates.
+
+```bash
+# Codex
+codex plugin marketplace add cdeust/zetetic-team-subagents
+codex plugin add zetetic-reasoning@zetetic-marketplace
+
+# Gemini CLI
+gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
+  --path plugins/zetetic-reasoning/skills/evidence-synthesis
+```
+
+### Full Claude Code distribution
+
 ```bash
 claude plugin marketplace add cdeust/zetetic-team-subagents
 claude plugin install zetetic-team-subagents

@@ -16,6 +16,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Portable evidence synthesis for Codex and Gemini CLI.** A separately
+  packaged `plugins/zetetic-reasoning` vertical slice exposes one skill and
+  eight sourced reasoning references through a Codex marketplace manifest and
+  a Gemini extension manifest. It deliberately carries no lifecycle hooks,
+  server registration or team-agent roster. Contract tests pin versions and
+  paths, validate the skill frontmatter, require source, refusal, uncertainty
+  and blind-spot language, and reject host-specific runtime tokens from the
+  portable package. The attested release bundle and SBOM now include it.
 - **The Python suite runs in CI, gated on 80 percent coverage.** Before this,
   `grep -rn pytest .github/` returned nothing: the suites under `tests/` ran
   nowhere in CI, so a change that broke all of them landed green, and
@@ -60,8 +68,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   Python coverage to a blocking 80 percent then mutation testing as the strength
   measure; a recorded end-to-end autonomous-build-loop run on a foreign repo;
   roster growth under the counting gate. Will not do: sandboxing or runtime
-  enforcement of refusals, hosts other than Claude Code, any hosted service or
-  telemetry, localization. Every item states a Done-when condition naming the
+  enforcement of refusals, a full port of the Claude-specific lifecycle to
+  other hosts, any hosted service or telemetry, or localization. Every item
+  states a Done-when condition naming the
   artifact that would exist or the number that would move.
 - **`docs/COUNTING.md`: the counting convention.** Every quantity this project
   states about itself is defined once, with the exact command that produces it,

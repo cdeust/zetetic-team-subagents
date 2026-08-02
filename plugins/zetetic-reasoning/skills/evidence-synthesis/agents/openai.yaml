@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence Synthesis"
+  short_description: "Synthesize evidence with explicit uncertainty"
+  default_prompt: "Use $evidence-synthesis to audit these sources and produce a qualified conclusion."

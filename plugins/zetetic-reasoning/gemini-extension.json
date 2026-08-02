@@ -1,0 +1,5 @@
+{
+  "name": "zetetic-reasoning",
+  "version": "1.0.0",
+  "description": "Synthesize conflicting evidence into a sourced, qualified conclusion with explicit counter-evidence and uncertainty."
+}

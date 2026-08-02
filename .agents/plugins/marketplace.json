@@ -1,0 +1,20 @@
+{
+  "name": "zetetic-marketplace",
+  "interface": {
+    "displayName": "Zetetic Reasoning"
+  },
+  "plugins": [
+    {
+      "name": "zetetic-reasoning",
+      "source": {
+        "source": "local",
+        "path": "./plugins/zetetic-reasoning"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Research"
+    }
+  ]
+}
