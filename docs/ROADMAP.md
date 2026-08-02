@@ -27,12 +27,14 @@ enumerated there rather than here, because that file is the one a machine reads.
 badge at [bestpractices.dev/projects/13847](https://www.bestpractices.dev/projects/13847)
 shows silver.
 
-Then the criteria that silver does not require but that are unmet and fixable:
+The two Silver MUST blockers present when this roadmap was written are now
+closed: `web_ingest` applies one absolute-HTTPS allowlist at caller input,
+redirect and discovered-link boundaries, with regression tests for downgrade
+and malformed-input cases. The remaining criteria that silver does not require
+but that are unmet and fixable are:
 
 | Criterion | What has to change |
 |---|---|
-| `crypto_used_network` | `tools/web_ingest.py` accepts a caller-supplied URL without restricting the scheme. Needs an https allowlist applied at that boundary and re-applied after each redirect hop, with plain HTTP available only behind an explicit opt-in. |
-| `input_validation` | The same boundary. Validation is present nearly everywhere and wrong in shape at exactly one place. |
 | `version_tags_signed` | Release tags are annotated but unsigned; `git tag -v` reports no signature. The artifacts are already Sigstore-attested, so this adds a second independent anchor. |
 | `dynamic_analysis` | No tool that varies its own inputs is applied. The checkers and the PII classifier are the natural targets: both consume adversarial text and both are currently tested against fixed fixtures. |
 

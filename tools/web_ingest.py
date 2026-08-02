@@ -77,6 +77,47 @@ class FetchError(RuntimeError):
     pass
 
 
+def _validate_url(url: str) -> str:
+    """Accept only absolute HTTPS URLs without embedded credentials.
+
+    This is the single trust-boundary policy for every caller-supplied URL and
+    every URL learned from a redirect, sitemap, or page.  Keeping it here makes
+    it difficult for a new fetch path to accidentally bypass transport policy.
+    """
+    if not isinstance(url, str) or not url:
+        raise FetchError("URL must be a non-empty string")
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        parsed.port  # Force validation of a malformed or out-of-range port.
+    except ValueError as exc:
+        raise FetchError(f"invalid URL: {url}") from exc
+    if parsed.scheme.lower() != "https":
+        raise FetchError(f"URL must use https: {url}")
+    if not hostname:
+        raise FetchError(f"URL must include a host: {url}")
+    if parsed.username is not None or parsed.password is not None:
+        raise FetchError(f"URL must not contain credentials: {url}")
+    return url
+
+
+class _HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject a redirect before urllib can follow it over insecure transport."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_url(urljoin(req.full_url, newurl))
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _open_url(req: urllib.request.Request):
+    """Open a request with verified TLS and the HTTPS-only redirect policy."""
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=_SSL_CTX),
+        _HttpsOnlyRedirectHandler(),
+    )
+    return opener.open(req, timeout=TIMEOUT_S)
+
+
 def _decode_body(raw: bytes, headers) -> str:
     if headers.get("Content-Encoding", "").lower() == "gzip":
         raw = gzip.decompress(raw)
@@ -96,6 +137,7 @@ def fetch(url: str, etag: str | None = None, last_mod: str | None = None,
     follow 307/308 ourselves with a bounded count and the same method (a redirected
     moved page is the canonical source — final_url records where the body came from).
     """
+    _validate_url(url)
     headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"}
     if etag:
         headers["If-None-Match"] = etag
@@ -103,9 +145,10 @@ def fetch(url: str, etag: str | None = None, last_mod: str | None = None,
         headers["If-Modified-Since"] = last_mod
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S, context=_SSL_CTX) as resp:
+        with _open_url(req) as resp:
+            final_url = _validate_url(resp.geturl())
             body = _decode_body(resp.read(MAX_BYTES), resp.headers)
-            return {"status": resp.status, "headers": resp.headers, "body": body, "final_url": resp.geturl()}
+            return {"status": resp.status, "headers": resp.headers, "body": body, "final_url": final_url}
     except urllib.error.HTTPError as exc:
         if exc.code == 304:
             return {"status": 304, "headers": exc.headers, "body": "", "final_url": url}
@@ -210,6 +253,11 @@ def scrape(url: str, max_age_s: int = DEFAULT_MAX_AGE_S, main_only: bool = True)
 
 # --- map (use-case) --------------------------------------------------------
 def _same_site(url: str, seed: str, subdomains: bool) -> bool:
+    try:
+        _validate_url(url)
+        _validate_url(seed)
+    except FetchError:
+        return False
     a, b = urlparse(url).netloc, urlparse(seed).netloc
     if a == b:
         return True

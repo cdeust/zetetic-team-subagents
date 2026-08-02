@@ -223,13 +223,18 @@ fan-out at 10, and hook stdin reads are bounded. The caps are named constants
 with sourced justifications, because the same rule this project enforces on user
 code applies to its own.
 
-**Limit:** the fetch path does **not** restrict the URL scheme. A caller-supplied
-`http://` URL is accepted on the same footing as `https://`, so transport
-confidentiality is not enforced at that boundary. This is the project's most
-concrete known weakness, is recorded as `crypto_used_network` and
-`input_validation` in `.bestpractices.json`, and is a named roadmap item. It is
-listed here rather than omitted because an assurance case that only argues its
-strengths is advocacy.
+The fetch path permits only absolute `https://` URLs with a host and without
+embedded credentials. The same validator runs at caller input, before urllib
+follows a redirect, on the final response URL before its body is read, and when
+discovered links are admitted to a crawl. Plain HTTP, local-file schemes,
+scheme-relative URLs, malformed ports and credential-bearing URLs fail closed
+as `FetchError`. The regression suite exercises each rejection and an HTTPS to
+HTTP downgrade.
+
+**Limit:** this control enforces URL shape and encrypted transport. It does not
+resolve hostnames ahead of the connection or claim to be a network sandbox, so
+deployment-level egress policy remains the appropriate control for private
+network reachability.
 
 ### Validate at boundaries, trust internal contracts
 

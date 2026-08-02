@@ -33,7 +33,7 @@ testpaths = ["tests"]
 #
 #   tests/           The suite measures the product, not itself.
 #
-# Measured on 2026-07-28 at 99% (1564 statements, 23 missed, 949 tests). The
+# Measured on 2026-08-03 at 97% (1607 statements, 50 missed, 969 tests). The
 # floor is set at 80 rather than at the measured value on purpose: it is the
 # criterion's bar and a real bound, not a ratchet that turns any refactor red.
 [tool.coverage.run]

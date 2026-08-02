@@ -16,6 +16,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **HTTPS-only validation at the web-ingest trust boundary.** Caller-supplied,
+  redirected and discovered URLs now pass through one allowlist that requires
+  absolute HTTPS, a host and no embedded credentials. Redirect downgrades and
+  malformed URL forms fail closed before their response body is consumed, with
+  offline regression tests covering every rejection path. This closes the
+  OpenSSF Silver `crypto_used_network` and `input_validation` MUST gaps. The
+  full pinned suite passes 969 tests with 97 percent statement coverage over
+  the declared shipped surface; the 80 percent CI floor remains enforced.
 - **Portable evidence synthesis for Codex and Gemini CLI.** A separately
   packaged `plugins/zetetic-reasoning` vertical slice exposes one skill and
   eight sourced reasoning references through a Codex marketplace manifest and
@@ -38,7 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   `hooks/pre-tool-secret-shield.py` and the memory ACL surface
   `tools/memory-mcp-server.py`, are at 98 and 99 percent. Also newly covered:
   `web_extract` (100), `web_ingest` (98, driven entirely offline through a fake
-  `urlopen`), `stop-acceptance-gate` (99), `stop-context-guard` (97, previously
+  transport), `stop-acceptance-gate` (99), `stop-context-guard` (97, previously
   20 because the only exercise it got was a subprocess run),
   `stop-zetetic-spine` (99) and `gen-bundle-sbom` (98).
 - **`docs/ASSURANCE-CASE.md`: the security argument, with its limits.** All four
@@ -50,8 +58,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   counters. Three places where a control is weaker than it looks are stated
   rather than omitted: the secret shield fails open on malformed input by
   design, the memory ACL is permissive with no registry present and bypassable
-  by environment, and the fetch path does not restrict the URL scheme. Linked
-  from `SECURITY.md` and README.
+  by environment, and the fetch path is a shape-and-transport control rather
+  than a network sandbox. Linked from `SECURITY.md` and README.
 - **`GOVERNANCE.md`: who decides, and what happens if they stop.** A decision
   model (the maintainer merges; a change needs every hard gate green plus a
   completion ledger; disagreements resolve on evidence in the open), a roles

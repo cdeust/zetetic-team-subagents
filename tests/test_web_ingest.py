@@ -12,15 +12,12 @@ memo is cleared between tests, so no test can observe another's state
 (rules/coding-standards.md §13.1 G3).
 
 Two facts about this module are documented here as tests rather than left
-implicit, because both are stated as limits in docs/ASSURANCE-CASE.md:
+implicit, because both are stated as controls in docs/ASSURANCE-CASE.md:
 
 - the body read is capped at MAX_BYTES and the redirect chain at MAX_REDIRECTS,
   so hostile content cannot exhaust memory or loop forever;
-- the fetch path does NOT restrict the URL scheme. `test_fetch_accepts_a_plain_
-  http_url_today` pins that as CURRENT behaviour with a pointer to the issue,
-  so the day someone adds the allowlist the test fails loudly and gets updated
-  deliberately, rather than the gap being closed silently in one direction or
-  reopened silently in the other.
+- the fetch path allows only absolute HTTPS URLs without embedded credentials,
+  and reapplies that rule to every redirect target and final response URL.
 """
 from __future__ import annotations
 
@@ -54,6 +51,11 @@ class _Response(io.BytesIO):
         self.status = status
         self.headers = _headers(**hdrs)
         self._url = url
+        self.read_called = False
+
+    def read(self, *args, **kwargs):
+        self.read_called = True
+        return super().read(*args, **kwargs)
 
     def geturl(self):
         return self._url
@@ -81,18 +83,18 @@ def isolate(tmp_path, monkeypatch):
 
 @pytest.fixture
 def serve(monkeypatch):
-    """Install a fake urlopen. Returns the recorded request list."""
+    """Install a fake transport. Returns the recorded request list."""
     requests: list[urllib.request.Request] = []
 
     def _install(handler):
-        def _urlopen(req, timeout=None, context=None):
+        def _urlopen(req):
             requests.append(req)
             result = handler(req)
             if isinstance(result, Exception):
                 raise result
             return result
 
-        monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
+        monkeypatch.setattr(wi, "_open_url", _urlopen)
         return requests
 
     return _install
@@ -287,19 +289,48 @@ def test_fetch_wraps_transport_failures(serve, exc):
         wi.fetch("https://ex.test/")
 
 
-def test_fetch_accepts_a_plain_http_url_today(serve):
-    """CURRENT behaviour, pinned deliberately, not endorsed.
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://ex.test/",
+        "file:///etc/passwd",
+        "//ex.test/path",
+        "https:///missing-host",
+        "https://user:secret@ex.test/",
+        "https://ex.test:99999/",
+    ],
+)
+def test_fetch_rejects_invalid_or_insecure_urls_before_transport(serve, url):
+    reqs = serve(_always(_Response(b"must not be reached")))
+    with pytest.raises(wi.FetchError):
+        wi.fetch(url)
+    assert reqs == []
 
-    The scheme is not restricted at this boundary, so http:// is accepted on the
-    same footing as https://. That is the project's known `crypto_used_network`
-    and `input_validation` gap, recorded in .bestpractices.json, argued in
-    docs/ASSURANCE-CASE.md Part 3 and scheduled in docs/ROADMAP.md.
 
-    This test exists so the day an allowlist lands, it FAILS and is updated on
-    purpose, rather than the change going in with nothing noticing either way.
-    """
-    serve(_always(_Response(b"plain", url="http://ex.test/")))
-    assert wi.fetch("http://ex.test/")["body"] == "plain"
+def test_redirect_handler_rejects_https_to_http_downgrade():
+    handler = wi._HttpsOnlyRedirectHandler()
+    request = urllib.request.Request("https://ex.test/start")
+    with pytest.raises(wi.FetchError, match="must use https"):
+        handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            _headers(Location="http://ex.test/downgrade"),
+            "http://ex.test/downgrade",
+        )
+
+
+def test_fetch_rejects_insecure_final_url_before_reading_body(serve):
+    response = _Response(b"must not be read", url="http://ex.test/final")
+    serve(_always(response))
+    with pytest.raises(wi.FetchError, match="must use https"):
+        wi.fetch("https://ex.test/start")
+    assert response.read_called is False
+
+
+def test_same_site_rejects_insecure_discovered_links():
+    assert wi._same_site("http://ex.test/page", "https://ex.test/", False) is False
 
 
 # ── robots.txt ───────────────────────────────────────────────────────────────
