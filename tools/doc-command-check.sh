@@ -11,8 +11,9 @@
 # Scope is deliberately narrow: only tokens in a position where the document is
 # instructing the reader to execute something — the argument to bash / sh /
 # python3 (with or without -m ... for module form) inside a fenced code block.
-# Prose mentions, host paths under ~/.claude, URLs and placeholders are not
-# path claims and are not checked. A wider net would flag the README's own
+# Prose mentions, host paths under ~/.claude, URLs and shell placeholders are
+# not path claims and are not checked. Literal /path/to examples are rejected:
+# they look executable but cannot resolve for any reader. A wider net would flag the README's own
 # illustrative output (`retry.py`) and train everyone to ignore the gate, which
 # is how the shellcheck warning backlog accumulated (issue #74).
 #
@@ -106,9 +107,19 @@ for doc in "${docs[@]}"; do
     tok="${tok%\"}"; tok="${tok#\"}"
     tok="${tok%\'}"; tok="${tok#\'}"
 
-    # Not a repo-path claim: host paths, absolute paths, URLs, shell variables
-    # or substitutions anywhere in the token, placeholders and globs. Each is
-    # something the reader substitutes, not a file this repository ships.
+    # A literal /path/to operand is an unresolved documentation placeholder,
+    # not a legitimate host path. Count it as missing before the general
+    # absolute-path exemption below.
+    case "$tok" in
+      /path/to/*)
+        checked=$(( checked + 1 ))
+        missing=$(( missing + 1 ))
+        printf 'MISSING  %s: unresolved /path/to placeholder: %s\n' "$where" "$tok"
+        continue ;;
+    esac
+
+    # Not a repo-path claim: real host paths, URLs, shell variables or
+    # substitutions anywhere in the token, angle placeholders and globs.
     case "$tok" in
       ''|'~'*|/*|http*|*'$'*|*'<'*|*'>'*|*'*'*|*'{'*) continue ;;
     esac

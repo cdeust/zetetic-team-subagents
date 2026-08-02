@@ -82,6 +82,10 @@ assert_run "absolute path is not a repo claim" 2 '```bash
 bash /usr/local/bin/whatever.sh
 ```'
 
+assert_run "literal /path/to placeholder is rejected" 1 '```bash
+python3 /path/to/plugin-creator/scripts/validate_plugin.py plugin
+```' "/path/to/plugin-creator/scripts/validate_plugin.py"
+
 assert_run "placeholder in angle brackets is not a repo claim" 2 '```bash
 bash <repo>/tools/zetetic-checker.sh
 ```'

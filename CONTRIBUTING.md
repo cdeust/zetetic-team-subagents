@@ -50,9 +50,9 @@ hooks or server dependency. Run its contract test and both manifest validators:
 
 ```bash
 python3 -m pytest tests/test_portable_package.py
-python3 /path/to/plugin-creator/scripts/validate_plugin.py \
-  plugins/zetetic-reasoning
-python3 /path/to/skill-creator/scripts/quick_validate.py \
+python3 tools/sync-portable-references.py --check
+bash tools/run-codex-validators.sh \
+  plugins/zetetic-reasoning \
   plugins/zetetic-reasoning/skills/evidence-synthesis
 ```
 

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "plugins" / "zetetic-reasoning"
@@ -36,6 +39,22 @@ def _frontmatter_keys(path: Path) -> set[str]:
         line.split(":", 1)[0]
         for line in frontmatter.splitlines()
         if line and not line.startswith((" ", "\t"))
+    }
+
+
+def _load_skill(path: Path) -> dict:
+    text = (path / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter = yaml.safe_load(text.split("---\n", 2)[1])
+    reference_names = set(re.findall(r"\(references/([a-z-]+\.md)\)", text))
+    references = {
+        name: (path / "references" / name).read_text(encoding="utf-8")
+        for name in reference_names
+    }
+    return {
+        "name": frontmatter["name"],
+        "description": frontmatter["description"],
+        "instructions": text.split("---\n", 2)[2],
+        "references": references,
     }
 
 
@@ -97,6 +116,29 @@ def test_skill_links_exactly_the_vendored_references() -> None:
     assert all((reference_dir / link).is_file() for link in links)
 
 
+def test_codex_and_gemini_host_layouts_load_the_complete_skill(tmp_path: Path) -> None:
+    codex_plugin = tmp_path / "codex" / "plugins" / "zetetic-reasoning"
+    shutil.copytree(PACKAGE, codex_plugin)
+    codex_manifest = _json(codex_plugin / ".codex-plugin" / "plugin.json")
+    codex_skill = (
+        codex_plugin / codex_manifest["skills"] / "evidence-synthesis"
+    ).resolve()
+
+    gemini_skill = tmp_path / "gemini" / "skills" / "evidence-synthesis"
+    shutil.copytree(SKILL, gemini_skill)
+
+    loaded = {
+        "codex": _load_skill(codex_skill),
+        "gemini-cli": _load_skill(gemini_skill),
+    }
+    assert loaded["codex"] == loaded["gemini-cli"]
+    for host, skill in loaded.items():
+        assert skill["name"] == "evidence-synthesis", host
+        assert set(skill["references"]) == REFERENCES, host
+        assert "Question and scope" in skill["instructions"], host
+        assert all("Primary sources" in text for text in skill["references"].values()), host
+
+
 def test_every_reference_has_multiple_traceable_sources() -> None:
     for path in (SKILL / "references").glob("*.md"):
         text = path.read_text(encoding="utf-8")
@@ -140,3 +182,11 @@ def test_release_bundle_includes_portable_marketplace_and_package() -> None:
     )
     assert ".agents/plugins/marketplace.json" in script
     assert "plugins/zetetic-reasoning" in script
+
+
+def test_portable_references_are_generated_from_canonical_agents() -> None:
+    subprocess.run(
+        ["python3", "tools/sync-portable-references.py", "--check"],
+        cwd=ROOT,
+        check=True,
+    )

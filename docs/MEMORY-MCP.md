@@ -41,7 +41,7 @@ The repo's `.mcp.json` registers the server automatically:
 If your MCP host doesn't auto-discover `.mcp.json`:
 
 ```bash
-claude mcp add memory -- python3 /path/to/zetetic-team-subagents/tools/memory-mcp-server.py
+claude mcp add memory -- python3 tools/memory-mcp-server.py
 ```
 
 Set `MEMORY_AGENT_ID` in your shell or MCP host env to the agent's slug: every write is attributed in the audit log under that ID. `scripts/spawn-agent.sh` exports this automatically.

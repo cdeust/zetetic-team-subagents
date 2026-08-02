@@ -114,6 +114,22 @@ jobs:
           python -m pip install --disable-pip-version-check
           --require-hashes -r requirements-dev.lock
 
+      - name: Run pinned OpenAI Codex validators on the packaged skill
+        run: |
+          bash tools/run-codex-validators.sh \
+            plugins/zetetic-reasoning \
+            plugins/zetetic-reasoning/skills/evidence-synthesis
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Check generated portable references are current
+        run: python3 tools/sync-portable-references.py --check
+
+      - name: Load the skill from Codex and Gemini host layouts
+        run: >-
+          python -m pytest -q tests/test_portable_package.py
+          -k codex_and_gemini_host_layouts_load_the_complete_skill
+
       # HARD gate. Before issue #71 the four suites under tests/ ran NOWHERE in
       # CI (`grep -rn pytest .github/` returned nothing), so a change that broke
       # all of them landed green. pyproject.toml declared testpaths for a runner
