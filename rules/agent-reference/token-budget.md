@@ -9,12 +9,20 @@ audience: team agents — loaded on demand via Read, never at spawn
 
 ### Model limits (authoritative)
 
-| Model | Context window | Max output | Session budget (hard cap) | Checkpoint threshold |
-|---|---|---|---|---|
-| Claude Fable 5 | 1,000K | — | 160K | ~120K |
-| Claude Opus 4.8 | 1,000K | 128K | 200K | ~180K |
-| Claude Sonnet 4.6 | 1,000K | 64K | 200K | ~180K |
-| Claude Haiku 4.5 | 200K | 64K | 170K | ~120K |
+| Model | Model ID | Context window | Max output | Session budget (hard cap) | Checkpoint threshold |
+|---|---|---|---|---|---|
+| Claude Fable 5 | `claude-fable-5` | 1,000K | 128K | 160K | ~120K |
+| Claude Opus 5 | `claude-opus-5` | 1,000K | 128K | 200K | ~180K |
+| Claude Opus 4.8 | `claude-opus-4-8` | 1,000K | 128K | 200K | ~180K |
+| Claude Sonnet 5 | `claude-sonnet-5` | 1,000K | 128K | 200K | ~180K |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` | 1,000K | 128K | 200K | ~180K |
+| Claude Haiku 4.5 | `claude-haiku-4-5` | 200K | 64K | 170K | ~120K |
+
+Source: Anthropic model catalog (`claude-api` reference, cached 2026-06-24) for context/max-output/IDs; `~/.claude/ctxguard-thresholds.json` for session budget and checkpoint threshold.
+
+Two corrections applied in this revision: Sonnet 4.6 max output is **128K**, not 64K (the previous table understated it), and Fable 5 max output is **128K**, previously left blank.
+
+**Threshold resolution is by substring match on the lowercased model id**, first match wins (`fable` → `mythos` → `haiku` → `sonnet` → `opus`, then a default). `claude-opus-5` therefore resolves through the `opus` row and `claude-sonnet-5` through the `sonnet` row — **no new entry in `ctxguard-thresholds.json` is required for the 5-series**, and adding one would be redundant.
 
 **Your model and threshold are named in your core file's `<token-budget>` stub** (declared per agent; authoritative values in `~/.claude/ctxguard-thresholds.json`). Apply the corresponding row above.
 

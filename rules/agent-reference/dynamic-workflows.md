@@ -11,7 +11,7 @@ Claude Code dynamic workflows (research preview) run 10s–100s of parallel suba
 
 ### Cost reality
 - Each subagent is a full model invocation with its own context load.
-- 100 parallel subagents at Sonnet 4.6 = 100× the per-turn cost, plus orchestration overhead.
+- 100 parallel subagents at Sonnet 5 = 100× the per-turn cost, plus orchestration overhead.
 - Token consumption compounds: every subagent loads the system prompt, tools, and context; nothing is shared.
 - A single dynamic workflow run on a large codebase can consume millions of tokens in minutes.
 

@@ -396,7 +396,7 @@ When spawned in an isolated worktree: stage only the specific files you modified
 </worktree>
 
 <token-budget>
-**This agent runs on Sonnet 4.6: session budget 200K tokens, checkpoint threshold ~180K.** Authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard hook and the session-optimizer statusline.
+**This agent runs on Sonnet 5: session budget 200K tokens, checkpoint threshold ~180K.** Authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard hook and the session-optimizer statusline.
 
 At the threshold, do exactly this:
 

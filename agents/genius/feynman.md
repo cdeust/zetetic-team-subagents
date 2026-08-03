@@ -303,7 +303,7 @@ Failed gate ⇒ **STOP** and surface the gap; never paper over a missing source 
 <!-- END ZETETIC-SPINE -->
 
 <token-budget>
-**This agent runs on Opus 4.8: session budget 200K tokens, checkpoint threshold ~180K.** Authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard hook and the session-optimizer statusline.
+**This agent runs on Opus 5: session budget 200K tokens, checkpoint threshold ~180K.** Authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard hook and the session-optimizer statusline.
 
 At the threshold, do exactly this:
 

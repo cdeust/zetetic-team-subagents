@@ -54,7 +54,7 @@ The Cortex session_start hook injects hot+anchored memories and the latest check
 
 **Neither should be modified mid-session.** Modifying the system prompt mid-session busts the KV cache (full context reload cost). Hot memory injection at session start is handled by the hook — not by the agent.
 
-**Opus 4.8 exception**: Mid-conversation `"system"` role messages (injected by the harness/orchestrator) are cache-safe incremental updates that do not modify the top-level system prompt. Use these for token-budget updates, permission changes, and scope narrowing. You receive them; you do not send them.
+**Mid-conversation system-message exception** (Opus 5, Opus 4.8, Fable 5, Mythos 5 — not Sonnet 5): mid-conversation `"system"` role messages (injected by the harness/orchestrator) are cache-safe incremental updates that do not modify the top-level system prompt. Use these for token-budget updates, permission changes, and scope narrowing. You receive them; you do not send them.
 
 ### What to write where
 

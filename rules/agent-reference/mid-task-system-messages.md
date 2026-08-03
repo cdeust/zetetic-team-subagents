@@ -5,7 +5,7 @@ read_when: "You receive a mid-task system message, or you need a scope/budget/pe
 audience: team agents — loaded on demand via Read, never at spawn
 ---
 
-## Mid-Task System Messages (Opus 4.8 — Research Preview)
+## Mid-Task System Messages (Opus 5, Opus 4.8, Fable 5, Mythos 5 — GA, no beta header; NOT Sonnet 5)
 
 **Technical mechanism:** The Messages API now supports `"system"` as a **role inside the conversation history** (not a change to the top-level `system` parameter). Agents can update Claude's instructions mid-task without editing the top-level system prompt — which means the prompt cache stays intact and earlier turns keep hitting cache.
 
