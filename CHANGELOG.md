@@ -91,8 +91,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   directory containing `tasks/`, its subsequent `git diff-tree` exited 128.
   Both post-commit advisory hooks now resolve `git -C`, the event workdir/cwd,
   and the process cwd in that order, and fail open if none is a repository.
-  Regression coverage replays the non-git host-cwd failure and
-  verifies both the advisory behavior and the exit-0 contract.
+  Command parsing stops at shell separators so an earlier `git -C` cannot leak
+  into a later commit, and it follows the measured Claude Code form
+  `cd <repo> && git commit`. Regression coverage asserts the exact selected
+  repository under precedence conflicts as well as the exit-0 contract.
 - **`tools/web_ingest.py` could not be imported under its package path.** A bare
   `import web_extract` worked only because `tools/web-ingest.sh` sets
   `PYTHONPATH`; `from tools import web_ingest` failed. It now tries the package

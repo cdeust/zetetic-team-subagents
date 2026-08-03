@@ -396,6 +396,40 @@ else
   fail "post-commit-lab-notebook git -C context: expected advisory exit 0, got rc=$rc out='$out'"
 fi
 
+# An explicit git -C target wins over a conflicting event workdir. The
+# repositories expose different advisory sentinels, so this asserts the chosen
+# repository rather than merely the hook's exit code.
+out="$( ( cd "$NON_GIT_ROOT" && bash "$POST_LAB" \
+  <<<"$(bash_event_context "git -C '$LAB_ROOT' commit -m x" "$NON_GIT_ROOT" "$DIFF_ROOT")" ) 2>&1 )"
+rc=$?
+if [[ "$rc" -eq 0 ]] && grep -q 'Research Session Active' <<<"$out"; then
+  pass "post-commit-lab-notebook gives git -C precedence over event workdir"
+else
+  fail "post-commit-lab-notebook precedence: expected LAB_ROOT, got rc=$rc out='$out'"
+fi
+
+# A -C on an earlier, non-commit git command must not leak across `&&` into a
+# later commit. The later commit runs in the event workdir (DIFF_ROOT).
+out="$( ( cd "$NON_GIT_ROOT" && bash "$POST_DIFF" \
+  <<<"$(bash_event_context "git -C '$LAB_ROOT' log && git commit -m x" "$NON_GIT_ROOT" "$DIFF_ROOT")" ) 2>&1 )"
+rc=$?
+if [[ "$rc" -eq 0 ]] && grep -q 'Consider updating' <<<"$out"; then
+  pass "post-commit-difficulty isolates git -C at shell command boundaries"
+else
+  fail "post-commit-difficulty separator context: expected DIFF_ROOT, got rc=$rc out='$out'"
+fi
+
+# Claude Code commonly emits `cd <repo> && git commit`. Honour that concrete
+# shell cwd transition without evaluating arbitrary shell syntax.
+out="$( ( cd "$NON_GIT_ROOT" && bash "$POST_LAB" \
+  <<<"$(bash_event_context "cd '$LAB_ROOT' && git commit -m x" "$NON_GIT_ROOT" "")" ) 2>&1 )"
+rc=$?
+if [[ "$rc" -eq 0 ]] && grep -q 'Research Session Active' <<<"$out"; then
+  pass "post-commit-lab-notebook resolves leading cd repository context"
+else
+  fail "post-commit-lab-notebook leading cd: expected LAB_ROOT, got rc=$rc out='$out'"
+fi
+
 for hook in "$POST_DIFF" "$POST_LAB"; do
   printf '%s' "$(bash_event_context 'git commit -m x' "$NON_GIT_ROOT" "")" \
     | ( cd "$NON_GIT_ROOT" && bash "$hook" ) >/dev/null 2>&1
