@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Zetetic Agents: 97 reasoning patterns, one epistemic standard" width="100%"/>
+  <img src="assets/banner.svg" alt="Zetetic reasoning for AI agents: sourced evidence, explicit uncertainty, one epistemic standard" width="100%"/>
 </p>
 
 <p align="center">
@@ -12,8 +12,8 @@
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
-> **11 problem-shaped skills backed by 97 sourced reasoning patterns, and commits are blocked when constants lack source citations.**
-> You invoke a skill named after your problem's shape (`causal-audit`, `failure-forensics`, `estimation`, ...); it routes to the reasoning procedure that fits. 97 genius agents (plus 23 team-role agents = 120 total) each cite their primary paper and document their refusal conditions, paired with a pre-commit hook that blocks any floating-point constant with 3+ significant digits that lacks a `source:` annotation.
+> **Cross-platform evidence synthesis for Codex, Gemini CLI, and Claude Code, plus a full Claude-native distribution of 11 problem-shaped skills backed by 97 sourced reasoning patterns.**
+> The portable package audits primary sources, counter-evidence, and uncertainty on all three hosts. The full Claude Code package additionally routes skills such as `causal-audit`, `failure-forensics`, and `estimation` across 97 genius agents (plus 23 team-role agents = 120 total), lifecycle hooks, and a pre-commit gate that blocks any floating-point constant with 3+ significant digits unless it carries a `source:` annotation.
 > Not a prompt library. A methodology with **commit-time enforcement**.
 
 ---

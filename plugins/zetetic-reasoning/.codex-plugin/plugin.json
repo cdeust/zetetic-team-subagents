@@ -12,6 +12,9 @@
   "license": "MIT",
   "keywords": [
     "evidence-synthesis",
+    "agent-skills",
+    "codex",
+    "gemini-cli",
     "research",
     "reasoning",
     "uncertainty"

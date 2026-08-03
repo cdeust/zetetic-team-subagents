@@ -1,7 +1,7 @@
 {
   "name": "zetetic-marketplace",
   "interface": {
-    "displayName": "Zetetic Reasoning"
+    "displayName": "Zetetic Reasoning — Evidence Synthesis"
   },
   "plugins": [
     {
