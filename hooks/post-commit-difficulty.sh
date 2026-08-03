@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # post-commit-difficulty.sh — After commit, check if difficulty books need updating
-set -euo pipefail
+# Advisory PostToolUse hooks must fail open.  In particular, the hook process
+# may start outside the repository even when the completed command used
+# ``git -C`` or supplied its own tool workdir.
+set -uo pipefail
 
 # Command guard: only fire after git commit (matcher: "Bash" fires on ALL Bash calls)
 HOOK_INPUT=""
@@ -29,13 +32,18 @@ fi
 GIT_VERB_RE='(^|[;&|({])[[:space:]]*((sudo|command|env)[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|({]*/)?git[[:space:]]+(-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?[[:space:]]+)*(commit|push)([[:space:];&|)<>]|$)'
 if ! printf '%s\n' "$BASH_CMD" | grep -qE "$GIT_VERB_RE" 2>/dev/null; then exit 0; fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+HOOK_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/git-context.sh
+source "$HOOK_DIR/lib/git-context.sh"
+if ! REPO_ROOT="$(zt_resolve_repo_root "$HOOK_INPUT" "$BASH_CMD")"; then
+  exit 0
+fi
 DB_DIR="$REPO_ROOT/tasks"
 
 [[ ! -d "$DB_DIR" ]] && exit 0
 
 # Get files in the last commit
-COMMITTED=$(git -C "$REPO_ROOT" diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null)
+COMMITTED=$(git -C "$REPO_ROOT" diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null || true)
 [[ -z "$COMMITTED" ]] && exit 0
 
 # Check if any difficulty book references the committed files' directories

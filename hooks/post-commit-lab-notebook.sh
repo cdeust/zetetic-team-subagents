@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # post-commit-lab-notebook.sh — Prompt for lab notebook entry after commit during research session
 # Lightweight check: if research/NOTEBOOK.md exists, remind to log the commit.
-set -euo pipefail
+# Advisory PostToolUse hooks must fail open.  The command may target a repo via
+# a tool workdir or `git -C` while the hook process itself starts elsewhere.
+set -uo pipefail
 
 # Command guard: only fire after git commit (matcher: "Bash" fires on ALL Bash calls)
 HOOK_INPUT=""
@@ -29,7 +31,12 @@ fi
 ZT_GIT_VERB_RE='(^|[;&|({])[[:space:]]*((sudo|command|env)[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|({]*/)?git[[:space:]]+(-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?[[:space:]]+)*(commit|push)([[:space:];&|)<>]|$)'
 if ! printf '%s' "$BASH_CMD" | grep -qE "$ZT_GIT_VERB_RE" 2>/dev/null; then exit 0; fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+HOOK_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/git-context.sh
+source "$HOOK_DIR/lib/git-context.sh"
+if ! REPO_ROOT="$(zt_resolve_repo_root "$HOOK_INPUT" "$BASH_CMD")"; then
+  exit 0
+fi
 NOTEBOOK="$REPO_ROOT/research/NOTEBOOK.md"
 SESSION_FILE="$REPO_ROOT/research/.session.json"
 

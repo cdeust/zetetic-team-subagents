@@ -11,6 +11,9 @@
 #       .get(); they must fail OPEN (exit 0), not crash (exit 1).
 #   R4 stop-acceptance-gate non-dict payload -> allow (exit 0, no block).
 #   R5 stop-context-guard   non-dict payload -> allow (exit 0, no block).
+#   R6 PostToolUse repo context: post-commit advisory hooks must resolve a repo
+#       from tool_input.workdir or `git -C` even when the hook cwd is not a
+#       repository, and must always exit 0 when no repo can be resolved.
 #   A7 git-verb guard across ALL FIVE gate hooks (pre-commit-zetetic,
 #       pre-push-review, pre-push-provenance, post-commit-difficulty,
 #       post-commit-lab-notebook): wrapper/separator forms behind sudo/env/a
@@ -65,6 +68,18 @@ json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; 
 
 # Build a Bash-tool event JSON for the given command string.
 bash_event() { printf '{"tool_name":"Bash","tool_input":{"command":%s}}' "$(json_str "$1")"; }
+bash_event_context() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json
+import sys
+
+command, cwd, workdir = sys.argv[1:4]
+event = {"cwd": cwd, "tool_name": "Bash", "tool_input": {"command": command}}
+if workdir:
+    event["tool_input"]["workdir"] = workdir
+print(json.dumps(event))
+PY
+}
 read_event() { printf '{"tool_name":"Read","tool_input":{"file_path":%s}}' "$(json_str "$1")"; }
 
 echo "C2 hook-layer regression suite"
@@ -344,6 +359,50 @@ a7_check_hook "post-commit-difficulty" "$POST_DIFF"         "$DIFF_ROOT" "" \
   'Consider updating' "commit"
 a7_check_hook "post-commit-lab-notebook" "$POST_LAB"        "$LAB_ROOT"  "" \
   'Research Session Active' "commit"
+
+# =====================================================================
+# R6 — PostToolUse hooks run in the host cwd, which can differ from the tool's
+# workdir.  The old difficulty hook fell back to a non-git directory containing
+# tasks/, then leaked git diff-tree's exit 128 into the session.
+# =====================================================================
+echo " R6 PostToolUse repository context and fail-open contract:"
+NON_GIT_ROOT="$TMP/r6-non-git"
+mkdir -p "$NON_GIT_ROOT/tasks"
+
+out="$( ( cd "$NON_GIT_ROOT" && bash "$POST_DIFF" \
+  <<<"$(bash_event_context "git -C '$DIFF_ROOT' commit -m x" "$NON_GIT_ROOT" "")" ) 2>&1 )"
+rc=$?
+if [[ "$rc" -eq 0 ]] && grep -q 'Consider updating' <<<"$out"; then
+  pass "post-commit-difficulty resolves git -C repo from non-git cwd"
+else
+  fail "post-commit-difficulty git -C context: expected advisory exit 0, got rc=$rc out='$out'"
+fi
+
+out="$( ( cd "$NON_GIT_ROOT" && bash "$POST_DIFF" \
+  <<<"$(bash_event_context 'git commit -m x' "$NON_GIT_ROOT" "$DIFF_ROOT")" ) 2>&1 )"
+rc=$?
+if [[ "$rc" -eq 0 ]] && grep -q 'Consider updating' <<<"$out"; then
+  pass "post-commit-difficulty resolves tool_input.workdir"
+else
+  fail "post-commit-difficulty workdir context: expected advisory exit 0, got rc=$rc out='$out'"
+fi
+
+out="$( ( cd "$NON_GIT_ROOT" && bash "$POST_LAB" \
+  <<<"$(bash_event_context "git -C '$LAB_ROOT' commit -m x" "$NON_GIT_ROOT" "")" ) 2>&1 )"
+rc=$?
+if [[ "$rc" -eq 0 ]] && grep -q 'Research Session Active' <<<"$out"; then
+  pass "post-commit-lab-notebook resolves git -C repo from non-git cwd"
+else
+  fail "post-commit-lab-notebook git -C context: expected advisory exit 0, got rc=$rc out='$out'"
+fi
+
+for hook in "$POST_DIFF" "$POST_LAB"; do
+  printf '%s' "$(bash_event_context 'git commit -m x' "$NON_GIT_ROOT" "")" \
+    | ( cd "$NON_GIT_ROOT" && bash "$hook" ) >/dev/null 2>&1
+  rc=$?
+  [[ "$rc" -eq 0 ]] && pass "$(basename "$hook") fails open without a repository" \
+                    || fail "$(basename "$hook") leaked exit $rc without a repository"
+done
 
 # =====================================================================
 # R1 — macOS-no-timeout: with timeout AND gtimeout absent from PATH, a fed
