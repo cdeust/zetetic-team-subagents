@@ -89,9 +89,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   the host session.** `post-commit-difficulty.sh` previously fell back to the
   hook process cwd; when a tool ran `git -C <repo> commit` from a non-git
   directory containing `tasks/`, its subsequent `git diff-tree` exited 128.
-  Both post-commit advisory hooks now resolve `tool_input.workdir`, `git -C`,
-  the event cwd and the process cwd in that order, and fail open if none is a
-  repository. Regression coverage replays the non-git host-cwd failure and
+  Both post-commit advisory hooks now resolve `git -C`, the event workdir/cwd,
+  and the process cwd in that order, and fail open if none is a repository.
+  Regression coverage replays the non-git host-cwd failure and
   verifies both the advisory behavior and the exit-0 contract.
 - **`tools/web_ingest.py` could not be imported under its package path.** A bare
   `import web_extract` worked only because `tools/web-ingest.sh` sets
