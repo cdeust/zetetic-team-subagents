@@ -1,12 +1,16 @@
-# Labelling prompt — Phase 0 gold set (FROZEN 2026-08-04, before batch 3 was read)
+# Labelling prompt: Phase 0 gold set (FROZEN 2026-08-04, before batch 3 was read)
 
 This is the exact instruction handed to every labeller. It is identical for A, B and C;
 only the model and the input/output paths differ. Archived so the labelling pass is
-replayable — batches 1 and 2 ran on a prompt reconstructed at the time and NOT archived,
+replayable. Batches 1 and 2 ran on a prompt reconstructed at the time and NOT archived,
 which is a declared reproducibility gap for those 120 cases.
 
----
+The block below is the frozen stimulus, quoted verbatim. Everything between the
+delimiters is byte-for-byte what the labellers were given and must not be edited,
+including its punctuation. House copy rules apply to this file's prose, not to
+quoted evidence.
 
+```
 You are labelling real turns from software-engineering sessions for a routing benchmark.
 
 Read `~/.claude/goa-phase0/label-rubric.md` FIRST, in full, before opening any case.
@@ -43,3 +47,4 @@ Binding constraints:
 
 Emit nothing but the JSONL file. Your final message is a single line:
 `<n> cases labelled -> <OUT_PATH>`.
+```

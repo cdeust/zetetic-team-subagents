@@ -1,9 +1,9 @@
-# Phase 0 protocol — replayable labelling and agreement measurement
+# Phase 0 protocol: replayable labelling and agreement measurement
 
 This directory holds everything needed to REPRODUCE the Phase 0 labelling of the
 graph-of-agents refonte with an independent set of labellers, on any model family.
 
-It deliberately holds no cases. See "Getting the cases" below — that gap is the
+It deliberately holds no cases. See "Getting the cases" below. That gap is the
 point of this document, not an oversight.
 
 ## What Phase 0 measures, and what it found
@@ -41,14 +41,14 @@ agreement, part of the measured kappa is family, not rubric ambiguity.
 
 | File | Role |
 |---|---|
-| `label-rubric.md` | The 15 shapes + `none`, descriptions copied verbatim from each skill's `description:` frontmatter — exactly what the router sees. FROZEN before any case was read. |
+| `label-rubric.md` | The 15 shapes + `none`, descriptions copied verbatim from each skill's `description:` frontmatter, exactly what the router sees. FROZEN before any case was read. |
 | `labeling-prompt.md` | The instruction handed to every labeller, identical for all. FROZEN. |
 | `../../tools/mine_shape_cases.py` | Mines unlabelled candidates from session transcripts. |
 | `../../tools/score_shape_labels.py` | Cohen (1960) and Fleiss (1971) kappa, majority adjudication, three-way-split extraction. |
 
 ## Replaying it
 
-1. **Mine candidates** (or receive them — see below):
+1. **Mine candidates** (or receive them, see below):
 
    ```
    python3 tools/mine_shape_cases.py --out cases.jsonl --sample 0
@@ -59,7 +59,7 @@ agreement, part of the measured kappa is family, not rubric ambiguity.
 
 2. **Label blind, one labeller per model.** Hand each labeller `labeling-prompt.md`
    verbatim, substituting `<CASES_PATH>` and `<OUT_PATH>`. Where the prompt refers to
-   `~/.claude/goa-phase0/label-rubric.md`, read it as this directory's copy — the path
+   `~/.claude/goa-phase0/label-rubric.md`, read it as this directory's copy. The path
    is left as-is because the prompt is frozen and must not be edited between runs.
 
    Constraint 5 of the prompt is the load-bearing one: a labeller who sees another
@@ -77,7 +77,7 @@ agreement, part of the measured kappa is family, not rubric ambiguity.
    labeller whose work was split across batches stays one rater.
 
 4. **Adjudicate.** Build a cases file from the disagreement ids containing `case_id`
-   and `text` ONLY — no votes — and hand it to a third labeller under the same prompt.
+   and `text` ONLY, with no votes, and hand it to a third labeller under the same prompt.
    Re-run the scorer with three raters. Cases where all three differ are NOT
    auto-resolved: a tie broken by rater order would encode the order as evidence.
 
@@ -112,4 +112,4 @@ repository owner's call:
   unless the removal is itself reported.
 
 Mining a fresh corpus from your own transcripts needs none of the above, and answers
-the cross-family question just as well — the confound is about raters, not cases.
+the cross-family question just as well, because the confound is about raters, not cases.

@@ -1,3 +1,11 @@
+# Labelling rubric: Phase 0 gold set (FROZEN before any case was read)
+
+The block below is the frozen rubric, quoted verbatim. Every labeller read it in
+full before opening a case. It is byte-for-byte what they were given and must not
+be edited, including its punctuation. House copy rules apply to this file's prose,
+not to quoted evidence.
+
+```
 # Labelling rubric — Phase 0 gold set (FROZEN before any case was read)
 
 Assign to each case EXACTLY ONE label: one of the 15 shape names below, or `none`.
@@ -77,3 +85,4 @@ Find where a small push changes the whole system. Use when local fixes keep fail
 ## `none`
 
 No routable problem stated (see rule 1).
+```
