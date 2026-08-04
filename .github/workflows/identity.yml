@@ -38,18 +38,22 @@ jobs:
       - name: Fetch the pinned identity contract
         run: |
           set -euo pipefail
+          # Outside the working tree on purpose: the contract lists the revoked
+          # prefixes, so downloading it into the repo would make the scan below
+          # find them in the file it just wrote.
           curl --fail --location --silent --show-error \
                --connect-timeout 5 --max-time 30 --retry 2 \
-               "$CONTRACT_URL" -o contract.json
-          jq -e '.schema_version == 1' contract.json > /dev/null \
+               "$CONTRACT_URL" -o "$RUNNER_TEMP/contract.json"
+          jq -e '.schema_version == 1' "$RUNNER_TEMP/contract.json" > /dev/null \
             || { echo "::error::unsupported contract schema_version"; exit 1; }
 
       - name: Derive the tool prefix rather than restating it
         run: |
           set -euo pipefail
-          plugin=$(jq -r '.claude_plugin' contract.json)
-          server=$(jq -r '.mcp_server' contract.json)
-          published=$(jq -r '.claude_tool_prefix' contract.json)
+          contract="$RUNNER_TEMP/contract.json"
+          plugin=$(jq -r '.claude_plugin' "$contract")
+          server=$(jq -r '.mcp_server' "$contract")
+          published=$(jq -r '.claude_tool_prefix' "$contract")
           derived="mcp__plugin_${plugin}_${server}__"
           if [ "$published" != "$derived" ]; then
             echo "::error::contract is internally inconsistent: published '$published' != derived '$derived'"
@@ -65,15 +69,18 @@ jobs:
           while read -r revoked; do
             # A line may keep a revoked spelling on purpose (historical record,
             # a fixture that must contain it). It must say so explicitly.
-            hits=$(grep -rn --binary-files=without-match -- "$revoked" . \
+            # -e carries the pattern so no `--` is needed: `--` would end option
+            # parsing and turn the --exclude-dir flags into path operands.
+            hits=$(grep -rn --binary-files=without-match \
                      --exclude-dir=.git --exclude-dir=.github \
+                     -e "$revoked" . \
                    | grep -v 'identity-allow-legacy' || true)
             if [ -n "$hits" ]; then
               echo "::error::revoked upstream prefix still present: $revoked"
               printf '%s\n' "$hits"
               status=1
             fi
-          done < <(jq -r '.revoked_claude_tool_prefixes[]' contract.json)
+          done < <(jq -r '.revoked_claude_tool_prefixes[]' "$RUNNER_TEMP/contract.json")
           exit $status
 
       - name: The canonical prefix must actually be used
@@ -81,8 +88,9 @@ jobs:
           set -euo pipefail
           # Guards against the opposite failure: a repo that removed the stale
           # spelling without adopting the current one still calls nothing.
-          count=$(grep -rl --binary-files=without-match -- "$EXPECTED_PREFIX" . \
-                    --exclude-dir=.git --exclude-dir=.github | wc -l | tr -d ' ')
+          count=$(grep -rl --binary-files=without-match \
+                    --exclude-dir=.git --exclude-dir=.github \
+                    -e "$EXPECTED_PREFIX" . | wc -l | tr -d ' ')
           echo "files naming the canonical prefix: $count"
           [ "$count" -gt 0 ] || {
             echo "::error::no file names $EXPECTED_PREFIX; the agents lost their code intelligence"
