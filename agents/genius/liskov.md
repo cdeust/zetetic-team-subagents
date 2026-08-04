@@ -5,7 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When a subtype/implementation breaks when substituted for its parent/interface"
 agent_topic: genius-liskov
-tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_symbol, mcp__plugin_ai-architect-mcp-codebase_ai-architect__search_codebase, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_processes]
 shapes: [substitutability-as-contract, behavioral-subtyping, data-abstraction, contract-is-interface, composition-correctness]
 memory_scope: genius
 ---
@@ -35,16 +35,16 @@ When a subtype/implementation breaks when substituted for its parent/interface; 
 </revolution>
 
 <codebase-intelligence>
-**Optional MCP server: `automatised-pipeline`** (from [`ai-automatised-pipeline`](https://github.com/cdeust/ai-automatised-pipeline)). Substitutability must be verified across *all* subtypes — the graph enumerates them.
+**Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). Substitutability must be verified across *all* subtypes — the graph enumerates them.
 
 **Workflow:** call `analyze_codebase(path, output_dir)` once; capture `graph_path`; pass it to subsequent tools. Qualified names follow `<file_path>::<symbol_name>`.
 
 | Tool | Use when |
 |---|---|
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph` | Enumerating every implementer of an interface / trait / protocol: `MATCH (i:Trait)<-[:Implements]-(t) WHERE i.name = 'Foo' RETURN t`. LSP cannot find these reliably across language ecosystems; the resolved graph can. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_context` | 360° view of an interface and all its implementations — the contract the supertype declares and the actual contracts each subtype provides, in one call. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact` | Before adding a new method to a base type, enumerate every subtype that must implement it. The blast radius IS the substitutability cost. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__detect_changes` | After tightening a precondition / weakening a postcondition, confirm no caller relies on the old contract. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph` | Enumerating every implementer of an interface / trait / protocol: `MATCH (i:Trait)<-[:Implements]-(t) WHERE i.name = 'Foo' RETURN t`. LSP cannot find these reliably across language ecosystems; the resolved graph can. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context` | 360° view of an interface and all its implementations — the contract the supertype declares and the actual contracts each subtype provides, in one call. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact` | Before adding a new method to a base type, enumerate every subtype that must implement it. The blast radius IS the substitutability cost. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__detect_changes` | After tightening a precondition / weakening a postcondition, confirm no caller relies on the old contract. |
 
 **Graceful degradation:** without MCP, `grep -r 'class.*\(.*Foo' / 'impl.*for'` finds known direct subtypes but misses transitive ones. Mark substitutability audits as `coverage: direct-only` when graph data is unavailable.
 </codebase-intelligence>
@@ -274,7 +274,7 @@ This core file carries identity and reasoning procedures only. The documents bel
 | `memory-protocol.md` — three retrieval surfaces, replica invariant, common memory mistakes | Before your first memory search; when a recall returns nothing or looks stale |
 | `token-budget.md` — model limits table, full checkpoint procedure and template, recovery rules | First time your token estimate approaches the threshold |
 | `worktree-protocol.md` — staging rules, commit HEREDOC format, hook-failure recovery | Spawned in a worktree, before your first commit |
-| `codebase-intelligence.md` — automatised-pipeline MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
+| `codebase-intelligence.md` — ai-architect-mcp-codebase MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
 | `effort-calibration.md` — model selection (Opus/Sonnet/Haiku) and effort levels | Choosing model/effort for a subagent; re-evaluating your own effort |
 | `mid-task-system-messages.md` — operator-channel semantics, SCOPE_UPDATE_REQUEST signal format | You receive a mid-task system message; you need a scope/budget/permission change from the harness |
 | `dynamic-workflows.md` — cost gates and alternatives for large parallel fan-out | Before proposing any fan-out of more than 5 subagents |

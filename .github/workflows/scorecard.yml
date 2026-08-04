@@ -2,7 +2,7 @@ name: OpenSSF Scorecard
 
 # Issue #53 criterion 6. zetetic-team-subagents adopts the ecosystem's single
 # Scorecard definition as a CALL SITE, not a copy: the reusable workflow lives
-# in cdeust/automatised-pipeline (AP #66/#77). There is a fitting symmetry here
+# in cdeust/ai-architect-mcp-codebase (AP #66/#77). There is a fitting symmetry here
 # — this repo hosts rules/coding-standards.md, the standard every other repo's
 # supply-chain work is measured against, so it should not be the one asserting
 # its posture instead of showing it.
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
 
 # REVERSAL NOTE (post-merge fix, issue #53): the call-site pattern
-# (uses: cdeust/automatised-pipeline/.../scorecard.yml@main) produced
+# (uses: cdeust/ai-architect-mcp-codebase/.../scorecard.yml@main) produced
 # startup_failure on main — zero jobs spawned — and scorecard-action's
 # publish_results requires the OIDC subject to be THIS repo's own
 # default-branch workflow, so a cross-repo reusable call cannot publish

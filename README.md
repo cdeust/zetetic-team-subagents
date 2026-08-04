@@ -339,7 +339,7 @@ A team that never writes the file gets the strict defaults; a team that disagree
 | Project | Role |
 |---|---|
 | [Cortex](https://github.com/cdeust/Cortex) | Local persistent memory + cognitive profiling that pre-loads your reasoning patterns at session start |
-| [automatised-pipeline](https://github.com/cdeust/automatised-pipeline) | Codebase-intelligence MCP; agents query a property graph instead of `grep -r` |
+| [ai-architect-mcp-codebase](https://github.com/cdeust/ai-architect-mcp-codebase) | Codebase-intelligence MCP; agents query a property graph instead of `grep -r` |
 | [prd-spec-generator](https://github.com/cdeust/prd-spec-generator) | TypeScript MCP that turns a feature description into a 9-file PRD with multi-judge verification using these agents |
 | [session-optimizer](https://github.com/cdeust/session-optimizer) | Context-budget status line + `Stop` guard hook that makes the per-model checkpoint protocol visible and self-enforcing |
 
@@ -370,7 +370,7 @@ This software is the independent work of Clément Deust. It was developed
 outside any employment relationship and is not affiliated with, endorsed by,
 or owned by any past or present employer. It is part of the ai-architect
 ecosystem ([Cortex](https://github.com/cdeust/Cortex),
-[automatised-pipeline](https://github.com/cdeust/automatised-pipeline),
+[ai-architect-mcp-codebase](https://github.com/cdeust/ai-architect-mcp-codebase),
 [prd-spec-generator](https://github.com/cdeust/prd-spec-generator)).
 
 The reasoning patterns encoded in the 97 genius agents are derived from

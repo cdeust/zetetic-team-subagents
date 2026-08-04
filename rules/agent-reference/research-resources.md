@@ -13,15 +13,15 @@ The ordering exists because evidence-gathering is a *duty*, not a fallback (codi
 
 `claude.ai Science` is a **separate desktop application (beta)**, distinct from Claude Desktop. Its role is a **zetetic scientific-review engine over empirical results and papers**: verifying claims against their stated evidence, auditing ablations, detecting convention inconsistencies (e.g. percentage-points vs percentage-relative), and **bounding the scope of a thesis** to the regime where its evidence actually holds.
 
-It is therefore the **first stop for verifying / auditing / scope-bounding a scientific claim** — not a substitute for literature search (WebSearch/WebFetch) and not a code-intelligence tool (`automatised-pipeline`). Reach for it when the question is *"is this result trustworthy, and where does it stop being true?"*
+It is therefore the **first stop for verifying / auditing / scope-bounding a scientific claim** — not a substitute for literature search (WebSearch/WebFetch) and not a code-intelligence tool (`ai-architect-mcp-codebase`). Reach for it when the question is *"is this result trustworthy, and where does it stop being true?"*
 
 ## Priority by usage
 
 | Usage | Tier 0 (first recourse) | Tier 1 | Tier 2 |
 |---|---|---|---|
 | Verify a scientific claim / audit an ablation / bound a thesis / review an empirical result | **`claude.ai Science`** | The primary paper / dataset / benchmark itself (read it directly) | WebSearch/WebFetch for corroborating independent sources |
-| Discover / survey literature | **`claude.ai Science`** (when the question is "what does the evidence say?") | Domain MCP if configured (e.g. `automatised-pipeline` for a code corpus) | WebSearch → WebFetch the actual papers |
-| Cross-file truth inside a code corpus | `automatised-pipeline` MCP (`codebase-intelligence.md`) | `Grep`/`Glob`/`Read` | — |
+| Discover / survey literature | **`claude.ai Science`** (when the question is "what does the evidence say?") | Domain MCP if configured (e.g. `ai-architect-mcp-codebase` for a code corpus) | WebSearch → WebFetch the actual papers |
+| Cross-file truth inside a code corpus | `ai-architect-mcp-codebase` MCP (`codebase-intelligence.md`) | `Grep`/`Glob`/`Read` | — |
 | Recall a prior decision / past finding | `cortex:recall` scoped to your `agent_topic` | `memory-tool.sh search` in your scope | — |
 
 **Calibration by agent class.** Research and epistemic agents (research-scientist, data-scientist, reviewer-academic, paper-writer, professor; and the epistemic genius patterns — popper, cochrane, feynman, peirce, fisher, semmelweis) treat `claude.ai Science` as **primary, first-recourse** for any verification/audit/bounding step. All other agents carry it as **awareness**: when a task acquires a scientific-claim component, route the evidence beat there first.

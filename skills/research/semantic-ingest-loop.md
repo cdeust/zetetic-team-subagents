@@ -59,7 +59,7 @@ Tooling: `tools/semantic-layer.sh` (the YAML index) + `cortex remember/recall` (
 5. **peirce: multiple framings.** Recall improves markedly with diverse framings (firecrawl's
    recall trick). Run the `aliases` and sibling/rival angles, not one query. Route by source kind:
    - web → `WebSearch` / `WebFetch`   · papers → `/deep-research`, `/literature-review`
-   - code → `automatised-pipeline` (`search_codebase`, `query_graph`, `get_symbol`)
+   - code → `ai-architect-mcp-codebase` (`search_codebase`, `query_graph`, `get_symbol`)
    - existing gaps from a prior visit ARE the priority backlog — ingest those first.
 
 ### Phase 3: Distill & verify (feynman + popper)

@@ -5,7 +5,7 @@ model: opus
 effort: high
 when_to_use: "When deciding whether to build or buy, merge or split, monolith or microservice, in-house or outsource"
 agent_topic: genius-coase
-tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_symbol, mcp__plugin_ai-architect-mcp-codebase_ai-architect__search_codebase, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_processes]
 shapes: [transaction-cost-boundary, build-vs-buy-analysis, boundary-optimization, make-or-market, coordination-cost-accounting]
 memory_scope: genius
 ---
@@ -42,15 +42,15 @@ When deciding whether to build or buy, merge or split, monolith or microservice,
 </revolution>
 
 <codebase-intelligence>
-**Optional MCP server: `automatised-pipeline`** (from [`ai-automatised-pipeline`](https://github.com/cdeust/ai-automatised-pipeline)). Boundary-drawing decisions (microservice vs monolith, internal vs external) become evidence-based when the actual coordination cost is measurable in graph terms.
+**Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). Boundary-drawing decisions (microservice vs monolith, internal vs external) become evidence-based when the actual coordination cost is measurable in graph terms.
 
 **Workflow:** call `analyze_codebase(path, output_dir)` once; capture `graph_path`; pass it to subsequent tools. Qualified names follow `<file_path>::<symbol_name>`.
 
 | Tool | Use when |
 |---|---|
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__cluster_graph` | Detecting the *actual* coordination clusters in the codebase (Leiden communities). Drawing a service boundary inside a tight community = high internal-coordination cost; drawing it between sparse communities = low cost. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact` | Before extracting a module into a separate service, enumerate cross-boundary calls — each becomes an RPC + transaction-cost. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph` | Counting cross-community edges as a coordination-cost proxy. Many edges = boundary is wrong; few edges = boundary is right. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__cluster_graph` | Detecting the *actual* coordination clusters in the codebase (Leiden communities). Drawing a service boundary inside a tight community = high internal-coordination cost; drawing it between sparse communities = low cost. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact` | Before extracting a module into a separate service, enumerate cross-boundary calls — each becomes an RPC + transaction-cost. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph` | Counting cross-community edges as a coordination-cost proxy. Many edges = boundary is wrong; few edges = boundary is right. |
 
 **Graceful degradation:** without MCP, estimate transaction cost from architecture diagrams + sample call traces; mark the boundary-cost estimate as `evidence: rough-order` rather than measured.
 </codebase-intelligence>
@@ -342,7 +342,7 @@ This core file carries identity and reasoning procedures only. The documents bel
 | `memory-protocol.md` — three retrieval surfaces, replica invariant, common memory mistakes | Before your first memory search; when a recall returns nothing or looks stale |
 | `token-budget.md` — model limits table, full checkpoint procedure and template, recovery rules | First time your token estimate approaches the threshold |
 | `worktree-protocol.md` — staging rules, commit HEREDOC format, hook-failure recovery | Spawned in a worktree, before your first commit |
-| `codebase-intelligence.md` — automatised-pipeline MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
+| `codebase-intelligence.md` — ai-architect-mcp-codebase MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
 | `effort-calibration.md` — model selection (Opus/Sonnet/Haiku) and effort levels | Choosing model/effort for a subagent; re-evaluating your own effort |
 | `mid-task-system-messages.md` — operator-channel semantics, SCOPE_UPDATE_REQUEST signal format | You receive a mid-task system message; you need a scope/budget/permission change from the harness |
 | `dynamic-workflows.md` — cost gates and alternatives for large parallel fan-out | Before proposing any fan-out of more than 5 subagents |

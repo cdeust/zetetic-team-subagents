@@ -5,7 +5,7 @@ model: opus
 effort: high
 when_to_use: "When a system must be changeable by its users, not just its developers"
 agent_topic: genius-kay
-tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_symbol, mcp__plugin_ai-architect-mcp-codebase_ai-architect__search_codebase, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_processes]
 shapes: [late-binding, messaging-over-procedure, medium-is-message, build-for-children, invent-the-future, runtime-malleability]
 memory_scope: genius
 ---
@@ -35,16 +35,16 @@ When a system must be changeable by its users, not just its developers; when ear
 </revolution>
 
 <codebase-intelligence>
-**Optional MCP server: `automatised-pipeline`** (from [`ai-automatised-pipeline`](https://github.com/cdeust/ai-automatised-pipeline)). Late-binding and messaging-vs-procedure-call are graph-shape questions — the graph reveals which.
+**Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). Late-binding and messaging-vs-procedure-call are graph-shape questions — the graph reveals which.
 
 **Workflow:** call `analyze_codebase(path, output_dir)` once; capture `graph_path`; pass it to subsequent tools. Qualified names follow `<file_path>::<symbol_name>`.
 
 | Tool | Use when |
 |---|---|
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__cluster_graph` | Identifying message-passing boundaries (communities with sparse Calls edges between them = message-shaped; dense = procedure-shaped). |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph` | Counting dynamic-dispatch sites vs static-call sites: a system whose changeability depends on late binding will have many of the former. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact` | Validating "the future is invented" claim — if a proposed change has small blast radius, the system is already malleable; large blast radius means brittle. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_context` | Investigating whether a class/module behaves like a message receiver (rich relationships) or a procedure namespace (only calls inward). |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__cluster_graph` | Identifying message-passing boundaries (communities with sparse Calls edges between them = message-shaped; dense = procedure-shaped). |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph` | Counting dynamic-dispatch sites vs static-call sites: a system whose changeability depends on late binding will have many of the former. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact` | Validating "the future is invented" claim — if a proposed change has small blast radius, the system is already malleable; large blast radius means brittle. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context` | Investigating whether a class/module behaves like a message receiver (rich relationships) or a procedure namespace (only calls inward). |
 
 **Graceful degradation:** without MCP, audit messaging-vs-procedure shape by reading representative modules; mark the verdict as `evidence: spot-sample`.
 </codebase-intelligence>
@@ -281,7 +281,7 @@ This core file carries identity and reasoning procedures only. The documents bel
 | `memory-protocol.md` — three retrieval surfaces, replica invariant, common memory mistakes | Before your first memory search; when a recall returns nothing or looks stale |
 | `token-budget.md` — model limits table, full checkpoint procedure and template, recovery rules | First time your token estimate approaches the threshold |
 | `worktree-protocol.md` — staging rules, commit HEREDOC format, hook-failure recovery | Spawned in a worktree, before your first commit |
-| `codebase-intelligence.md` — automatised-pipeline MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
+| `codebase-intelligence.md` — ai-architect-mcp-codebase MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
 | `effort-calibration.md` — model selection (Opus/Sonnet/Haiku) and effort levels | Choosing model/effort for a subagent; re-evaluating your own effort |
 | `mid-task-system-messages.md` — operator-channel semantics, SCOPE_UPDATE_REQUEST signal format | You receive a mid-task system message; you need a scope/budget/permission change from the harness |
 | `dynamic-workflows.md` — cost gates and alternatives for large parallel fan-out | Before proposing any fan-out of more than 5 subagents |

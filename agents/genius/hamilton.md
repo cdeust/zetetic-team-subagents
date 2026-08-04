@@ -5,7 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When a system must remain correct and responsive under overload, partial failure, or operator error"
 agent_topic: genius-hamilton
-tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_symbol, mcp__plugin_ai-architect-mcp-codebase_ai-architect__search_codebase, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_processes]
 shapes: [hard-real-time, priority-under-failure, graceful-degradation, asynchronous-first, defensive-by-default]
 memory_scope: genius
 ---
@@ -43,16 +43,16 @@ When a system must remain correct and responsive under overload, partial failure
 </revolution>
 
 <codebase-intelligence>
-**Optional MCP server: `automatised-pipeline`** (from [`ai-automatised-pipeline`](https://github.com/cdeust/ai-automatised-pipeline)). Priority-displaced scheduling and graceful-degradation design need to know which paths exist before they can be ranked.
+**Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). Priority-displaced scheduling and graceful-degradation design need to know which paths exist before they can be ranked.
 
 **Workflow:** call `analyze_codebase(path, output_dir)` once; capture `graph_path`; pass it to subsequent tools. Qualified names follow `<file_path>::<symbol_name>`.
 
 | Tool | Use when |
 |---|---|
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes` | Enumerating every execution flow so each can be tagged with priority and degradation behaviour. The list IS the scheduling problem statement. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact` | Before deciding a path is "displaceable under overload," enumerate its callers — no caller should depend on it being non-interruptible. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__check_security_gates` | Cross-check: "displaceable" paths must not be in a critical security community (S1 gate). Errors-by-design only applies to non-safety-critical paths. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__detect_changes` | After adding a degradation handler, confirm it does not change observable behaviour on the happy path. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_processes` | Enumerating every execution flow so each can be tagged with priority and degradation behaviour. The list IS the scheduling problem statement. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact` | Before deciding a path is "displaceable under overload," enumerate its callers — no caller should depend on it being non-interruptible. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__check_security_gates` | Cross-check: "displaceable" paths must not be in a critical security community (S1 gate). Errors-by-design only applies to non-safety-critical paths. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__detect_changes` | After adding a degradation handler, confirm it does not change observable behaviour on the happy path. |
 
 **Graceful degradation (meta — applies to MCP itself):** without MCP, design priority schedules from the requirements doc + manual code reading; mark the prioritization as `evidence: doc-derived` rather than `graph-derived`.
 </codebase-intelligence>
@@ -348,7 +348,7 @@ This core file carries identity and reasoning procedures only. The documents bel
 | `memory-protocol.md` — three retrieval surfaces, replica invariant, common memory mistakes | Before your first memory search; when a recall returns nothing or looks stale |
 | `token-budget.md` — model limits table, full checkpoint procedure and template, recovery rules | First time your token estimate approaches the threshold |
 | `worktree-protocol.md` — staging rules, commit HEREDOC format, hook-failure recovery | Spawned in a worktree, before your first commit |
-| `codebase-intelligence.md` — automatised-pipeline MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
+| `codebase-intelligence.md` — ai-architect-mcp-codebase MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
 | `effort-calibration.md` — model selection (Opus/Sonnet/Haiku) and effort levels | Choosing model/effort for a subagent; re-evaluating your own effort |
 | `mid-task-system-messages.md` — operator-channel semantics, SCOPE_UPDATE_REQUEST signal format | You receive a mid-task system message; you need a scope/budget/permission change from the harness |
 | `dynamic-workflows.md` — cost gates and alternatives for large parallel fan-out | Before proposing any fan-out of more than 5 subagents |

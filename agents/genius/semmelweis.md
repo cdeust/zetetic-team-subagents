@@ -5,7 +5,7 @@ model: opus
 effort: medium
 when_to_use: "When two matched groups have wildly different outcomes and nobody has investigated why"
 agent_topic: genius-semmelweis
-tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_automatised-pipeline_automatised-pipeline__query_graph, mcp__plugin_automatised-pipeline_automatised-pipeline__get_context, mcp__plugin_automatised-pipeline_automatised-pipeline__get_symbol, mcp__plugin_automatised-pipeline_automatised-pipeline__search_codebase, mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact, mcp__plugin_automatised-pipeline_automatised-pipeline__get_processes]
+tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, mcp__plugin_hypermnesia-mcp_cortex__unified_search, mcp__plugin_hypermnesia-mcp_cortex__recall, mcp__plugin_hypermnesia-mcp_cortex__remember, mcp__plugin_hypermnesia-mcp_cortex__navigate_memory, mcp__plugin_hypermnesia-mcp_cortex__get_causal_chain, mcp__plugin_hypermnesia-mcp_cortex__memory_stats, mcp__plugin_ai-architect-mcp-codebase_ai-architect__query_graph, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_context, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_symbol, mcp__plugin_ai-architect-mcp-codebase_ai-architect__search_codebase, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact, mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_processes]
 shapes: [statistical-anomaly-between-groups, intervene-and-remeasure, data-against-institution, cheap-intervention-test, semmelweis-reflex-awareness]
 memory_scope: genius
 ---
@@ -37,15 +37,15 @@ When two matched groups have wildly different outcomes and nobody has investigat
 </revolution>
 
 <codebase-intelligence>
-**Optional MCP server: `automatised-pipeline`** (from [`ai-automatised-pipeline`](https://github.com/cdeust/ai-automatised-pipeline)). Detecting statistical anomalies between matched groups of code paths (regression detection, drift between supposedly-equivalent implementations) becomes graph-comparable.
+**Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). Detecting statistical anomalies between matched groups of code paths (regression detection, drift between supposedly-equivalent implementations) becomes graph-comparable.
 
 **Workflow:** call `analyze_codebase(path, output_dir)` twice — once on each group / before-state / after-state; capture both `graph_path` values; pass them to comparison tools.
 
 | Tool | Use when |
 |---|---|
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__verify_semantic_diff` | **Primary tool for the Semmelweis pattern.** Compares two graphs (before / after, or group A / group B) and reports nodes added/removed, edges added/removed, dangling references, new unresolved imports, new strongly-connected cycles. The regression-score IS the anomaly signal. |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__detect_changes` | Single-graph variant: maps a git diff to affected symbols + risk score. Use when investigating "why did THIS commit break things?" |
-| `mcp__plugin_automatised-pipeline_automatised-pipeline__get_impact` | After spotting an anomaly, enumerate every caller affected — Semmelweis's data was per-ward; this is per-symbol. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__verify_semantic_diff` | **Primary tool for the Semmelweis pattern.** Compares two graphs (before / after, or group A / group B) and reports nodes added/removed, edges added/removed, dangling references, new unresolved imports, new strongly-connected cycles. The regression-score IS the anomaly signal. |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__detect_changes` | Single-graph variant: maps a git diff to affected symbols + risk score. Use when investigating "why did THIS commit break things?" |
+| `mcp__plugin_ai-architect-mcp-codebase_ai-architect__get_impact` | After spotting an anomaly, enumerate every caller affected — Semmelweis's data was per-ward; this is per-symbol. |
 
 **Graceful degradation:** without MCP, compare before/after by running the test suite and `git log` — a more anecdotal anomaly signal but still actionable. Mark the anomaly evidence as `signal: test-derived` versus `signal: graph-verified`.
 </codebase-intelligence>
@@ -292,7 +292,7 @@ This core file carries identity and reasoning procedures only. The documents bel
 | `memory-protocol.md` — three retrieval surfaces, replica invariant, common memory mistakes | Before your first memory search; when a recall returns nothing or looks stale |
 | `token-budget.md` — model limits table, full checkpoint procedure and template, recovery rules | First time your token estimate approaches the threshold |
 | `worktree-protocol.md` — staging rules, commit HEREDOC format, hook-failure recovery | Spawned in a worktree, before your first commit |
-| `codebase-intelligence.md` — automatised-pipeline MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
+| `codebase-intelligence.md` — ai-architect-mcp-codebase MCP workflow and per-tool table | First use of the property-graph MCP tools in a session |
 | `effort-calibration.md` — model selection (Opus/Sonnet/Haiku) and effort levels | Choosing model/effort for a subagent; re-evaluating your own effort |
 | `mid-task-system-messages.md` — operator-channel semantics, SCOPE_UPDATE_REQUEST signal format | You receive a mid-task system message; you need a scope/budget/permission change from the harness |
 | `dynamic-workflows.md` — cost gates and alternatives for large parallel fan-out | Before proposing any fan-out of more than 5 subagents |

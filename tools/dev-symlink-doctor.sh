@@ -17,7 +17,7 @@
 #          is what makes a fresh, never-mounted install detectable instead of
 #          reporting OK by vacuity) or a relative path (binary mode: that one
 #          path must be a symlink into the dev repo, e.g.
-#          target/release/automatised-pipeline).
+#          target/release/ai-architect-mcp-codebase).
 #   Blank lines and lines starting with # are ignored. ~ expands to $HOME.
 #   <cache_install_dir> is expected to end in the plugin's version segment
 #   (e.g. .../cortex-plugins/cortex/4.14.0) — this is what the version-bridge

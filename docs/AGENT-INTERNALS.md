@@ -37,7 +37,7 @@ distinct-from-X clauses; loaded only when the agent is invoked):**
 <blind-spots>...</blind-spots>
 
 <codebase-intelligence>
-[Optional MCP server `automatised-pipeline` tool table + workflow; graceful
+[Optional MCP server `ai-architect-mcp-codebase` tool table + workflow; graceful
  degradation when the server is absent.]
 </codebase-intelligence>
 ```
@@ -71,7 +71,7 @@ The orchestrator routes based on frontmatter: a sentence is enough. The invoked 
 | `<canonical-moves>` | both | The 5 numbered moves the agent applies |
 | `<refusal-conditions>` | both | When the agent declines and what artifact it produces instead |
 | `<blind-spots>` | both | Self-documented limits |
-| `<codebase-intelligence>` | optional | MCP graph-tool integration when `ai-automatised-pipeline` is attached |
+| `<codebase-intelligence>` | optional | MCP graph-tool integration when `ai-architect-mcp-codebase` is attached |
 
 ## Adding a new agent
 

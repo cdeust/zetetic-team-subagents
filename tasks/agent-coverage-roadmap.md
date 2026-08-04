@@ -134,7 +134,7 @@ exercée) — la liste étant non exhaustive, cette passe est obligatoire.
   [fast-check/Stryker], rust/cargo + [proptest/cargo-mutants] selon les couches) ; **décider l'outil mutation &
   property PAR langage maintenant** (pas en plein workflow) ; checkers existants tournent sans erreur interne.
 - **WF‑PRE.3 MCP & mémoire** : santé cortex MCP (recall/remember joignables, coldStart résolu, replica queue
-  drainée) ; automatised-pipeline MCP configuré OU dégradation gracieuse documentée ; memory-tool.sh OK.
+  drainée) ; ai-architect-mcp-codebase MCP configuré OU dégradation gracieuse documentée ; memory-tool.sh OK.
 - **WF‑PRE.4 Permissions & sandbox** : pré-autoriser (settings allowlist) les opérations des workflows (runs de
   test bash, écritures, `git worktree add/remove`) pour **zéro prompt en cours de workflow** (un prompt gèle un
   run en arrière-plan) ; isolation worktree fonctionnelle ; scratch dirs isolés.

@@ -28,6 +28,11 @@ AUDITOR="$REPO/tools/agent-definition-auditor.sh"
 SAMPLE="$REPO/agents/engineer.md"
 CURRENT_PREFIX="mcp__plugin_hypermnesia-mcp_cortex__"
 STALE_PREFIX="mcp__plugin_cortex_cortex__"
+# The sample also names the codebase-intelligence server. Case 5 needs a live
+# target here: if this stays on a spelling the sample no longer contains, the
+# case silently degrades to one blocker instead of two.
+CODEBASE_PREFIX="mcp__plugin_ai-architect-mcp-codebase_ai-architect__"
+CODEBASE_STALE_PREFIX="mcp__plugin_ap_ap__"
 
 PASS=0
 FAIL=0
@@ -93,7 +98,7 @@ grep -q "FP unknown MCP tool prefix 'mcp__plugin_not-installed_srv__'" <<<"$out"
 echo " 4. a file naming no MCP tool is not tallied as an FP pass:"
 mkdir -p "$TMP/nomcp"
 # Every MCP tool goes, not only the Cortex ones: engineer.md also names the
-# automatised-pipeline server, and leaving it in would make FP tally a pass for
+# ai-architect-mcp-codebase server, and leaving it in would make FP tally a pass for
 # a reason this case is not testing.
 sed -E 's/mcp__plugin_[A-Za-z0-9_-]*__[a-z_]*/Read/g' "$SAMPLE" \
   > "$TMP/nomcp/engineer.md"
@@ -111,8 +116,10 @@ fi
 # =====================================================================
 echo " 5. each distinct stale prefix gets its own blocker:"
 mkdir -p "$TMP/two"
+grep -q "$CODEBASE_PREFIX" "$SAMPLE" \
+  || fail "sample no longer names $CODEBASE_PREFIX; case 5 would be vacuous"
 sed -e "s/$CURRENT_PREFIX/$STALE_PREFIX/g" \
-    -e "s/mcp__plugin_automatised-pipeline_automatised-pipeline__/mcp__plugin_ap_ap__/g" \
+    -e "s/$CODEBASE_PREFIX/$CODEBASE_STALE_PREFIX/g" \
     "$SAMPLE" > "$TMP/two/engineer.md"
 out="$(bash "$AUDITOR" "$TMP/two" 2>&1)"
 n="$(grep -c "FP unknown MCP tool prefix" <<<"$out")"

@@ -78,7 +78,7 @@ FD_MIN_LEN=40
 # hypermnesia-mcp" (Cortex 4.15.0), MCP server key stays "cortex"; verified
 # against the installed 4.16.0 tool registry (tool_registry_memory.py,
 # tool_registry_nav.py) on 2026-07-27.
-KNOWN_MCP_PREFIXES="mcp__plugin_hypermnesia-mcp_cortex__ mcp__plugin_automatised-pipeline_automatised-pipeline__"
+KNOWN_MCP_PREFIXES="mcp__plugin_hypermnesia-mcp_cortex__ mcp__plugin_ai-architect-mcp-codebase_ai-architect__"
 
 BLOCKERS_FILE=$(mktemp)
 WARNINGS_FILE=$(mktemp)
