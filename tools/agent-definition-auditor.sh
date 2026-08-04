@@ -78,6 +78,12 @@ FD_MIN_LEN=40
 # hypermnesia-mcp" (Cortex 4.15.0), MCP server key stays "cortex"; verified
 # against the installed 4.16.0 tool registry (tool_registry_memory.py,
 # tool_registry_nav.py) on 2026-07-27.
+# automatised-pipeline was renamed ai-architect-mcp-codebase (repo
+# cdeust/ai-architect-mcp-codebase, rename PR #191, merged 2026-08-04); the
+# MCP server key also changed, from "automatised-pipeline" to "ai-architect".
+# source: cdeust/ai-architect-mcp-codebase .claude-plugin/plugin.json (name:
+# "ai-architect-mcp-codebase") + .mcp.json (mcpServers key: "ai-architect"),
+# read via `gh api` on 2026-08-04.
 KNOWN_MCP_PREFIXES="mcp__plugin_hypermnesia-mcp_cortex__ mcp__plugin_ai-architect-mcp-codebase_ai-architect__"
 
 BLOCKERS_FILE=$(mktemp)

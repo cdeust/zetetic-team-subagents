@@ -88,7 +88,7 @@ Quick context for anyone curious about the wider stack:
 
 🧠 𝗖𝗼𝗿𝘁𝗲𝘅 (https://github.com/cdeust/Cortex) is the persistent memory layer underneath. Pre-loads your reasoning patterns and project context at session start. I'll post about it tomorrow.
 
-🔎 𝗮𝗶-𝗮𝘂𝘁𝗼𝗺𝗮𝘁𝗶𝘀𝗲𝗱-𝗽𝗶𝗽𝗲𝗹𝗶𝗻𝗲 (https://github.com/cdeust/ai-automatised-pipeline) is the codebase-intelligence MCP server the agents call instead of grep. That post is the day after.
+🔎 𝗮𝗶-𝗮𝘂𝘁𝗼𝗺𝗮𝘁𝗶𝘀𝗲𝗱-𝗽𝗶𝗽𝗲𝗹𝗶𝗻𝗲 (https://github.com/cdeust/ai-architect-mcp-codebase) is the codebase-intelligence MCP server the agents call instead of grep. That post is the day after.
 
 If you only have time for one, which would you want to hear about first?
 
