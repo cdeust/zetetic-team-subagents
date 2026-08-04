@@ -59,6 +59,17 @@ CONTRIBUTING.md|hook_registrations|skills \+ ([0-9]+) lifecycle hooks
 .claude-plugin/marketplace.json|commands|skills total, ([0-9]+) commands
 .claude-plugin/marketplace.json|tools|commands, ([0-9]+) tools
 .claude-plugin/marketplace.json|hook_scripts|tools, ([0-9]+) hooks
+README.md|problem_skills|distribution of ([0-9]+) problem-shaped skills
+README.md|problem_skills|entry point: ([0-9]+) problem-shaped skills
+README.md|problem_skills|. ([0-9]+) problem-shaped skills route you
+README.md|category_skills|. ([0-9]+) category skills run full pipelines
+README.md|skills_total|\*\*([0-9]+) multi-step workflows
+skills/_index.md|skills_total|covers ([0-9]+) skills:
+skills/_index.md|problem_skills|[^0-9]([0-9]+) problem-shaped entry points
+skills/_index.md|category_skills|plus ([0-9]+) category skills
+docs/COUNTING.md|problem_skills|problem-shaped skills .*[^0-9]([0-9]+) .$
+docs/COUNTING.md|category_skills|category skills .*[^0-9]([0-9]+) .$
+docs/COUNTING.md|skills_total|skill documents .*[^0-9]([0-9]+) .$
 REGISTRY
 )
 

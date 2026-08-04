@@ -22,21 +22,21 @@ is decided here, and the numbers are derived from it rather than remembered.
 ## The quantities
 
 Run every command from the repository root. Each is a claim key used by the
-gate; the value in the last column was measured on 2026-07-28.
+gate; the value in the last column was measured on 2026-08-04.
 
 | key | quantity | command | value |
 |---|---|---|---|
 | `genius_agents` | genius agents | `grep -l '^name:' agents/genius/*.md \| wc -l` | 97 |
 | `team_agents` | team-role agents | `grep -l '^name:' agents/*.md \| wc -l` | 23 |
 | `agents_total` | agents, all kinds | `genius_agents + team_agents` | 120 |
-| `problem_skills` | problem-shaped skills | `find skills -name 'SKILL.md' \| wc -l` | 11 |
+| `problem_skills` | problem-shaped skills | `find skills -name 'SKILL.md' \| wc -l` | 15 |
 | `category_skills` | category skills | `skills_total - problem_skills` | 65 |
-| `skills_total` | skill documents | `find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' \| wc -l` | 76 |
+| `skills_total` | skill documents | `find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' \| wc -l` | 80 |
 | `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 19 |
 | `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 20 |
 | `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 26 |
-| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 43 |
-| `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 27 |
+| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 46 |
+| `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 28 |
 | `memory_suites` | memory tool suites | `ls scripts/test-memory-*.sh \| wc -l` | 6 |
 
 ## The judgement calls, and why
@@ -54,7 +54,7 @@ separately; the total is arithmetic. A single `find agents -name '*.md'` would
 silently re-include `INDEX.md` and any future non-agent document.
 
 **Skills are counted in two populations, and the total is one measurement.**
-`problem_skills` are the directories holding a `SKILL.md`: the eleven
+`problem_skills` are the directories holding a `SKILL.md`: the fifteen
 problem-shaped entry points a user actually invokes. `category_skills` is
 everything else, the individual procedures those entry points route to.
 `skills_total` measures all skill documents in one pass, and `category_skills`

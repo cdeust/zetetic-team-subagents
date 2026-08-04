@@ -6,13 +6,13 @@
   <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/suites-28-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
-  <img src="https://img.shields.io/badge/skills-76-green" alt="Skills">
+  <img src="https://img.shields.io/badge/skills-80-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-19_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
-> **Cross-platform evidence synthesis for Codex, Gemini CLI, and Claude Code, plus a full Claude-native distribution of 11 problem-shaped skills backed by 97 sourced reasoning patterns.**
+> **Cross-platform evidence synthesis for Codex, Gemini CLI, and Claude Code, plus a full Claude-native distribution of 15 problem-shaped skills backed by 97 sourced reasoning patterns.**
 > The portable package audits primary sources, counter-evidence, and uncertainty on all three hosts. The full Claude Code package additionally routes skills such as `causal-audit`, `failure-forensics`, and `estimation` across 97 genius agents (plus 23 team-role agents = 120 total), lifecycle hooks, and a pre-commit gate that blocks any floating-point constant with 3+ significant digits unless it carries a `source:` annotation.
 > Not a prompt library. A methodology with **commit-time enforcement**.
 
@@ -50,9 +50,9 @@ Zetetic Agents are different in one specific way: **they can say "I don't know."
 
 ---
 
-## The entry point: 11 problem-shaped skills
+## The entry point: 15 problem-shaped skills
 
-You don't browse a roster of 97 historical figures. You name the *shape* of your problem. Each skill lists the 6–10 reasoning procedures that fit that shape, with one-line triggers, and loads the best fit on demand:
+You don't browse a roster of 97 historical figures. You name the *shape* of your problem. Each skill lists the 3–10 reasoning procedures that fit that shape, with one-line triggers, and loads the best fit on demand:
 
 | Skill | Invoke when |
 |---|---|
@@ -67,6 +67,10 @@ You don't browse a roster of 97 historical figures. You name the *shape* of your
 | [`boundary-design`](skills/boundary-design/SKILL.md) | build-vs-buy; module/team/API boundary placement; leaky abstractions |
 | [`structure-discovery`](skills/structure-discovery/SKILL.md) | hidden pattern suspected; reverse-engineering; classification with gaps |
 | [`problem-reframing`](skills/problem-reframing/SKILL.md) | debate in circles; false binary; a trade-off being denied; "we're stuck" |
+| [`normative-design`](skills/normative-design/SKILL.md) | "is this rule fair?"; a rule that doesn't decide the case; harm nobody chose |
+| [`narrative-sensemaking`](skills/narrative-sensemaking/SKILL.md) | "what happened and what did it mean?"; a step missing from a sequence; a claim too big to be possible |
+| [`representation-and-possibility`](skills/representation-and-possibility/SKILL.md) | the notation hides the answer; "is this list complete?"; result found, proof missing |
+| [`experience-and-transmission`](skills/experience-and-transmission/SKILL.md) | every metric green, the experience broken; docs unread; correct code nobody can maintain |
 
 Each skill body names the relevant genius agents, when to use each, and how to load them (`tools/genius-invoker.sh invoke <agent> "<problem>"`). The full 97-agent roster stays available as the [reference library](#the-reference-library-97-reasoning-patterns).
 
@@ -171,7 +175,7 @@ Agents, rules, skills, and commands are static Markdown and work natively. The
 | Capability | What it gives you (concretely) |
 |---|---|
 | **97 documented refusals** | Each genius agent's body documents conditions under which it refuses (when to stop, what to cite, when to hand off). Refusal conditions are intent statements, not enforced contracts. |
-| **76 multi-step workflows** | 11 problem-shaped skills route you to the right reasoning procedure; 65 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
+| **80 multi-step workflows** | 15 problem-shaped skills route you to the right reasoning procedure; 65 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
 | **Commit-time gates** | `pre-commit-zetetic.sh` blocks commits with `UNSOURCED` keywords (always/never/obviously) at any profile. `MAGIC_NUMBER` floats (3+ decimals without `source:`) and `TODO_NO_REF` warn at default profile, block under `ZETETIC_PROFILE=strict`. Active only when `git commit` is invoked through Claude Code's hook system. |
 | **Craftsmanship gate** | `tools/craftsmanship-checker.sh` mechanically enforces `coding-standards.md` §4 size limits + select structural rules. `FILE_TOO_LONG` (>500 lines) blocks; function/class/parameter/nesting block for recognized languages; grab-bag module names and layer-direction advise. Every threshold and per-rule severity (`block`/`advise`/`off`) is tunable per-repo via `.craftsmanship.conf`; defaults are the sourced §4 numbers. Runs at commit (local hook, changed files) and in CI (hard on newly-added files, informational full-tree sweep). Judgment rules (SRP/OCP/LSP/ISP, rule-of-three) are deliberately **not** mechanized, because a hook that fakes a verdict it can't reach just trains you to ignore it. |
 | **650+ problem-shape triggers** | [`agents/genius/INDEX.md`](agents/genius/INDEX.md) maps natural-language problem descriptions to reasoning methods. <!-- source: 759 table content rows (grep -cE '^\|' agents/genius/INDEX.md = 843, minus 84 separator rows), counted 2026-06-23; "650+" is a conservative floor. --> |

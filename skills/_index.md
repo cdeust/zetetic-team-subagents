@@ -1,6 +1,6 @@
 # Skills Index
 
-75 skills: 11 problem-shaped entry points (`<name>/SKILL.md`) plus 64 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
+This index covers 80 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 65 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
 
 ## Problem-shaped entry points (start here)
 
@@ -19,6 +19,10 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 | [`boundary-design`](boundary-design/SKILL.md) | build-vs-buy, module/team/API boundaries, abstraction placement |
 | [`structure-discovery`](structure-discovery/SKILL.md) | hidden regularities, reverse engineering, taxonomy gaps |
 | [`problem-reframing`](problem-reframing/SKILL.md) | malformed questions, false binaries, denied trade-offs |
+| [`normative-design`](normative-design/SKILL.md) | fairness and legitimacy of rules; open-texture cases; diffuse responsibility |
+| [`narrative-sensemaking`](narrative-sensemaking/SKILL.md) | accounts to reconstruct; sequence gaps; structurally implausible claims |
+| [`representation-and-possibility`](representation-and-possibility/SKILL.md) | notation obscuring the solution; unbounded option spaces; result before proof |
+| [`experience-and-transmission`](experience-and-transmission/SKILL.md) | correct artifacts nobody can use, learn, or read; observer inside the system |
 
 ## Quick Reference
 
