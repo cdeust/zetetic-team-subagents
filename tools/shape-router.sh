@@ -28,12 +28,19 @@ INDEX="$AGENTS_DIR/genius/INDEX.md"
 QUERY="${1:-}"
 [[ -z "$QUERY" ]] && { echo "usage: $0 \"<problem description or keyword>\"" >&2; exit 1; }
 
-# Search the index for matching shapes
-matches=$(grep -i "$QUERY" "$INDEX" 2>/dev/null | grep -E '^\| \*\*' | head -10)
+# A missing index is an install fault, not an absent match: reporting it as
+# "no matching shapes" would send the caller hunting for better keywords.
+[[ -r "$INDEX" ]] || { echo "shape-router: index not readable: $INDEX" >&2; exit 2; }
+
+# `|| true` is required, not defensive: under `set -euo pipefail` a grep that
+# matches nothing fails the pipeline, and the failing status of a command
+# substitution propagates to the assignment, killing the script. Without it
+# every no-match query exits 1 silently and the fallback below is unreachable.
+matches=$(grep -i "$QUERY" "$INDEX" | grep -E '^\| \*\*' | head -10 || true)
 
 if [[ -z "$matches" ]]; then
   # Try broader search
-  matches=$(grep -i "$QUERY" "$INDEX" 2>/dev/null | grep -E '^\|' | grep -v '^\| Shape' | head -10)
+  matches=$(grep -i "$QUERY" "$INDEX" | grep -E '^\|' | grep -v '^\| Shape' | head -10 || true)
 fi
 
 if [[ -z "$matches" ]]; then
