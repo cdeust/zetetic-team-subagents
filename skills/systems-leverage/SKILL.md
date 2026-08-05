@@ -1,5 +1,6 @@
 ---
 name: systems-leverage
+shapes: [systems-leverage]
 description: >
   Find where a small push changes the whole system. Use when local fixes keep
   failing, "where should we intervene?", recurring organizational patterns

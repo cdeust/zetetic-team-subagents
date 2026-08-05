@@ -1,5 +1,6 @@
 ---
 name: narrative-sensemaking
+shapes: [narrative-sensemaking]
 description: >
   Some questions are "what happened and what did it mean", not "what is the
   mechanism". Use when an account must be reconstructed rather than measured,

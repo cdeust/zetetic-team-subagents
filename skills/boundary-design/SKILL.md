@@ -1,5 +1,6 @@
 ---
 name: boundary-design
+shapes: [boundary-design]
 description: >
   Draw the line where it costs least. Use for build-vs-buy calls, "where does this
   module/team/service boundary belong?", APIs and abstractions forcing users into

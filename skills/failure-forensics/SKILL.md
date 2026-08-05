@@ -1,5 +1,6 @@
 ---
 name: failure-forensics
+shapes: [failure-forensics]
 description: >
   Read the wreckage before rebuilding. Use for incident post-mortems, "what
   happens when everything goes wrong at once?", flaky or anomalous cases being

@@ -1,5 +1,6 @@
 ---
 name: formal-correctness
+shapes: [formal-correctness]
 description: >
   Prove it, don't test-and-hope. Use for concurrent or distributed code with no
   written spec, "how do we know this is correct?", interfaces that break when

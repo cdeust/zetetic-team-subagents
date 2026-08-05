@@ -1,5 +1,6 @@
 ---
 name: measurement-discipline
+shapes: [measurement-discipline]
 description: >
   Fix the instrument before trusting the number. Use when someone says "the metric
   improved but I don't trust it", "measured more than the parts predict", "we want

@@ -1,5 +1,6 @@
 ---
 name: representation-and-possibility
+shapes: [representation-and-possibility]
 description: >
   When the notation is the obstacle and the option space was never enumerated.
   Use when the current vocabulary hides the solution, when a system claims to be

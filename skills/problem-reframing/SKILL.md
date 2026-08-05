@@ -1,5 +1,6 @@
 ---
 name: problem-reframing
+shapes: [problem-reframing]
 description: >
   The question itself may be the bug. Use when a debate goes in circles, both
   options of a binary feel wrong, improving one parameter degrades another,

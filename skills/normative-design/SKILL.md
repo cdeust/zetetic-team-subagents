@@ -1,5 +1,6 @@
 ---
 name: normative-design
+shapes: [normative-design]
 description: >
   Legitimacy is a design property, not an afterthought. Use when a rule, policy, or
   allocation must be written or applied and the open question is "is this fair and

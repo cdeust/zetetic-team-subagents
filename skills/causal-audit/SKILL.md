@@ -1,5 +1,6 @@
 ---
 name: causal-audit
+shapes: [causal-audit]
 description: >
   Correlation walked in; make it prove causation. Use when someone claims "X causes
   Y" from observational data, asks "did the change actually cause the improvement?",

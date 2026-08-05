@@ -1,5 +1,6 @@
 ---
 name: experience-and-transmission
+shapes: [experience-and-transmission]
 description: >
   The artifact is correct and nobody can use, learn, or read it. Use when every
   component metric is green but the end-to-end experience is broken, when

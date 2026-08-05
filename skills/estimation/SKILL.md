@@ -1,5 +1,6 @@
 ---
 name: estimation
+shapes: [estimation]
 description: >
   Bound it before you build it. Use when a decision is blocked by "we don't have
   data", an estimate looks suspiciously precise, someone asks "is this even

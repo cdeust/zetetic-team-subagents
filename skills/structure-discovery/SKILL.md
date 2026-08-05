@@ -1,5 +1,6 @@
 ---
 name: structure-discovery
+shapes: [structure-discovery]
 description: >
   Find the hidden pattern that organizes the mess. Use for "these look related but
   we can't say how", classification with suspicious gaps, reverse-engineering an

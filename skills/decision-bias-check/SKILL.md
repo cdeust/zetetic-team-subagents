@@ -1,5 +1,6 @@
 ---
 name: decision-bias-check
+shapes: [decision-bias-check]
 description: >
   Audit the decision before it ships. Use for "are we sure about this?", high-stakes
   choices made on fast intuition, plans with no failure scenario, estimates that are

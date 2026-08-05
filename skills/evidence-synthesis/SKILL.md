@@ -1,5 +1,6 @@
 ---
 name: evidence-synthesis
+shapes: [evidence-synthesis]
 description: >
   Turn a pile of sources into a defensible claim. Use for "what does the literature
   actually say?", conflicting studies or benchmarks, "is this result trustworthy?",
