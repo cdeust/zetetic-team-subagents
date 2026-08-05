@@ -1,0 +1,102 @@
+{
+  "_hypothesis_disclaimer": "This mapping is a REVIEWABLE HYPOTHESIS, not ground truth. Every shape->site/tag entry is the curator's best guess at where a shape is plausibly expressed in a public corpus; it has not been validated against the frozen Phase-0 rubric. Concordance between two independent agent labelers (tools/goa/concordance_gate.py) is the actual validation signal. A shape whose sampled candidates are mostly rejected at labeling should have its allowlist revisited here, not silently backfilled with more candidates from the same tags.",
+  "_source": "docs/goa-phase0 EXTERNAL-TESTBASE.md §1 'Plausible shapes' column, verified 2026-08-05 by direct fetch of each source.",
+  "_dump_reference": {
+    "stackexchange": "archive.org mirror of the Stack Exchange data dump, 2024-04-02 copy ONLY (CC BY-SA 4.0, pre anti-LLM-training click-through restriction). Later dumps are out of scope for this mapping.",
+    "ntsb": "Zenodo record 17096333 (CC BY 4.0), 7,462 occurrences 2016-2023, published 2025-09-11."
+  },
+  "shapes": {
+    "boundary-design": {
+      "corpus": "stackexchange",
+      "site": "softwareengineering.stackexchange.com",
+      "tags": ["architecture", "team", "modularity"]
+    },
+    "causal-audit": {
+      "corpus": "stackexchange",
+      "site": "stats.stackexchange.com",
+      "tags": ["causality", "experiment-design", "observational-study"]
+    },
+    "decision-bias-check": {
+      "corpus": "stackexchange",
+      "site": "pm.stackexchange.com",
+      "tags": ["estimation-bias"]
+    },
+    "estimation": {
+      "corpus": "stackexchange",
+      "site": "pm.stackexchange.com",
+      "tags": ["estimation"],
+      "fallback_site": "softwareengineering.stackexchange.com",
+      "fallback_tags": ["estimation"]
+    },
+    "evidence-synthesis": {
+      "corpus": "stackexchange",
+      "site": "skeptics.stackexchange.com",
+      "tags": []
+    },
+    "experience-and-transmission": {
+      "corpus": "stackexchange",
+      "site": "ux.stackexchange.com",
+      "tags": []
+    },
+    "failure-forensics": {
+      "corpus": "stackexchange",
+      "site": "serverfault.com",
+      "tags": ["outage", "downtime"],
+      "fallback_site": "sysadmin.stackexchange.com",
+      "fallback_tags": ["outage", "downtime"]
+    },
+    "formal-correctness": {
+      "corpus": "stackexchange",
+      "site": "cs.stackexchange.com",
+      "tags": ["formal-methods", "concurrency"]
+    },
+    "measurement-discipline": {
+      "corpus": "stackexchange",
+      "site": "stats.stackexchange.com",
+      "tags": ["measurement", "reliability"]
+    },
+    "normative-design": {
+      "corpus": "stackexchange",
+      "site": "workplace.stackexchange.com",
+      "tags": [],
+      "fallback_site": "law.stackexchange.com",
+      "fallback_tags": []
+    },
+    "representation-and-possibility": {
+      "corpus": "stackexchange",
+      "site": "math.stackexchange.com",
+      "tags": ["notation"],
+      "fallback_site": "cs.stackexchange.com",
+      "fallback_tags": ["notation"]
+    },
+    "structure-discovery": {
+      "corpus": "stackexchange",
+      "site": "datascience.stackexchange.com",
+      "tags": ["clustering"],
+      "fallback_site": "stats.stackexchange.com",
+      "fallback_tags": ["clustering"]
+    },
+    "failure-forensics-ntsb": {
+      "corpus": "ntsb",
+      "note": "Same shape as failure-forensics above; a distinct config key because the corpus/reader differ. assemble_fixture.py merges rows by 'shape', not by this key.",
+      "shape": "failure-forensics",
+      "fields": ["probable_cause", "narrative"]
+    },
+    "causal-audit-ntsb": {
+      "corpus": "ntsb",
+      "shape": "causal-audit",
+      "fields": ["probable_cause"]
+    },
+    "measurement-discipline-ntsb": {
+      "corpus": "ntsb",
+      "shape": "measurement-discipline",
+      "fields": ["narrative"]
+    }
+  },
+  "unmeasured_shapes": [
+    "narrative-sensemaking",
+    "systems-leverage",
+    "problem-reframing"
+  ],
+  "unmeasured_rationale": "EXTERNAL-TESTBASE.md §2: no verified corpus fits these three shapes as a genre. Reported UNMEASURED by Instrument B; never filled synthetically (user directive 2026-08-05)."
+}

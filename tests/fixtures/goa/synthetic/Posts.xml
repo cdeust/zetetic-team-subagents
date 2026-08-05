@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<posts>
+  <row Id="1" PostTypeId="1" Score="12" Tags="&lt;causality&gt;&lt;experiment-design&gt;" Body="&lt;p&gt;Invented sample question about causal inference in an A/B test.&lt;/p&gt;" />
+  <row Id="2" PostTypeId="2" Score="3" Body="&lt;p&gt;Invented sample answer text.&lt;/p&gt;" />
+  <row Id="3" PostTypeId="1" Score="1" Tags="&lt;unrelated-tag&gt;" Body="&lt;p&gt;Invented sample question that does not match the allowlist.&lt;/p&gt;" />
+  <row Id="4" PostTypeId="1" Score="7" Tags="&lt;observational-study&gt;" Body="&lt;p&gt;Another invented sample question about a confound in an observational study.&lt;/p&gt;" />
+</posts>

@@ -1,0 +1,4 @@
+occurrence_id,narrative,probable_cause
+occ-1,"Invented sample narrative describing a fictional instrument malfunction.","Invented sample probable cause: fictional sensor drift."
+occ-2,"","Invented sample probable cause with an empty narrative field."
+occ-3,"Invented sample narrative with no probable cause recorded.",
