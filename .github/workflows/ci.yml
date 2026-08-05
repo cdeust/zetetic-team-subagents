@@ -167,14 +167,18 @@ jobs:
         run: bash scripts/test-worktree-sweep-safety.sh
 
   zetetic-checker:
-    name: Zetetic Standard Checker
+    name: Zetetic Standard Checker (hard gate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # BLOCKING. The checker prints "FAILED: N blocking violation(s)" and exits
+      # non-zero; swallowing that with `|| echo ... (informational)` produced a
+      # green build over 9 self-declared blocking violations, which is worse
+      # than having no gate at all: it reports compliance that was never checked.
       - name: Run zetetic-checker on full tree
-        run: ZETETIC_PROFILE=standard bash tools/zetetic-checker.sh --full || echo "checker reported violations (informational)"
+        run: ZETETIC_PROFILE=standard bash tools/zetetic-checker.sh --full
 
   craftsmanship-checker:
     name: Craftsmanship Checker (hard gate)

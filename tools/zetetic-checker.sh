@@ -26,7 +26,17 @@ set -euo pipefail
 
 # ── Defaults ───────────────────────────────────────────────────────────
 # Always skip: generated / lock / binary-ish files. The zetetic standard targets authored code.
-ZETETIC_SKIP_PATHS_ALWAYS='Cargo\.lock$|package-lock\.json$|yarn\.lock$|pnpm-lock\.yaml$|poetry\.lock$|Gemfile\.lock$|composer\.lock$|target/|node_modules/|dist/|build/|\.git/|\.venv/|vendor/|\.sqlx/'
+#
+# This checker's own fixture corpus is skipped for the same reason: those files
+# are deliberately non-compliant STIMULUS, not authored code. Every line in them
+# exists to make a rule fire, and run-tests.sh asserts the exact finding count
+# per fixture — a stricter check than the tree sweep, so excluding them here
+# removes no coverage. run-tests.sh cds into the fixture directory and passes
+# bare filenames, which this path pattern deliberately does not match; the
+# regression suite therefore still scans them.
+# source: tools/tests/zetetic-checker/fixture-selfevident-claim.py:1-4 declares
+#   the fixture MUST fire, and run-tests.sh:119 asserts its count.
+ZETETIC_SKIP_PATHS_ALWAYS='Cargo\.lock$|package-lock\.json$|yarn\.lock$|pnpm-lock\.yaml$|poetry\.lock$|Gemfile\.lock$|composer\.lock$|target/|node_modules/|dist/|build/|\.git/|\.venv/|vendor/|\.sqlx/|tools/tests/zetetic-checker/'
 ZETETIC_SKIP_EXT_ALWAYS='\.(lock|svg|png|jpg|jpeg|gif|webp|pdf|min\.js|min\.css)$'
 
 # Default-skip-but-configurable: data / config formats. Teams may re-enable via .zetetic.conf.

@@ -31,7 +31,8 @@
 #
 # FAIL-OPEN (issue #52 criterion 3). No network, no jq, no release metadata, an
 # unreadable manifest, or a malformed version degrades to a single NOTICE line
-# and exit 0 — never a broken session, never a hang, never a false "you are
+# and exit 0 (ref: issue #52 criterion 3) — never a broken session, never a
+# hang, never a false "you are
 # stale". A boot-time check that can fail a session is a check that gets
 # disabled, and then the six-release gap recurs with the check nominally in
 # place. Every network call is time-boxed.
