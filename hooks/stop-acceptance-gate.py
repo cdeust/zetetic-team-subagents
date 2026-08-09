@@ -133,9 +133,13 @@ def resolve_config(root: str, requested: str) -> str:
     return local
 
 
-def gate_args(root: str, cfg: dict) -> list:
-    """Build the acceptance-gate.sh argv from a marker config (empty cfg -> defaults)."""
-    gate = resolve_gate(root)
+def gate_args(gate: str, root: str, cfg: dict) -> list:
+    """Build the acceptance-gate.sh argv from a marker config (empty cfg -> defaults).
+
+    `gate` is the already-resolved runner path: `main` resolves it once, so this
+    stays a pure function of its arguments rather than re-reading the filesystem
+    and the environment a second time.
+    """
     args = [gate, "--root", root, "--config",
             resolve_config(root, cfg.get("config", "memory/acceptance-gates.loop.yaml"))]
     base, head = cfg.get("diff_base"), cfg.get("diff_head")
@@ -176,7 +180,8 @@ def main() -> None:
         allow()
 
     root = repo_root()
-    if not resolve_gate(root):
+    gate = resolve_gate(root)
+    if not gate:
         allow()
 
     # BLOCK everywhere (owner directive 2026-08-09): the marker is no longer the
@@ -188,7 +193,7 @@ def main() -> None:
     # and globally rather than per repository.
     marker = os.path.join(root, ".abl-gate.json")
     if os.environ.get("ABL_STOP_BLOCK", "off").lower() == "on" and not os.path.isfile(marker):
-        result = run_gate(gate_args(root, {"config": "memory/acceptance-gates.yaml"}),
+        result = run_gate(gate_args(gate, root, {"config": "memory/acceptance-gates.yaml"}),
                           root, GATE_TIMEOUT_S)
         if result is None or result[0] == 0:
             allow()
@@ -204,7 +209,7 @@ def main() -> None:
             allow()
         if not isinstance(cfg, dict):  # hand-edited non-object marker -> fail open
             allow()
-        result = run_gate(gate_args(root, cfg), root, GATE_TIMEOUT_S)
+        result = run_gate(gate_args(gate, root, cfg), root, GATE_TIMEOUT_S)
         if result is None or result[0] == 0:
             allow()
         block(verdict_reason("Acceptance gate is not green; keep working until it passes",
@@ -216,7 +221,7 @@ def main() -> None:
     if not has_changes(root):
         allow()
     # WARN checks the committed BASE gate set, not the autonomous-loop variant.
-    result = run_gate(gate_args(root, {"config": "memory/acceptance-gates.yaml"}),
+    result = run_gate(gate_args(gate, root, {"config": "memory/acceptance-gates.yaml"}),
                       root, WARN_TIMEOUT_S)
     if result is None or result[0] == 0:
         allow()

@@ -79,6 +79,12 @@ def never_the_real_repo(tmp_path, monkeypatch):
     """
     monkeypatch.setattr(hook, "repo_root", lambda: str(tmp_path / "_empty_root"))
     (tmp_path / "_empty_root").mkdir()
+    # The BLOCK-everywhere opt-in (ABL_STOP_BLOCK) is set in the maintainer's
+    # shell, and it runs before the WARN tier. Inheriting it would silently
+    # rewrite what every WARN-tier test measures — a test must not depend on
+    # the environment of whoever runs it. Tests that exercise BLOCK set it
+    # themselves.
+    monkeypatch.delenv("ABL_STOP_BLOCK", raising=False)
 
 
 @pytest.fixture
@@ -192,18 +198,18 @@ def test_has_changes_is_false_when_git_cannot_run(monkeypatch):
 # ── gate_args ────────────────────────────────────────────────────────────────
 
 def test_gate_args_uses_the_loop_config_by_default():
-    args = hook.gate_args("/repo", {})
+    args = hook.gate_args("/repo/tools/acceptance-gate.sh", "/repo", {})
     assert args[0] == "/repo/tools/acceptance-gate.sh"
-    assert args[1:] == ["--config", "/repo/memory/acceptance-gates.loop.yaml"]
+    assert args[1:] == ["--root", "/repo", "--config", "/repo/memory/acceptance-gates.loop.yaml"]
 
 
 def test_gate_args_honours_a_marker_config():
-    args = hook.gate_args("/repo", {"config": "custom.yaml"})
-    assert args[2] == "/repo/custom.yaml"
+    args = hook.gate_args("/repo/tools/acceptance-gate.sh", "/repo", {"config": "custom.yaml"})
+    assert args[4] == "/repo/custom.yaml"
 
 
 def test_gate_args_passes_a_diff_range_when_both_ends_are_present():
-    args = hook.gate_args("/repo", {"diff_base": "a", "diff_head": "b"})
+    args = hook.gate_args("/repo/tools/acceptance-gate.sh", "/repo", {"diff_base": "a", "diff_head": "b"})
     assert args[-4:] == ["--diff-base", "a", "--diff-head", "b"]
 
 
@@ -212,7 +218,7 @@ def test_gate_args_passes_a_diff_range_when_both_ends_are_present():
 )
 def test_gate_args_omits_a_half_specified_diff_range(cfg):
     """Negative assertion: half a range is not a range."""
-    assert "--diff-base" not in hook.gate_args("/repo", cfg)
+    assert "--diff-base" not in hook.gate_args("/repo/tools/acceptance-gate.sh", "/repo", cfg)
 
 
 # ── run_gate ─────────────────────────────────────────────────────────────────
@@ -449,6 +455,6 @@ def test_warn_tier_checks_the_committed_base_gate_set(monkeypatch, fake_repo):
     monkeypatch.setattr(hook, "has_changes", lambda root: True)
     monkeypatch.setattr(subprocess, "run", _run)
     _run_main(monkeypatch, {})
-    assert seen["args"][2].endswith("memory/acceptance-gates.yaml")
+    assert seen["args"][4].endswith("memory/acceptance-gates.yaml")
     assert "loop" not in seen["args"][2]
     assert seen["timeout"] == hook.WARN_TIMEOUT_S
