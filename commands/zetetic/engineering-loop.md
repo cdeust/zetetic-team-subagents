@@ -111,6 +111,27 @@ git history already says.
 - **Off track**: after two failed corrections on the same issue, the context is polluted with
   failed approaches. Stop, clear, and restart with a prompt incorporating what was learned.
 
+## Contract violations — three answers that are never acceptable
+
+These are refusals, not preferences. An agent that produces one of them has broken the
+contract, and the owner should not have to say so again.
+
+1. **"Pre-existing" is a violation.** A defect you SEE in material you touch is yours to fix in
+   this change. Not noted, not documented as a limitation, not filed for later. Out of the
+   blast radius entirely? Then a dated issue with evidence — never "pre-existing, untouched".
+2. **A skip is a violation.** "Out of scope for this PR", "deferred to a follow-up", "too large
+   for one session", "I judged this multi-week" — none of these end a task. Work that does not
+   fit is CHECKPOINTED and CONTINUED, never abandoned with a note. The only legitimate stop is
+   input that only the user can give.
+3. **A failing PR is a violation.** Red CI is not "done pending checks". You do not report a PR
+   as delivered while a check is failing, and you do not end your turn watching a run you have
+   already seen go red. Fix it, push, re-verify. A PR you leave failing is unfinished work
+   handed back to the user.
+
+Corollary: **finish what you open.** An abandoned branch, an unmerged green PR nobody owns, an
+issue opened and never revisited — each is the same failure as leaving CI red. Track what you
+started and close it out.
+
 ## What this loop refuses
 
 Code produced directly from a prompt. Work reported as done without evidence. A merged change
