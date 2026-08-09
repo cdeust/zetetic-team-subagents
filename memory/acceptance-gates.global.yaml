@@ -1,0 +1,30 @@
+# acceptance-gates.global.yaml — the universal gate set.
+#
+# Used by hooks/stop-acceptance-gate.py for any repository that carries no
+# memory/acceptance-gates.yaml of its own, so "blocking everywhere" (owner
+# directive 2026-08-09) does not require authoring a config per repository.
+#
+# Same schema as acceptance-gates.yaml. Gates here must be TRUE UNIVERSALS:
+# deterministic, language-agnostic, and meaningful in any repository. A gate that
+# only makes sense in some repos belongs in that repo's own config, never here —
+# a false block in a universal gate freezes every session on the machine.
+#
+# Deliberately NOT here: test suites, linters, build commands. Their invocation is
+# repo-specific and unknowable generically; a repo that wants them gates them in
+# its own acceptance-gates.yaml, which takes precedence over this file.
+
+version: 1
+gates:
+  - name: no-abandoned-work
+    # source: measured failure, 2026-08-09 — twice in one session an agent edited a
+    # file to fix a red CI check, reported the fix as done, and left it uncommitted
+    # in the worktree. The turn ended on a claim the repository contradicted. This
+    # gate makes that state impossible to end a turn on.
+    #
+    # Tracked files only: untracked scratch files are not abandoned work, and
+    # blocking on them would freeze ordinary exploratory sessions.
+    # The runner executes each gate with cwd = --root (acceptance_gate.py:144), so
+    # plain git needs no path token; {root} is not a substitution the runner knows.
+    cmd: "test -z \"$(git diff --name-only)\" || { echo 'uncommitted changes to tracked files:'; git diff --name-only; exit 1; }"
+    mandatory: true
+    origin: base

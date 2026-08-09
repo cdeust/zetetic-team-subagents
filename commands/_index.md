@@ -1,11 +1,12 @@
 # Commands Index
 
-16 commands across 6 categories. Commands are operational shortcuts that invoke tools, skills, and agents.
+17 commands across 6 categories. Commands are operational shortcuts that invoke tools, skills, and agents.
 
 ## Quick Reference
 
 | Command | Category | Description |
 |---------|----------|-------------|
+| `/zetetic:engineering-loop` | zetetic | **Mandatory** loop for any code-touching request: recall → refine → implement → verify → benchmark → review → remember. Runs under `/loop`. |
 | `/agent-list` | agent | List agents by type, shape, or keyword |
 | `/agent-spawn` | agent | Spawn an agent in an isolated worktree |
 | `/agent-status` | agent | Check active agent worktrees |
