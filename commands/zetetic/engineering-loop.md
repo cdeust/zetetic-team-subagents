@@ -111,26 +111,39 @@ git history already says.
 - **Off track**: after two failed corrections on the same issue, the context is polluted with
   failed approaches. Stop, clear, and restart with a prompt incorporating what was learned.
 
-## Contract violations — three answers that are never acceptable
+## Contract violations — answers that are never acceptable
 
 These are refusals, not preferences. An agent that produces one of them has broken the
 contract, and the owner should not have to say so again.
 
-1. **"Pre-existing" is a violation.** A defect you SEE in material you touch is yours to fix in
-   this change. Not noted, not documented as a limitation, not filed for later. Out of the
-   blast radius entirely? Then a dated issue with evidence — never "pre-existing, untouched".
+1. **"Pre-existing" / "outside the blast radius" / "I filed an issue for it" — one refusal
+   wearing three faces.** There is no blast radius for breakage, and filing is not an action.
+   You touch something and it breaks, you fix it on the way: no discussion, no scoping debate,
+   no matter who broke it or when. A red test, a failing check, a violated invariant in code you
+   passed through is yours the moment you saw it. **You do not open issues — the user is the
+   only one who does.** An issue you file is a way of choosing not to work, and you do not get
+   to choose: you act, you do, you fix. If something genuinely cannot be fixed now, it goes in
+   the report to the user, who decides whether it becomes an issue.
 2. **A skip is a violation.** "Out of scope for this PR", "deferred to a follow-up", "too large
    for one session", "I judged this multi-week" — none of these end a task. Work that does not
    fit is CHECKPOINTED and CONTINUED, never abandoned with a note. The only legitimate stop is
    input that only the user can give.
-3. **A failing PR is a violation.** Red CI is not "done pending checks". You do not report a PR
-   as delivered while a check is failing, and you do not end your turn watching a run you have
-   already seen go red. Fix it, push, re-verify. A PR you leave failing is unfinished work
-   handed back to the user.
+3. **A failing PR is a violation.** Red CI is not "done pending checks". **A delegated contract
+   ends when it is fulfilled, not when a report is written**: for work that lands in a
+   repository, fulfilled means the PR is **green, mergeable, and verified**. Until then you keep
+   working — you do not stop, do not negotiate the scope down, do not wander onto adjacent work,
+   and do not hand back a red deliverable with an explanation attached.
 
-Corollary: **finish what you open.** An abandoned branch, an unmerged green PR nobody owns, an
-issue opened and never revisited — each is the same failure as leaving CI red. Track what you
-started and close it out.
+**Enforce these on anything you delegate.** The rules that bind you bind any agent you spawn;
+check its output the way yours would be checked, and reopen the contract when they were not met.
+And **an agent's final report is not proof that it stopped** — measured twice on 2026-08-09: two
+subagents kept writing into the working tree for hours after delivering a report that read as
+final, one silently starting an architectural change it had itself declared out of scope, both
+with the deliverable's own tests still red. Check the process list, not the report, before
+calling a tree clean or a measurement valid.
+
+Corollary: **finish what you open.** An abandoned branch, or a green PR left unmerged with no
+owner, is the same failure as leaving CI red.
 
 ## What this loop refuses
 
