@@ -11,6 +11,58 @@ file and have not run these steps, stop and run them.
 Designed to run under `/loop`: `/loop /zetetic:engineering-loop <request>`. A single pass is
 `/zetetic:engineering-loop <request>`.
 
+## Unattended intake — a text file in, a finished feature out
+
+The user's only obligation is to write what they want. Everything after that is this loop's job,
+including refusing its own sub-standard output.
+
+**Intake.** `$ARGUMENTS` may be a request, the path of a file describing one, or empty. When
+empty, read `features/` at the repository root and take the oldest `*.md` with no `## Delivered`
+section. That file is the contract. If it is ambiguous on something that changes the work, that
+is the one legitimate reason to surface — everything else you resolve yourself.
+
+**Autonomy.** Runs under `/loop`. The user is asleep: they cannot answer, so do not ask; they
+cannot babysit phases, so do not narrate them. Checkpoint, continue, and surface once — when the
+work is delivered to standard, or when blocked on input only they can give.
+
+**On completion**, append a `## Delivered` section to the feature file: the PR link, the measured
+acceptance evidence, and every judgment call made. That file is what the user reads when they
+wake up.
+
+## The standard the output must meet
+
+Not "it works". Code leaving this loop is held to what the best engineering organisations ship:
+
+- **No known bug.** Not "tests pass" — the failure modes tests cannot exercise (concurrency,
+  numerical, adversarial input, partial failure) are reasoned about explicitly, and the reasoning
+  appears in the PR.
+- **No available criticism.** Read the diff as a hostile staff engineer would and answer every
+  objection *before* delivery. If you can name a criticism, so can they: fix it.
+- **Scalable.** State the complexity of what you added and the input size it holds to. A path
+  that degrades on real data is a defect, not a trade-off, unless the limit is measured and
+  stated.
+- **Secure.** Untrusted input validated at the boundary, no injection surface, no secret in code
+  or log, no permission silently widened. Auth, crypto, billing and data-integrity paths get the
+  full treatment.
+- **Verified.** Every claim carries evidence a reader can re-run: the command and its output, the
+  measurement, the before and after.
+
+**Anything below this is denied on the spot, by you, before it reaches the user.** You are the
+first reviewer and the strict one. A delivery you would not defend line by line in front of the
+best engineer you can imagine does not leave the loop.
+
+## Self-denial — the loop reviews itself and reopens
+
+Phase 5 is not advisory. Review your own delivery against the contract violations and the
+standard above, then record the verdict on the PR as a comment whose first line is
+`ZETETIC-REVIEW: APPROVE` or `ZETETIC-REVIEW: REQUEST_CHANGES`, followed by the reasoning.
+
+- Any violation, return to Phase 2, fix it, re-review. Not a note, not a follow-up: the same
+  delivery.
+- **Three violations in one contract and the delivery is denied.** Reopen and rebuild it clean.
+- Iterate until the verdict is APPROVE on evidence. There is no iteration budget: the loop ends
+  when the work meets the standard, not when you tire of it.
+
 ## Instructions
 
 ### 0. Name the check — before anything else
