@@ -19,38 +19,38 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - **The native git commit gate (`.githooks/pre-commit` + `commit-msg`, #110) was
   live in exactly one of the owner's five repositories.** Both hooks resolved
-  their tools directory as `$(git rev-parse --show-toplevel)/tools` — correct
+  their tools directory as `$(git rev-parse --show-toplevel)/tools`, correct
   only in zetetic-team-subagents' own clone. Pointed at from any other repo via
   `core.hooksPath`, that path does not exist, so the hook printed a `WARNING`
   and exited 0. Measured 2026-08-10: session-optimizer, cortex-viz,
   ai-architect-mcp-spec and ai-architect-mcp-codebase all had zero active
-  `.git/hooks` and no branch protection requiring an equivalent CI job — a
+  `.git/hooks` and no branch protection requiring an equivalent CI job, so a
   direct `git commit` in four of the five repos was gated by nothing at all.
 
   `.githooks/lib/resolve-tools.sh` (new, sourced by both hooks) derives the
   shared engine's location from the hook FILE's own on-disk path
-  (`BASH_SOURCE`), not from the committing repo — confirmed in a scratch
+  (`BASH_SOURCE`), not from the committing repo. Confirmed in a scratch
   clone that an absolute, out-of-repo `core.hooksPath` fires correctly and
   `git rev-parse --show-toplevel` inside the hook still resolves to the
   *committing* repo. `resolve_tool()` prefers a target repo's own vendored
   copy of `deletion-gate.sh`/`zetetic-checker.sh`/`craftsmanship-checker.sh`,
-  then falls back to this clone's — one engine, five repos, nothing vendored.
+  then falls back to this clone's: one engine, five repos, nothing vendored.
 
   `require_tool()` replaces the old warn-and-exit-0 fallback with a BLOCK.
   Once a repo is wired, `tools/<name>` is a physical sibling of the hook file
   inside the same clone; the only way it goes missing is a corrupted or
-  partial plugin clone — "I could not tell," never "this repo legitimately
-  has no gate" (an unwired repo never reaches this code: `core.hooksPath` is
-  unset, so git invokes nothing). Verified against a deliberately gutted
-  plugin clone: the commit is now BLOCKED with a diagnostic, not silently
-  passed.
+  partial plugin clone, meaning "I could not tell," never "this repo
+  legitimately has no gate" (an unwired repo never reaches this code:
+  `core.hooksPath` is unset, so git invokes nothing). Verified against a
+  deliberately gutted plugin clone: the commit is now BLOCKED with a
+  diagnostic, not silently passed.
 
   `tools/install-git-hooks.sh` gained `--repo <path>` and `--all` (reads the
   new `tools/git-hooks-fleet.txt` sibling-repo manifest) and always points
   `core.hooksPath` at this clone's `.githooks/` by absolute path, including
-  for this repo's own clone — one code path, idempotent (`wired` vs
+  for this repo's own clone: one code path, idempotent (`wired` vs
   `unchanged`). **`core.hooksPath` is per-clone LOCAL git config
-  (`.git/config`) and is never committed** — a fresh clone of any of the five
+  (`.git/config`) and is never committed.** A fresh clone of any of the five
   repos starts unwired regardless of this change, and stays unwired until
   `install-git-hooks.sh` (or `--all`) is run in that clone. That is not a gap
   in this fix; it is the git property this script exists to close
