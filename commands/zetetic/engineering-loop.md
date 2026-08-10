@@ -142,6 +142,17 @@ final, one silently starting an architectural change it had itself declared out 
 with the deliverable's own tests still red. Check the process list, not the report, before
 calling a tree clean or a measurement valid.
 
+**A shortcut past the engineering fundamentals is refused by default.** SOLID, Clean
+Architecture, DRY, separation of concerns, the size limits, root-cause over symptom — the
+baseline of the trade, not a house style. Code that gets there by duplication, a god function, a
+layer violation, a special case bolted onto a growing conditional, or an abstraction nothing can
+substitute into is refused whether or not its tests pass. Green tests are necessary, never
+sufficient.
+
+Work as an expert software architect: the seam in the right place, the responsibility where it
+belongs, the contract expressed by the interface, dependencies pointing inward. When the correct
+structure costs more than the shortcut, pay it — that difference is the job.
+
 **A contract ends when the root cause is corrected and the refactoring it requires is done.**
 Not when the symptom stops showing, not when the suite goes green around a patch at the throw
 site. If fixing the cause exposes a structure that must change — a file past its size cap, a
