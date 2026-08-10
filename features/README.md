@@ -5,12 +5,16 @@ required of you: no plan, no ticket, no scoping session.
 
 `/loop /zetetic:engineering-loop` picks up the oldest file with no `## Delivered` section, runs
 the whole cycle unattended — recall, refine, implement, verify, benchmark, review, remember —
-and appends `## Delivered` with the pull request link, the measured evidence, and every judgment
-call it made. That section is what you read when you come back.
+and appends `## Delivered` with the pull request link, the measured evidence, and the proof the
+feature runs in the ecosystem. That section is what you read when you come back.
 
-The loop surfaces before that only when the request is ambiguous in a way that changes the work.
-Everything else it resolves itself, and it denies its own output before you ever see it if the
-work is below the standard in the loop definition.
+**There is one accepted outcome: the feature built and working.** Not a partial feature, not a
+design proposal, not a question about what you meant. Ambiguity is resolved from the surrounding
+code, not handed back. The loop denies its own output before you ever see it when the work is
+below the standard, and keeps going until it is not.
+
+The only thing that stops it is something only you can supply — a credential, an access, an
+authority. Nothing else.
 
 ## What to write
 

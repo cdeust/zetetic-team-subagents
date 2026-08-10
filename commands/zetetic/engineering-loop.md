@@ -18,16 +18,26 @@ including refusing its own sub-standard output.
 
 **Intake.** `$ARGUMENTS` may be a request, the path of a file describing one, or empty. When
 empty, read `features/` at the repository root and take the oldest `*.md` with no `## Delivered`
-section. That file is the contract. If it is ambiguous on something that changes the work, that
-is the one legitimate reason to surface — everything else you resolve yourself.
+section. That file is the contract. **Ambiguity is not a reason to surface.** Resolve it the way
+the ecosystem resolves it: read how the surrounding code already answers the question, pick the
+answer that makes the feature work end to end, and state what you chose in the delivery. There is
+no arbitration to hand back.
 
 **Autonomy.** Runs under `/loop`. The user is asleep: they cannot answer, so do not ask; they
 cannot babysit phases, so do not narrate them. Checkpoint, continue, and surface once — when the
-work is delivered to standard, or when blocked on input only they can give.
+feature is built, functional in the ecosystem, and delivered to standard. **That is the only
+accepted outcome.** Not a partial feature, not a design proposal, not a question.
 
 **On completion**, append a `## Delivered` section to the feature file: the PR link, the measured
-acceptance evidence, and every judgment call made. That file is what the user reads when they
-wake up.
+acceptance evidence, and the proof it runs in the ecosystem. That file is what the user reads
+when they wake up.
+
+**Functional in the ecosystem** is the bar, and it is stricter than "merged". The feature is
+reachable from the production path — not test-gated, not behind a flag nobody sets, not an
+instrument. It runs against the real system it belongs to, with the surrounding components it
+must cooperate with, and the evidence shows it working there: the command invoked, the output
+returned, the state it changed. Code that compiles, passes tests and is unreachable has delivered
+nothing.
 
 ## The standard the output must meet
 
@@ -157,76 +167,17 @@ git history already says.
 
 ## Stopping conditions
 
-- **Done**: the check from step 0 passes, evidence is shown, and the learning is recorded.
-- **Blocked**: input only the user can provide, a destructive or irreversible action, or a real
-  scope change. Ask and end the turn — never end on a promise of work not done.
-- **Off track**: after two failed corrections on the same issue, the context is polluted with
-  failed approaches. Stop, clear, and restart with a prompt incorporating what was learned.
+There is one: **the feature is built and functional in the ecosystem**, delivered to standard,
+with the evidence in the feature file. Nothing else ends the loop.
 
-## Contract violations — answers that are never acceptable
+Not a partial feature. Not a design proposal. Not a question about what was meant. Not "the code
+is written, integration is next". Not a green PR that nothing calls. If the work does not fit in
+one pass, checkpoint at `/memories/zetetic-loop/<slug>.md` and continue on the next tick — the
+loop resumes where it stopped, and it keeps resuming until the feature runs.
 
-These are refusals, not preferences. An agent that produces one of them has broken the
-contract, and the owner should not have to say so again.
-
-1. **"Pre-existing" / "outside the blast radius" / "I filed an issue for it" — one refusal
-   wearing three faces.** There is no blast radius for breakage, and filing is not an action.
-   You touch something and it breaks, you fix it on the way: no discussion, no scoping debate,
-   no matter who broke it or when. A red test, a failing check, a violated invariant in code you
-   passed through is yours the moment you saw it. **You do not open issues — the user is the
-   only one who does.** An issue you file is a way of choosing not to work, and you do not get
-   to choose: you act, you do, you fix. If something genuinely cannot be fixed now, it goes in
-   the report to the user, who decides whether it becomes an issue.
-2. **A skip is a violation.** "Out of scope for this PR", "deferred to a follow-up", "too large
-   for one session", "I judged this multi-week" — none of these end a task. Work that does not
-   fit is CHECKPOINTED and CONTINUED, never abandoned with a note. The only legitimate stop is
-   input that only the user can give.
-3. **A failing PR is a violation.** Red CI is not "done pending checks". **A delegated contract
-   ends when it is fulfilled, not when a report is written**: for work that lands in a
-   repository, fulfilled means the PR is **green, mergeable, and verified**. Until then you keep
-   working — you do not stop, do not negotiate the scope down, do not wander onto adjacent work,
-   and do not hand back a red deliverable with an explanation attached.
-
-**Enforce these on anything you delegate.** The rules that bind you bind any agent you spawn;
-check its output the way yours would be checked, and reopen the contract when they were not met.
-And **an agent's final report is not proof that it stopped** — measured twice on 2026-08-09: two
-subagents kept writing into the working tree for hours after delivering a report that read as
-final, one silently starting an architectural change it had itself declared out of scope, both
-with the deliverable's own tests still red. Check the process list, not the report, before
-calling a tree clean or a measurement valid.
-
-**A shortcut past the engineering fundamentals is refused by default.** SOLID, Clean
-Architecture, DRY, separation of concerns, the size limits, root-cause over symptom — the
-baseline of the trade, not a house style. Code that gets there by duplication, a god function, a
-layer violation, a special case bolted onto a growing conditional, or an abstraction nothing can
-substitute into is refused whether or not its tests pass. Green tests are necessary, never
-sufficient.
-
-Work as an expert software architect: the seam in the right place, the responsibility where it
-belongs, the contract expressed by the interface, dependencies pointing inward. When the correct
-structure costs more than the shortcut, pay it — that difference is the job.
-
-**A contract ends when the root cause is corrected and the refactoring it requires is done.**
-Not when the symptom stops showing, not when the suite goes green around a patch at the throw
-site. If fixing the cause exposes a structure that must change — a file past its size cap, a
-tangled responsibility, a seam in the wrong place — that change belongs to the same contract, not
-to a follow-up. Ordinary software craftsmanship, not a local rule.
-
-**Refusal is not one of the options.** No engineering organisation lets a developer decline the
-work. "Out of scope", "needs its own effort", "someone else should own it" are not answers a
-contract admits. One path only: do the work, and do it well. Difficulty and delicacy are reasons
-to proceed carefully — never reasons to hand it back.
-
-**A declared violation is still a violation.** Naming a broken rule in the PR body does not
-license it — not a size cap, not a regression, not a failing invariant, not debt in a file you
-touched. "Declared, not hidden" is a confession, not an acceptance criterion. The fix lands in
-the same PR, before delivery. A regression is fixed, never accepted and never annotated.
-
-**Three violations in one contract and the PR is DENIED by default** — not renegotiated, not
-merged with caveats. Reopen the work and deliver a contract without violations. The count is per
-contract, not per file, and one you declare yourself counts exactly like one a reviewer finds.
-
-Corollary: **finish what you open.** An abandoned branch, or a green PR left unmerged with no
-owner, is the same failure as leaving CI red.
+The single exception is a credential, an access, or an authority only the user holds — something
+no amount of work on your side can produce. Ambiguity is not one of these: you resolve it from
+the code and state what you chose.
 
 ## What this loop refuses
 
