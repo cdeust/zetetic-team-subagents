@@ -1,7 +1,7 @@
 {
   "name": "zetetic-gates",
   "description": "Commits with unsourced constants get BLOCKED. Three mechanical gates, zero agents: a zetetic checker (absolute claims and 3+ decimal constants need a source: annotation), a craftsmanship checker (coding-standards size limits, tunable via .craftsmanship.conf), and a secret-shield that stops credential-file reads. Installs in 30 seconds.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
