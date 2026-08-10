@@ -15,6 +15,34 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Stale post-rename references to `automatised-pipeline`, `prd-spec-generator`
+  and `cortex-viz`.** `README.md`'s companion-projects table and license
+  footnote still linked `github.com/cdeust/prd-spec-generator` (a redirect,
+  not a 404, which made the staleness easy to miss); `rules/coding-standards.md`
+  named the same repo in its mutation-testing status line; and
+  `tools/dev-symlink.map.example` pointed three cache-install paths and one
+  dev-repo dir (`Cortex-live`, already removed) at names or directories that no
+  longer exist. All four now name the current repos:
+  `cdeust/ai-architect-mcp-spec` and the `hypermnesia-mcp`/`hypermnesia-mcp-viz`
+  plugin keys. Comments that document the renames themselves
+  (`.github/workflows/identity.yml`, `scorecard.yml`,
+  `tools/agent-definition-auditor.sh`), the dated LinkedIn post record, the
+  `.bestpractices.json` citation of the external OpenSSF project by its
+  registered pre-rename name, and the ADR/audit files describing past
+  decisions are unchanged on purpose — editing them would falsify the trace
+  they exist to keep.
+- **`memory/scope-registry.json`'s `cortex-viz` memory scope was never
+  reconciled with the plugin's marketplace rename to `hypermnesia-mcp-viz`.**
+  Directories already exist on users' disks at
+  `~/.claude/memories/cortex-viz/`, the plugin's GitHub repo was not renamed,
+  and this repo cannot verify which `MEMORY_AGENT_ID` the currently-shipped
+  plugin binary writes under — so the old key is kept rather than dropped.
+  Registered `hypermnesia-mcp-viz` as a second external-plugin scope,
+  identical in shape, and documented the compatibility decision in
+  `memory/scope-coverage.md`. Distinct registry scopes: 30 -> 31 (both
+  counted values and the file's self-verification snippet updated together).
+
 ### Added
 - **HTTPS-only validation at the web-ingest trust boundary.** Caller-supplied,
   redirected and discovered URLs now pass through one allowlist that requires
