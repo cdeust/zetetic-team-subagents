@@ -30,14 +30,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   `tools/agent-definition-auditor.sh`), the dated LinkedIn post record, the
   `.bestpractices.json` citation of the external OpenSSF project by its
   registered pre-rename name, and the ADR/audit files describing past
-  decisions are unchanged on purpose — editing them would falsify the trace
+  decisions are unchanged on purpose: editing them would falsify the trace
   they exist to keep.
 - **`memory/scope-registry.json`'s `cortex-viz` memory scope was never
   reconciled with the plugin's marketplace rename to `hypermnesia-mcp-viz`.**
   Directories already exist on users' disks at
   `~/.claude/memories/cortex-viz/`, the plugin's GitHub repo was not renamed,
   and this repo cannot verify which `MEMORY_AGENT_ID` the currently-shipped
-  plugin binary writes under — so the old key is kept rather than dropped.
+  plugin binary writes under, so the old key is kept rather than dropped.
   Registered `hypermnesia-mcp-viz` as a second external-plugin scope,
   identical in shape, and documented the compatibility decision in
   `memory/scope-coverage.md`. Distinct registry scopes: 30 -> 31 (both
