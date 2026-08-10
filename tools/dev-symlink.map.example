@@ -9,13 +9,17 @@
 #   mode = <relative binary path>        (symlink just that one path)
 #
 # Verified against the live montage on 2026-07-13 (see memory:
-# dev-symlink-montage.md). Update the version segments after each release.
+# dev-symlink-montage.md); plugin/marketplace keys and dev-repo dirs refreshed
+# 2026-08-10 for the automatised-pipeline / prd-spec-generator / cortex-viz
+# renames plus the earlier cortex -> hypermnesia-mcp plugin-key rename (the
+# mirror dir `Cortex-live` no longer exists on disk). Update the version
+# segments after each release.
 
-~/.claude/plugins/cache/cortex-plugins/cortex/4.13.3|/Users/cdeust/Developments/anthropic-partnership/Cortex-live|tree
-~/.claude/plugins/cache/cortex-plugins/cortex-viz/2.6.0|/Users/cdeust/Developments/anthropic-partnership/cortex-viz|tree
+~/.claude/plugins/cache/cortex-plugins/hypermnesia-mcp/4.17.2|/Users/cdeust/Developments/anthropic-partnership/Cortex|tree
+~/.claude/plugins/cache/hypermnesia-mcp-viz-marketplace/hypermnesia-mcp-viz/3.0.0|/Users/cdeust/Developments/anthropic-partnership/cortex-viz|tree
 ~/.claude/plugins/cache/cortex-vision-plugins/cortex-vision/1.0.1|/Users/cdeust/Developments/anthropic-partnership/cortex-vision|tree
 ~/.claude/plugins/cache/cortex-voice-plugins/cortex-voice/1.0.1|/Users/cdeust/Developments/anthropic-partnership/cortex-voice|tree
-~/.claude/plugins/cache/prd-spec-generator-marketplace/prd-spec-generator/0.4.1|/Users/cdeust/Developments/anthropic-partnership/prd-spec-generator|tree
+~/.claude/plugins/cache/ai-architect-mcp-spec-marketplace/ai-architect-mcp-spec/0.7.0|/Users/cdeust/Developments/anthropic-partnership/ai-architect-mcp-spec|tree
 ~/.claude/plugins/cache/session-optimizer-marketplace/session-optimizer/1.4.1|/Users/cdeust/Developments/anthropic-partnership/session-optimizer|tree
 ~/.claude/plugins/cache/zetetic-marketplace/zetetic-team-subagents/2.27.0|/Users/cdeust/Developments/anthropic-partnership/zetetic-team-subagents|tree
 ~/.claude/plugins/cache/ai-architect-mcp-codebase-marketplace/ai-architect-mcp-codebase/0.9.0|/Users/cdeust/Developments/anthropic-partnership/automatised-pipeline|target/release/ai-architect-mcp-codebase
