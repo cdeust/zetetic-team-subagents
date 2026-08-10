@@ -242,6 +242,51 @@ jobs:
       - name: Run craftsmanship-checker on full tree (informational)
         run: bash tools/craftsmanship-checker.sh --full || echo "craftsmanship --full reported violations (informational; legacy tree)"
 
+  deletion-gate:
+    name: Deletion Gate (hard gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # HARD gate, full-tree — not a ratchet: this is Tier 3 of the deletion
+      # gate (tools/deletion_gate.py). Tier 1 (hooks/pre-tool-deletion-gate.py,
+      # a PreToolUse hook) catches the pattern at edit time inside a session;
+      # this job is the branch-protecting backstop for anything that reaches a
+      # commit by another path — a scripted/bulk delete, a merge, a commit made
+      # outside this harness. Base ref is the PR base SHA for pull_request, or
+      # HEAD^ for a push (HEAD on the first commit, no parent) — same
+      # determination as the craftsmanship job above, computed independently
+      # here so this job has no cross-job dependency.
+      #
+      # Incident (source: cdeust/cortex-viz commit 45d4a80): three
+      # module-level forwarders were removed and justified as "never had a
+      # caller in this repository's history" — they had four. A grep for the
+      # removed names against the post-change tree would have found them.
+      # This gate is that grep, made mandatory: a removed top-level
+      # definition either has no surviving caller AND a substantive
+      # Retired-Because: trailer, or is a detected rename/move, or the build
+      # is red.
+      - name: Determine base ref for the diff
+        id: base
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${PR_BASE_SHA}" ]]; then
+            base="${PR_BASE_SHA}"
+          else
+            base="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "base=${base}" >> "$GITHUB_OUTPUT"
+          echo "Diff base: ${base}"
+
+      - name: No removed definition ships with a dangling caller or an unexplained deletion
+        run: >-
+          bash tools/deletion-gate.sh --repo .
+          --base "${{ steps.base.outputs.base }}" --head HEAD
+
   doc-commands:
     name: Documented Commands Exist (hard gate)
     runs-on: ubuntu-latest

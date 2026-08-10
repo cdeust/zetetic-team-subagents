@@ -61,6 +61,7 @@ Replace `/path/to/zetetic-team-subagents` with the actual path to your clone.
 | Hook | Event | What it does | Blocks? |
 |------|-------|-------------|---------|
 | **pre-commit-zetetic** | Before `git commit` | Scans staged files for invented constants, unsourced claims, TODOs without difficulty-book refs | Yes: violations block commit |
+| **pre-tool-deletion-gate** | Before `Edit`/`Write` | Diffs old_string/content against the on-disk file; if the edit removes a top-level definition (Python/JS/TS/Rust/shell), searches the working tree for surviving callers. Tier 1 of `tools/deletion_gate.py`, catching the delete-with-live-callers pattern (cdeust/cortex-viz commit 45d4a80) at the moment of the edit, before it can land. Does not require a `Retired-Because:` trailer (no commit exists yet); that half of the contract is enforced at commit/CI time by `tools/deletion-gate.sh`. | Yes: a surviving caller blocks the edit (exit 2) |
 | **post-commit-difficulty** | After `git commit` | Checks if committed files relate to an active difficulty book; reminds to update | No: advisory |
 | **pre-push-review** | Before `git push` | Runs zetetic checker on all changes since last push | Yes: violations block push |
 | **session-start** | Session start | Loads repo state, difficulty books, agent worktrees, cached session | No: context injection |

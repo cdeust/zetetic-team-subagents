@@ -29,6 +29,30 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry query answering in seconds is the evidence where a green publish job
   is not. Generated into 119 agents by `scripts/generate-spine.py`; the
   generator is edited, never the outputs.
+- **Deletion gate: a removed top-level definition either has no surviving
+  caller and a reason, or it does not ship.** Prose telling agents "removal
+  needs its own justification, a defect is not one" was violated the day
+  after it was written (cdeust/cortex-viz commit 45d4a80 removed three
+  module-level forwarders justified as "never had a caller in this
+  repository's history", but they had four, in files the diff never touched;
+  the release could not build a graph). `tools/deletion_gate.py` +
+  `tools/deletion_gate_lang.py` make the pattern mechanically impossible to
+  merge: for every removed top-level definition (Python/JS/TS/Rust/shell) it
+  greps the post-change tree for surviving callers and blocks, names them; a
+  rename or move (matched by body similarity, not name) passes with no
+  rationale owed; a genuine no-survivor removal requires a `Retired-Because:`
+  commit trailer that says more than the observation itself. Wired at three
+  tiers: `hooks/pre-tool-deletion-gate.py` (PreToolUse, blocks the Edit/Write
+  itself before it lands), the `deletion-gate` CI job (hard gate over the PR
+  diff, `.github/workflows/ci.yml`), `tools/tests/deletion-gate/` (26
+  end-to-end regression cases, including the shape of the incident, offline),
+  and `tests/test_deletion_gate*.py` / `tests/test_pre_tool_deletion_gate.py`
+  (93 pytest cases at 96-100 percent line coverage per module, so the shipped
+  Python surface's 80 percent CI floor stays enforced rather than diluted by
+  three new modules landing at 0 percent). Verified
+  against the real cortex-viz commit 45d4a80: blocks, names
+  `graph_build_run.py:234`, `graph_build_run.py:155` and
+  `graph_build_merge.py:136` as the surviving callers. (#109)
 
 ## [2.37.0]: GOA Phase 0/Instrument B tooling, genius-bank coverage complete, and the engineering-loop restored
 

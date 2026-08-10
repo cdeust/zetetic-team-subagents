@@ -12,7 +12,7 @@
     {
       "name": "zetetic-team-subagents",
       "source": "./",
-      "description": "Complete system: 15 problem-shaped skills backed by 97 genius agents, 23 team agents (incl. refactorer, simplifier, memory-writer), 80 skills total, 27 commands, 49 tools, 20 hooks, authoritative coding-standards rules",
+      "description": "Complete system: 15 problem-shaped skills backed by 97 genius agents, 23 team agents (incl. refactorer, simplifier, memory-writer), 80 skills total, 27 commands, 52 tools, 21 hooks, authoritative coding-standards rules",
       "version": "2.37.0",
       "author": {
         "name": "Clement Deust",
