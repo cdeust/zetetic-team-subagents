@@ -419,28 +419,56 @@ def resolve_message(repo: str, args) -> str:
     return range_messages(repo, args.base, args.head)
 
 
+def count_modes_given(args) -> int:
+    return sum((bool(args.commit), bool(args.staged), bool(args.base)))
+
+
+def resolve_mode(args) -> tuple[str, str, bool, bool]:
+    """(base, head, staged, require_trailer) for the CLI mode selected by
+    args. Each branch fixes all four TOGETHER as one decision for that mode —
+    they must never be derived independently (see caller's mutual-exclusion
+    check: CodeQL py/uninitialized-local-variable, PR #109, deletion_gate.py:443
+    — require_trailer used to be derived from `args.staged` alone while
+    base/head picked commit-priority, so a caller combining both flags got
+    the two silently disagreeing: the resulting run diffed the empty staged
+    index instead of commit^..commit and passed a real, trailer-less
+    deletion). Precondition: count_modes_given(args) == 1, enforced by the
+    caller before this runs, so exactly one of the three branches applies."""
+    if args.commit:
+        return f"{args.commit}^", args.commit, False, True  # a real commit exists; its message carries the trailer
+    if args.staged:
+        # pre-image is the last commit; head is unused. Staged with no
+        # message file: there is no commit yet to carry a Retired-Because:
+        # trailer, so this run is the survivors-only "net" (module docstring
+        # point 3 is deferred to the commit/CI-range run, which always has a
+        # real message and always requires the trailer).
+        return "HEAD", args.head, True, bool(args.message_file)
+    return args.base, args.head, False, True  # a real commit range exists; every commit's message is checked
+
+
 def main(argv: list) -> int:
     args = build_parser().parse_args(argv)
-    if not args.staged and not args.commit and not args.base:
+    modes_given = count_modes_given(args)
+    if modes_given == 0:
         print("error: one of --commit, --base/--head, or --staged is required", file=sys.stderr)
         return EXIT_USAGE
-
-    if args.commit:
-        base, head = f"{args.commit}^", args.commit
-    elif args.staged:
-        base, head = "HEAD", args.head  # pre-image is the last commit; head is unused
-    else:
-        base, head = args.base, args.head
-    # Staged with no message file: there is no commit yet to carry a
-    # Retired-Because: trailer, so this run is the survivors-only "net"
-    # (module docstring point 3 is deferred to the commit/CI-range run,
-    # which always has a real message and always requires the trailer).
-    require_trailer = not (args.staged and not args.message_file)
+    if modes_given > 1:
+        # A caller that passes two mode flags at once (e.g. --commit sha
+        # --staged) leaves it undecided which diff the gate should run. A
+        # gate that cannot tell which mode was requested refuses the input;
+        # it does not let one flag silently win over the other.
+        print(
+            "error: --commit, --staged, and --base/--head are mutually "
+            "exclusive modes — combine none or exactly one",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    base, head, staged, require_trailer = resolve_mode(args)
 
     try:
         require_pcre(args.repo)
         message = resolve_message(args.repo, args)
-        result = evaluate(args.repo, base, head, args.staged, message, require_trailer)
+        result = evaluate(args.repo, base, head, staged, message, require_trailer)
     except GitError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE

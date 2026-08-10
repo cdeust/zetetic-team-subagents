@@ -415,3 +415,37 @@ def test_main_git_error_maps_to_usage_exit(tmp_path: Path, capsys):
     code = dg.main(["--repo", str(tmp_path), "--commit", "deadbeef"])
     assert code == dg.EXIT_USAGE
     assert "error:" in capsys.readouterr().err
+
+
+def test_main_rejects_combining_commit_and_staged_as_ambiguous(git_repo: Path, capsys):
+    # CodeQL py/uninitialized-local-variable, tools/deletion_gate.py:443 (PR #109):
+    # `require_trailer` was computed from `args.staged` alone while `base`/`head`
+    # were chosen by commit-priority (`if args.commit: ... elif args.staged: ...`).
+    # Passing both flags together decoupled the two: base/head took the commit
+    # path but `staged=True` was still forwarded to evaluate()/collect_definitions,
+    # which diffs the (empty) index instead of commit^..commit — the gate found
+    # zero removed definitions and passed a real, trailer-less deletion. A gate
+    # that cannot tell which of two mutually exclusive modes was requested must
+    # refuse the input, not silently let one flag win over the other.
+    (git_repo / "lib.py").write_text("def orphan(x):\n    return x\n")
+    _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")
+    head = _commit(git_repo, "drop orphan, no trailer")
+    code = dg.main(["--repo", str(git_repo), "--commit", head, "--staged"])
+    assert code == dg.EXIT_USAGE
+    assert "mutually exclusive" in capsys.readouterr().err
+
+
+def test_main_commit_mode_requires_the_trailer_even_when_message_file_absent(
+    git_repo: Path, capsys
+):
+    # require_trailer must be decided per selected mode, not by testing
+    # `args.staged` in isolation: commit mode always has a real commit message
+    # to check, so the trailer is required regardless of --message-file.
+    (git_repo / "lib.py").write_text("def orphan(x):\n    return x\n")
+    _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")
+    head = _commit(git_repo, "drop orphan, no trailer")
+    code = dg.main(["--repo", str(git_repo), "--commit", head])
+    assert code == dg.EXIT_BLOCK
+    assert "no Retired-Because" in capsys.readouterr().out
