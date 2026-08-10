@@ -21,6 +21,7 @@ Usage:
   scripts/generate-spine.py            # inject/refresh the block in every agent
   scripts/generate-spine.py --check    # exit 1 if any agent's block is stale
 """
+
 import glob
 import os
 import re
@@ -37,10 +38,18 @@ BLOCK_RE = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.S)
 # confirmées + ADR-003.
 STRONG = {
     # team — research-correlated (have or are about scientific evidence)
-    "research-scientist", "data-scientist", "reviewer-academic",
-    "paper-writer", "professor",
+    "research-scientist",
+    "data-scientist",
+    "reviewer-academic",
+    "paper-writer",
+    "professor",
     # genius — epistemic reasoning patterns
-    "popper", "cochrane", "feynman", "peirce", "fisher", "semmelweis",
+    "popper",
+    "cochrane",
+    "feynman",
+    "peirce",
+    "fisher",
+    "semmelweis",
 }
 
 # Deliberate exclusions — agents with no claim-making/testing/coding surface, for
@@ -63,64 +72,99 @@ RESOURCE_STD = (
 )
 
 
-def spine_block(strong: bool) -> str:
-    resource = RESOURCE_STRONG if strong else RESOURCE_STD
-    return "\n".join([
-        BEGIN,
-        "<zetetic-spine>",
-        "**Per-task spine — run in order; depth scales with stakes " +
-        "(coding-standards.md §10): recall → evidence/sources → " +
-        "adversarial-verify → remember.**",
-        "1. **Recall** before acting — `cortex:recall` scoped to your " +
-        "`agent_topic` + your memory scope. If recall contradicts the plan, " +
-        "stop and reconcile before proceeding.",
+# The four numbered beats, which are the only part that varies (by resource).
+# Split from the standing rules below when this function crossed the 50-line cap
+# (coding-standards.md §4.2): a procedure that runs in order and a set of rules
+# that always hold are two concerns, and the cap surfaced the seam rather than
+# creating it.
+def _procedure(resource: str) -> list[str]:
+    return [
+        "**Per-task spine — run in order; depth scales with stakes "
+        + "(coding-standards.md §10): recall → evidence/sources → "
+        + "adversarial-verify → remember.**",
+        "1. **Recall** before acting — `cortex:recall` scoped to your "
+        + "`agent_topic` + your memory scope. If recall contradicts the plan, "
+        + "stop and reconcile before proceeding.",
         "2. **Evidence/sources** — *the source precedes the implementation, "
         "never the reverse.* Every claim, constant, threshold, and algorithm is "
         "**derived from** a source read first. A citation attached *after* the "
         "code — a paper picked because it resembles what you already wrote — is "
         "fabricated proof, not evidence; resemblance is not prescription, so "
         "verify the source actually states your value/equation and that its "
-        "conditions match yours. No source → say \"I don't know\" and stop; do "
-        "not ship, then justify (coding-standards.md §8). " + resource +
-        " — `~/.claude/rules/agent-reference/research-resources.md`.",
-        "3. **Adversarial-verify** before \"done\" — design the test that " +
-        "catches the error *if it exists* (severity, not ceremony); reproduce " +
-        "before claiming a fix. **For code changes at High/Medium stakes, prove " +
-        "the suite KILLS mutants, not just covers lines** — mutation testing on " +
-        "the changed lines (`tools/mutation_check.sh`; test-engineer Move 8 / " +
-        "coding-standards.md §12): kill or document-as-equivalent every " +
-        "survivor. Bound the thesis to its evidence regime.",
-        "4. **Remember** after acting — persist WHY-level outcomes " +
-        "(decision+rationale, rejected approach+root cause, benchmark deltas " +
-        "before AND after); code stays in the repo.",
-        "",
-        "**Stamp the standard you were judged against.** Any rule-compliance " +
-        "report you emit states the rules version it was evaluated under — " +
-        "`tools/plugin-version-check.sh --rules-version` (and " +
-        "`--version` for the plugin build). A compliance verdict read later is " +
-        "uninterpretable without it, and a stale plugin can enforce a " +
-        "superseded standard while certifying the result (issue #52).",
-        "",
-        "**Hand back at the push, never at the wait.** You cannot hold a " +
-        "15-20 minute pipeline: you either park on a monitor nothing wakes, or " +
-        "you are killed mid-block, and both end with a report that never " +
-        "arrives. So finish, run only the checks short enough to complete in " +
-        "your own thread, push, and hand back **immediately** with the PR " +
-        "number and the exact sha. Waiting on CI belongs to whoever delegated " +
-        "to you. If it reddens they message you the failure, which resumes you " +
-        "with your context intact — you lose nothing by returning early. Never " +
-        "end a turn on \"I'll resume when my monitor notifies me\": that is " +
-        "death, not waiting. The one thing you do finish yourself is a short " +
-        "check that IS your deliverable's proof (a registry query after a " +
-        "publish, a suite that runs in seconds) — those seconds are yours, the " +
-        "twenty minutes are not.",
-        "",
-        "Failed gate ⇒ **STOP** and surface the gap; never paper over a missing " +
-        "source with confidence. Full procedure: " +
-        "`~/.claude/rules/agent-reference/zetetic-spine.md`.",
-        "</zetetic-spine>",
-        END,
-    ])
+        'conditions match yours. No source → say "I don\'t know" and stop; do '
+        "not ship, then justify (coding-standards.md §8). "
+        + resource
+        + " — `~/.claude/rules/agent-reference/research-resources.md`.",
+        '3. **Adversarial-verify** before "done" — design the test that '
+        + "catches the error *if it exists* (severity, not ceremony); reproduce "
+        + "before claiming a fix. **For code changes at High/Medium stakes, prove "
+        + "the suite KILLS mutants, not just covers lines** — mutation testing on "
+        + "the changed lines (`tools/mutation_check.sh`; test-engineer Move 8 / "
+        + "coding-standards.md §12): kill or document-as-equivalent every "
+        + "survivor. Bound the thesis to its evidence regime.",
+        "4. **Remember** after acting — persist WHY-level outcomes "
+        + "(decision+rationale, rejected approach+root cause, benchmark deltas "
+        + "before AND after); code stays in the repo.",
+    ]
+
+
+# Rules that hold regardless of the task, and depend on nothing.
+STANDING_RULES = [
+    "",
+    "**Stamp the standard you were judged against.** Any rule-compliance "
+    + "report you emit states the rules version it was evaluated under — "
+    + "`tools/plugin-version-check.sh --rules-version` (and "
+    + "`--version` for the plugin build). A compliance verdict read later is "
+    + "uninterpretable without it, and a stale plugin can enforce a "
+    + "superseded standard while certifying the result (issue #52).",
+    "",
+    "**Deleting the thing that has the defect is not fixing the defect.** "
+    + "Removal is a design decision needing a justification of its own, apart "
+    + "from the bug; when the bug IS the reason offered, it is not a reason. "
+    + "The thing was doing a job, the job does not stop existing, and every "
+    + "caller now carries what was taken from them. Repair first; remove only "
+    + "when you can say what replaces it and who agreed the job was no longer "
+    + "needed. The tell is that this never arrives as avoidance — it arrives "
+    + 'as cleanup, justified by a claim of absence ("nothing calls this") '
+    + "that is exactly the claim you may not take on faith. Grep the call "
+    + "sites, then READ them. Measured 2026-08-10: three forwarders deleted "
+    + "as uncalled had four callers, the released build could not start, and "
+    + "the drift that actually motivated the deletion went unfixed. A defect "
+    + "in a thing, an unused-looking thing, and a thing that should not exist "
+    + "are three findings with three different remedies.",
+    "",
+    "**Hand back at the push, never at the wait.** You cannot hold a "
+    + "15-20 minute pipeline: you either park on a monitor nothing wakes, or "
+    + "you are killed mid-block, and both end with a report that never "
+    + "arrives. So finish, run only the checks short enough to complete in "
+    + "your own thread, push, and hand back **immediately** with the PR "
+    + "number and the exact sha. Waiting on CI belongs to whoever delegated "
+    + "to you. If it reddens they message you the failure, which resumes you "
+    + "with your context intact — you lose nothing by returning early. Never "
+    + 'end a turn on "I\'ll resume when my monitor notifies me": that is '
+    + "death, not waiting. The one thing you do finish yourself is a short "
+    + "check that IS your deliverable's proof (a registry query after a "
+    + "publish, a suite that runs in seconds) — those seconds are yours, the "
+    + "twenty minutes are not.",
+    "",
+    "Failed gate ⇒ **STOP** and surface the gap; never paper over a missing "
+    + "source with confidence. Full procedure: "
+    + "`~/.claude/rules/agent-reference/zetetic-spine.md`.",
+]
+
+
+def spine_block(strong: bool) -> str:
+    resource = RESOURCE_STRONG if strong else RESOURCE_STD
+    return "\n".join(
+        [
+            BEGIN,
+            "<zetetic-spine>",
+            *_procedure(resource),
+            *STANDING_RULES,
+            "</zetetic-spine>",
+            END,
+        ]
+    )
 
 
 def anchor_end(text: str):
@@ -186,20 +230,26 @@ def main():
             changed.append(name)
 
     if no_anchor:
-        print("WARNING: no <zetetic-standard>/<zetetic> anchor in: "
-              + ", ".join(no_anchor), file=sys.stderr)
+        print(
+            "WARNING: no <zetetic-standard>/<zetetic> anchor in: "
+            + ", ".join(no_anchor),
+            file=sys.stderr,
+        )
 
     if check:
         if stale:
-            print("zetetic-spine block stale in %d agent(s): %s\n"
-                  "run scripts/generate-spine.py"
-                  % (len(stale), ", ".join(stale)), file=sys.stderr)
+            print(
+                "zetetic-spine block stale in %d agent(s): %s\n"
+                "run scripts/generate-spine.py" % (len(stale), ", ".join(stale)),
+                file=sys.stderr,
+            )
             sys.exit(1)
         print("zetetic-spine up to date in all agents")
         return
-    print("zetetic-spine: updated %d agent(s)%s"
-          % (len(changed),
-             (" — no-anchor: %d" % len(no_anchor)) if no_anchor else ""))
+    print(
+        "zetetic-spine: updated %d agent(s)%s"
+        % (len(changed), (" — no-anchor: %d" % len(no_anchor)) if no_anchor else "")
+    )
 
 
 if __name__ == "__main__":

@@ -17,6 +17,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Every agent now carries a repair-before-remove rule in its zetetic spine
+  (#108): deleting the thing that has the defect is not fixing the defect.
+  Removal is a design decision needing a justification of its own, apart from
+  the bug; when the bug IS the reason offered, it is not a reason. The tell is
+  that this never arrives as avoidance but as cleanup, justified by a claim of
+  absence that §1 already forbids taking on faith. Measured 2026-08-10 on
+  `cortex-viz`: three module forwarders were deleted as having "never had a
+  caller in this repository's history" when they had four, the released 3.1.0
+  could not build a graph at all, and the parameter drift that actually
+  motivated the deletion went unfixed. A second defect explains why it survived
+  a release: the failure that would have reported it was swallowed by a bare
+  `except Exception: pass`. A deletion and a silent handler cover for each
+  other. `spine_block` was split into `_procedure()` and `STANDING_RULES` when
+  the addition crossed the 50-line cap, output byte-identical.
+
 - Every agent now carries a hand-back rule in its zetetic spine (#107): finish,
   run only the checks short enough to complete in your own thread, push, and
   hand back immediately with the PR number and the exact sha. Waiting on a
