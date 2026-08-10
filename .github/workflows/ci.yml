@@ -268,6 +268,26 @@ jobs:
       - name: Every documented count matches the tree
         run: bash tools/doc-count-check.sh
 
+  changelog-commit-check:
+    name: Changelog Commit Coverage (hard gate)
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth 0: the check walks `git log <latest-tag>..HEAD` and needs
+      # every tag plus the full commit range since it, not the default shallow
+      # clone.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # HARD gate, added after v2.37.0's own release postmortem: 14 of the 30
+      # commits since v2.36.0 had no CHANGELOG.md entry, because nothing
+      # measured the gap once the Unreleased section stopped being touched
+      # per-PR. Every feat:/fix:/sec:/perf: commit since the latest tag must
+      # be cited by its PR number somewhere above that tag's own section
+      # header.
+      - name: Every user-visible commit since the latest tag is in CHANGELOG.md
+        run: bash tools/changelog-commit-check.sh
+
   redaction-sweep:
     name: Redaction Sweep (hard gate)
     runs-on: ubuntu-latest

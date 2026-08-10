@@ -191,6 +191,13 @@ Scope, floor and exclusions live in `pyproject.toml`, so a local
 exactly what CI enforces. Adding a shipped Python file without tests will turn
 the build red (issue #71).
 
+`tools/changelog-commit-check.sh` runs in CI and fails the build if any
+`feat:`/`fix:`/`sec:`/`perf:` commit since the latest release tag is not cited
+by its own `(#NNN)` PR number somewhere in `CHANGELOG.md`'s not-yet-released
+content. That gate exists because the v2.36.0 -> v2.37.0 changelog stopped
+being updated per-PR after a point and 14 of 30 commits went unrecorded before
+anything noticed. `docs:`/`chore:`/`ci:`/`test:` commits are not required.
+
 ---
 
 ## What NOT to do
