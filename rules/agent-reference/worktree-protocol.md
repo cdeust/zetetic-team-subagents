@@ -39,6 +39,22 @@ After completing your changes:
    )"
    ```
    Types: feat, fix, refactor, test, docs, perf, chore
-3. Do NOT push — the orchestrator handles branch merging.
+3. **Pushing is the orchestrator's call, stated in your delegation prompt. Follow it.** Push
+   when the contract says to, and stop there; do not push when it does not.
+
+   This line used to forbid pushing absolutely. That was a local invention, and it contradicted
+   the dispatch contract every delegation actually carries, which ends the agent's work at the
+   push so the orchestrator can query CI and re-engage it with the result. Corrected 2026-08-10,
+   after the contradiction produced a security flag on an agent that had done exactly what its
+   prompt told it to do.
+
+   Anthropic's worktree documentation treats a pushed worktree branch as the ordinary case: the
+   cleanup sweep "skips a worktree that still holds work: changed or untracked files, or
+   unpushed commits", and a merged worktree is detected from "the remote branch the worktree
+   pushed to" no longer existing. Neither describes pushing as out of bounds.
+
+   **Rewriting history is different and still needs saying.** Force-pushing, amending a pushed
+   commit, or rebasing requires the prompt to authorise it explicitly, name the branch, and say
+   what must survive the rewrite. Absent that sentence, add a commit rather than reshaping one.
 4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
 5. Report the list of changed files and your branch name in your final response.
