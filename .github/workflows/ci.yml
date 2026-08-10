@@ -305,6 +305,14 @@ jobs:
         with:
           node-version: '20'
 
+      # Orphan check (issue #93): a run-tests.sh nested deeper than
+      # tools/tests/<suite>/run-tests.sh matches neither this job's glob below
+      # nor tests/run-all.sh's, and would silently never run. tests/run-all.sh
+      # --list runs that comparison and exits 2 on a mismatch; fail here with
+      # an explicit message rather than downstream via doc-count-check's DRIFT.
+      - name: Check for orphaned tools/tests suites
+        run: bash tests/run-all.sh --list > /dev/null
+
       # HARD gate: run every tools/tests/*/run-tests.sh; fail the job on the
       # first non-zero exit. set -e propagates the failure (no "|| echo").
       - name: Run tools/tests regression suites
