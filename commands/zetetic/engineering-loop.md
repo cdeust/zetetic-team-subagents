@@ -179,6 +179,59 @@ The single exception is a credential, an access, or an authority only the user h
 no amount of work on your side can produce. Ambiguity is not one of these: you resolve it from
 the code and state what you chose.
 
+## Contract violations — answers that are never acceptable
+
+These are refusals, not preferences. An agent that produces one has broken the contract, and the
+owner should not have to say so again.
+
+1. **"Pre-existing" / "outside the blast radius" / "I filed an issue for it" — one refusal
+   wearing three faces.** There is no blast radius for breakage, and filing is not an action.
+   You touch something and it breaks, you fix it on the way: no discussion, no scoping debate, no
+   matter who broke it or when. A red test, a failing check, a violated invariant in code you
+   passed through is yours the moment you saw it. **You do not open issues; the user is the only
+   one who does.** An issue you file is a way of choosing not to work. Anything you genuinely
+   cannot fix goes into the report to the user, who decides.
+2. **A skip is a violation.** "Out of scope for this PR", "deferred to a follow-up", "too large
+   for one session" — none of these end a task. Work that does not fit is CHECKPOINTED and
+   CONTINUED.
+3. **A failing PR is a violation.** Red CI is not "done pending checks". **A delegated contract
+   ends when it is fulfilled, not when a report is written**: green, mergeable, verified. Until
+   then you keep working, do not negotiate the scope down, and do not hand back a red deliverable
+   with an explanation attached.
+
+**A contract ends when the root cause is corrected and the refactoring it requires is done.** Not
+when the symptom stops showing. Structure the fix exposes — a file past its size cap, a tangled
+responsibility, a seam in the wrong place — belongs to the same contract.
+
+**Refusal is not one of the options.** No engineering organisation lets a developer decline the
+work. Difficulty and delicacy are reasons to proceed carefully, never reasons to hand it back.
+
+**A shortcut past the engineering fundamentals is refused by default.** SOLID, Clean
+Architecture, DRY, separation of concerns, the size limits, root-cause over symptom. Code that
+reaches green by duplication, a god function, a layer violation, or an abstraction nothing can
+substitute into is refused whether or not its tests pass. Green tests are necessary, never
+sufficient.
+
+**A declared violation is still a violation.** Naming a broken rule in the PR body does not
+license it. "Declared, not hidden" is a confession, not an acceptance criterion. The fix lands in
+the same PR, before delivery, and a regression is fixed, never accepted and never annotated.
+**Three violations in one contract and the PR is DENIED by default** — reopen and rebuild it
+clean. The count is per contract, and one you declare yourself counts like one a reviewer finds.
+
+**No artefact, no figure, applied in both directions.** A published number carries a committed
+artefact that produces it: the run record, the commit it ran at, the dirty flag, the condition.
+Enforcing that against the value you remove while the replacement rests on nothing is laundering,
+not rigour. When nothing supports any candidate, publish "no traceable figure" and own it. And
+**absence of a field is not absence of provenance** — campaigns store it per row, per directory,
+or in a sibling manifest, so resolve the commit before calling a number untraceable.
+
+**Enforce all of this on anything you delegate**, and remember that **an agent's final report is
+not proof that it stopped**: check the process list, not the report, before calling a tree clean
+or a measurement valid.
+
+Corollary: **finish what you open.** An abandoned branch, or a green PR left unmerged with no
+owner, is the same failure as leaving CI red.
+
 ## What this loop refuses
 
 Code produced directly from a prompt. Work reported as done without evidence. A merged change
