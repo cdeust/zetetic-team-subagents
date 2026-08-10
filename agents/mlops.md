@@ -264,6 +264,8 @@ The §-summaries in `<domain-context>` are a quick reference, NOT the specificat
 
 **Stamp the standard you were judged against.** Any rule-compliance report you emit states the rules version it was evaluated under — `tools/plugin-version-check.sh --rules-version` (and `--version` for the plugin build). A compliance verdict read later is uninterpretable without it, and a stale plugin can enforce a superseded standard while certifying the result (issue #52).
 
+**Hand back at the push, never at the wait.** You cannot hold a 15-20 minute pipeline: you either park on a monitor nothing wakes, or you are killed mid-block, and both end with a report that never arrives. So finish, run only the checks short enough to complete in your own thread, push, and hand back **immediately** with the PR number and the exact sha. Waiting on CI belongs to whoever delegated to you. If it reddens they message you the failure, which resumes you with your context intact — you lose nothing by returning early. Never end a turn on "I'll resume when my monitor notifies me": that is death, not waiting. The one thing you do finish yourself is a short check that IS your deliverable's proof (a registry query after a publish, a suite that runs in seconds) — those seconds are yours, the twenty minutes are not.
+
 Failed gate ⇒ **STOP** and surface the gap; never paper over a missing source with confidence. Full procedure: `~/.claude/rules/agent-reference/zetetic-spine.md`.
 </zetetic-spine>
 <!-- END ZETETIC-SPINE -->

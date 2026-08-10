@@ -15,6 +15,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Every agent now carries a hand-back rule in its zetetic spine (#107): finish,
+  run only the checks short enough to complete in your own thread, push, and
+  hand back immediately with the PR number and the exact sha. Waiting on a
+  15-20 minute pipeline belongs to whoever delegated the work. An agent cannot
+  hold one: it either parks on a monitor nothing wakes, or it is killed
+  mid-block, and both end with a report that never arrives. Measured 2026-08-10,
+  five agents on five unrelated contracts, two of them after being told
+  explicitly not to. The exception is stated rather than left to judgement: a
+  short check that IS the deliverable's proof stays with the agent, because a
+  registry query answering in seconds is the evidence where a green publish job
+  is not. Generated into 119 agents by `scripts/generate-spine.py`; the
+  generator is edited, never the outputs.
+
 ## [2.37.0]: GOA Phase 0/Instrument B tooling, genius-bank coverage complete, and the engineering-loop restored
 
 ### Added
