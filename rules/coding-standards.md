@@ -280,7 +280,7 @@ Adding a language is one registry row + one `run_<lang>` (§1.2 Open/Closed), so
 the supported set grows without editing the dispatch — an agent landing on a
 Kotlin/Gradle or Swift/SwiftUI repo is not limited to a hardcoded few.
 
-Concrete-wiring status: **Cortex** (Python) wired + demonstrated (`scripts/mutation_check.sh`); dispatcher + per-language runners delivered in `tools/mutation_check.sh`. Deferred (per-repo config, tools not yet installed): **prd-spec-generator** (TS → Stryker), **ai-architect-mcp-codebase** (Rust → cargo-mutants), and any Kotlin/Swift repo (PIT / Muter).
+Concrete-wiring status: **Cortex** (Python) wired + demonstrated (`scripts/mutation_check.sh`); dispatcher + per-language runners delivered in `tools/mutation_check.sh`. Deferred (per-repo config, tools not yet installed): **ai-architect-mcp-spec** (TS → Stryker), **ai-architect-mcp-codebase** (Rust → cargo-mutants), and any Kotlin/Swift repo (PIT / Muter).
 
 ### 12.3 Cross-backend / cross-config discipline
 When a module serves more than one backend or runtime (PostgreSQL vs SQLite, two serializers, …), the regression tests mutation testing relies on must encode the **backend-agnostic contract** — assert the property directly, or feed each backend's representative shape. A mutation run against only the "easy" backend will not kill the bug that hides in the other. Pin the contract at the one boundary every path crosses.

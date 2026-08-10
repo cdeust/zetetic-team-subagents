@@ -344,7 +344,7 @@ A team that never writes the file gets the strict defaults; a team that disagree
 |---|---|
 | [Cortex](https://github.com/cdeust/Cortex) | Local persistent memory + cognitive profiling that pre-loads your reasoning patterns at session start |
 | [ai-architect-mcp-codebase](https://github.com/cdeust/ai-architect-mcp-codebase) | Codebase-intelligence MCP; agents query a property graph instead of `grep -r` |
-| [prd-spec-generator](https://github.com/cdeust/prd-spec-generator) | TypeScript MCP that turns a feature description into a 9-file PRD with multi-judge verification using these agents |
+| [ai-architect-mcp-spec](https://github.com/cdeust/ai-architect-mcp-spec) | Cross-platform PRD verifier and generator MCP that turns a feature description into a 9-file PRD with calibrated multi-judge verification using these agents |
 | [session-optimizer](https://github.com/cdeust/session-optimizer) | Context-budget status line + `Stop` guard hook that makes the per-model checkpoint protocol visible and self-enforcing |
 
 ---
@@ -375,7 +375,7 @@ outside any employment relationship and is not affiliated with, endorsed by,
 or owned by any past or present employer. It is part of the ai-architect
 ecosystem ([Cortex](https://github.com/cdeust/Cortex),
 [ai-architect-mcp-codebase](https://github.com/cdeust/ai-architect-mcp-codebase),
-[prd-spec-generator](https://github.com/cdeust/prd-spec-generator)).
+[ai-architect-mcp-spec](https://github.com/cdeust/ai-architect-mcp-spec)).
 
 The reasoning patterns encoded in the 97 genius agents are derived from
 published academic work cited in each agent's documentation (e.g., Pearl on
