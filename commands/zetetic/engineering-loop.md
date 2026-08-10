@@ -142,6 +142,26 @@ final, one silently starting an architectural change it had itself declared out 
 with the deliverable's own tests still red. Check the process list, not the report, before
 calling a tree clean or a measurement valid.
 
+**A contract ends when the root cause is corrected and the refactoring it requires is done.**
+Not when the symptom stops showing, not when the suite goes green around a patch at the throw
+site. If fixing the cause exposes a structure that must change — a file past its size cap, a
+tangled responsibility, a seam in the wrong place — that change belongs to the same contract, not
+to a follow-up. Ordinary software craftsmanship, not a local rule.
+
+**Refusal is not one of the options.** No engineering organisation lets a developer decline the
+work. "Out of scope", "needs its own effort", "someone else should own it" are not answers a
+contract admits. One path only: do the work, and do it well. Difficulty and delicacy are reasons
+to proceed carefully — never reasons to hand it back.
+
+**A declared violation is still a violation.** Naming a broken rule in the PR body does not
+license it — not a size cap, not a regression, not a failing invariant, not debt in a file you
+touched. "Declared, not hidden" is a confession, not an acceptance criterion. The fix lands in
+the same PR, before delivery. A regression is fixed, never accepted and never annotated.
+
+**Three violations in one contract and the PR is DENIED by default** — not renegotiated, not
+merged with caveats. Reopen the work and deliver a contract without violations. The count is per
+contract, not per file, and one you declare yourself counts exactly like one a reviewer finds.
+
 Corollary: **finish what you open.** An abandoned branch, or a green PR left unmerged with no
 owner, is the same failure as leaving CI red.
 
