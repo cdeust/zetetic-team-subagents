@@ -70,6 +70,7 @@ skills/_index.md|category_skills|plus ([0-9]+) category skills
 docs/COUNTING.md|problem_skills|problem-shaped skills .*[^0-9]([0-9]+) .$
 docs/COUNTING.md|category_skills|category skills .*[^0-9]([0-9]+) .$
 docs/COUNTING.md|skills_total|skill documents .*[^0-9]([0-9]+) .$
+docs/COUNTING.md|suites|test suites .*[^0-9]([0-9]+) .$
 REGISTRY
 )
 
