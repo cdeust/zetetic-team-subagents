@@ -40,6 +40,7 @@ HOOK="$REPO/hooks/pre-tool-deletion-gate.py"
 HOOK_POST="$REPO/hooks/post-tool-deletion-gate.py"
 NATIVE_PRECOMMIT="$REPO/.githooks/pre-commit"
 NATIVE_COMMITMSG="$REPO/.githooks/commit-msg"
+NATIVE_LIB="$REPO/.githooks/lib/resolve-tools.sh"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -458,12 +459,13 @@ check_exit "PostToolUse passes when nothing was removed" 0 "$POST_RC3"
 git_repo native-hooks
 (
   cd "$REPO_PATH" || exit 1
-  mkdir -p tools .githooks
+  mkdir -p tools .githooks/lib
   cp "$GATE_PY" "$REPO/tools/deletion_gate_lang.py" "$REPO/tools/deletion_gate_git.py" "$GATE_SH" tools/
   cp "$NATIVE_PRECOMMIT" "$NATIVE_COMMITMSG" .githooks/
+  cp "$NATIVE_LIB" .githooks/lib/
   printf '#!/usr/bin/env bash\nexit 0\n' > tools/zetetic-checker.sh
   printf '#!/usr/bin/env bash\nexit 0\n' > tools/craftsmanship-checker.sh
-  chmod +x .githooks/* tools/*.sh tools/deletion_gate.py
+  chmod +x .githooks/pre-commit .githooks/commit-msg .githooks/lib/resolve-tools.sh tools/*.sh tools/deletion_gate.py
   printf 'def orphan(x):\n    return x\n' > lib.py
   git add -A && git commit -qm init
   git config core.hooksPath .githooks

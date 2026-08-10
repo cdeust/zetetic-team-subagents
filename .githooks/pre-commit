@@ -12,23 +12,23 @@
 # args and only runs at commit time, so no command guard is needed).
 #
 # Activation is per-clone: run tools/install-git-hooks.sh once after cloning
-# (git does not auto-trust a versioned hooksPath). See that script for details.
+# (git does not auto-trust a versioned hooksPath). In THIS repo's own clone
+# that points core.hooksPath back at .githooks/ here; in any other of the
+# owner's repos it points core.hooksPath at THIS repo's .githooks/ (shared
+# engine, see .githooks/lib/resolve-tools.sh for how tools/ resolves either
+# way). See tools/install-git-hooks.sh for details, including --all.
 #
 # Exit codes: 0 = allow commit; non-zero = block.
 # Rule provenance: rules/coding-standards.md §8 (zetetic) and §4 (craftsmanship).
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TOOLS="$REPO_ROOT/tools"
-
-# Graceful degradation: if the checkers are absent, do not block commits.
-if [[ ! -x "$TOOLS/zetetic-checker.sh" ]]; then
-  echo "WARNING: tools/zetetic-checker.sh not found — skipping pre-commit checks." >&2
-  exit 0
-fi
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/resolve-tools.sh
+source "$HOOK_DIR/lib/resolve-tools.sh"
 
 # 1. Zetetic source discipline (UNSOURCED is blocking under profile=standard).
-output=$("$TOOLS/zetetic-checker.sh" --staged 2>&1) || {
+ZETETIC_CHECKER="$(require_tool zetetic-checker.sh)" || exit 1
+output=$("$ZETETIC_CHECKER" --staged 2>&1) || {
   echo "BLOCKED: Zetetic violations in staged files." >&2
   echo "$output" >&2
   exit 1
@@ -37,23 +37,27 @@ output=$("$TOOLS/zetetic-checker.sh" --staged 2>&1) || {
 # 2. Craftsmanship gate (coding-standards §4 sizes + structural rules on staged
 #    files). Block on real violations (rc=1); fail OPEN on a checker/config
 #    error (rc=2 or other) so a typo in .craftsmanship.conf does not stop every
-#    commit.
-if [[ -x "$TOOLS/craftsmanship-checker.sh" ]]; then
-  craft_rc=0
-  craft_output=$("$TOOLS/craftsmanship-checker.sh" --staged 2>&1) || craft_rc=$?
-  if [[ $craft_rc -eq 1 ]]; then
-    echo "BLOCKED: Craftsmanship violations (coding-standards §4) in staged files." >&2
-    echo "$craft_output" >&2
-    exit 1
-  elif [[ $craft_rc -ne 0 ]]; then
-    echo "WARNING: craftsmanship-checker error (rc=$craft_rc) — skipping (fail-open). Check .craftsmanship.conf." >&2
-    echo "$craft_output" >&2
-  fi
+#    commit — distinct from require_tool's "engine missing" failure above,
+#    this is "engine ran and reported a config problem".
+CRAFTSMANSHIP_CHECKER="$(require_tool craftsmanship-checker.sh)" || exit 1
+craft_rc=0
+craft_output=$("$CRAFTSMANSHIP_CHECKER" --staged 2>&1) || craft_rc=$?
+if [[ $craft_rc -eq 1 ]]; then
+  echo "BLOCKED: Craftsmanship violations (coding-standards §4) in staged files." >&2
+  echo "$craft_output" >&2
+  exit 1
+elif [[ $craft_rc -ne 0 ]]; then
+  echo "WARNING: craftsmanship-checker error (rc=$craft_rc) — skipping (fail-open). Check .craftsmanship.conf." >&2
+  echo "$craft_output" >&2
 fi
 
-# 3. Informational warnings — surfaced only, non-blocking by design.
-if [[ -x "$TOOLS/difficulty-book-manager.sh" ]]; then
-  "$TOOLS/difficulty-book-manager.sh" check 2>&1 || {
+# 3. Informational warnings — genuinely repo-local extras (this repo's own
+#    difficulty book and agent routing table have no equivalent in the other
+#    four repos), non-blocking by design, and deliberately NOT resolved
+#    through the shared plugin clone: they check artifacts that live only in
+#    a repo committing to zetetic-team-subagents itself.
+if [[ -x "$REPO_ROOT/tools/difficulty-book-manager.sh" ]]; then
+  "$REPO_ROOT/tools/difficulty-book-manager.sh" check 2>&1 || {
     echo "WARNING: Difficulty book has an unaddressed hardest case." >&2
   }
 fi
@@ -71,24 +75,24 @@ fi
 #    for zetetic/craftsmanship above: the Claude Code PreToolUse/PostToolUse
 #    deletion-gate hooks only fire inside a Claude Code session — a human
 #    (or any other tool) running `git commit` directly bypasses them
-#    entirely, and this repo's main has no branch protection requiring the
-#    CI job either (verified 2026-08-10), so this is not a redundant check.
-if [[ -x "$TOOLS/deletion-gate.sh" ]]; then
-  del_rc=0
-  del_output=$("$TOOLS/deletion-gate.sh" --repo "$REPO_ROOT" --staged 2>&1) || del_rc=$?
-  # BLOCK on both rc=1 (a real violation) and rc=2 (--staged is always
-  # passed here, so rc=2 from THIS invocation is never a usage error — it is
-  # deletion_gate.py's GitError path, "found a removed definition, could not
-  # verify whether a caller survives it". Fail-closed, deliberately unlike
-  # the craftsmanship/zetetic checks above: their rc=2 is a config typo
-  # (.craftsmanship.conf), a different failure class than "an unverified
-  # deletion". See hooks/pre-tool-deletion-gate.py's docstring for the same
-  # reasoning applied at the PreToolUse/PostToolUse tiers.
-  if [[ $del_rc -ne 0 ]]; then
-    echo "BLOCKED: the deletion gate could not clear this commit." >&2
-    echo "$del_output" >&2
-    exit 1
-  fi
+#    entirely, and none of the five repos' `main` requires a CI job that
+#    would otherwise catch it either (verified 2026-08-10), so this is not
+#    a redundant check.
+DELETION_GATE="$(require_tool deletion-gate.sh)" || exit 1
+del_rc=0
+del_output=$("$DELETION_GATE" --repo "$REPO_ROOT" --staged 2>&1) || del_rc=$?
+# BLOCK on both rc=1 (a real violation) and rc=2 (--staged is always
+# passed here, so rc=2 from THIS invocation is never a usage error — it is
+# deletion_gate.py's GitError path, "found a removed definition, could not
+# verify whether a caller survives it". Fail-closed, deliberately unlike
+# the craftsmanship check above: their rc=2 is a config typo
+# (.craftsmanship.conf), a different failure class than "an unverified
+# deletion". See hooks/pre-tool-deletion-gate.py's docstring for the same
+# reasoning applied at the PreToolUse/PostToolUse tiers.
+if [[ $del_rc -ne 0 ]]; then
+  echo "BLOCKED: the deletion gate could not clear this commit." >&2
+  echo "$del_output" >&2
+  exit 1
 fi
 
 exit 0

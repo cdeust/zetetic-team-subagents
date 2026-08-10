@@ -13,24 +13,23 @@
 # found / rename or move / no-survivor-with-reason) only completes here.
 #
 # Activation is per-clone: run tools/install-git-hooks.sh once after
-# cloning (git does not auto-trust a versioned hooksPath).
+# cloning (git does not auto-trust a versioned hooksPath). See
+# .githooks/pre-commit's header and tools/install-git-hooks.sh for how this
+# repo's .githooks/ serves as the shared engine for the owner's other repos.
 #
 # Exit codes: 0 = allow commit; non-zero = block (native git commit-msg
 # hook contract).
 set -euo pipefail
 
 MSG_FILE="${1:?commit-msg hook: git did not pass a message file path}"
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TOOLS="$REPO_ROOT/tools"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/resolve-tools.sh
+source "$HOOK_DIR/lib/resolve-tools.sh"
 
-# Graceful degradation: if the gate is absent, do not block commits.
-if [[ ! -x "$TOOLS/deletion-gate.sh" ]]; then
-  echo "WARNING: tools/deletion-gate.sh not found — skipping deletion-gate trailer check." >&2
-  exit 0
-fi
+DELETION_GATE="$(require_tool deletion-gate.sh)" || exit 1
 
 del_rc=0
-del_output=$("$TOOLS/deletion-gate.sh" --repo "$REPO_ROOT" --staged --message-file "$MSG_FILE" 2>&1) || del_rc=$?
+del_output=$("$DELETION_GATE" --repo "$REPO_ROOT" --staged --message-file "$MSG_FILE" 2>&1) || del_rc=$?
 # Fail-closed on both rc=1 (a real violation: survivor found, or no
 # survivor and no substantive trailer) and rc=2 (GitError — "found a
 # removal, could not verify it"; --staged is always passed here, so rc=2

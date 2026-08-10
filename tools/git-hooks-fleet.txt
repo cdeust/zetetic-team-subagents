@@ -1,0 +1,15 @@
+# git-hooks-fleet.txt — sibling repos wired to THIS repo's shared
+# .githooks/ by `tools/install-git-hooks.sh --all`.
+#
+# One LOCAL DIRECTORY NAME per line, resolved relative to this plugin
+# clone's parent directory (siblings on disk). Local directory name, not
+# necessarily the GitHub repo name — ai-architect-mcp-codebase's clone is
+# still named automatised-pipeline as of 2026-08-10 (pending a rename; see
+# rules memory ai-architect-tools-ecosystem.md). Update this file, not
+# install-git-hooks.sh, when a repo is added, renamed, or retired.
+#
+# Lines starting with # and blank lines are ignored.
+session-optimizer
+cortex-viz
+ai-architect-mcp-spec
+automatised-pipeline
