@@ -106,6 +106,15 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-deletion-gate.py\""
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [

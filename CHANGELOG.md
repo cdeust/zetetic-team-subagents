@@ -17,6 +17,46 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Deletion gate, Tier 2 and Tier 3: the net for a removal that never goes
+  through an Edit/Write, plus the native-git backstop for a commit made
+  outside Claude Code.** #109 shipped Tier 1 only (`hooks/pre-tool-deletion-gate.py`,
+  PreToolUse on `Edit`/`Write`), structurally blind to a removal made via
+  Bash (`sed`/`rm`/`git rm`/a patch), a whole-file `Write` with no
+  `old_string`, or a multi-step accumulation. `hooks/post-tool-deletion-gate.py`
+  (PostToolUse on `Edit`/`Write`/`Bash`) closes that gap: it diffs HEAD
+  against the real on-disk tree (`tools/deletion_gate.py --worktree`, backed
+  by the new `tools/deletion_gate_git.py`) after every tool call, catching
+  the shape Tier 1 cannot see. `.githooks/pre-commit` + `.githooks/commit-msg`
+  close a second gap: this repo's `main` carries no branch protection
+  (verified 2026-08-10), so a direct `git commit` outside Claude Code
+  bypassed every existing tier; the native pair now runs the same gate
+  (survivors at pre-commit, the `Retired-Because:` trailer at commit-msg,
+  since the message does not exist until then).
+
+  Every BLOCK message across all tiers now directs the reader to the fix
+  rather than just naming the failure (Anthropic, "Writing tools for
+  agents": a tool's error text is its only interface): what was removed,
+  who still calls it and where (showing the true total when truncating,
+  never a silent cut), the normal-repair path, and, if removal is genuinely
+  intended, migrate the callers first and give the reason last.
+
+  Two correctness bugs found by dogfooding the gate against its own commits,
+  both self-caught by `.githooks/commit-msg` before either reached a test
+  fixture: rename/move detection was checked AFTER the survivor grep instead
+  of before, so a well-formed move's own new call site looked like a stale
+  caller and blocked its own author; and a survivor inside a file the
+  CURRENT diff already touched was treated the same as one in a file the
+  diff never went near, when the incident's own commit message names that
+  distinction as exactly what let its missing callers go unnoticed. Both
+  fixed with regression cases in both the pytest and the shell suite.
+
+  Verified against the real cortex-viz commit 45d4a80 again after both
+  fixes: still blocks, still names `graph_build_run.py:234`,
+  `graph_build_run.py:155` and `graph_build_merge.py:136`. 37 end-to-end
+  shell cases (`tools/tests/deletion-gate/`), 127 pytest cases across the
+  six deletion-gate Python modules at 95-100 percent coverage each (repo
+  total 88 percent, floor 80 percent). (#110)
+
 - Every agent now carries a repair-before-remove rule in its zetetic spine
   (#108): deleting the thing that has the defect is not fixing the defect.
   Removal is a design decision needing a justification of its own, apart from

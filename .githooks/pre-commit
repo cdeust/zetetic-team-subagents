@@ -64,4 +64,31 @@ if [[ -x "$REPO_ROOT/scripts/generate-routing-table.py" ]]; then
   }
 fi
 
+# 4. Deletion gate (staged mode: survivors-only "net"; there is no commit
+#    message at THIS point in git's hook sequence, so the trailer half of
+#    the contract is checked next, by .githooks/commit-msg, once the
+#    message exists). Closes the SAME gap this native hook exists to close
+#    for zetetic/craftsmanship above: the Claude Code PreToolUse/PostToolUse
+#    deletion-gate hooks only fire inside a Claude Code session — a human
+#    (or any other tool) running `git commit` directly bypasses them
+#    entirely, and this repo's main has no branch protection requiring the
+#    CI job either (verified 2026-08-10), so this is not a redundant check.
+if [[ -x "$TOOLS/deletion-gate.sh" ]]; then
+  del_rc=0
+  del_output=$("$TOOLS/deletion-gate.sh" --repo "$REPO_ROOT" --staged 2>&1) || del_rc=$?
+  # BLOCK on both rc=1 (a real violation) and rc=2 (--staged is always
+  # passed here, so rc=2 from THIS invocation is never a usage error — it is
+  # deletion_gate.py's GitError path, "found a removed definition, could not
+  # verify whether a caller survives it". Fail-closed, deliberately unlike
+  # the craftsmanship/zetetic checks above: their rc=2 is a config typo
+  # (.craftsmanship.conf), a different failure class than "an unverified
+  # deletion". See hooks/pre-tool-deletion-gate.py's docstring for the same
+  # reasoning applied at the PreToolUse/PostToolUse tiers.
+  if [[ $del_rc -ne 0 ]]; then
+    echo "BLOCKED: the deletion gate could not clear this commit." >&2
+    echo "$del_output" >&2
+    exit 1
+  fi
+fi
+
 exit 0

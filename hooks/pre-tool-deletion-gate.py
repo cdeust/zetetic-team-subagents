@@ -3,27 +3,48 @@
 removes a top-level definition while a live reference to it survives.
 
 This is Tier 1 of the deletion gate (tools/deletion_gate.py owns the
-mechanism; this hook is a caller of it, not a reimplementation —
-coding-standards.md S1.2 Open/Closed). It runs BEFORE the edit lands, so it
-stops the pattern at the moment of the act rather than reporting it after a
-commit and a push: an Edit/Write hook sees old_string/new_string (or
-content) directly, which a post-hoc CI diff never gets to intervene on.
+mechanism and the message text; this hook is a caller of it, not a
+reimplementation — coding-standards.md S1.2 Open/Closed). It runs BEFORE the
+edit lands, so it stops the pattern at the moment of the act rather than
+reporting it after a commit and a push: an Edit/Write hook sees
+old_string/new_string (or content) directly, which a post-hoc CI diff never
+gets to intervene on.
 
-What it does NOT do: require a Retired-Because: trailer. There is no commit
-yet at edit time, so "no survivors, no trailer" cannot be evaluated here —
-that half of the contract is Tier 2, tools/deletion_gate.py run at commit/CI
-time (tools/deletion-gate.sh, wired in .github/workflows/ci.yml and
-memory/acceptance-gates.yaml). This hook only ever fires the survivors-found
-BLOCK, which is unconditional and needs no message.
+Three tiers total, and each catches what the others cannot:
+  Tier 1 (here)                — blocks at the moment of the Edit/Write.
+  Tier 2 (post-tool-deletion-gate.py, PostToolUse on Edit|Write|Bash) — the
+                                  net: reads the actual working tree after
+                                  ANY tool call, so a removal that arrived
+                                  via `sed`/`rm`/`git rm`/a patch/a multi-step
+                                  edit — none of which this hook's
+                                  old_string/new_string payload can see — is
+                                  still caught.
+  Tier 3 (tools/deletion-gate.sh, the .githooks/pre-commit native git hook,
+          and the `deletion-gate` CI job) — the commit/CI-range check, the
+          only place a Retired-Because: trailer can be verified (no commit
+          exists yet at Tier 1 or 2).
+
+FAIL-CLOSED ON "CANNOT DETERMINE", not fail-open. A removed definition whose
+survivor search errors out (PCRE-less git, a git failure, a repo state this
+gate cannot read) BLOCKS with a message naming the problem and how to fix
+it — it does not silently pass. Earlier revisions of this hook failed open
+on GitError on the theory that Tier 3 always catches what Tier 1 misses;
+checked against this repo's actual GitHub settings
+(`gh api repos/.../branches/main/protection` -> 404 "Branch not protected",
+verified 2026-08-10) that theory does not hold — main has no required status
+checks, so a direct push or a web-UI merge bypasses CI entirely, and
+`.githooks/pre-commit` is opt-in per clone (`tools/install-git-hooks.sh`),
+not automatic. With no dependable backstop, "cannot verify" and "safe to
+proceed" are not the same claim, and this hook must not conflate them.
+Tier 1's remaining fail-OPEN paths (an unparseable stdin event, a file
+outside the scope this gate covers) are genuinely "nothing to check" rather
+than "checked and inconclusive" — see _read_event/_target_edit.
 
 Reads the Claude Code tool-event JSON from stdin:
     {"tool_name": "Edit"|"Write", "tool_input": {...}}
-Exits 2 (blocking) with the surviving callers on stderr when a removed
-definition still has one; exits 0 otherwise, including on every input this
-hook cannot confidently parse (fail-open for the TOOL CALL — the commit-time
-gate is what fails closed on ambiguity; a PreToolUse hook that block-by-
-default on parse noise would freeze ordinary editing, coding-standards.md
-S10 stakes calibration: this is the low-cost early check, not the gate).
+Exits 2 (blocking, with an actionable message on stderr) when a removed
+definition either has a live caller or could not be verified; exits 0 when
+there is genuinely nothing this hook covers to check.
 """
 from __future__ import annotations
 
@@ -48,6 +69,8 @@ def _resolve_tools_dir() -> Path:
 
 sys.path.insert(0, str(_resolve_tools_dir()))
 import deletion_gate as dg  # noqa: E402  (path must be set first)
+import deletion_gate_git as dgg  # noqa: E402
+import deletion_gate_lang as dgl  # noqa: E402
 
 
 def _resolve_repo_root(file_path: str) -> str:
@@ -86,23 +109,34 @@ def _post_image(tool: str, tin: dict, pre_text: str | None) -> str | None:
 
 
 def _removed_definitions(pre_text: str | None, post_text: str, lang: str) -> dict:
-    pre_defs = dg.extract_definitions(pre_text, lang) if pre_text else {}
-    post_defs = dg.extract_definitions(post_text, lang)
+    pre_defs = dgl.extract_definitions(pre_text, lang) if pre_text else {}
+    post_defs = dgl.extract_definitions(post_text, lang)
     return {name: kb for name, kb in pre_defs.items() if name not in post_defs}
 
 
 def _block_reason(repo: str, rel_path: str, lang: str, removed: dict) -> str | None:
+    """The first removed name with a live caller, formatted as a full
+    actionable BLOCK message (module: dg.format_survivor_block) — the exact
+    same words the CLI/CI Tier and Tier 2 show for the same defect."""
     for name, (kind, _body) in removed.items():
-        survivors = dg.find_survivors(
-            repo, ref=None, staged=False, name=name, lang=lang, exclude_path=rel_path
+        survivors = dgg.find_survivors(
+            repo, ref=None, mode=None, name=name, lang=lang, exclude_paths={rel_path}
         )
         if survivors:
-            detail = "; ".join(survivors[:8])
-            return (
-                f"deletion-gate: removing {rel_path}::{name} ({kind}) would leave "
-                f"{len(survivors)} surviving reference(s): {detail}"
-            )
+            label = f"{rel_path}::{name} ({kind})"
+            return dg.format_survivor_block(label, name, survivors)
     return None
+
+
+def _indeterminate_reason(rel_path: str, removed: dict, exc: dgg.GitError) -> str:
+    names = ", ".join(sorted(removed))
+    return (
+        f"BLOCK {rel_path} removes {names}, but whether any caller survives "
+        f"could not be checked: {exc}\n"
+        f"  Fix the problem named above (commonly: install a PCRE-enabled "
+        f"git, or run this inside a real git checkout), then retry the "
+        f"edit — this gate refuses to guess when it cannot verify."
+    )
 
 
 def _read_event() -> dict | None:
@@ -123,22 +157,14 @@ def _target_edit(event: dict) -> tuple:
     file_path = tin.get("file_path")
     if not isinstance(file_path, str) or not file_path:
         return None, None, None, None
-    lang = dg.detect_lang(file_path)
-    if lang is None or dg.is_test_path(file_path):
+    lang = dgl.detect_lang(file_path)
+    if lang is None or dgg.is_test_path(file_path):
         return None, None, None, None
     return file_path, lang, tool, tin
 
 
 def _emit_block(reason: str) -> int:
     print(f"[deletion-gate] {reason}", file=sys.stderr)
-    print(
-        "[deletion-gate] Fix the caller(s), or rename/move the definition "
-        "(the body must reappear elsewhere for that to be recognized), or "
-        "commit with a Retired-Because: trailer explaining why the job no "
-        "longer needs doing (enforced at commit/CI time by "
-        "tools/deletion-gate.sh).",
-        file=sys.stderr,
-    )
     return 2
 
 
@@ -165,12 +191,12 @@ def main() -> int:
     if not removed:
         return 0
 
+    repo = _resolve_repo_root(file_path)
+    rel_path = _repo_relative(repo, file_path)
     try:
-        repo = _resolve_repo_root(file_path)
-        rel_path = _repo_relative(repo, file_path)
         reason = _block_reason(repo, rel_path, lang, removed)
-    except dg.GitError:
-        return 0  # can't determine -> the commit-time gate fails closed instead
+    except dgg.GitError as exc:
+        return _emit_block(_indeterminate_reason(rel_path, removed, exc))
 
     return _emit_block(reason) if reason is not None else 0
 

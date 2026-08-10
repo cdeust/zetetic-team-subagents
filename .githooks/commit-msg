@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg — closes the half of the deletion gate that
+# .githooks/pre-commit structurally cannot: whether a removed definition
+# with no surviving caller carries a substantive Retired-Because: trailer.
+#
+# Why a separate hook rather than folding this into pre-commit: git's
+# pre-commit hook runs BEFORE the commit message is composed, so it has no
+# message to check — that is precisely why tools/deletion_gate.py's
+# `--staged` mode defers the "no survivors, no trailer" verdict
+# (require_trailer=False without --message-file; see resolve_mode()'s
+# docstring). commit-msg receives the prepared message as $1, which is the
+# one thing pre-commit cannot have, so the full three-way verdict (survivor
+# found / rename or move / no-survivor-with-reason) only completes here.
+#
+# Activation is per-clone: run tools/install-git-hooks.sh once after
+# cloning (git does not auto-trust a versioned hooksPath).
+#
+# Exit codes: 0 = allow commit; non-zero = block (native git commit-msg
+# hook contract).
+set -euo pipefail
+
+MSG_FILE="${1:?commit-msg hook: git did not pass a message file path}"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+TOOLS="$REPO_ROOT/tools"
+
+# Graceful degradation: if the gate is absent, do not block commits.
+if [[ ! -x "$TOOLS/deletion-gate.sh" ]]; then
+  echo "WARNING: tools/deletion-gate.sh not found — skipping deletion-gate trailer check." >&2
+  exit 0
+fi
+
+del_rc=0
+del_output=$("$TOOLS/deletion-gate.sh" --repo "$REPO_ROOT" --staged --message-file "$MSG_FILE" 2>&1) || del_rc=$?
+# Fail-closed on both rc=1 (a real violation: survivor found, or no
+# survivor and no substantive trailer) and rc=2 (GitError — "found a
+# removal, could not verify it"; --staged is always passed here, so rc=2
+# from this exact invocation is never a plain usage error). See
+# hooks/pre-tool-deletion-gate.py's docstring for the same reasoning.
+if [[ $del_rc -ne 0 ]]; then
+  echo "BLOCKED: the deletion gate could not clear this commit message." >&2
+  echo "$del_output" >&2
+  exit 1
+fi
+
+exit 0

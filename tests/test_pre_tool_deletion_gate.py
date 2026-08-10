@@ -163,7 +163,19 @@ def test_emit_block_returns_2_and_prints_the_reason(capsys):
     assert gate._emit_block("removing lib.py::emit would leave 1 caller") == 2
     err = capsys.readouterr().err
     assert "removing lib.py::emit" in err
-    assert "Retired-Because:" in err
+
+
+def test_block_reason_message_carries_the_shared_actionable_guidance(git_repo: Path):
+    """_block_reason delegates its wording to dg.format_survivor_block (the
+    single formatter shared with the CLI/CI Tier and Tier 2), so the fix
+    guidance and the incident counter-example appear here too."""
+    (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
+    (git_repo / "caller.py").write_text("from lib import emit\n\ndef run():\n    return emit(1)\n")
+    _commit(git_repo)
+    removed = {"emit": ("function", "def emit(x):\n    return x\n")}
+    reason = gate._block_reason(str(git_repo), "lib.py", "python", removed)
+    assert "Retired-Because:" in reason
+    assert "cortex-viz commit 45d4a80" in reason
 
 
 # ── _target_edit ─────────────────────────────────────────────────────────────
@@ -259,11 +271,13 @@ def test_main_fails_open_when_stdin_read_raises(monkeypatch):
     assert gate.main() == 0
 
 
-def test_main_passes_when_removal_search_hits_a_git_error(tmp_path: Path, monkeypatch):
+def test_main_blocks_when_removal_search_cannot_determine_survivors(tmp_path, monkeypatch, capsys):
     """The file exists but its directory is not inside any git repo — the
-    survivor search cannot run, and the hook fails open for the tool call
-    rather than blocking on ambiguity (the commit-time gate fails closed
-    instead)."""
+    survivor search cannot run, and the hook FAILS CLOSED (blocks) rather
+    than silently allowing an unverifiable removal. Branch protection is
+    off for this repo's main (`gh api .../branches/main/protection` -> 404,
+    verified 2026-08-10) and `.githooks/pre-commit` is opt-in, so "Tier 3
+    always catches it" cannot be assumed — see the module docstring."""
     not_a_repo = tmp_path / "not-a-repo"
     not_a_repo.mkdir()
     (not_a_repo / "lib.py").write_text("def emit(x):\n    return x\n")
@@ -275,4 +289,7 @@ def test_main_passes_when_removal_search_hits_a_git_error(tmp_path: Path, monkey
             "new_string": "",
         },
     }
-    assert _run_main(monkeypatch, event) == 0
+    assert _run_main(monkeypatch, event) == 2
+    err = capsys.readouterr().err
+    assert "could not be checked" in err
+    assert "retry the edit" in err

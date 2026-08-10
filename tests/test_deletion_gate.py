@@ -1,18 +1,22 @@
 """Unit tests for tools/deletion_gate.py — the removed-top-level-definition
-gate (coding-standards.md S8, the deletion-gate incident: cdeust/cortex-viz
-commit 45d4a80).
+gate's POLICY layer (coding-standards.md S8, the deletion-gate incident:
+cdeust/cortex-viz commit 45d4a80): the four-way disposition (block /
+rename-pass / trailer-pass / trailer-block), the shared actionable message
+formatters, and the CLI. The git I/O primitives it calls live in
+tools/deletion_gate_git.py and are tested in tests/test_deletion_gate_git.py.
 
 Imported dotted (tools.deletion_gate) per mutmut's trampoline-matching
 requirement (tests/test_manifest_gate.py). tools/deletion_gate.py itself
-imports its sibling tools/deletion_gate_lang.py by BARE name (so a script
-invocation and the PreToolUse hook, which both put tools/ directly on
-sys.path, resolve it) — this file adds tools/ to sys.path too so the same
-bare import resolves under pytest's dotted-package import as well.
+imports its sibling modules by BARE name (so a script invocation and both
+hooks, which all put tools/ directly on sys.path, resolve them) — this file
+adds tools/ to sys.path too so the same bare import resolves under pytest's
+dotted-package import as well.
 
-The end-to-end shell suite (tools/tests/deletion-gate/run-tests.sh, 26
+The end-to-end shell suite (tools/tests/deletion-gate/run-tests.sh, 36
 cases including the real-incident shape, rename/move, the observation-only
-trailer rejection, and the PreToolUse hook) is the behavioral contract;
-this file is the in-process unit layer coverage.py and mutmut need.
+trailer rejection, the PreToolUse/PostToolUse hooks, and the native git
+hooks) is the behavioral contract; this file is the in-process unit layer
+coverage.py and mutmut need.
 """
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 import tools.deletion_gate as dg
+import tools.deletion_gate_git as dgg
 
 
 # ── constants ────────────────────────────────────────────────────────────────
@@ -53,9 +58,9 @@ def test_normalize_body_swaps_the_definitions_own_name_and_drops_blank_lines():
 
 
 def test_find_rename_match_picks_the_highest_similarity_unconsumed_candidate():
-    removed = dg.Definition("a.py", "emit", "function", "def emit(x):\n    return x\n")
-    close = dg.Definition("b.py", "publish", "function", "def publish(x):\n    return x\n")
-    far = dg.Definition("c.py", "unrelated", "function", "def unrelated():\n    return 99999\n")
+    removed = dgg.Definition("a.py", "emit", "function", "def emit(x):\n    return x\n")
+    close = dgg.Definition("b.py", "publish", "function", "def publish(x):\n    return x\n")
+    far = dgg.Definition("c.py", "unrelated", "function", "def unrelated():\n    return 99999\n")
     match = dg.find_rename_match(removed, [far, close], consumed=set())
     assert match is not None
     idx, cand, ratio = match
@@ -64,16 +69,16 @@ def test_find_rename_match_picks_the_highest_similarity_unconsumed_candidate():
 
 
 def test_find_rename_match_respects_consumed_and_kind():
-    removed = dg.Definition("a.py", "emit", "function", "def emit(x):\n    return x\n")
-    same_name_wrong_kind = dg.Definition("b.py", "emit", "class", "def emit(x):\n    return x\n")
+    removed = dgg.Definition("a.py", "emit", "function", "def emit(x):\n    return x\n")
+    same_name_wrong_kind = dgg.Definition("b.py", "emit", "class", "def emit(x):\n    return x\n")
     assert dg.find_rename_match(removed, [same_name_wrong_kind], set()) is None
 
-    cand = dg.Definition("b.py", "publish", "function", "def emit(x):\n    return x\n")
+    cand = dgg.Definition("b.py", "publish", "function", "def emit(x):\n    return x\n")
     assert dg.find_rename_match(removed, [cand], consumed={0}) is None
 
 
 def test_find_rename_match_none_when_nothing_added():
-    removed = dg.Definition("a.py", "emit", "function", "def emit(x):\n    return x\n")
+    removed = dgg.Definition("a.py", "emit", "function", "def emit(x):\n    return x\n")
     assert dg.find_rename_match(removed, [], set()) is None
 
 
@@ -111,33 +116,29 @@ def test_is_substantive_boundary_is_inclusive_at_15_significant_chars():
     assert dg.is_substantive(fifteen_letters[:-1]) is False
 
 
-# ── is_test_path ─────────────────────────────────────────────────────────────
+# ── message formatters ───────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("path", [
-    "tests/test_thing.py",
-    "test/test_thing.py",
-    "tools/tests/deletion-gate/run-tests.sh",
-    "pkg/test_helper.py",
-    "scripts/test-memory-e2e.sh",
-    "pkg/foo_test.py",
-    "pkg/foo_test.go",
-    "ui/foo.test.ts",
-    "ui/foo.spec.tsx",
-])
-def test_is_test_path_true(path):
-    assert dg.is_test_path(path) is True
+def test_format_survivor_block_shows_the_true_total_not_a_silent_truncation():
+    survivors = [f"caller{i}.py:1:x" for i in range(dg.SURVIVOR_SHOW_LIMIT + 5)]
+    msg = dg.format_survivor_block("lib.py::emit (function)", "emit", survivors)
+    assert f"showing {dg.SURVIVOR_SHOW_LIMIT} of {len(survivors)}" in msg
+    assert "Retired-Because:" in msg
+    assert dg.INCIDENT_COUNTEREXAMPLE in msg
 
 
-@pytest.mark.parametrize("path", [
-    "pkg/lib.py",
-    "server/graph_event_stream.py",
-    "contest.py",  # must not false-positive on a substring
-])
-def test_is_test_path_false(path):
-    assert dg.is_test_path(path) is False
+def test_format_no_trailer_block_names_the_missing_key_and_the_incident():
+    msg = dg.format_no_trailer_block("lib.py::orphan (function)")
+    assert "Retired-Because:" in msg
+    assert dg.INCIDENT_COUNTEREXAMPLE in msg
 
 
-# ── require_pcre / find_survivors / changed_paths / collect_definitions ─────
+def test_format_observation_only_block_quotes_the_trailer_and_names_the_defect():
+    msg = dg.format_observation_only_block("lib.py::orphan (function)", "no callers, unused.")
+    assert "no callers, unused." in msg
+    assert "OBSERVATION" in msg
+
+
+# ── evaluate(): the four dispositions, end to end ────────────────────────────
 
 @pytest.fixture
 def git_repo(tmp_path: Path) -> Path:
@@ -158,102 +159,14 @@ def _commit(repo: Path, message: str) -> str:
                            capture_output=True, text=True, check=True).stdout.strip()
 
 
-def test_require_pcre_passes_on_a_normal_git_build(git_repo: Path):
-    (git_repo / "f.py").write_text("x = 1\n")
-    _commit(git_repo, "init")
-    dg.require_pcre(str(git_repo))  # raises on failure; no exception is the assertion
-
-
-def test_find_survivors_matches_call_attr_and_import_shapes(git_repo: Path):
-    (git_repo / "caller.py").write_text(
-        "from lib import emit\n\n"
-        "def run():\n"
-        "    return emit(1)\n"
-    )
-    (git_repo / "other.py").write_text("x = 1\n")  # must not match a different lang scope
-    head = _commit(git_repo, "init")
-    survivors = dg.find_survivors(str(git_repo), head, False, "emit", "python")
-    assert any("caller.py" in s for s in survivors)
-    assert not any("other.py" in s for s in survivors)
-
-
-def test_find_survivors_matches_shell_bare_word_invocation(git_repo: Path):
-    (git_repo / "lib.sh").write_text("emit_event() {\n  echo 1\n}\n")
-    (git_repo / "caller.sh").write_text('emit_event "hello"\n')
-    head = _commit(git_repo, "init")
-    survivors = dg.find_survivors(str(git_repo), head, False, "emit_event", "shell")
-    assert any("caller.sh" in s for s in survivors)
-
-
-def test_find_survivors_raises_on_a_bad_ref(git_repo: Path):
-    (git_repo / "f.py").write_text("x = 1\n")
-    _commit(git_repo, "init")
-    with pytest.raises(dg.GitError, match="git grep failed"):
-        dg.find_survivors(str(git_repo), "not-a-real-ref", False, "x", "python")
-
-
-def test_show_file_returns_none_for_a_path_absent_at_ref(git_repo: Path):
-    (git_repo / "f.py").write_text("x = 1\n")
-    head = _commit(git_repo, "init")
-    assert dg.show_file(str(git_repo), head, "missing.py") is None
-
-
-def test_run_git_raises_git_error_on_failure(git_repo: Path):
-    (git_repo / "f.py").write_text("x = 1\n")
-    _commit(git_repo, "init")
-    with pytest.raises(dg.GitError, match="failed"):
-        dg.run_git(str(git_repo), ["not-a-real-git-subcommand"])
-
-
-def test_changed_paths_reports_rename_status_when_git_detects_one(git_repo: Path):
-    (git_repo / "a.py").write_text("def f():\n" + "    return 1\n" * 20)
-    base = _commit(git_repo, "init")
-    subprocess.run(["git", "mv", "a.py", "b.py"], cwd=git_repo, check=True, capture_output=True)
-    head = _commit(git_repo, "rename file, same big body")
-    rows = dg.changed_paths(str(git_repo), base, head, False)
-    assert any(status.startswith("R") for status, _, _ in rows)
-
-
-def test_find_survivors_exclude_path_drops_that_files_matches(git_repo: Path):
-    (git_repo / "lib.py").write_text("def emit(x):\n    return emit(x - 1)\n")
-    head = _commit(git_repo, "init")
-    survivors = dg.find_survivors(
-        str(git_repo), head, False, "emit", "python", exclude_path="lib.py"
-    )
-    assert survivors == []
-
-
-def test_changed_paths_reports_status_and_paths(git_repo: Path):
-    (git_repo / "a.py").write_text("x = 1\n")
-    base = _commit(git_repo, "init")
-    (git_repo / "a.py").write_text("x = 2\n")
-    (git_repo / "b.py").write_text("y = 1\n")
-    head = _commit(git_repo, "second")
-    rows = dg.changed_paths(str(git_repo), base, head, False)
-    statuses = {p: s for s, p, _ in rows}
-    assert statuses["a.py"] == "M"
-    assert statuses["b.py"] == "A"
-
-
-def test_collect_definitions_finds_removed_and_added(git_repo: Path):
-    (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
-    base = _commit(git_repo, "init")
-    (git_repo / "lib.py").write_text("")
-    head = _commit(git_repo, "drop emit")
-    removed, added = dg.collect_definitions(str(git_repo), base, head, False)
-    assert [d.name for d in removed] == ["emit"]
-    assert added == []
-
-
-# ── evaluate(): the four dispositions, end to end ────────────────────────────
-
 def test_evaluate_blocks_on_a_surviving_caller(git_repo: Path):
     (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
     (git_repo / "caller.py").write_text("from lib import emit\n\ndef run():\n    return emit(1)\n")
     base = _commit(git_repo, "init")
     (git_repo / "lib.py").write_text("")
     head = _commit(git_repo, "drop emit, no trailer")
-    result = dg.evaluate(str(git_repo), base, head, False, "drop emit, no trailer")
+    request = dg.GateRequest(str(git_repo), base, head, "drop emit, no trailer")
+    result = dg.evaluate(request)
     assert result.blocked is True
     assert any("caller.py" in f.message for f in result.findings)
 
@@ -267,7 +180,7 @@ def test_evaluate_passes_a_legitimate_deletion_with_a_substantive_trailer(git_re
         "Retired-Because: superseded by the streaming exporter two releases ago.\n"
     )
     head = _commit(git_repo, message)
-    result = dg.evaluate(str(git_repo), base, head, False, message)
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, message))
     assert result.blocked is False
 
 
@@ -277,9 +190,9 @@ def test_evaluate_blocks_an_observation_only_trailer(git_repo: Path):
     (git_repo / "lib.py").write_text("")
     message = "chore: drop orphan\n\nRetired-Because: no callers, unused, dead code.\n"
     head = _commit(git_repo, message)
-    result = dg.evaluate(str(git_repo), base, head, False, message)
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, message))
     assert result.blocked is True
-    assert "restates the absence" in result.findings[0].message
+    assert "is the OBSERVATION, not a reason" in result.findings[0].message
 
 
 def test_evaluate_passes_a_rename_with_no_trailer(git_repo: Path):
@@ -287,7 +200,7 @@ def test_evaluate_passes_a_rename_with_no_trailer(git_repo: Path):
     base = _commit(git_repo, "init")
     (git_repo / "lib.py").write_text("def publish(x):\n    return x\n")
     head = _commit(git_repo, "rename emit -> publish")
-    result = dg.evaluate(str(git_repo), base, head, False, "rename emit -> publish")
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, "rename emit -> publish"))
     assert result.blocked is False
     assert "rename/move" in result.findings[0].message
 
@@ -298,7 +211,7 @@ def test_evaluate_skips_a_test_path_removal(git_repo: Path):
     base = _commit(git_repo, "init")
     (git_repo / "tests" / "test_thing.py").write_text("")
     head = _commit(git_repo, "drop a retired test")
-    result = dg.evaluate(str(git_repo), base, head, False, "drop a retired test")
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, "drop a retired test"))
     assert result.blocked is False
     assert "SKIP" in result.findings[0].message
 
@@ -308,7 +221,8 @@ def test_evaluate_require_trailer_false_defers_the_no_survivor_case(git_repo: Pa
     base = _commit(git_repo, "init")
     (git_repo / "lib.py").write_text("")
     head = _commit(git_repo, "drop orphan")
-    result = dg.evaluate(str(git_repo), base, head, False, "", require_trailer=False)
+    request = dg.GateRequest(str(git_repo), base, head, "", require_trailer=False)
+    result = dg.evaluate(request)
     assert result.blocked is False
     assert "required at commit time" in result.findings[0].message
 
@@ -318,41 +232,126 @@ def test_evaluate_no_removed_definitions_returns_empty_findings(git_repo: Path):
     base = _commit(git_repo, "init")
     (git_repo / "lib.py").write_text("def keep(x):\n    return x + 1\n")
     head = _commit(git_repo, "tweak body only")
-    result = dg.evaluate(str(git_repo), base, head, False, "tweak body only")
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, "tweak body only"))
     assert result.findings == []
     assert result.blocked is False
 
 
-# ── message resolution helpers ───────────────────────────────────────────────
-
-def test_commit_message_returns_the_full_body(git_repo: Path):
-    (git_repo / "f.py").write_text("x = 1\n")
-    head = _commit(git_repo, "feat: a subject\n\na body line.\n")
-    assert "a body line." in dg.commit_message(str(git_repo), head)
-
-
-def test_range_messages_covers_every_commit_in_range(git_repo: Path):
-    (git_repo / "f.py").write_text("x = 1\n")
-    base = _commit(git_repo, "first")
-    (git_repo / "f.py").write_text("x = 2\n")
-    head = _commit(git_repo, "second")
-    combined = dg.range_messages(str(git_repo), base, head)
-    assert "second" in combined
+def test_evaluate_worktree_mode_catches_an_unstaged_survivor(git_repo: Path):
+    (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
+    (git_repo / "caller.py").write_text("from lib import emit\n\ndef run():\n    return emit(1)\n")
+    _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")  # unstaged
+    request = dg.GateRequest(
+        str(git_repo), "HEAD", "HEAD", "", mode=dgg.MODE_WORKTREE, require_trailer=False
+    )
+    result = dg.evaluate(request)
+    assert result.blocked is True
+    assert any("caller.py" in f.message for f in result.findings)
 
 
-# ── CLI: build_parser / resolve_message / main ───────────────────────────────
+def test_evaluate_exempts_a_survivor_in_a_file_this_diff_already_touched(git_repo: Path):
+    """Regression: a moved-AND-redesigned function (signature changed
+    enough that find_rename_match's body-similarity check misses it) whose
+    only "survivor" is the new caller in the file the SAME diff added is
+    not the incident pattern — it is a self-consistent refactor. Caught by
+    dogfooding this exact gate against its own commit (2026-08-10): moving
+    changed_paths()/post_content() into deletion_gate_git.py while dropping
+    the old (staged, worktree) bool pair for a single `mode` string changed
+    their bodies enough to fall under RENAME_SIMILARITY_THRESHOLD, and the
+    gate blocked its own legitimate refactor on the new call site it had
+    just written."""
+    (git_repo / "lib.py").write_text(
+        "def helper(x, staged, worktree=False):\n"
+        "    if worktree:\n        return 1\n"
+        "    if staged:\n        return 2\n"
+        "    return 0\n"
+    )
+    base = _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")
+    (git_repo / "new_home.py").write_text(
+        "def helper(x, mode=None):\n"
+        "    if mode == 'w':\n        return 1\n"
+        "    if mode == 's':\n        return 2\n"
+        "    return 0\n"
+    )
+    (git_repo / "caller.py").write_text(
+        "from new_home import helper\n\ndef run():\n    return helper(1)\n"
+    )
+    message = (
+        "refactor: move+redesign helper, update the one caller\n\n"
+        "Retired-Because: split into new_home.py with a mode arg replacing "
+        "the two booleans; caller.py updated in this same commit.\n"
+    )
+    head = _commit(git_repo, message)
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, message))
+    assert result.blocked is False
+
+
+def test_evaluate_still_blocks_a_survivor_in_a_file_this_diff_did_not_touch(git_repo: Path):
+    """The exemption above must not swallow the real incident shape: a
+    caller in a file the diff never touched is still the danger."""
+    (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
+    (git_repo / "caller.py").write_text(
+        "from lib import emit\n\ndef run():\n    return emit(1)\n"
+    )
+    base = _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")
+    head = _commit(git_repo, "drop emit, no trailer")  # caller.py untouched
+    result = dg.evaluate(dg.GateRequest(str(git_repo), base, head, "drop emit, no trailer"))
+    assert result.blocked is True
+    assert any("caller.py" in f.message for f in result.findings)
+
+
+# ── CLI: build_parser / resolve_message / resolve_mode / main ───────────────
 
 def test_build_parser_requires_no_default_repo_value_of_dot():
     args = dg.build_parser().parse_args(["--commit", "abc123"])
     assert args.repo == "."
     assert args.commit == "abc123"
     assert args.staged is False
+    assert args.worktree is False
 
 
 def test_main_usage_error_when_no_mode_given(capsys):
     code = dg.main(["--repo", "."])
     assert code == dg.EXIT_USAGE
     assert "one of --commit" in capsys.readouterr().err
+
+
+def test_main_rejects_combining_commit_and_staged_as_ambiguous(git_repo: Path, capsys):
+    # CodeQL py/uninitialized-local-variable, tools/deletion_gate.py:443 (sha
+    # 6ef90aa): require_trailer was computed from `args.staged` alone while
+    # base/head were chosen by commit-priority. Passing both flags together
+    # decoupled the two: base/head took the commit path but staged=True was
+    # still forwarded to evaluate()/collect_definitions, which diffs the
+    # (empty) index instead of commit^..commit — the gate found zero removed
+    # definitions and passed a real, trailer-less deletion. A gate that
+    # cannot tell which of several mutually exclusive modes was requested
+    # must refuse the input, not silently let one flag win over the others.
+    (git_repo / "lib.py").write_text("def orphan(x):\n    return x\n")
+    _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")
+    head = _commit(git_repo, "drop orphan, no trailer")
+    code = dg.main(["--repo", str(git_repo), "--commit", head, "--staged"])
+    assert code == dg.EXIT_USAGE
+    assert "mutually exclusive" in capsys.readouterr().err
+
+
+def test_main_commit_mode_requires_the_trailer_even_when_message_file_absent(
+    git_repo: Path, capsys
+):
+    # require_trailer must be decided per selected mode, not by testing
+    # args.staged/args.worktree in isolation: commit mode always has a real
+    # commit message to check, so the trailer is required regardless of
+    # --message-file.
+    (git_repo / "lib.py").write_text("def orphan(x):\n    return x\n")
+    _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")
+    head = _commit(git_repo, "drop orphan, no trailer")
+    code = dg.main(["--repo", str(git_repo), "--commit", head])
+    assert code == dg.EXIT_BLOCK
+    assert "no Retired-Because" in capsys.readouterr().out
 
 
 def test_main_end_to_end_commit_mode_blocks_on_a_survivor(git_repo: Path, capsys):
@@ -398,6 +397,19 @@ def test_main_staged_without_message_file_defers_rather_than_blocks(git_repo: Pa
     assert code == dg.EXIT_OK
 
 
+def test_main_worktree_mode_catches_an_unstaged_removal(git_repo: Path, capsys):
+    """This is the shape --staged cannot see: a change on disk that was
+    never `git add`ed at all — exactly what a Bash `sed`/`rm` leaves."""
+    (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
+    (git_repo / "caller.py").write_text("from lib import emit\n\ndef run():\n    return emit(1)\n")
+    _commit(git_repo, "init")
+    (git_repo / "lib.py").write_text("")  # on-disk only, not staged
+    code = dg.main(["--repo", str(git_repo), "--worktree"])
+    out = capsys.readouterr().out
+    assert code == dg.EXIT_BLOCK
+    assert "caller.py" in out
+
+
 def test_main_end_to_end_rename_only_diff_prints_pass(git_repo: Path, capsys):
     (git_repo / "lib.py").write_text("def emit(x):\n    return x\n")
     _commit(git_repo, "init")
@@ -410,42 +422,40 @@ def test_main_end_to_end_rename_only_diff_prints_pass(git_repo: Path, capsys):
     assert "deletion-gate: pass" in out
 
 
+def test_resolve_mode_worktree_defers_the_trailer_without_a_message_file():
+    class Args:
+        commit = None
+        staged = False
+        worktree = True
+        base = None
+        head = "HEAD"
+        message_file = None
+
+    base, head, mode, require_trailer = dg.resolve_mode(Args())
+    assert (base, head, mode) == ("HEAD", "HEAD", dgg.MODE_WORKTREE)
+    assert require_trailer is False
+
+
+def test_main_rejects_combining_worktree_and_staged_as_ambiguous(git_repo: Path, capsys):
+    (git_repo / "lib.py").write_text("x = 1\n")
+    _commit(git_repo, "init")
+    code = dg.main(["--repo", str(git_repo), "--staged", "--worktree"])
+    assert code == dg.EXIT_USAGE
+    assert "mutually exclusive" in capsys.readouterr().err
+
+
+def test_count_modes_given_counts_every_mode_flag():
+    class Args:
+        commit = "abc"
+        staged = True
+        worktree = False
+        base = None
+
+    assert dg.count_modes_given(Args()) == 2
+
+
 def test_main_git_error_maps_to_usage_exit(tmp_path: Path, capsys):
     # Not a git repo at all -> require_pcre's `git -C` invocation fails closed.
     code = dg.main(["--repo", str(tmp_path), "--commit", "deadbeef"])
     assert code == dg.EXIT_USAGE
     assert "error:" in capsys.readouterr().err
-
-
-def test_main_rejects_combining_commit_and_staged_as_ambiguous(git_repo: Path, capsys):
-    # CodeQL py/uninitialized-local-variable, tools/deletion_gate.py:443 (PR #109):
-    # `require_trailer` was computed from `args.staged` alone while `base`/`head`
-    # were chosen by commit-priority (`if args.commit: ... elif args.staged: ...`).
-    # Passing both flags together decoupled the two: base/head took the commit
-    # path but `staged=True` was still forwarded to evaluate()/collect_definitions,
-    # which diffs the (empty) index instead of commit^..commit — the gate found
-    # zero removed definitions and passed a real, trailer-less deletion. A gate
-    # that cannot tell which of two mutually exclusive modes was requested must
-    # refuse the input, not silently let one flag win over the other.
-    (git_repo / "lib.py").write_text("def orphan(x):\n    return x\n")
-    _commit(git_repo, "init")
-    (git_repo / "lib.py").write_text("")
-    head = _commit(git_repo, "drop orphan, no trailer")
-    code = dg.main(["--repo", str(git_repo), "--commit", head, "--staged"])
-    assert code == dg.EXIT_USAGE
-    assert "mutually exclusive" in capsys.readouterr().err
-
-
-def test_main_commit_mode_requires_the_trailer_even_when_message_file_absent(
-    git_repo: Path, capsys
-):
-    # require_trailer must be decided per selected mode, not by testing
-    # `args.staged` in isolation: commit mode always has a real commit message
-    # to check, so the trailer is required regardless of --message-file.
-    (git_repo / "lib.py").write_text("def orphan(x):\n    return x\n")
-    _commit(git_repo, "init")
-    (git_repo / "lib.py").write_text("")
-    head = _commit(git_repo, "drop orphan, no trailer")
-    code = dg.main(["--repo", str(git_repo), "--commit", head])
-    assert code == dg.EXIT_BLOCK
-    assert "no Retired-Because" in capsys.readouterr().out

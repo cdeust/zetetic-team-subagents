@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Regression suite for tools/deletion_gate.py + tools/deletion-gate.sh + the
-# PreToolUse hook hooks/pre-tool-deletion-gate.py.
+# three-tier hook wiring: hooks/pre-tool-deletion-gate.py (PreToolUse),
+# hooks/post-tool-deletion-gate.py (PostToolUse, the working-tree net), and
+# the native .githooks/pre-commit + .githooks/commit-msg pair.
 #
 # Incident: cdeust/cortex-viz commit 45d4a80 deleted three module-level
 # forwarders justified as "never had a caller in this repository's history".
@@ -23,6 +25,11 @@
 #   8. the shell wrapper delegates argv/exit code identically to the .py
 #   9. the PreToolUse hook blocks an Edit that would strand a real caller,
 #      and passes a rename in-place with no other caller left dangling
+#  10. the PostToolUse hook (worktree mode) catches a Bash-originated
+#      removal and a whole-file Write, both invisible to Tier 1
+#  11. the native git hooks (.githooks/pre-commit + commit-msg) block a
+#      real `git commit` end to end, both for a live survivor and for a
+#      missing/observation-only trailer, and allow a substantive one
 set -uo pipefail
 
 SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +37,9 @@ REPO="$(cd "$SUITE_DIR/../../.." && pwd)"
 GATE_PY="$REPO/tools/deletion_gate.py"
 GATE_SH="$REPO/tools/deletion-gate.sh"
 HOOK="$REPO/hooks/pre-tool-deletion-gate.py"
+HOOK_POST="$REPO/hooks/post-tool-deletion-gate.py"
+NATIVE_PRECOMMIT="$REPO/.githooks/pre-commit"
+NATIVE_COMMITMSG="$REPO/.githooks/commit-msg"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -118,7 +128,7 @@ git_repo observation-only
 HEAD="$(cd "$REPO_PATH" && git rev-parse HEAD)"
 OUT="$(python3 "$GATE_PY" --repo "$REPO_PATH" --commit "$HEAD" 2>&1)"; RC=$?
 check_exit "observation-only trailer blocks" 1 "$RC"
-check_grep "observation-only message names the defect" "restates the absence" "$OUT"
+check_grep "observation-only message names the defect" "is the OBSERVATION, not a reason" "$OUT"
 
 # --- 5. rename + move, same body, no trailer --------------------------------
 git_repo rename-move
@@ -258,6 +268,48 @@ OUT="$(python3 "$GATE_PY" --repo "$REPO_PATH" --commit "$HEAD" 2>&1)"; RC=$?
 check_exit "removing the second shell def in a file still blocks" 1 "$RC"
 check_grep "second-def removal names the surviving caller" "caller.sh" "$OUT"
 
+# --- 5f. a caller inside a file THIS diff already touched is not a survivor
+# Regression from dogfooding this gate against its own commit (2026-08-10):
+# moving+redesigning a function (signature changed enough that the rename
+# similarity check misses it) whose only "caller" is the new call site the
+# SAME diff just wrote is not the incident pattern — the incident's own
+# commit message names the distinguishing fact ("in files that commit's own
+# diff never touched"). The mirror case (5-caller in an UNTOUCHED file)
+# already exists at case 1 above and must keep blocking.
+git_repo touched-file-exemption
+(
+  cd "$REPO_PATH" || exit 1
+  cat > lib.py <<'EOF'
+def helper(x, staged, worktree=False):
+    if worktree:
+        return 1
+    if staged:
+        return 2
+    return 0
+EOF
+  git add -A && git commit -qm init
+  printf '' > lib.py
+  cat > new_home.py <<'EOF'
+def helper(x, mode=None):
+    if mode == 'w':
+        return 1
+    if mode == 's':
+        return 2
+    return 0
+EOF
+  cat > caller.py <<'EOF'
+from new_home import helper
+
+def run():
+    return helper(1)
+EOF
+  git add -A
+  git commit -qm "$(printf 'refactor: move+redesign helper, update the one caller\n\nRetired-Because: split into new_home.py with a mode arg; caller.py updated in this same commit.')"
+)
+HEAD="$(cd "$REPO_PATH" && git rev-parse HEAD)"
+OUT="$(python3 "$GATE_PY" --repo "$REPO_PATH" --commit "$HEAD" 2>&1)"; RC=$?
+check_exit "a caller in a file this diff already touched is not a survivor" 0 "$RC"
+
 # --- 6. test-path exemption -------------------------------------------------
 git_repo test-exempt
 (
@@ -342,6 +394,96 @@ print(json.dumps({'tool_name':'Edit','tool_input':{
 ")
 printf '%s' "$HOOK_PASS_JSON" | python3 "$HOOK" >/dev/null 2>&1; HOOK_RC2=$?
 check_exit "hook allows an edit that removes no definition" 0 "$HOOK_RC2"
+
+# --- 10. PostToolUse hook: the working-tree net -----------------------------
+git_repo post-hook-bash
+(
+  cd "$REPO_PATH" || exit 1
+  cat > lib.py <<'EOF'
+def emit(x):
+    return x + 1
+EOF
+  cat > caller.py <<'EOF'
+from lib import emit
+
+def run():
+    return emit(3)
+EOF
+  git add -A && git commit -qm init
+)
+# Simulate the EFFECT of a Bash-originated removal (sed/rm) — no Edit/Write
+# tool_input exists for this at all, which is the point of Tier 2.
+printf '' > "$REPO_PATH/lib.py"
+POST_BASH_JSON='{"tool_name":"Bash","tool_input":{"command":"sed -i \"\" \"1,2d\" lib.py"}}'
+POST_OUT="$(cd "$REPO_PATH" && printf '%s' "$POST_BASH_JSON" | python3 "$HOOK_POST" 2>&1)"; POST_RC=$?
+check_exit "PostToolUse catches a Bash-originated removal" 2 "$POST_RC"
+check_grep "PostToolUse names the caller for the Bash-originated removal" "caller.py" "$POST_OUT"
+
+git_repo post-hook-write
+(
+  cd "$REPO_PATH" || exit 1
+  cat > lib.py <<'EOF'
+def emit(x):
+    return x + 1
+EOF
+  cat > caller.py <<'EOF'
+from lib import emit
+
+def run():
+    return emit(3)
+EOF
+  git add -A && git commit -qm init
+)
+printf '# rewritten, emit is gone\n' > "$REPO_PATH/lib.py"
+POST_WRITE_JSON=$(python3 -c "
+import json
+print(json.dumps({'tool_name':'Write','tool_input':{'file_path':'$REPO_PATH/lib.py'}}))
+")
+POST_OUT2="$(cd "$REPO_PATH" && printf '%s' "$POST_WRITE_JSON" | python3 "$HOOK_POST" 2>&1)"; POST_RC2=$?
+check_exit "PostToolUse catches a whole-file Write with no old_string" 2 "$POST_RC2"
+check_grep "PostToolUse names the caller for the whole-file Write" "caller.py" "$POST_OUT2"
+
+git_repo post-hook-noop
+(
+  cd "$REPO_PATH" || exit 1
+  printf 'def keep(x):\n    return x\n' > lib.py
+  git add -A && git commit -qm init
+  printf 'def keep(x):\n    return x + 1\n' > lib.py
+)
+POST_NOOP_JSON='{"tool_name":"Bash","tool_input":{"command":"echo hi"}}'
+(cd "$REPO_PATH" && printf '%s' "$POST_NOOP_JSON" | python3 "$HOOK_POST" >/dev/null 2>&1); POST_RC3=$?
+check_exit "PostToolUse passes when nothing was removed" 0 "$POST_RC3"
+
+# --- 11. native git hooks: pre-commit + commit-msg, a real `git commit` ----
+git_repo native-hooks
+(
+  cd "$REPO_PATH" || exit 1
+  mkdir -p tools .githooks
+  cp "$GATE_PY" "$REPO/tools/deletion_gate_lang.py" "$REPO/tools/deletion_gate_git.py" "$GATE_SH" tools/
+  cp "$NATIVE_PRECOMMIT" "$NATIVE_COMMITMSG" .githooks/
+  printf '#!/usr/bin/env bash\nexit 0\n' > tools/zetetic-checker.sh
+  printf '#!/usr/bin/env bash\nexit 0\n' > tools/craftsmanship-checker.sh
+  chmod +x .githooks/* tools/*.sh tools/deletion_gate.py
+  printf 'def orphan(x):\n    return x\n' > lib.py
+  git add -A && git commit -qm init
+  git config core.hooksPath .githooks
+)
+(
+  cd "$REPO_PATH" || exit 1
+  printf '' > lib.py
+  git add -A
+)
+NATIVE_OUT1="$(cd "$REPO_PATH" && git commit -m "drop orphan" 2>&1)"; NATIVE_RC1=$?
+check_exit "native commit-msg hook blocks a missing trailer" 1 "$NATIVE_RC1"
+check_grep "native commit-msg hook names the missing key" "Retired-Because" "$NATIVE_OUT1"
+
+(cd "$REPO_PATH" && git commit -m "$(printf 'drop orphan\n\nRetired-Because: no callers, unused.')" >/dev/null 2>&1); NATIVE_RC2=$?
+check_exit "native commit-msg hook blocks an observation-only trailer" 1 "$NATIVE_RC2"
+
+(cd "$REPO_PATH" && git commit -m "$(printf 'drop orphan\n\nRetired-Because: superseded by orphan_v2 two releases ago.')" >/dev/null 2>&1); NATIVE_RC3=$?
+check_exit "native commit-msg hook allows a substantive trailer" 0 "$NATIVE_RC3"
+check_grep "the substantive-trailer commit actually landed" "drop orphan" \
+  "$(cd "$REPO_PATH" && git log --oneline -1)"
 
 echo ""
 echo "deletion-gate: $PASS passed, $FAIL failed"
