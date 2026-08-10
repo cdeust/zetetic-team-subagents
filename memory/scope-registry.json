@@ -364,9 +364,21 @@
       "max_file_kb": 100
     },
     "cortex-viz": {
-      "description": "cortex-viz visualization agent's working memory.",
+      "description": "Legacy working-memory scope for the visualization plugin, kept for compatibility with directories already on disk at ~/.claude/memories/cortex-viz/. The plugin's marketplace/display name is now 'hypermnesia-mcp-viz' (its GitHub repo, cdeust/cortex-viz, was not renamed), but this repo cannot verify which MEMORY_AGENT_ID the currently-shipped plugin actually writes under, and strict_unknown_scope denies writes to a removed key outright. Both this entry and 'hypermnesia-mcp-viz' below are accepted rather than migrated; see memory/scope-coverage.md for the reasoning.",
       "owners": [
         "cortex-viz",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "hypermnesia-mcp-viz": {
+      "description": "Working-memory scope for the visualization plugin under its current marketplace/display name (renamed from 'cortex-viz'; see the 'cortex-viz' entry above for why both keys are accepted side by side).",
+      "owners": [
+        "hypermnesia-mcp-viz",
         "_user"
       ],
       "readers": [

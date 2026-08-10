@@ -2,7 +2,7 @@
 
 **Companion to:** `memory/scope-registry.json` v2 and `memory/ADR-001-scope-coverage.md`.
 **Purpose:** authoritative agent-slug → scope mapping. Refactorer uses this to set `memory_scope:` frontmatter on every agent.
-**Last updated:** 2026-04-24
+**Last updated:** 2026-08-10
 
 ## Conventions
 
@@ -29,7 +29,29 @@ This registry is the central seed for the whole file-memory system (`tools/memor
 
 | Scope | Owners | Readers | Notes |
 |---|---|---|---|
-| `cortex-viz` | `cortex-viz`, `_user` | `*` | Working memory for the `cortex-viz` visualization plugin agent. TTL 30 days; 100 KB/file. |
+| `cortex-viz` | `cortex-viz`, `_user` | `*` | **Legacy key, kept for compatibility.** Working memory for the visualization plugin under its pre-rename identity. TTL 30 days; 100 KB/file. |
+| `hypermnesia-mcp-viz` | `hypermnesia-mcp-viz`, `_user` | `*` | Working memory for the visualization plugin under its current marketplace/display name. TTL 30 days; 100 KB/file. |
+
+**Compatibility decision (2026-08-10, rename follow-up).** The visualization
+plugin's marketplace/display name changed `cortex-viz` -> `hypermnesia-mcp-viz`,
+but its GitHub repo (`cdeust/cortex-viz`) was not renamed, and directories
+already exist on users' disks at `~/.claude/memories/cortex-viz/`. Renaming the
+registry key outright would deny every future write from any plugin install
+still identifying itself as `cortex-viz`, and this repo has no visibility into
+which `MEMORY_AGENT_ID` the currently-shipped plugin binary actually emits.
+`acl_check()` (`tools/memory-tool.sh`) only denies **writes** to a scope absent
+from the registry under `strict_unknown_scope`; reads fall back to `defaults`
+(same TTL/size shape as the named entries here) regardless. So dropping the key
+would not make existing data unreadable, but it would silently break writes for
+any plugin instance still on the old identity — a regression this repo cannot
+detect from outside. `tools/memory-tool.sh rename` exists for a user who wants
+to consolidate `/memories/cortex-viz/` into `/memories/hypermnesia-mcp-viz/`
+by hand; nothing in this repo does it automatically, because nothing here is a
+caller of that migration path today (no in-repo agent writes to either scope).
+Both keys are therefore registered side by side, identical in shape, each
+described as pointing at the other. This is compatibility, not indecision: the
+day the old identity is confirmed dead, `cortex-viz` drops out of this table in
+one PR.
 
 ## Team agents — per-agent scopes (19 entries)
 
@@ -109,7 +131,7 @@ All genius agents share scope `genius`. Per-agent isolation is by **mandatory su
 | Team agents (excl. genius) | 21 | 21 / 21 = 100% |
 | Genius agents | 97 | 97 / 97 = 100% |
 | **Total agents** | **118** | **100%** |
-| Distinct registry scopes | 30 | (8 systemic incl. `_user` + 19 team + 1 research + 1 genius + 1 external-plugin `cortex-viz`) |
+| Distinct registry scopes | 31 | (8 systemic incl. `_user` + 19 team + 1 research + 1 genius + 2 external-plugin: `cortex-viz`, `hypermnesia-mcp-viz`) |
 
 > **Why this total (118) is one less than the README's agent count (119):** this doc
 > tabulates only **scope-owning** agents. `memory-writer` is a budgeted scribe that
@@ -167,4 +189,4 @@ For every agent file under `agents/`:
 python3 -c 'import json; d=json.load(open("memory/scope-registry.json")); print("scopes=", len(d["scopes"]), "strict=", d["strict_unknown_scope"], "curators=", d["curator_agents"])'
 ```
 
-Expected: `scopes= 30 strict= True curators= ['_user', 'orchestrator']`
+Expected: `scopes= 31 strict= True curators= ['_user', 'orchestrator']`
