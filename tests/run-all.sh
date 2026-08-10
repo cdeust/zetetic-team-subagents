@@ -37,7 +37,29 @@ list_shell_suites() {
   done
 }
 
+# Orphan detection (issue #93): list_shell_suites' glob only matches a
+# run-tests.sh exactly one level under tools/tests/ (tools/tests/<suite>/
+# run-tests.sh). A suite nested deeper (tools/tests/<suite>/<sub>/run-tests.sh)
+# would exist on disk, look like coverage, and never actually run -- silently
+# reproducing the "registered nowhere" bug this discovery mechanism was built
+# to prevent. Compare disk against discovery and fail closed on a mismatch.
+check_no_orphan_suites() {
+  local on_disk discovered orphans
+  on_disk="$(find tools/tests -name 'run-tests.sh' 2>/dev/null | sort)"
+  discovered="$(list_shell_suites | grep '^tools/tests/' | sort)"
+  orphans="$(comm -23 <(printf '%s\n' "$on_disk") <(printf '%s\n' "$discovered"))"
+  if [[ -n "$orphans" ]]; then
+    echo "FATAL: run-tests.sh exists on disk but is not discovered by tools/tests/*/run-tests.sh:" >&2
+    printf '%s\n' "$orphans" | sed 's/^/  /' >&2
+    echo "       Move it to tools/tests/<suite-name>/run-tests.sh (exactly one level deep)," >&2
+    echo "       or it will never run locally or in CI." >&2
+    return 1
+  fi
+  return 0
+}
+
 if [[ "${1:-}" == "--list" ]]; then
+  check_no_orphan_suites || exit 2
   printf '%s\n' "$PYTHON_BIN -m pytest"
   list_shell_suites
   exit 0
@@ -72,6 +94,8 @@ run_suite() {
 echo "============================================================"
 echo "ALL SUITES  (repo: $REPO_ROOT)"
 echo "============================================================"
+
+check_no_orphan_suites || exit 2
 
 # 1. Python suite. Absence of pytest is reported as a failure, not skipped:
 # a green run that silently omitted 334 tests is the failure mode this whole
