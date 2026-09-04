@@ -17,6 +17,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tools/skill-runner.sh` model-tier escalation banner (#119).** A skill
+  whose `agents:` frontmatter names an agent above the sonnet baseline
+  (opus, fable) now gets a `!!! MODEL-TIER ESCALATION REQUIRED !!!` banner
+  before the procedure body, naming the agent and directing the caller to
+  spawn it as a real subagent instead of inlining its procedure at the
+  caller's own tier. `commands/skill/run.md` is updated to act on it.
+  `scripts/generate-skill-agent-model-matrix.py` computes the full
+  skill-to-agent-to-model matrix from the tree (`docs/skill-agent-model-matrix.md`,
+  drift-checked): 65 skill files carry a non-empty `agents:` field, and 63
+  of them name at least one escalation-tier agent.
+
 - **Delegation-contract schema + fail-closed validator (#116).** `schemas/delegation-contract.schema.yaml`
   declares ownership, worktree policy, push authority, handback artifacts, an
   external acceptance oracle, model, tool grant, and checkpoint policy for

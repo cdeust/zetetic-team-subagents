@@ -8,6 +8,7 @@ Execute a registered skill by name. The skill's procedure, zetetic gates, and ou
 
 2. Resolve the skill file: `tools/skill-runner.sh <skill-name>`
    If not found, list available skills and ask the user to choose.
+   If the output opens with a `!!! MODEL-TIER ESCALATION REQUIRED !!!` banner, it names an agent whose declared `model:` tier exceeds this runner's baseline (sonnet). Spawn each named agent as a real subagent via the Agent tool before proceeding — do not read that agent's steps and execute them inline at this session's own tier. Inlining silently drops the capability upgrade the skill's author deliberately chose.
 
 3. Read the resolved skill file. Follow its **Procedure** section step by step.
 
