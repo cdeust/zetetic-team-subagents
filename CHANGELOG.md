@@ -41,6 +41,33 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tools/bench-agent-cost/`: pre-registered paired cost/quality benchmark
+  (Phase 3 of the agent-to-skill migration plan).** A Fisher-style tool
+  comparing inline skill execution vs. full subagent spawn for the same
+  task, holding model, effort, tool grant, and git snapshot constant, with
+  randomized A/B order, minimum 5 paired replications, blind two-evaluator
+  quality scoring, a pre-registered non-inferiority margin (1.0 point on a
+  10-point rubric), and a full reproducibility-manifest sidecar per run.
+  Token/wall-clock/CLI-reported cost are documented throughout as
+  operational-cost proxies only, per a green-software domain-expert
+  consult incorporated into the design doc; an SCI disclaimer states
+  energy, grid intensity, and embodied carbon are not measurable from this
+  vantage point and no carbon claim is made. Gate run executed live
+  (haiku/low smoke run, 10 real `claude -p` invocations, 1 task x 5
+  replications x 2 conditions) before merge; found and fixed a real bug in
+  the tool's own dirty-tree check along the way (the benchmark's own
+  output directory was making its own next run see a dirty tree).
+
+- **`tools/tests/discoverability-baseline/`: labeled routing-precision
+  baseline for the 97 genius agents' discoverability (Phase 3).** A
+  26-prompt hand-labeled corpus measuring routing precision/recall against
+  `rules/skill-routing-table.md`'s 15 GOA shapes, replacing a raw "was the
+  file read" count that proves nothing about correctness. Per the plan's
+  explicit non-goal: this raises consultation, it is never used to argue
+  for pruning the genius layer. New regression suite (36th, was 35) runs
+  the pure precision/recall math in CI; the live router call is a separate,
+  manually-run script.
+
 - **`rules/agent-vs-skill-classification.md`: five-test rule deciding whether a
   team agent may be inlined as a skill (#120).** Tests are tool-grant
   guardrail, isolation need, model-tier delta from the `sonnet` baseline
