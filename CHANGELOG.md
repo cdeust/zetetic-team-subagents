@@ -17,6 +17,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`requirements-dev.lock` disagreed with a fresh resolve of `requirements-dev.txt`
+  (#117).** The committed lock pinned `pygments==2.20.0`; CI's `Python Suite +
+  Coverage Gate` recompiles the lock on every run and diffs it, and PyPI's
+  current release is `2.21.0`. Synced the lock entry to the version and
+  hashes from a passing CI compile. A local `uv cache clean` + `--refresh`
+  recompile on the maintainer's machine still resolved `2.20.0`, an
+  unexplained local/CI resolver discrepancy not investigated further here.
+
 - **The native git commit gate (`.githooks/pre-commit` + `commit-msg`, #110) was
   live in exactly one of the owner's five repositories.** Both hooks resolved
   their tools directory as `$(git rev-parse --show-toplevel)/tools`, correct
