@@ -15,30 +15,6 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [2.39.0]: model-tier escalation banners, the agent-vs-skill classification rule, and the genius-agent Agent-tool registration retired
-
-### Fixed
-
-- **The 97 `agents/genius/*.md` reasoning-pattern agents were auto-registered as
-  invocable Agent-tool subagents with zero measured usage.** An audit of every
-  past Claude Code session transcript (~768MB across 31 projects) found 97 of
-  98 genius agents were never invoked via the Agent tool, and the one that was
-  (`lamport`, once) was never run in parallel with anything, no isolation or
-  parallelism benefit was ever exploited, and tool restriction was already
-  ruled out (every genius agent shares the orchestrator's own toolset).
-  `/genius-invoke`, `/genius-compose`, and `/genius-route` already cover this
-  ground more cheaply: all three read `agents/genius/<name>.md` directly and
-  apply the pattern inline, no subagent spawn. `plugin.json` now declares an
-  explicit `agents` array listing only the 23 team agents, so Claude Code no
-  longer auto-registers the genius agents as a second, redundant invocation
-  path. **The genius agent files themselves are untouched**, still fully
-  readable by the three commands above, still 97 in number, still never a
-  removal candidate under this repo's own standard. Also re-synced
-  `plugin.json`'s embedded hooks copy against `hooks/hooks.json` (authoritative
-  since the Stop-hook dedup fix, `4bd2f1d0`), which had drifted and still
-  carried the duplicate registration that fix already resolved in the
-  canonical file.
-
 ### Added
 
 - **`tools/bench-agent-cost/`: pre-registered paired cost/quality benchmark
@@ -67,6 +43,32 @@ adheres to [Semantic Versioning](https://semver.org/).
   for pruning the genius layer. New regression suite (36th, was 35) runs
   the pure precision/recall math in CI; the live router call is a separate,
   manually-run script.
+
+## [2.39.0]: model-tier escalation banners, the agent-vs-skill classification rule, and the genius-agent Agent-tool registration retired
+
+### Fixed
+
+- **The 97 `agents/genius/*.md` reasoning-pattern agents were auto-registered as
+  invocable Agent-tool subagents with zero measured usage.** An audit of every
+  past Claude Code session transcript (~768MB across 31 projects) found 97 of
+  98 genius agents were never invoked via the Agent tool, and the one that was
+  (`lamport`, once) was never run in parallel with anything, no isolation or
+  parallelism benefit was ever exploited, and tool restriction was already
+  ruled out (every genius agent shares the orchestrator's own toolset).
+  `/genius-invoke`, `/genius-compose`, and `/genius-route` already cover this
+  ground more cheaply: all three read `agents/genius/<name>.md` directly and
+  apply the pattern inline, no subagent spawn. `plugin.json` now declares an
+  explicit `agents` array listing only the 23 team agents, so Claude Code no
+  longer auto-registers the genius agents as a second, redundant invocation
+  path. **The genius agent files themselves are untouched**, still fully
+  readable by the three commands above, still 97 in number, still never a
+  removal candidate under this repo's own standard. Also re-synced
+  `plugin.json`'s embedded hooks copy against `hooks/hooks.json` (authoritative
+  since the Stop-hook dedup fix, `4bd2f1d0`), which had drifted and still
+  carried the duplicate registration that fix already resolved in the
+  canonical file.
+
+### Added
 
 - **`rules/agent-vs-skill-classification.md`: five-test rule deciding whether a
   team agent may be inlined as a skill (#120).** Tests are tool-grant
