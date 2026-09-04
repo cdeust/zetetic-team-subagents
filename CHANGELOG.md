@@ -15,6 +15,48 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Delegation-contract schema + fail-closed validator (#116).** `schemas/delegation-contract.schema.yaml`
+  declares ownership, worktree policy, push authority, handback artifacts, an
+  external acceptance oracle, model, tool grant, and checkpoint policy for
+  any `scripts/spawn-agent.sh` delegation. `tools/delegation_contract.py`
+  (stdlib-only, no new dependency) validates it and is now called BEFORE
+  `git worktree add`: a missing, malformed, or ownership-overlapping
+  contract is denied with a non-zero exit and creates nothing.
+
+- **Strict, full-tree frontmatter validator (#116).** `tools/frontmatter_validator.py`
+  parses every declared frontmatter block under `skills/`, `agents/`
+  (incl. `agents/genius/`), `commands/`, and the packaged
+  `plugins/*/skills/` surface with PyYAML's strict `safe_load`, reporting
+  stable `{file, line, rule}` records. Found and fixed 7 skill files whose
+  unquoted `input:`/`output:` values contained a colon-space, parsed as a
+  nested mapping key.
+
+### Fixed
+
+- **`scripts/spawn-agent.sh` created a git worktree before any precondition
+  check (#116).** No ownership, scope, push-authority, handback, or
+  acceptance-oracle validation happened before the mutation. It now calls
+  `tools/delegation_contract.py` first and refuses to create anything on an
+  invalid or missing contract. A follow-up review found that three of its
+  `VAR="$(cmd)"` assignments were bare statements under `set -e`, which
+  triggers on the assignment's own exit status before a subsequent
+  `VAR_RC=$?` check runs: a rejected contract exited 1 with the intended
+  "deny: ..." reason silently swallowed. Moved each into an `if !` condition
+  (exempt from `set -e` by design) so the reason reaches stderr.
+
+- **Push authority was stated three different, contradictory ways (#116).**
+  The generated zetetic-spine text (`scripts/generate-spine.py`) said "push,
+  and hand back immediately" unconditionally; ~116 agents' own inline
+  `<worktree>` sections said "do NOT push"; `worktree-protocol.md` already
+  said push is delegation-controlled. All three now defer to the delegation
+  contract's `push_authority` field, surfaced at runtime as
+  `DELEGATION_PUSH_AUTHORITY`. Also fixed in the same pass: `ux-designer.md`
+  declared tools omitted `Bash`/`Edit`/`Write` despite its required
+  procedures using them, and `orchestrator.md`'s frontmatter selected
+  `model: fable` while its token-budget prose described Opus's budget.
+
 ## [2.38.0]: deletion-gate Tier 2/3, mechanically enforced push authority, and a duplicated Stop hook fixed
 
 ### Fixed
