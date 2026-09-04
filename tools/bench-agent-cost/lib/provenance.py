@@ -15,12 +15,27 @@ def _run(cmd: list[str]) -> str:
     return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()
 
 
+# This benchmark writes its own raw/scored output under docs/bench-agent-cost/
+# inside the repo it is measuring. Excluding that path from the dirty check is
+# not a loophole: code_hash attests the CODE state a run executed against, and
+# a benchmark's own in-progress results are not code -- without this
+# exclusion, replication 1 writing its output file would make replication 2's
+# provenance check see a "dirty" tree caused by nothing but this tool's own
+# prior output (reproduced live, 2026-09-05: the second of ten runs in the
+# review_small_diff gate run failed exactly this way before the exclusion was
+# added).
+RESULTS_DIR_EXCLUDED_FROM_DIRTY_CHECK = "docs/bench-agent-cost"
+
+
 def repo_sha(repo_root: str, allow_dirty: bool) -> tuple[str, bool]:
     """Precondition: repo_root is a git worktree. Postcondition: returns
     (HEAD sha, is_dirty). Raises if the tree is dirty and allow_dirty is
     False -- refuse to record a run against an unreproducible code state."""
     sha = _run(["git", "-C", repo_root, "rev-parse", "HEAD"])
-    status = _run(["git", "-C", repo_root, "status", "--porcelain"])
+    status = _run([
+        "git", "-C", repo_root, "status", "--porcelain",
+        "--", ".", f":(exclude){RESULTS_DIR_EXCLUDED_FROM_DIRTY_CHECK}",
+    ])
     is_dirty = bool(status)
     if is_dirty and not allow_dirty:
         raise RuntimeError(
