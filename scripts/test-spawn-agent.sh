@@ -2,11 +2,14 @@
 # Basic test for spawn-agent.sh.
 #
 # Verifies, without hitting the Anthropic API:
-#   1. frontmatter stripping produces a non-empty body that excludes YAML keys
-#   2. unknown agent name fails with exit 1
-#   3. missing argument fails with exit 2
-#   4. worktree + branch are created under a throwaway target repo
-#   5. the final `claude …` invocation is assembled with the expected flags
+#   1. missing argument fails with exit 2
+#   2. missing/invalid delegation contract is denied BEFORE any worktree,
+#      branch, or process mutation (HC-ZETETIC-004 fail-closed precondition)
+#   3. unknown agent name (via a valid contract naming an unresolvable agent)
+#      is denied with no worktree created
+#   4. frontmatter stripping produces a non-empty body that excludes YAML keys
+#   5. a VALID contract launches: worktree + branch created, claude invoked
+#      with the expected flags, MEMORY_AGENT_ID propagated
 #
 # Strategy: shim `claude` on PATH with a recorder that dumps its argv to a file
 # and exits 0. The real CLI is never called.
@@ -22,38 +25,26 @@ trap 'rm -rf "$TMP"; [[ -n "${TARGET:-}" ]] && git -C "$TARGET" worktree list --
 pass() { printf "  \033[32mok\033[0m   %s\n" "$1"; }
 fail() { printf "  \033[31mFAIL\033[0m %s\n" "$1"; exit 1; }
 
+worktree_count() {
+  git -C "$TARGET" worktree list --porcelain 2>/dev/null | grep -c '^worktree' || true
+}
+
 # ---- Test 1: missing arg -----------------------------------------------------
 echo "test: missing agent name exits 2"
 set +e
-"$SPAWN" >/dev/null 2>&1
+"$SPAWN" --contract /nonexistent >/dev/null 2>&1
 rc=$?
 set -e
 [[ $rc -eq 2 ]] && pass "exit 2" || fail "expected 2, got $rc"
 
-# ---- Test 2: unknown agent ---------------------------------------------------
-echo "test: unknown agent exits 1"
-set +e
-"$SPAWN" no-such-agent-xyz "task" >/dev/null 2>&1
-rc=$?
-set -e
-[[ $rc -eq 1 ]] && pass "exit 1" || fail "expected 1, got $rc"
-
-# ---- Test 3: frontmatter stripping -------------------------------------------
-echo "test: frontmatter stripping"
-BODY="$(awk 'BEGIN{f=0} /^---$/{f++; next} f>=2{print}' "$REPO/agents/engineer.md")"
-[[ -n "$BODY" ]]                                    || fail "body empty"
-grep -q "^name: engineer" <<<"$BODY"                && fail "body still contains YAML 'name:'"
-grep -q "You are the procedure" <<<"$BODY"           || fail "body missing identity text"
-pass "frontmatter removed, identity preserved ($(wc -l <<<"$BODY" | tr -d ' ') lines)"
-
-# ---- Test 4: end-to-end with a claude shim -----------------------------------
-echo "test: worktree creation + claude invocation (shimmed)"
+# ---- Set up a throwaway target repo used by the remaining tests -------------
 TARGET="$TMP/target-repo"
-mkdir -p "$TARGET"
+mkdir -p "$TARGET/agents"
 git -C "$TARGET" init -q -b main
-git -C "$TARGET" commit -q --allow-empty -m init
+cp "$REPO/agents/engineer.md" "$TARGET/agents/engineer.md"
+git -C "$TARGET" add -A
+git -C "$TARGET" commit -q -m init
 
-# Shim claude: record argv AND MEMORY_AGENT_ID env var, then exit 0.
 SHIM_DIR="$TMP/bin"
 mkdir -p "$SHIM_DIR"
 RECORD="$TMP/claude-argv.txt"
@@ -66,10 +57,61 @@ exit 0
 EOF
 chmod +x "$SHIM_DIR/claude"
 
-# Run spawn script from inside the target repo with shimmed PATH.
+VALID_CONTRACT="$TMP/valid-contract.json"
+cat >"$VALID_CONTRACT" <<JSON
+{
+  "schema_version": "1.0.0",
+  "agent": "engineer",
+  "target_repo": "$TARGET",
+  "owned_paths": ["src/**"],
+  "excluded_paths": [],
+  "worktree_policy": "required",
+  "push_authority": "forbidden",
+  "handback_artifacts": ["branch_name", "commit_sha"],
+  "acceptance_oracle": {"type": "test", "criterion": "pytest tests/ -q exits 0"},
+  "model": "sonnet",
+  "tool_grant": ["Read", "Edit", "Bash"],
+  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "engineer"}
+}
+JSON
+
+# ---- Test 2: no contract supplied -> denied, no worktree created ------------
+echo "test: no contract supplied is denied before any mutation"
+BEFORE="$(worktree_count)"
+set +e
+( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" engineer "task" >/dev/null 2>&1 )
+rc=$?
+set -e
+[[ $rc -ne 0 ]] || fail "expected non-zero exit with no contract, got 0"
+[[ "$(worktree_count)" == "$BEFORE" ]] || fail "worktree was created despite missing contract"
+pass "no contract -> deny, worktree count unchanged ($BEFORE)"
+
+# ---- Test 3: unknown agent (valid contract, unresolvable agent name) -------
+echo "test: unknown agent is denied, no worktree created"
+UNKNOWN_CONTRACT="$TMP/unknown-agent-contract.json"
+sed 's/"agent": "engineer"/"agent": "no-such-agent-xyz"/' "$VALID_CONTRACT" > "$UNKNOWN_CONTRACT"
+BEFORE="$(worktree_count)"
+set +e
+( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$UNKNOWN_CONTRACT" no-such-agent-xyz "task" >/dev/null 2>&1 )
+rc=$?
+set -e
+[[ $rc -ne 0 ]] || fail "expected non-zero exit for unknown agent, got 0"
+[[ "$(worktree_count)" == "$BEFORE" ]] || fail "worktree was created despite unknown agent"
+pass "unknown agent -> deny, worktree count unchanged ($BEFORE)"
+
+# ---- Test 4: frontmatter stripping -------------------------------------------
+echo "test: frontmatter stripping"
+BODY="$(awk 'BEGIN{f=0} /^---$/{f++; next} f>=2{print}' "$REPO/agents/engineer.md")"
+[[ -n "$BODY" ]]                                    || fail "body empty"
+grep -q "^name: engineer" <<<"$BODY"                && fail "body still contains YAML 'name:'"
+grep -q "You are the procedure" <<<"$BODY"           || fail "body missing identity text"
+pass "frontmatter removed, identity preserved ($(wc -l <<<"$BODY" | tr -d ' ') lines)"
+
+# ---- Test 5: end-to-end with a valid contract + claude shim -----------------
+echo "test: worktree creation + claude invocation (shimmed, valid contract)"
 (
   cd "$TARGET"
-  PATH="$SHIM_DIR:$PATH" "$SPAWN" engineer "hello task" >/dev/null
+  PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$VALID_CONTRACT" engineer "hello task" >/dev/null
 )
 
 [[ -f "$RECORD" ]] || fail "claude shim was not invoked"
@@ -94,6 +136,10 @@ WT="$(git -C "$TARGET" worktree list --porcelain | awk '/^worktree/ {print $2}' 
 BR="$(git -C "$TARGET" branch --list 'agent/engineer/*' | head -1 | tr -d ' *')"
 [[ -n "$BR" ]] || fail "agent branch not created"
 pass "worktree=$WT branch=$BR"
+
+# Verify the active-contract lock was released after the (shimmed) agent exited.
+[[ -d "$TARGET/.claude/delegation-locks" ]] && [[ -n "$(ls -A "$TARGET/.claude/delegation-locks" 2>/dev/null)" ]] && fail "delegation lock not released after exit"
+pass "delegation lock released on exit"
 
 echo
 echo "all tests passed"
