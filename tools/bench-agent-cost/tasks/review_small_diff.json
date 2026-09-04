@@ -1,0 +1,17 @@
+{
+  "task_id": "review_small_diff",
+  "skill_name": "review",
+  "skill_path": "skills/engineering/review.md",
+  "primary_agent": "code-reviewer",
+  "fixture_path": "tools/bench-agent-cost/fixtures/review_target.py",
+  "task_instruction": "Review the attached file (tools/bench-agent-cost/fixtures/review_target.py) for Clean Architecture and SOLID violations, per this repo's rules/coding-standards.md. For each violation: cite the file:line, name the specific principle violated, state its severity, and suggest a fix. Do not fix the code yourself -- produce a review report only.",
+  "rubric_max_points": 10,
+  "rubric": [
+    {"id": "magic_number", "points": 2, "criterion": "Identifies the unnamed/unsourced discount threshold (500) and multiplier (0.9) as a magic-number violation (coding-standards.md §3.1)."},
+    {"id": "srp_mixed_io_logic", "points": 3, "criterion": "Identifies that process_order mixes I/O (DB read, HTTP call) with business logic (discount calculation) in one function -- an SRP/layering violation (§1.1, §3.1)."},
+    {"id": "swallowed_error", "points": 2, "criterion": "Identifies the silent `return None` on a non-200 payment response as an unnamed failure mode / swallowed error (§9 anti-pattern list)."},
+    {"id": "file_line_citations", "points": 1, "criterion": "Every reported finding cites a specific file:line, not just a general description."},
+    {"id": "severity_proportional", "points": 1, "criterion": "Severity assigned is proportional to consequence (the SRP/payment-flow issues are ranked at or above the magic number, not flooded with equal-weight style nits)."},
+    {"id": "no_fabrication", "points": 1, "criterion": "Reports no violation that is not actually present in the fixture (no false positives)."}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "task_id": "debug_small_bug",
+  "skill_name": "debug",
+  "skill_path": "skills/engineering/debug.md",
+  "primary_agent": "engineer",
+  "fixture_path": "tools/bench-agent-cost/fixtures/debug_target.py",
+  "task_instruction": "Root-cause this bug report: `chunk_items([1,2,3,4,5], size=2)` in tools/bench-agent-cost/fixtures/debug_target.py returns `[[1,2],[3,4]]` -- the last item (5) silently disappears. This reproduces on every input whose length is not a multiple of `size`. Identify the true root cause (not just where the symptom shows up), explain why it is the root cause and not a downstream throw site, and propose the minimal fix with a correctness argument. Do not fix unrelated code.",
+  "rubric_max_points": 10,
+  "rubric": [
+    {"id": "root_cause_located", "points": 4, "criterion": "Correctly identifies that `bound = len(items) - len(items) % size` truncates the trailing partial chunk as the root cause, not the slicing expression on the next line."},
+    {"id": "distinguishes_symptom_from_cause", "points": 2, "criterion": "Explicitly distinguishes the root cause (the bound computation) from the symptom (missing last item) or from a plausible-but-wrong throw site (the slice call)."},
+    {"id": "minimal_fix", "points": 2, "criterion": "Proposed fix is minimal -- it changes only what is needed to include the trailing partial chunk (e.g. iterate over the full range and let slicing naturally short-circuit, or explicitly append the remainder), without unrelated refactoring."},
+    {"id": "correctness_argument", "points": 2, "criterion": "States a correctness argument or verification step for the fix (e.g. a worked trace on the given example, or a proposed test) rather than asserting the fix works without justification."}
+  ]
+}

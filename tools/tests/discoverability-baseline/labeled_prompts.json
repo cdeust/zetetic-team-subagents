@@ -1,0 +1,38 @@
+{
+  "_comment": "Hand-labeled prompt corpus for Phase 3's discoverability baseline. Each prompt is labeled with the shape it SHOULD route to per rules/skill-routing-table.md's 15 GOA shapes, or 'none' where no shape genuinely applies. This measures routing precision/recall -- NOT a raw 'was the genius agent file read' count, which proves nothing about correctness (plan Phase 3).",
+  "shape_ids": [
+    "boundary-design", "causal-audit", "decision-bias-check", "estimation",
+    "evidence-synthesis", "experience-and-transmission", "failure-forensics",
+    "formal-correctness", "measurement-discipline", "narrative-sensemaking",
+    "normative-design", "problem-reframing", "representation-and-possibility",
+    "structure-discovery", "systems-leverage", "none"
+  ],
+  "prompts": [
+    {"id": "p01", "text": "Should the retry logic live inside the payment client library or in every caller? We keep duplicating it.", "label": "boundary-design"},
+    {"id": "p02", "text": "The team wants to know whether shipping the new caching layer actually caused the latency drop, or if traffic just dropped that week.", "label": "causal-audit"},
+    {"id": "p03", "text": "We're about to greenlight a six-month rewrite based on one engineer's gut feeling that the old system is unmaintainable -- can we sanity check the decision before committing?", "label": "decision-bias-check"},
+    {"id": "p04", "text": "Nobody has measured how many concurrent users the new notification service needs to support at launch. Marketing wants a number today.", "label": "estimation"},
+    {"id": "p05", "text": "Three benchmark papers report contradictory numbers for the same retrieval method on the same dataset -- which one should we trust for our design doc?", "label": "evidence-synthesis"},
+    {"id": "p06", "text": "Every individual dashboard widget passes its unit tests, but analysts still can't answer basic questions from the dashboard as a whole.", "label": "experience-and-transmission"},
+    {"id": "p07", "text": "Write a post-mortem for last night's outage where three unrelated-looking alerts fired at once and we're not sure which one was the actual trigger.", "label": "failure-forensics"},
+    {"id": "p08", "text": "This distributed lock has no written spec and everyone reasons about it by walking through the two or three traces they've personally seen -- how do we know it's actually correct under all interleavings?", "label": "formal-correctness"},
+    {"id": "p09", "text": "The uptime metric says 99.99% but three different teams calculate 'uptime' three different ways and the number doesn't match what users report.", "label": "measurement-discipline"},
+    {"id": "p10", "text": "Reconstruct what actually happened during the incident from the scattered Slack messages and half-written timeline -- the postmortem doc has steps out of order.", "label": "narrative-sensemaking"},
+    {"id": "p11", "text": "We need a policy for how support tickets get prioritized that customers will accept as fair, not just fast to apply.", "label": "normative-design"},
+    {"id": "p12", "text": "We keep debating 'build vs buy' for the search feature and going in circles -- both options feel wrong for different reasons.", "label": "problem-reframing"},
+    {"id": "p13", "text": "Our config format can't express the thing we actually need to configure, and we suspect the whole design space of representations was never actually enumerated.", "label": "representation-and-possibility"},
+    {"id": "p14", "text": "These five customer complaints look related somehow but nobody can articulate what pattern connects them.", "label": "structure-discovery"},
+    {"id": "p15", "text": "We keep patching the same recurring incident at the point where it surfaces, and it keeps coming back somewhere else in the pipeline -- where should we actually intervene?", "label": "systems-leverage"},
+    {"id": "p16", "text": "Should the new PDF export feature be a shared library both the web app and the CLI import, or should each own its own implementation?", "label": "boundary-design"},
+    {"id": "p17", "text": "Marketing claims the new onboarding email caused the signup bump, but we also changed the pricing page that same week -- is the causal story solid?", "label": "causal-audit"},
+    {"id": "p18", "text": "This negotiation with the vendor is stuck -- prep a strategy that finds where our actual interests overlap instead of just trading position statements.", "label": "decision-bias-check"},
+    {"id": "p19", "text": "How much Postgres storage will the new event-logging feature need in year one? We have no historical data yet.", "label": "estimation"},
+    {"id": "p20", "text": "Turn this pile of 12 loosely related design docs into one defensible recommendation with a clear claim-evidence-warrant structure.", "label": "evidence-synthesis"},
+    {"id": "p21", "text": "Please fix the off-by-one in this loop that's dropping the last element of the array.", "label": "none"},
+    {"id": "p22", "text": "Add a null check before we dereference `user.profile` in the settings page.", "label": "none"},
+    {"id": "p23", "text": "Bump the eslint version in package.json and fix whatever breaks.", "label": "none"},
+    {"id": "p24", "text": "Write a one-paragraph changelog entry summarizing this release's bug fixes.", "label": "none"},
+    {"id": "p25", "text": "This shared resource (a rate-limited third-party API) gets exhausted every month because every team calls it independently with no coordination -- how do we manage it without a central gatekeeper micromanaging every call?", "label": "systems-leverage"},
+    {"id": "p26", "text": "The onboarding curriculum for new hires is too dense in week one and mostly idle by week four -- redesign the sequencing.", "label": "experience-and-transmission"}
+  ]
+}

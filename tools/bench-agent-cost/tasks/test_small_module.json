@@ -1,0 +1,17 @@
+{
+  "task_id": "test_small_module",
+  "skill_name": "test",
+  "skill_path": "skills/engineering/test.md",
+  "primary_agent": "test-engineer",
+  "fixture_path": "tools/bench-agent-cost/fixtures/test_target.py",
+  "task_instruction": "Design a test plan (unit-test level) for calculate_discount in tools/bench-agent-cost/fixtures/test_target.py. Enumerate happy-path, edge-case, and boundary-condition tests. State explicitly what your tests can and cannot prove about correctness (Dijkstra: testing shows presence, not absence, of bugs). Produce the test plan, not a full pytest file, unless a pytest file is faster for you to reason precisely -- either form is acceptable for scoring.",
+  "rubric_max_points": 10,
+  "rubric": [
+    {"id": "happy_path", "points": 1, "criterion": "Covers a straightforward non-member discount case (e.g. price=100, pct=0.2)."},
+    {"id": "invalid_input", "points": 2, "criterion": "Covers at least one invalid-input case that must raise ValueError (negative price, or pct outside [0,1])."},
+    {"id": "boundary_pct", "points": 2, "criterion": "Covers the pct boundary values 0 and 1 explicitly."},
+    {"id": "member_floor_interaction", "points": 2, "criterion": "Covers the interaction between is_member's flat -5 subtraction and the max(...,0.0) floor -- i.e. a case where the member discount would otherwise go negative."},
+    {"id": "independent_deterministic", "points": 1, "criterion": "States or designs tests to be independent and deterministic (no shared mutable state, no reliance on execution order)."},
+    {"id": "states_limits", "points": 2, "criterion": "Explicitly states what this test suite cannot prove (e.g. does not prove absence of bugs outside the enumerated cases; does not prove numerical behavior under floating-point edge cases unless specifically called out)."}
+  ]
+}
