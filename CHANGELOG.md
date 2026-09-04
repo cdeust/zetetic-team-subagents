@@ -19,6 +19,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Two plugins registered the same `Stop` hook simultaneously, firing the
+  checkpoint-threshold block twice per crossing at two different token
+  counts a few tool calls apart** (`context-guard@session-optimizer-marketplace`
+  and this plugin's own copy of `stop-context-guard.py`), the exact "double
+  execution for users with both installed" failure the session-optimizer
+  deprecation shim already documents as forbidden. `context-guard` already
+  owns this hook; the duplicate registration here is removed, and the
+  remaining copy is gated on real session activity rather than an absolute
+  token threshold alone: 12 of 13 audited Cortex sessions already started
+  above the Sonnet WARN threshold on inherited context with zero tool
+  calls, so the old threshold discriminated nothing. WARN now asks for a
+  direct checkpoint write instead of spawning `memory-writer` for a ~55-66K
+  token round trip to write a checkpoint that often said nothing happened;
+  `memory-writer` stays available as an explicit fallback. This also drops
+  the repo's lifecycle-hook count from 21 to 20 (`README.md`, `CONTRIBUTING.md`
+  updated to match).
+
 - **`requirements-dev.lock` disagreed with a fresh resolve of `requirements-dev.txt`
   (#117).** The committed lock pinned `pygments==2.20.0`; CI's `Python Suite +
   Coverage Gate` recompiles the lock on every run and diffs it, and PyPI's

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/suites-33-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-80-green" alt="Skills">
-  <img src="https://img.shields.io/badge/hooks-21_lifecycle-red" alt="Hooks">
+  <img src="https://img.shields.io/badge/hooks-20_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
