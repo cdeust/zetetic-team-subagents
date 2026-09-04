@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "no-such-agent-xyz",
+  "target_repo": "{{TARGET_REPO}}",
+  "owned_paths": ["src/**"],
+  "excluded_paths": [],
+  "worktree_policy": "required",
+  "push_authority": "forbidden",
+  "handback_artifacts": ["branch_name"],
+  "acceptance_oracle": {"type": "test", "criterion": "x"},
+  "model": "sonnet",
+  "tool_grant": ["Read"],
+  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "engineer"}
+}

@@ -1,0 +1,79 @@
+# delegation-contract.schema.yaml — CONTRACT for a delegation-contract JSON file
+# passed to scripts/spawn-agent.sh via --contract.
+#
+# Closes HC-ZETETIC-004 (mechanical-delegation-preconditions) and provides the
+# foundation HC-ZETETIC-002 (executable-agent-handoff-contract) needs: one
+# versioned, machine-readable declaration of ownership, push authority, tool
+# grant, model tier, checkpoint policy, and handback artifacts BEFORE any
+# worktree, process, branch, or remote mutation happens.
+#
+# Enforcement: tools/delegation_contract.py validates every contract against
+# the rules documented here and is the ONLY code path scripts/spawn-agent.sh
+# calls to decide launch/deny. This file is the human-readable spec; the
+# Python module is the executable check. Keep them in sync — a rule described
+# here that the validator does not enforce is documentation, not a contract.
+#
+# source: HC-ZETETIC-004 acceptance criteria (harness-comparison issue,
+# mechanical-delegation-preconditions.md) — "A versioned delegation schema
+# requires target repository, owned paths, excluded paths, worktree policy,
+# push authority, handback artifacts, and an external acceptance oracle
+# before launch." + HC-ZETETIC-002 acceptance criteria — "One versioned
+# contract declares file ownership, worktree, push authority, handback
+# artifacts, required tools, model identity, and checkpoint policy."
+
+schema_version: "1.0.0"   # semver. Bump MAJOR on a breaking field removal/rename,
+                           # MINOR on an additive required field, PATCH on doc-only change.
+
+contract_contract:
+  required:
+    schema_version: "string — semver, must match a version this validator understands."
+    agent:          "string — agent slug. Must resolve to agents/<agent>.md or agents/genius/<agent>.md in target_repo."
+    target_repo:    "string — absolute path to the repository being delegated into."
+    owned_paths:    "list[string] — non-empty. Glob patterns (relative to target_repo) this delegation may modify. Must resolve inside target_repo — no '..' escaping the repo root."
+    excluded_paths: "list[string] — glob patterns (relative to target_repo) excluded even when they match owned_paths. May be empty."
+    worktree_policy: "enum — required | none. 'required' means spawn-agent.sh must create an isolated worktree before launch."
+    push_authority: "enum — forbidden | allowed | required. No default: an omitted or unrecognized value is a fail-closed reject, never a fallback to 'forbidden'. This is the single source of truth the worktree-protocol.md push instruction and the generated zetetic-spine text must both defer to (HC-ZETETIC-002)."
+    handback_artifacts: "list[string] — non-empty. What the agent must report at completion, e.g. ['branch_name', 'commit_sha']. push_authority in {allowed, required} additionally requires 'pr_number' in this list."
+    acceptance_oracle: "object — {type: string, criterion: string}. The EXTERNAL signal that decides completion (a test command, a build exit code, a measurement) — never a self-report. Both fields required, both non-empty."
+    model: "string — model tier for this delegation (e.g. sonnet, opus, haiku, fable)."
+    tool_grant: "list[string] — non-empty. Declared tools available to the agent for this delegation."
+    checkpoint_policy: "object — {threshold_tokens: int > 0, scope: string}. scope is the memory-tool.sh scope path the agent checkpoints to."
+
+  optional:
+    task: "string — free-form task description/context. Never a substitute for owned_paths/acceptance_oracle."
+    notes: "string — human-authored rationale, not machine-checked."
+
+  fail_closed_reject_reasons:
+    - "missing_required_field — any field in `required` above absent or null"
+    - "unknown_schema_version — schema_version not in the set of versions this validator's SUPPORTED_VERSIONS declares"
+    - "unknown_agent — agent does not resolve to an existing agents/<agent>.md or agents/genius/<agent>.md"
+    - "empty_owned_paths — owned_paths is an empty list"
+    - "path_escapes_repo — an owned_paths or excluded_paths entry resolves (via os.path.normpath against target_repo) outside target_repo"
+    - "invalid_push_authority — push_authority not one of {forbidden, allowed, required}"
+    - "missing_pr_number_handback — push_authority in {allowed, required} but 'pr_number' absent from handback_artifacts"
+    - "empty_acceptance_oracle — acceptance_oracle.type or .criterion missing/empty"
+    - "empty_tool_grant — tool_grant is an empty list"
+    - "invalid_checkpoint_policy — checkpoint_policy.threshold_tokens not a positive integer, or .scope empty"
+    - "overlapping_ownership — owned_paths intersects (by glob) with another contract's owned_paths currently recorded active for the same target_repo, and the concurrency policy is 'serialize' (see below)"
+    - "malformed_json — the contract file is not valid JSON"
+
+  concurrency_policy:
+    # Preregistered per HC-ZETETIC-004 acceptance: "Concurrent delegations
+    # with intersecting ownership are denied or serialized according to a
+    # preregistered policy, while disjoint controls proceed."
+    #
+    # This validator's policy is DENY (not queue-and-serialize): an
+    # intersecting active contract causes immediate rejection with reason
+    # `overlapping_ownership`, naming the conflicting contract's agent and
+    # active-lock path. Serialization (queueing) is not implemented — the
+    # caller retries once the conflicting delegation completes and its lock
+    # is released. Disjoint owned_paths always proceed, including against
+    # other active contracts on the same target_repo.
+    mode: "deny"
+    lock_directory: "<target_repo>/.claude/delegation-locks/ (gitignored; one JSON file per active worktree, named <branch-slug>.json, removed on agent exit via trap)"
+
+  validator_unavailability:
+    # HC-ZETETIC-004: "Validator unavailability is explicit and fails closed
+    # for mutating work; it never degrades silently to the current free-form
+    # launch path."
+    policy: "If tools/delegation_contract.py cannot be imported/executed (missing interpreter, syntax error, import failure), scripts/spawn-agent.sh treats this as reject with reason validator_unavailable and a non-zero exit — it never falls back to launching without validation."

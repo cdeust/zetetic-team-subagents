@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "engineer",
+  "target_repo": "{{TARGET_REPO}}",
+  "owned_paths": ["src/**"],
+  "excluded_paths": ["src/generated/**"],
+  "worktree_policy": "required",
+  "push_authority": "forbidden",
+  "handback_artifacts": ["branch_name", "commit_sha"],
+  "acceptance_oracle": {"type": "test", "criterion": "pytest tests/ -q exits 0"},
+  "model": "sonnet",
+  "tool_grant": ["Read", "Edit", "Bash"],
+  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "engineer"}
+}
