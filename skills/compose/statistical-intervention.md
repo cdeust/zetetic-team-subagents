@@ -14,7 +14,7 @@ agents:
   - feynman
 shapes: [statistical-anomaly-between-groups, design-before-run, integrity-audit, semmelweis-reflex-awareness]
 input: Two groups with different outcomes, or a proposed intervention with data.
-output: Full pipeline: matched-group analysis, experimental design, intervention results, communication plan.
+output: "Full pipeline: matched-group analysis, experimental design, intervention results, communication plan."
 zetetic_gate:
   logical: "Matched groups must be truly matched except for the candidate variable"
   critical: "Before/after data with the intervention as the only change"

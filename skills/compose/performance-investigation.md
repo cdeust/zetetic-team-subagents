@@ -14,7 +14,7 @@ agents:
   - engineer
 shapes: [order-of-magnitude-first, residual-with-a-carrier, profile-before-optimizing]
 input: A slow system or component with whatever metrics are currently available.
-output: Performance report: expected bracket, measured actuals, profiled hot path, fix with before/after.
+output: "Performance report: expected bracket, measured actuals, profiled hot path, fix with before/after."
 zetetic_gate:
   logical: "Expected bracket must be dimensionally consistent with measurements"
   critical: "Measured values from instrumentation, not intuition"

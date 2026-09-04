@@ -14,7 +14,7 @@ agents:
   - dijkstra
 shapes: [integrated-experience-as-spec, no-seams, all-dimensions-simultaneously, idealize-away-friction, elegance-as-correctness]
 input: A product, feature, or user flow to audit.
-output: Quality audit: experience spec, seam map, dimension check, correctness verification.
+output: "Quality audit: experience spec, seam map, dimension check, correctness verification."
 zetetic_gate:
   logical: "Quality criteria stated at experience level, not component level"
   critical: "'It just works' tested at every user contact point"

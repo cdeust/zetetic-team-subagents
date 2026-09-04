@@ -15,7 +15,7 @@ agents:
   - engineer
 shapes: [conjecture-generator, proof-and-program-together, invariants-not-traces]
 input: A problem requiring candidate solutions. The correctness standard.
-output: Verified solution: conjectures generated, proof of the selected candidate, implementation.
+output: "Verified solution: conjectures generated, proof of the selected candidate, implementation."
 zetetic_gate:
   logical: "Every conjecture is labeled as conjecture until proven"
   critical: "The prover MUST verify before any conjecture is shipped"

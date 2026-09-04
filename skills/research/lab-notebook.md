@@ -15,7 +15,7 @@ agents:
   - deming
   - feynman
 shapes: [no-source-no-implementation, replicate-to-estimate-variance, instrument-before-hypothesis]
-input: Research context. Current objective. Notebook location (default: .lab-notebook.md).
+input: "Research context. Current objective. Notebook location (default: .lab-notebook.md)."
 output: Structured lab notebook with timestamped entries, tags, cross-references, and timeline view.
 zetetic_gate:
   logical: "Every entry has a timestamp, a clear result, and a next-step — no dangling threads"

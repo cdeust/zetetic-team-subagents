@@ -14,7 +14,7 @@ agents:
   - noether
 shapes: [anomaly-others-discarded, residual-with-a-carrier, define-the-measure-first, symmetry-first]
 input: An anomaly — a specific observation that doesn't fit expectations.
-output: Explanation report: the anomaly, the isolated carrier, and the formal explanation.
+output: "Explanation report: the anomaly, the isolated carrier, and the formal explanation."
 zetetic_gate:
   logical: "The explanation must be consistent with all observations, not just the anomaly"
   critical: "The carrier must be isolated by two independent methods"

@@ -14,7 +14,7 @@ agents:
   - engineer
 shapes: [hard-real-time, priority-under-failure, graceful-degradation, spec-first, partial-failure-default]
 input: The system to harden. Its criticality requirements. Known failure modes.
-output: Resilience design: criticality taxonomy, priority schedule, formal spec, implementation.
+output: "Resilience design: criticality taxonomy, priority schedule, formal spec, implementation."
 zetetic_gate:
   logical: "Criticality taxonomy must not contradict itself"
   critical: "Error paths must be tested to actually fire"
