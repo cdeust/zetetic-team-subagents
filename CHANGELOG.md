@@ -17,6 +17,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`rules/agent-vs-skill-classification.md`: five-test rule deciding whether a
+  team agent may be inlined as a skill (#PRNUM).** Tests are tool-grant
+  guardrail, isolation need, model-tier delta from the `sonnet` baseline
+  (`tools/skill-runner.sh:31,35`), packaged assets, and authority transfer.
+  Applied as a worked table over all 23 team agents with per-agent file:line
+  evidence: 9 subagent-only, 1 dual-surface, 13 skill-frontable. A verdict is
+  a candidacy, never an authorization to remove an agent, and the rule is
+  scoped to `agents/*.md` only, never to the 97 genius agents. Two premises
+  the plan asked the table to assume were checked and corrected against
+  `origin/main`: `agents/ux-designer.md:8` no longer carries the narrow
+  read-only tool grant its dual-surface staging was justified by (widened in
+  #116, commit `4006565`, as a frontmatter-vs-body consistency fix), and
+  `refactorer` is named by no skill's `agents:` field. Recorded follow-up:
+  #119's escalation banner keys on model tier only, so it stays silent for
+  the four subagent-only agents that sit at the sonnet baseline
+  (code-reviewer, git-historian, research-scientist, reviewer-academic).
+
 - **`tools/skill-runner.sh` model-tier escalation banner (#119).** A skill
   whose `agents:` frontmatter names an agent above the sonnet baseline
   (opus, fable) now gets a `!!! MODEL-TIER ESCALATION REQUIRED !!!` banner
