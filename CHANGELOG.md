@@ -42,7 +42,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **`tools/bench-agent-cost/`: pre-registered paired cost/quality benchmark
-  (Phase 3 of the agent-to-skill migration plan).** A Fisher-style tool
+  (Phase 3 of the agent-to-skill migration plan) (#121).** A Fisher-style tool
   comparing inline skill execution vs. full subagent spawn for the same
   task, holding model, effort, tool grant, and git snapshot constant, with
   randomized A/B order, minimum 5 paired replications, blind two-evaluator
@@ -59,7 +59,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   output directory was making its own next run see a dirty tree).
 
 - **`tools/tests/discoverability-baseline/`: labeled routing-precision
-  baseline for the 97 genius agents' discoverability (Phase 3).** A
+  baseline for the 97 genius agents' discoverability (Phase 3) (#121).** A
   26-prompt hand-labeled corpus measuring routing precision/recall against
   `rules/skill-routing-table.md`'s 15 GOA shapes, replacing a raw "was the
   file read" count that proves nothing about correctness. Per the plan's
