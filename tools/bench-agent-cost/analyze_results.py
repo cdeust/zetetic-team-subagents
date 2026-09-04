@@ -33,7 +33,7 @@ def load_runs(raw_dir: Path, scored_dir: Path, task_id: str) -> list[dict]:
     return runs
 
 
-def quality_score(record: dict, rubric_max: int) -> float | None:
+def quality_score(record: dict) -> float | None:
     if not record["scores"]:
         return None
     # Average across the two blind evaluators (design doc: "blind by at
@@ -90,8 +90,8 @@ def report_all_cost_metrics(inline_runs: list[dict], subagent_runs: list[dict]) 
 
 
 def report_quality(inline_runs: list[dict], subagent_runs: list[dict], task: dict, margin: float) -> None:
-    inline_quality = [quality_score(r, task["rubric_max_points"]) for r in inline_runs]
-    subagent_quality = [quality_score(r, task["rubric_max_points"]) for r in subagent_runs]
+    inline_quality = [quality_score(r) for r in inline_runs]
+    subagent_quality = [quality_score(r) for r in subagent_runs]
     if not all(q is not None for q in inline_quality + subagent_quality):
         print("\nQuality scores not available for all runs -- run score_quality.py first.")
         return

@@ -1,0 +1,12 @@
+[
+  "review_small_diff::1::inline_skill",
+  "review_small_diff::1::subagent_spawn",
+  "review_small_diff::2::inline_skill",
+  "review_small_diff::2::subagent_spawn",
+  "review_small_diff::3::inline_skill",
+  "review_small_diff::3::subagent_spawn",
+  "review_small_diff::4::inline_skill",
+  "review_small_diff::4::subagent_spawn",
+  "review_small_diff::5::inline_skill",
+  "review_small_diff::5::subagent_spawn"
+]

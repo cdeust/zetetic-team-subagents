@@ -1,0 +1,24 @@
+{
+  "eval_a": {
+    "verdict": {
+      "magic_number": false,
+      "srp_mixed_io_logic": true,
+      "swallowed_error": true,
+      "file_line_citations": false,
+      "severity_proportional": true,
+      "no_fabrication": true
+    },
+    "total_points": 7
+  },
+  "eval_b": {
+    "verdict": {
+      "magic_number": false,
+      "srp_mixed_io_logic": true,
+      "swallowed_error": true,
+      "file_line_citations": true,
+      "severity_proportional": true,
+      "no_fabrication": true
+    },
+    "total_points": 8
+  }
+}

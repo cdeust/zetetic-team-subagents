@@ -1,0 +1,164 @@
+{
+  "predictions": {
+    "p01": "boundary-design",
+    "p02": "causal-audit",
+    "p03": "decision-bias-check",
+    "p04": "estimation",
+    "p05": "evidence-synthesis",
+    "p06": "experience-and-transmission",
+    "p07": "failure-forensics",
+    "p08": "formal-correctness",
+    "p09": "measurement-discipline",
+    "p10": "narrative-sensemaking",
+    "p11": "normative-design",
+    "p12": "boundary-design",
+    "p13": "representation-and-possibility",
+    "p14": "structure-discovery",
+    "p15": "systems-leverage",
+    "p16": "boundary-design",
+    "p17": "causal-audit",
+    "p18": "problem-reframing",
+    "p19": "estimation",
+    "p20": "evidence-synthesis",
+    "p21": "none",
+    "p22": "none",
+    "p23": "none",
+    "p24": "none",
+    "p25": "systems-leverage",
+    "p26": "experience-and-transmission"
+  },
+  "report": {
+    "per_shape": {
+      "boundary-design": {
+        "tp": 2,
+        "fp": 1,
+        "fn": 0,
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.8
+      },
+      "causal-audit": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "decision-bias-check": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6666666666666666
+      },
+      "estimation": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "evidence-synthesis": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "experience-and-transmission": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "failure-forensics": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "formal-correctness": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "measurement-discipline": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "narrative-sensemaking": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "normative-design": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "problem-reframing": {
+        "tp": 0,
+        "fp": 1,
+        "fn": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": null
+      },
+      "representation-and-possibility": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "structure-discovery": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "systems-leverage": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "none": {
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    "accuracy": 0.9230769230769231,
+    "n": 26
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 2,
+    "order_position": "second",
+    "code_hash": "6129788fb6ad46603e60f2780a9bfb95feaafa10",
+    "code_dirty": false,
+    "prompt_hash": "356280f9b0fa4e51d24a82ae17d380b649c4ab9cad60d9494a643a81f9948e62",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "21053cc4-fd1b-44d9-b21d-84f092f1e6bb",
+    "input_tokens": 17,
+    "output_tokens": 3049,
+    "cache_creation_input_tokens": 87662,
+    "cache_read_input_tokens": 125942,
+    "total_cost_usd": 0.2031802,
+    "duration_ms": 44331,
+    "duration_api_ms": 29838,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "Now I'll analyze this file against the coding standards. Here's my review report:\n\n---\n\n## Code Review: tools/bench-agent-cost/fixtures/review_target.py\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | review_target.py:19-22 | Reliability | \u00a73.2, \u00a79 (anti-pattern: swallowed error) | Silent failure on payment API error. Function returns `None` with no exception, no logging, no way for caller to distinguish success from failure. DB update (line 24) executes after failed payment, leaving order in inconsistent state. | Raise a named exception (`PaymentFailureError`) on HTTP status != 200. Halt execution before line 24 to prevent inconsistent DB state. |\n| 2 | review_target.py:11, 24 | Security | \u00a73.2 (validate at boundaries) | SQL injection vulnerability. String interpolation used in SQL queries (`f\"SELECT ... WHERE id = {order_id}\"`). No input validation shown. | Use parameterized queries: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))` |\n| 3 | review_target.py:8-25 | Architecture | \u00a71.1 (SRP) | Function violates SRP: mixes 4 independent concerns \u2014 database fetch, discount calculation, payment API call, order status update. One function with four reasons to change. Description test fails: \"fetch order from DB **and** calculate discount **and** call payment API **and** update DB status\". | Extract into separate functions: `fetch_order(db_conn, order_id)`, `calculate_discounted_total(total: float) -> float`, `charge_payment(payment_gateway, amount)`, `update_order_status(db_conn, order_id, status)`. Have an orchestrator compose them. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 4 | review_target.py:8 | Reliability | \u00a73.2 (validate at system boundaries), \u00a78 (source discipline) | No input validation or type hints. Parameters `order_id` and `db_conn` are untyped and unchecked. `order_id` could be negative, None, or a string; `db_conn` type is not declared. | Add type hints and validation: `def process_order(order_id: int, db_conn: Connection) -> float:` followed by `assert order_id > 0, \"order_id must be positive\"` |\n| 5 | review_target.py:13 | Readability | \u00a73.1 (no magic numbers), \u00a78 (Zetetic source discipline) | Magic number `500` with no name or source comment. Discount threshold is hardcoded without explanation \u2014 business rule? Configuration? | Define a named constant: `DISCOUNT_THRESHOLD = 500  # source: <business rule or config reference>` and use it: `if total > DISCOUNT_THRESHOLD:` |\n\n### Minor (optional, improve later)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 6 | review_target.py:14 | Readability | \u00a73.1 | Magic number `0.9` (discount factor). Unclear whether this is 10% off or 90% off. | Name it: `DISCOUNT_RATE = 0.9  # source: pricing policy` or rename for clarity: `DISCOUNTED_PRICE_MULTIPLIER = 0.9  # apply 10% discount` |\n\n---\n\n### Architecture Assessment\n\n**Layering Violation:** The function conflates infrastructure (database I/O, external HTTP API) with business logic (discount calculation) in a single public function. Per Clean Architecture \u00a72.1, core business logic should be isolated from I/O concerns. This function has no clear layer.\n\n**Dependency Flow:** The function imports `requests` (external dependency) and takes `db_conn` directly \u2014 infrastructure concerns leak into what should be a business-logic-level function. Per \u00a72.2 (Dependency Rule), core modules should not depend on infrastructure.\n\n**Missing Abstraction:** The payment gateway is called directly via `requests.post()`. Should be abstracted behind an interface (`PaymentGateway` protocol) injected at construction, enabling testing and swapping implementations.\n\n---\n\n**Summary:** 3 critical violations (error handling, SQL injection, SRP), 2 important (input validation, magic numbers), 2 minor (readability). This code cannot ship as-is."
+}

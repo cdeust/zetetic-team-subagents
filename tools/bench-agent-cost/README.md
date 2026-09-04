@@ -273,12 +273,55 @@ pinned production model/effort.
 
 ## Negative-result log
 
-None yet -- this PR ships the tool itself; the first pre-registered
-production run (sonnet/medium, all 3 tasks, 5 replications each) has not
-been executed. Whatever that run finds -- including a null result or a
-margin violation -- goes in a dated entry under `docs/bench-agent-cost/`
-alongside the run, per Move 7: a run that does not support its hypothesis
-is logged, not quietly rerun until one variant looks better.
+**2026-09-05, `review_small_diff`, haiku/low smoke run (n=5, single task) --
+non-inferiority NOT established.** Raw results at
+`docs/bench-agent-cost/20260905/`. This is the cost-bounded smoke run
+described above, not the frozen sonnet/medium production protocol -- logged
+anyway per Move 7, since it is a completed run whose result did not
+support the hypothesis and a null/negative result is never quietly dropped
+for being "just a smoke run."
+
+- Quality: inline_skill mean 8.90/10, subagent_spawn mean 9.20/10 (2 blind
+  evaluators). Paired one-sided non-inferiority test at margin=1.0:
+  lower 95% confidence bound on the difference = -1.166, which is below
+  -1.0 -> **`non_inferior_at_05: false`**. At n=5 this is underpowered to
+  distinguish "genuinely inferior" from "noise wider than the margin";
+  it is reported as inconclusive, not as evidence the inline condition is
+  worse. Seed-level: 2/5 inline wins, 2/5 subagent wins, 1 tie -- no
+  consistent direction.
+- Total tokens: inline_skill mean 216,824 vs. subagent_spawn mean 111,222
+  (paired t=134.5, df=4, significant at 0.05, inline wins 0/5 seeds on this
+  metric -- i.e. subagent used fewer tokens on every replication). This
+  is the opposite of the initiative's presumed direction and is exactly
+  the "subagent can be cheaper" case flagged as a real possible outcome
+  in constraint 5 above, not a strawman: `skills/engineering/review.md`'s
+  procedure text itself (~2,600 words, plus the escalation banner) is
+  inlined into every `inline_skill` prompt, while `subagent_spawn`'s
+  cold subagent context did not carry that same procedure text into the
+  measured session's own token count (it is spent inside the spawned
+  subagent's separate context, which this benchmark's top-level `usage`
+  JSON reports as the whole session's total including the subagent's
+  cost -- see the divergence with total_cost_usd below, which suggests
+  the aggregation is not as simple as "subagent costs are hidden").
+- total_cost_usd: inline_skill mean $0.21 vs. subagent_spawn mean $0.47 --
+  **the opposite direction from the token comparison.** This divergence
+  is itself a finding: the CLI's own dollar-cost accounting and this
+  benchmark's token-count proxy disagree about which condition is
+  cheaper for the same 10 runs. Candidate explanation not yet
+  investigated: `subagent_spawn` may incur additional non-token-metered
+  overhead (e.g. thinking-token billing inside the spawned subagent, or a
+  service-tier difference) that `usage.total_tokens` does not capture.
+  This is logged as an open question, not resolved here -- a production
+  decision must not pick whichever proxy happens to support the desired
+  conclusion (constraint 5).
+- Explanation candidate for the quality/margin result: single task, n=5,
+  haiku/low tier -- underpowered by design (this run's purpose was to
+  prove the tool's plumbing, not to answer the production question).
+
+**Action:** re-run at the pinned production tier (sonnet/medium) across
+all 3 tasks before any Phase 4/7 decision leans on this benchmark's
+quality or cost axis. The token/cost divergence above should be
+investigated as its own question before being treated as either result.
 
 ## Files
 

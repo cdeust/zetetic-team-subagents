@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 5,
+    "order_position": "second",
+    "code_hash": "f54841f5e5031d4b51a5b4fd45055e90ad599d4a",
+    "code_dirty": false,
+    "prompt_hash": "356280f9b0fa4e51d24a82ae17d380b649c4ab9cad60d9494a643a81f9948e62",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "85a8271c-a73a-4bbb-9c1e-668369ffbee8",
+    "input_tokens": 17,
+    "output_tokens": 2091,
+    "cache_creation_input_tokens": 87779,
+    "cache_read_input_tokens": 126055,
+    "total_cost_usd": 0.1986355,
+    "duration_ms": 42275,
+    "duration_api_ms": 27940,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: tools/bench-agent-cost/fixtures/review_target.py\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | review_target.py:8\u201325 | SOLID: SRP Violation | \u00a71.1 Single Responsibility Principle | `process_order()` mixes four independent responsibilities: database read, discount business logic, HTTP payment I/O, and database write. Each can change independently (discount rules, payment API, schema, transaction policy), giving the function four reasons to change. Makes unit testing impossible without mocking external systems; violates local reasoning (\u00a77.1) \u2014 caller cannot understand failure modes. | Extract into layer-appropriate functions: `calculate_discount(amount)` (core), `charge_payment(amount)` (infrastructure), `update_order_status(order_id)` (infrastructure). Orchestrate from a use-case handler. |\n| 2 | review_target.py:19\u201322 | Anti-pattern: Silent Failure | \u00a79 Anti-Patterns; \u00a77.1 Local Reasoning | Bare return of `None` on HTTP error (status != 200) swallows the failure without logging, context, or named failure mode. Caller has no way to distinguish \"payment failed due to API error\" from \"payment succeeded but status unknown\" \u2014 production bug waiting to happen. Violates error-handling idiom (\u00a73.2). | Raise a named exception with full context: `raise PaymentGatewayError(f\"Payment failed: {resp.status_code} {resp.text}\")` OR return a `Result[Amount, PaymentError]` type. Log the failure before raising. |\n| 3 | review_target.py:11, 24 | Security: SQL Injection | \u00a78 Source Discipline (no invented patterns); \u00a72.2 Dependency Rule (core cannot trust infrastructure to validate) | Direct string interpolation in SQL (`f\"SELECT ... WHERE id = {order_id}\"`, `f\"UPDATE ... WHERE id = {order_id}\"`) opens SQL injection vulnerability. `order_id` is user-controlled; attacker can execute arbitrary SQL. Violates input validation at system boundary (\u00a73.2). | Use parameterized queries: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))` and likewise for UPDATE. Never interpolate user input into SQL. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 4 | review_target.py:13 | Readability: Magic Number | \u00a73.1 Readability; \u00a78 Zetetic Source Discipline | Discount threshold `500` has no name or source. What is this number? What rule or business decision does it represent? Where did `0.9` come from (10% discount)? Violates \u00a78 rule: \"Every hardcoded number must have: `// source: <citation>` comment OR `// source: benchmark <path>`\". | Extract to named constants with sources: `DISCOUNT_THRESHOLD = 500  # source: business rule <ticket-id>` and `DISCOUNT_RATE = 0.9  # source: standard 10% order discount per <policy>`. |\n\n### Architecture assessment\n\n**Layer violations:** The function mixes concerns across three architectural layers (core/business logic, infrastructure/I/O) within a single function body, making it impossible to enforce the Dependency Rule (\u00a72.2). The discount calculation (core concern) is tangled with database access and HTTP I/O (infrastructure concerns).\n\n**Testability impact:** No unit test can verify discount logic without mocking `db_conn` and `requests.post`, creating brittle tests that pass in isolation but fail in integration \u2014 the classic symptom of layer violation.\n\n**Suggestion:** Restructure as:\n- **Core/domain:** `calculate_order_charge(total: float) -> float` \u2014 pure logic, no I/O\n- **Infrastructure:** `ChargePaymentGateway` protocol, `OrderRepository` protocol (core defines; infrastructure implements)\n- **Handlers/use-cases:** Orchestrate the flow: read order \u2192 calculate \u2192 charge \u2192 update \u2192 return result\n\n---\n\n**Summary:** Three violations, all critical path. The SRP+silent-failure pair create correctness bugs; the SQL injection is an immediate security risk. All three are preventable by layer separation and error-handling discipline."
+}

@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 1,
+    "order_position": "first",
+    "code_hash": "2593909313bb8ab4b5f105b6931250eea841f5d9",
+    "code_dirty": false,
+    "prompt_hash": "356280f9b0fa4e51d24a82ae17d380b649c4ab9cad60d9494a643a81f9948e62",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "e93856bc-17f3-4116-9a45-08a67780766f",
+    "input_tokens": 17,
+    "output_tokens": 1890,
+    "cache_creation_input_tokens": 92225,
+    "cache_read_input_tokens": 121318,
+    "total_cost_usd": 0.2060488,
+    "duration_ms": 39063,
+    "duration_api_ms": 24427,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: tools/bench-agent-cost/fixtures/review_target.py\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Severity | Fix |\n|---|-----------|----------|-----------|-------|----------|-----|\n| 1 | line 11, 24 | Security | Zetetic Source \u00a78 + Boundary Validation | SQL injection: `order_id` interpolated directly into query via f-string without parameterization. `requests` library is also untyped (no Protocol wrapping). | **CRITICAL** | Use parameterized queries: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))`. Inject `db_conn` as a Protocol-typed parameter, not raw. |\n| 2 | lines 19\u201322 | Error Handling | Coding-Standards \u00a79 Anti-Pattern | Bare silent failure: HTTP error response (`status_code != 200`) triggers `return None` with no exception raised, no logging, no named failure mode. Caller cannot distinguish success from failure. | **CRITICAL** | Raise a named exception: `if resp.status_code != 200: raise PaymentFailedError(f\"Payment API returned {resp.status_code}\")`. Do not swallow errors. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Severity | Fix |\n|---|-----------|----------|-----------|-------|----------|-----|\n| 3 | lines 8\u201325 | Architecture | SOLID \u00a71.1 (SRP) + Clean Architecture \u00a72 | Single Responsibility Principle violated: function `process_order` mixes three distinct concerns: (1) database queries, (2) external HTTP I/O, (3) business logic (discount calculation). Each is an independent reason to change this function. | **IMPORTANT** | Extract to three layers: (1) **Core** \u2014 `calculate_discount(total)` function, pure logic, no I/O. (2) **Infrastructure** \u2014 `fetch_order(order_id, db_conn)` and `submit_payment(amount, payment_client)` handle I/O. (3) **Application/Use Case** \u2014 `process_order_use_case` orchestrates the three. Inject dependencies; return typed results (Result type or exception). |\n| 4 | line 13 | Readability & Evidence | Coding-Standards \u00a73.1 + \u00a78 (Zetetic Source) | Magic number `500` appears without name or `// source:` comment. The discount threshold is a business constant \u2014 its origin (contract requirement? empirical?) is unknown. | **IMPORTANT** | Replace with a named constant: `DISCOUNT_THRESHOLD = 500  # source: <contract/docs/benchmark>`. If no source exists, \u00a7 8 forbids the number: clarify where 500 came from before committing. |\n\n### Minor (optional, improve later)\n\n| # | File:Line | Category | Principle | Issue | Severity | Fix |\n|---|-----------|----------|-----------|-------|----------|-----|\n| 5 | line 18 | Type Safety | Coding-Standards \u00a73.2 | `requests` library imported but parameter `payment_client` is never declared. Raw `requests.post()` call makes it impossible to mock or swap implementations (violates \u00a75 Reverse Dependency Injection). | **MINOR** | Replace `requests.post(...)` with an injected `payment_client.charge(...)` parameter typed as a `PaymentGateway` Protocol. |\n| 6 | line 11 | Clarity | Coding-Standards \u00a73.1 | `row[0]` is a positional index into a query result. Unclear what `row[0]` represents. | **MINOR** | Replace with named tuple or dataclass unpacking: `order = db_conn.execute(...).fetchone()` followed by typed unpacking, or use SQLAlchemy ORM to return a typed object. |\n\n### Architecture Assessment\n\n**Structural concerns \u2014 layer violations:**\n\n- **If this is production code** (docstring says it is not, but flagging for completeness): it violates Clean Architecture \u00a72.2 (dependency rule). The function directly imports and uses `requests` (infrastructure), mixes database access (also infrastructure) with business logic, and has no clear separation between layers. Core logic should never import or call infrastructure directly.\n- **Test-ability**: the mixed concerns and missing dependency injection make this function impossible to unit-test in isolation without hitting the real database and payment API.\n- **Reusability**: the discount logic is locked inside `process_order`; it cannot be reused elsewhere without duplicating code.\n\n**Correctness concern:**\n\n- The function silently returns `None` on payment failure. Callers cannot distinguish `None` (success with no return value) from `None` (error occurred). This is a correctness bug disguised as error handling.\n\n---\n\n**Summary**: Three critical violations (SQL injection, silent error swallowing, untyped I/O), one architecture violation (SRP), and two readability issues. The file is correctly flagged as a fixture for benchmarking; these violations are planted intentionally and should NOT be merged into production code."
+}

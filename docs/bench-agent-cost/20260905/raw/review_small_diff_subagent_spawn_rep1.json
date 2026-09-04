@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "subagent_spawn",
+    "replication": 1,
+    "order_position": "second",
+    "code_hash": "6129788fb6ad46603e60f2780a9bfb95feaafa10",
+    "code_dirty": false,
+    "prompt_hash": "4a1d135a78d76cb728b73ac964e824ff885a5f275a245b115c4bae1cfaf81831",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "c9d0e6dc-4caa-484e-8d50-08f3a1609a57",
+    "input_tokens": 10,
+    "output_tokens": 1238,
+    "cache_creation_input_tokens": 2454,
+    "cache_read_input_tokens": 107431,
+    "total_cost_usd": 0.48620620000000003,
+    "duration_ms": 25539,
+    "duration_api_ms": 71089,
+    "num_turns": 1,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "## Review Report \u2014 `tools/bench-agent-cost/fixtures/review_target.py`\n\n**Context:** This is a self-declared synthetic benchmark fixture (per its own docstring) \u2014 never imported or executed by production code. I classify stakes as **Low** (exploratory, non-executing test input), notwithstanding the payment-adjacent content, because production-risk criteria don't apply to code that is never run.\n\n---\n\n### Findings, in order of severity\n\n**1. `review_target.py:15` \u2014 SRP violation (coding-standards.md \u00a71.1) \u2014 HIGH**\n\n```python\ndef process_order(order_id, db_conn):\n```\n\nThis single function performs at minimum four distinct responsibilities: (a) reading order data from a DB, (b) computing a discount (business logic), (c) making an external HTTP payment call (I/O), and (d) updating order status in the DB. Applying the \u00a71.1 \"and\" test: this function reads orders, **and** computes discounts, **and** charges a payment gateway, **and** persists status \u2014 four \"and\"s, four independent reasons to change.\n\nThis is also a Clean Architecture layer violation (\u00a72.1): domain logic (discount calc) and infrastructure (HTTP client, SQL) are fused in one unit with no ports/adapters separation (\u00a72.3, \u00a75.1).\n\n**Fix:** Extract into three collaborators \u2014 a `DiscountPolicy.apply(total) \u2192 float` (pure domain function, no I/O), an `OrderRepository` port (with `get_total`/`mark_paid` methods, injected per \u00a75.1), and a `PaymentGateway` port (injected, implemented by an infrastructure adapter wrapping `requests`). `process_order` becomes a thin use-case orchestrator composing the three via constructor injection.\n\n---\n\n**2. `review_target.py:19-20` \u2014 Silent failure / swallowed error, no named failure mode (coding-standards.md \u00a79 anti-pattern list) \u2014 HIGH**\n\n```python\nif resp.status_code != 200:\n    return None\n```\n\nA failed payment charge is discarded as an untyped `None` with no distinction from a legitimate \"nothing to return\" case, no logging, no exception, and no propagation of *why* it failed (network error vs. declined card vs. 5xx from the gateway are all collapsed identically). Per \u00a79, \"catching/swallowing errors 'just in case' without a named failure mode\" is an enumerated refusal. Per \u00a73.2, error handling belongs at the appropriate layer with the language's error idiom (Python: raise a typed exception), not a bare sentinel return. Also note the caller cannot distinguish \"the charge failed\" from \"nothing to return\" \u2014 an LSP-adjacent contract ambiguity.\n\n**Fix:** Raise a named exception, e.g. `PaymentDeclinedError(order_id, resp.status_code, resp.text)`, and let the composition-root/handler layer decide how to surface it (retry, alert, user-facing error).\n\n---\n\n**3. `review_target.py:11-12` \u2014 Magic number, no source/name (coding-standards.md \u00a73.1, \u00a78) \u2014 MEDIUM**\n\n```python\nif total > 500:\n    total = total * 0.9\n```\n\nTwo unexplained literals: `500` (discount threshold) and `0.9` (10% discount multiplier). Per \u00a73.1 \"no magic numbers \u2014 every numeric constant has a name or a source comment,\" and per \u00a78, every hardcoded number needs a `# source:` citation. Neither exists here. A future reader cannot tell whether `500` is a currency-unit threshold, a percentage, or a count, nor whether `0.9` is an arbitrary choice or a contractually mandated discount rate.\n\n**Fix:** \n```python\nBULK_DISCOUNT_THRESHOLD = 500  # source: pricing policy doc PRICING-14\nBULK_DISCOUNT_MULTIPLIER = 0.9  # source: pricing policy doc PRICING-14\n```\nReference these by name in the (now-extracted) `DiscountPolicy`.\n\n---\n\n### Compliance Summary\n\n| Rule | Status | Finding |\n|---|---|---|\n| \u00a71.1 SRP | **FAIL** | Function mixes four responsibilities |\n| \u00a72.1/\u00a72.3 Clean Architecture | **FAIL** | I/O inline with domain logic; no layer separation |\n| \u00a73.1 No magic numbers | **FAIL** | `500` and `0.9` unexplained |\n| \u00a78 Source discipline | **FAIL** | No `# source:` citations |\n| \u00a79 No silent error swallowing | **FAIL** | `return None` swallows payment failure silently |\n\n**Verdict:** All three planted violations located and confirmed against coding-standards.md. No production-risk implications since this is inert fixture code never executed."
+}

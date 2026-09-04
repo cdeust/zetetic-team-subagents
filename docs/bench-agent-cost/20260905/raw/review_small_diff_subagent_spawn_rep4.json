@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "subagent_spawn",
+    "replication": 4,
+    "order_position": "second",
+    "code_hash": "f54841f5e5031d4b51a5b4fd45055e90ad599d4a",
+    "code_dirty": false,
+    "prompt_hash": "4a1d135a78d76cb728b73ac964e824ff885a5f275a245b115c4bae1cfaf81831",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "6c266529-3a41-476b-9d37-e5f4210540f4",
+    "input_tokens": 10,
+    "output_tokens": 1006,
+    "cache_creation_input_tokens": 2148,
+    "cache_read_input_tokens": 106387,
+    "total_cost_usd": 0.4296462,
+    "duration_ms": 21861,
+    "duration_api_ms": 79250,
+    "num_turns": 1,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "## Review Report: `tools/bench-agent-cost/fixtures/review_target.py`\n\nThe code-reviewer subagent has completed its analysis. Here is the review report:\n\n---\n\n### Context\nThis is a synthetic test fixture (production code does not import it), so stakes are **Low**. However, the structural violations are clear and provide valuable signal for the benchmark harness.\n\n### Findings\n\n**1. `review_target.py:8-25` \u2014 SRP violation (High)**\n- **Principle:** Single Responsibility Principle (Martin 2000)\n- **Issue:** One function does four independent things: persistence read, domain calculation (discount logic), external I/O (payment gateway call), and persistence write. Each has a separate reason to change.\n- **Fix:** Extract `OrderRepository.get_total()` / `.mark_paid()`, a pure `apply_discount(total) \u2192 float` function, and a `PaymentGateway.charge()` port. `process_order` becomes a thin orchestrator.\n\n**2. `review_target.py:5, 11, 18, 24` \u2014 DIP violation (High)**\n- **Principle:** Dependency Inversion Principle (Martin 2017 Ch. 11)\n- **Issue:** The function directly calls concrete infrastructure (`requests.post`, `db_conn.execute`) with no abstraction layer. Business logic depends on concrete details instead of interfaces.\n- **Fix:** Declare `PaymentGateway` and `OrderRepository` protocols; inject concrete implementations at the composition root. Remove direct `import requests` from files containing business rules.\n\n**3. Module-level \u2014 Clean Architecture layer boundary violation (High)**\n- **Principle:** Clean Architecture Dependency Rule (Martin 2017 Ch. 22)\n- **Issue:** No layer separation at all. Infrastructure and domain logic are collapsed into one function with zero ports/adapters. Violates the inward-only dependency direction.\n- **Fix:** Split into separate layers: `core/orders/discount.py` (pure), `core/orders/ports.py` (protocols), `infrastructure/payments/http_gateway.py`, `infrastructure/orders/sql_repo.py`, plus a handler composition root.\n\n**4. `review_target.py:19-22` \u2014 Reliability / postcondition ambiguity (Medium)**\n- **Principle:** Error handling best practice (coding-standards.md \u00a73.2, \u00a79)\n- **Issue:** Failure returns `None` with no distinguishable error type \u2014 ambiguous whether it means \"order had zero total\" or \"payment failed.\" Underlying HTTP failure reason is discarded.\n- **Fix:** Raise a typed exception (`PaymentDeclinedError`) at the `PaymentGateway` boundary once extracted. Let the composition root handle caller-facing response.\n\n**5. Security smell (noted, out of scope for this review)**\n- **Issue:** SQL at lines 11, 24 uses f-string interpolation of `order_id` \u2014 injection risk.\n- **Note:** This is resolved as a side effect when the repository abstraction is extracted and uses parameterized queries.\n\n### Root Cause Analysis\nAll three SOLID/Clean Architecture violations stem from the same cause: one function fuses domain logic with two unrelated infrastructure concerns without any port/adapter boundary. Fixing the extraction (ports + composition root) resolves findings 1\u20133 simultaneously; finding 4 resolves as a side effect.\n\n### Not Applicable\nOCP, LSP, ISP \u2014 no polymorphism or interfaces exist to evaluate.\n\n---\n\nThe report is a review only; no code modifications were made to the fixture."
+}

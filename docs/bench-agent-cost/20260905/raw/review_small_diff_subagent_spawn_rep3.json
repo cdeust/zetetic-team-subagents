@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "subagent_spawn",
+    "replication": 3,
+    "order_position": "second",
+    "code_hash": "f54841f5e5031d4b51a5b4fd45055e90ad599d4a",
+    "code_dirty": false,
+    "prompt_hash": "4a1d135a78d76cb728b73ac964e824ff885a5f275a245b115c4bae1cfaf81831",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "1c76c5a5-ac0b-4179-80bb-df6aadf541ba",
+    "input_tokens": 10,
+    "output_tokens": 1243,
+    "cache_creation_input_tokens": 4310,
+    "cache_read_input_tokens": 106486,
+    "total_cost_usd": 0.5224369499999999,
+    "duration_ms": 25617,
+    "duration_api_ms": 100130,
+    "num_turns": 1,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "## Review Report: tools/bench-agent-cost/fixtures/review_target.py\n\nThe code-reviewer agent has completed its analysis. Here is the report verbatim:\n\n---\n\n### Summary\nSynthetic 26-line fixture (never imported/executed by production code \u2014 confirmed: only referenced by tools/bench-agent-cost/tasks/review_small_diff.json and its own raw benchmark outputs under docs/bench-agent-cost/). It contains at least 4 distinct coding-standards.md violations: 3 the file's own comments name (magic number, SRP, silent failure) plus 1 the comments do NOT name (SQL injection via string interpolation, appearing twice). Not mergeable as production code as-is; as a fixture it is fit for its stated purpose (a fixed benchmark input), provided the fix suggestions below are understood as \"what a real PR fixing this file would need to do,\" not a request to edit the fixture.\n\n### Blocking Violations (would block merge if shipped as real code)\n\n**1. SQL Injection (review_target.py:11, :24)**\n- Issue: `db_conn.execute(f\"SELECT total FROM orders WHERE id = {order_id}\")` and `db_conn.execute(f\"UPDATE orders SET status='paid' WHERE id = {order_id}\")` build SQL via unparameterized f-string interpolation.\n- Severity: CRITICAL \u2014 OWASP A03:2021 Injection\n- Fix: Use parameterized queries, e.g. `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))`\n- Citation: coding-standards.md \u00a73.2, \u00a79 anti-patterns\n\n**2. Single Responsibility Principle Violation (review_target.py:8-25)**\n- Issue: `process_order` mixes three independent concerns: (1) discount calculation, (2) HTTP payment charge, (3) DB status update. File's own comment at line 16-17 names this as \"Violation B.\"\n- Severity: HIGH \u2014 violates SRP (Martin 2000)\n- Fix: Extract `apply_discount(total)`, `charge_payment(gateway, amount)`, and `mark_order_paid(db_conn, order_id)` into separate functions\n- Citation: coding-standards.md \u00a71.1; Fowler 2018 Ch.3 Long Method\n\n**3. Magic Numbers Without Source (review_target.py:13-14)**\n- Issue: Constants `500` (discount threshold) and `0.9` (discount rate) appear with no name or `# source:` comment\n- Severity: HIGH \u2014 violates naming and source discipline\n- Fix: Define named constants with source documentation, e.g.:\n  ```python\n  BULK_DISCOUNT_THRESHOLD = 500  # source: <business rule>\n  BULK_DISCOUNT_RATE = 0.9       # source: <business rule>\n  ```\n- Citation: coding-standards.md \u00a73.1, \u00a78\n\n**4. Silent Error Swallowing (review_target.py:19-22)**\n- Issue: Charge failure returns bare `None` with no named failure mode. Caller cannot distinguish \"payment declined\" from other `None`-returning paths.\n- Severity: HIGH \u2014 violates error-handling discipline\n- Fix: Raise typed exception (e.g. `PaymentDeclinedError`) or return discriminated result (e.g. `Ok(total) | Err(reason)`)\n- Citation: coding-standards.md \u00a73.2, \u00a79 anti-patterns\n\n### Non-Blocking (Advisory)\n\n**5. Dependency Inversion Principle (review_target.py:8, :18)**\n- Issue: `db_conn` is untyped parameter; `requests.post` called directly against concrete client rather than through a `PaymentGateway` port\n- Severity: ADVISORY \u2014 blocking only if promoted into real layered code\n- Fix: Introduce `PaymentGateway` and `OrderRepository` protocols per \u00a75.1 for testability\n- Citation: coding-standards.md \u00a71.5, \u00a75.1\n\n### Key Finding\nThe file's own inline comments identify three violations (\"Violation A/B/C\") but **miss the SQL injection at lines 11 and 24** \u2014 a live injection vector. This gap illustrates why reviewer-assisted findings must check against the actual code, not only self-reported violations.\n\n### Verdict\n**COMMENT** (as a fixture, it correctly serves its benchmark purpose; as hypothetical real code, it would receive **REQUEST CHANGES** on all four blocking items above, including the SQL injection not called out by the file's own comments)."
+}

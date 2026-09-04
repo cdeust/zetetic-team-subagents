@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "subagent_spawn",
+    "replication": 5,
+    "order_position": "first",
+    "code_hash": "f54841f5e5031d4b51a5b4fd45055e90ad599d4a",
+    "code_dirty": false,
+    "prompt_hash": "4a1d135a78d76cb728b73ac964e824ff885a5f275a245b115c4bae1cfaf81831",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "1bcb64bf-3cd9-4355-9778-3eb552773db1",
+    "input_tokens": 10,
+    "output_tokens": 1546,
+    "cache_creation_input_tokens": 2581,
+    "cache_read_input_tokens": 107645,
+    "total_cost_usd": 0.4270027,
+    "duration_ms": 28541,
+    "duration_api_ms": 73193,
+    "num_turns": 1,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review Report: review_target.py\n\nThe code-reviewer agent has completed its analysis. Here is the full report:\n\n---\n\n### Summary\n\n`review_target.py` is a self-declared synthetic fixture containing deliberate violations of rules/coding-standards.md, used as a fixed benchmark input. It is not a mergeable PR; the fixture's own docstring discloses the planted violations upfront. The report covers the three explicitly planted violations plus one additional observable violation (SQL injection).\n\n### Stakes Calibration\n- **Classification: Low** (isolated fixture, explicitly excluded from execution per its docstring)\n- However, because it touches a payments/order code pattern, Move 6 (security smells) applies regardless of stakes.\n\n---\n\n### Violations Found\n\n#### 1. **File:Line** \u2014 `tools/bench-agent-cost/fixtures/review_target.py:13` \u2014 Magic numbers\n- **Principle violated** \u2014 \u00a73.1 (Readability \u2014 no magic numbers; every numeric constant must have a name or source comment)\n- **Severity** \u2014 Medium (discounted because this is a non-executed fixture, but the pattern models a billing path)\n- **Description** \u2014 `500` and `0.9` are unnamed magic numbers. A reader cannot determine whether `500` is a currency threshold or test artifact, nor whether `0.9` (10% discount) is arbitrary or sourced from policy. \u00a73.1 requires every constant to carry a name or `# source:` comment per \u00a78.\n- **Suggested fix** \u2014 Extract both into named module-level constants (e.g., `BULK_DISCOUNT_THRESHOLD_CENTS`, `BULK_DISCOUNT_RATE`), each with a `# source:` comment pointing to the pricing policy or ADR that establishes them.\n\n#### 2. **File:Line** \u2014 `tools/bench-agent-cost/fixtures/review_target.py:8-25` (whole function) \u2014 SRP and Clean Architecture violations\n- **Principle violated** \u2014 \u00a71.1 SRP and \u00a72.1 Clean Architecture (Core/Domain must have zero I/O)\n- **Severity** \u2014 High (this is the exact failure mode \u00a72 exists to prevent: business logic fused with two I/O concerns in one function)\n- **Description** \u2014 `process_order` does: (1) DB read, (2) discount calculation, (3) HTTP POST, (4) response branching, (5) DB write \u2014 a five-part \"and\" violation of SRP. It also collapses Core/Domain, Application, and Infrastructure into one function, violating the Dependency Rule (\u00a72.2). No `PaymentGateway`/`OrderRepository` ports exist, making the function untestable without live DB and HTTP endpoints.\n- **Suggested fix** \u2014 Split into: a pure domain function `apply_discount(total) \u2192 float` (no I/O); a `PaymentGateway` protocol/port in core per \u00a75.1; an `OrderRepository` port for DB operations; and a thin use-case function wiring these via constructor/parameter injection (\u00a75.2), following Martin 2017 Ch. 22.\n\n#### 3. **File:Line** \u2014 `tools/bench-agent-cost/fixtures/review_target.py:19-22` \u2014 Silent error swallowing\n- **Principle violated** \u2014 \u00a79 Anti-Patterns (\"catching / swallowing errors 'just in case' without a named failure mode\")\n- **Severity** \u2014 High (silent failure on a payment charge is a data-integrity risk)\n- **Description** \u2014 On non-200 response, the function silently returns `None` \u2014 indistinguishable from any other exit path, with no exception, no logging, no named failure mode. The caller cannot tell \"payment failed\" from other states, and the DB `status='paid'` update is skipped without recording the failed charge attempt, creating an unreconciled state.\n- **Suggested fix** \u2014 Raise a specific, named exception (e.g., `PaymentDeclinedError` or `PaymentGatewayError`, carrying `resp.status_code` and response body) at the layer that can act on it per \u00a76.1. The orchestrating use case then decides to retry, mark `status='payment_failed'`, or propagate \u2014 but the failure must be named and observable, never silently swallowed.\n\n#### 4. **File:Line** \u2014 `tools/bench-agent-cost/fixtures/review_target.py:11, 24` \u2014 SQL injection (additional finding)\n- **Principle violated** \u2014 Move 6 (security smell scan) / \u00a73.2 Reliability (\"Validate at system boundaries\")\n- **Severity** \u2014 High (SQL injection via f-string interpolation)\n- **Description** \u2014 Both SQL statements interpolate `order_id` directly into the query string via f-string rather than using parameterized queries. If `order_id` originates from external input (request path/query parameter), this is a classic SQL injection vector \u2014 an attacker could read/modify arbitrary rows or exfiltrate data.\n- **Suggested fix** \u2014 Replace both f-string queries with parameterized queries using the DB driver's placeholder syntax (e.g., `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))`), and validate/type `order_id` at the boundary (\u00a73.2) before reaching the query layer.\n\n---\n\n### Verdict\n\n**REQUEST CHANGES** \u2014 If this fixture were live production code, all four findings would block merge. As a declared benchmark input whose purpose is to contain these violations for detection scoring, the review report itself is the deliverable."
+}

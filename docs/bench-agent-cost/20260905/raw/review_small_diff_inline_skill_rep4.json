@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 4,
+    "order_position": "first",
+    "code_hash": "f54841f5e5031d4b51a5b4fd45055e90ad599d4a",
+    "code_dirty": false,
+    "prompt_hash": "356280f9b0fa4e51d24a82ae17d380b649c4ab9cad60d9494a643a81f9948e62",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "ea2d9da2-f191-4458-a04e-8e97984e8655",
+    "input_tokens": 17,
+    "output_tokens": 1969,
+    "cache_creation_input_tokens": 87629,
+    "cache_read_input_tokens": 125934,
+    "total_cost_usd": 0.1977134,
+    "duration_ms": 40101,
+    "duration_api_ms": 25543,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: tools/bench-agent-cost/fixtures/review_target.py\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | review_target.py:8\u201325 | Architecture | SRP (\u00a71.1), Layer Violation (\u00a72.2) | `process_order()` violates Single Responsibility by mixing infrastructure I/O (DB read/write, HTTP call), business logic (discount calculation), and error handling in one function. Responsibilities: query DB, compute discount, charge payment, update DB\u2014three distinct reasons to change. Spans core (discount) and infrastructure (DB, HTTP) layers. | Extract discount logic to a pure `calculate_discount(total)` function in core. Extract payment call to an interface `PaymentGateway` injected into handler. Extract DB updates to a separate `persist_order_status()` function in infrastructure. Handler orchestrates the three. |\n| 2 | review_target.py:19\u201322 | Error Handling | Anti-pattern (\u00a79), Layer Violation | Silent failure: `if resp.status_code != 200: return None`. Error swallowed without a named failure mode; callers receive `None` with no way to distinguish success from payment-gateway failure. Violates \u00a79 anti-pattern: \"Catching / swallowing errors 'just in case' without a named failure mode.\" Proper error handling belongs at the layer that can act on it (handler layer), not silently suppressed in domain logic. | Raise a domain exception: `class PaymentFailed(Exception): pass` with `resp.status_code` and response body. Let handler decide whether to retry, log, or propagate to caller. Do not catch-and-return-None. |\n| 3 | review_target.py:11, 24 | Security | Boundary Validation (\u00a73.2), Injection Vector | SQL injection: f-string interpolation of `order_id` directly into SQL queries (`f\"SELECT ... WHERE id = {order_id}\"` and `f\"UPDATE ... WHERE id = {order_id}\"`). Attacker can craft malicious `order_id` to execute arbitrary SQL. Violates \u00a73.2: \"Validate at system boundaries only.\" Database is a boundary; user input must be parameterized. | Use parameterized queries: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", [order_id]).fetchone()` (or driver-specific parameterization). Never interpolate user input into SQL strings. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 4 | review_target.py:13 | Readability | No Magic Numbers (\u00a73.1, \u00a78) | Hardcoded `500` with no name or source comment. The significance of this threshold is opaque; readers cannot determine whether it is a business rule, a system limit, or an arbitrary value. Violates \u00a73.1 (readability) and \u00a78 (Zetetic Source Discipline: \"no magic numbers\"). Also defeats local reasoning (\u00a77): the constant's purpose is not evident from context. | Name the constant: `DISCOUNT_THRESHOLD = 500  # source: business rule, 2024-Q3 pricing review`. If this constant is configured elsewhere (environment, config file, DB), reference it there instead of hardcoding. If it has a business source, cite it in the comment. |\n\n---\n\n### Architecture Assessment\n\n**Layer Boundary Violations:**  \nThe function straddles three layers:\n- **Infrastructure** (lines 11, 24): Database reads/writes belong in a repository/DAO layer, not in domain logic.\n- **Core** (lines 13\u201314): Discount calculation is business logic and should be pure (no I/O).\n- **Infrastructure** (line 18): HTTP calls to external services belong in an adapter layer, not in domain logic.\n\nPer \u00a72.2 (Dependency Rule), core must import only shared/common and standard library. This function violates that by directly executing I/O and calling external services.\n\n**Suggested refactor:**  \n1. Extract `calculate_discount(total: float) -> float` to core (pure function, no I/O).\n2. Define `PaymentGateway` interface in core; inject concrete `HTTPPaymentGateway(PaymentGateway)` implementation in handler.\n3. Extract DB persistence to a repository layer (`OrderRepository`) injected via constructor.\n4. Handler (`process_order_handler`) orchestrates: query repository \u2192 compute discount \u2192 call gateway \u2192 persist result.\n\nThis preserves behavior while restoring layer boundaries and testability (domain logic testable without mocks; infrastructure swappable)."
+}

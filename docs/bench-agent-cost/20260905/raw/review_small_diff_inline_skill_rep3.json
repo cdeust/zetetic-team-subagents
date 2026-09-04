@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 3,
+    "order_position": "first",
+    "code_hash": "f54841f5e5031d4b51a5b4fd45055e90ad599d4a",
+    "code_dirty": false,
+    "prompt_hash": "356280f9b0fa4e51d24a82ae17d380b649c4ab9cad60d9494a643a81f9948e62",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "haiku",
+    "effort": "low",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "2c500f18-5983-4f2f-964c-9cd621199fbd",
+    "input_tokens": 17,
+    "output_tokens": 2323,
+    "cache_creation_input_tokens": 96867,
+    "cache_read_input_tokens": 121302,
+    "total_cost_usd": 0.2174962,
+    "duration_ms": 46337,
+    "duration_api_ms": 31600,
+    "num_turns": 3,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: `tools/bench-agent-cost/fixtures/review_target.py`\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | review_target.py:8-25 | Architecture | SRP (\u00a71.1) | Function mixes I/O operations (database SELECT, HTTP POST, database UPDATE) with business logic (discount calculation). Violates \"one reason to change\" \u2014 payments team, discount rules team, or database schema changes would each independently require edits to this function. | Split into separate functions: `calculate_discount(total: float) -> float`, `charge_payment(amount: float) -> bool`, `update_order_status(order_id: int, status: str) -> None`. Compose them at the appropriate architectural layer. |\n| 2 | review_target.py:11, 24 | Security | Input Validation (\u00a73.2) | SQL injection vulnerability: f-strings directly interpolate `order_id` into SQL queries without parameterization. User input is not validated at the system boundary. | Use parameterized queries: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))`. Never interpolate user input into SQL. |\n| 3 | review_target.py:19-22 | Reliability | Error Handling (\u00a79 anti-pattern, \u00a73.2) | Silent error swallowing: payment failure returns `None` without raising an exception or logging the error. Caller cannot distinguish between a successful `None` return and a failed payment; error context is lost. | Raise a custom exception: `raise PaymentError(f\"Payment failed with status {resp.status_code}\")`. Let the caller decide how to handle the error. Do not silently return None for exceptional conditions. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 4 | review_target.py:8-25 | Clean Architecture | Layer Boundary (\u00a72.1, \u00a72.2) | If this function is meant to contain business logic (discount calculation), it violates Clean Architecture: core/domain must have \"zero I/O\" (no database, no network). I/O belongs in infrastructure layer. | Restructure: move discount calculation into a core domain function, move database and HTTP logic into infrastructure adapters. Handlers layer composes them. Core never directly calls I/O. |\n| 5 | review_target.py:13-14 | Readability | Magic Numbers (\u00a73.1, \u00a78) | Numeric constants `500` (discount threshold) and `0.9` (discount factor) have no name or source comment. Unclear intent: is 500 in cents, dollars? Is 0.9 a business rule, empirical tuning, or arbitrary? | Extract to named constants with source comments: `DISCOUNT_THRESHOLD = 500  # source: business rule from finance team` and `DISCOUNT_RATE = 0.9  # source: Q4 2025 promotional policy`. |\n\n### Minor (optional, improve later)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 6 | review_target.py:8 | Type Safety | Type Hints (\u00a73.2) | Function lacks type hints for parameters (`order_id`, `db_conn`) and return type. Reduces IDE support, makes contract implicit, invites type errors. | Add type annotations: `def process_order(order_id: int, db_conn: DatabaseConnection) -> float:` (where `DatabaseConnection` is a Protocol defined in core that abstracts the connection type). |\n\n### Architecture Assessment\n\nThis file exhibits a **fundamental architectural failure**: a single function spans two layers (core business logic and infrastructure I/O) without clear separation. The discount calculation (core concern) is entangled with payment processing and database mutations (infrastructure concerns). This violates **Clean Architecture \u00a72.1\u20132.2** and produces an untestable, rigid function.\n\n**Structural concerns:**\n- Cannot unit-test discount logic without mocking database and HTTP calls.\n- Cannot reuse discount calculation independently.\n- Any change to payment provider, database schema, or discount policy requires editing the same function.\n- Error handling is lost at the HTTP boundary, making failure modes invisible.\n\n**Recommendation:** Before fixing individual violations, restructure along responsibility boundaries: extract `apply_discount(amount: float) -> float` as a pure function (testable, no I/O); inject payment and persistence as separate adapters into a handler layer; compose at the boundaries. This removes all three critical violations at their source."
+}
