@@ -18,7 +18,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **`rules/agent-vs-skill-classification.md`: five-test rule deciding whether a
-  team agent may be inlined as a skill (#PRNUM).** Tests are tool-grant
+  team agent may be inlined as a skill (#120).** Tests are tool-grant
   guardrail, isolation need, model-tier delta from the `sonnet` baseline
   (`tools/skill-runner.sh:31,35`), packaged assets, and authority transfer.
   Applied as a worked table over all 23 team agents with per-agent file:line
