@@ -99,6 +99,32 @@ set -e
 [[ "$(worktree_count)" == "$BEFORE" ]] || fail "worktree was created despite unknown agent"
 pass "unknown agent -> deny, worktree count unchanged ($BEFORE)"
 
+# ---- Test 3b: schema-invalid contract is denied WITH an auditable reason ---
+# Regression test for the `set -e` trap: `VAR="$(cmd)"` as a bare statement
+# under `set -e` exits the script on `cmd`'s non-zero status AT the
+# assignment line, before a subsequent `VAR_RC=$?; if [[ $VAR_RC -ne 0 ]];
+# then echo ...` ever runs — so the exit code was already correct (1) but
+# the "deny: ..." reason was silently swallowed. This asserts on stderr
+# CONTENT, not just the exit code, so that regression cannot come back quiet.
+echo "test: schema-invalid contract denies WITH a reason on stderr (not silently)"
+INVALID_CONTRACT="$TMP/invalid-contract.json"
+python3 - "$VALID_CONTRACT" "$INVALID_CONTRACT" <<'PY'
+import json, sys
+contract = json.load(open(sys.argv[1]))
+del contract["push_authority"]  # schema-invalid: missing required field
+json.dump(contract, open(sys.argv[2], "w"))
+PY
+BEFORE="$(worktree_count)"
+set +e
+DENY_OUTPUT="$( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$INVALID_CONTRACT" engineer "task" 2>&1 )"
+rc=$?
+set -e
+[[ $rc -ne 0 ]] || fail "expected non-zero exit for schema-invalid contract, got 0"
+[[ "$(worktree_count)" == "$BEFORE" ]] || fail "worktree was created despite schema-invalid contract"
+grep -q "deny: delegation contract rejected" <<<"$DENY_OUTPUT" || fail "deny reason missing from stderr (set -e swallowed it): got: $DENY_OUTPUT"
+grep -q "missing_required_field" <<<"$DENY_OUTPUT" || fail "validator's specific reason missing from stderr: got: $DENY_OUTPUT"
+pass "deny reason present on stderr, worktree count unchanged ($BEFORE)"
+
 # ---- Test 4: frontmatter stripping -------------------------------------------
 echo "test: frontmatter stripping"
 BODY="$(awk 'BEGIN{f=0} /^---$/{f++; next} f>=2{print}' "$REPO/agents/engineer.md")"

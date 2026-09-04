@@ -92,20 +92,39 @@ if [[ -z "$PYTHON3" ]]; then
   exit 1
 fi
 
-VALIDATOR_OUT="$("$PYTHON3" "$REPO_ROOT/tools/delegation_contract.py" "$CONTRACT" --repo-root "$TARGET_REPO" 2>&1)"
-VALIDATOR_RC=$?
-if [[ $VALIDATOR_RC -ne 0 ]]; then
+# The assignment is the `if !` condition itself, not a bare statement,
+# specifically so `set -e` (active at the top of this script) does NOT exit
+# on the assignment line before VALIDATOR_OUT can be reported — a bare
+# `VALIDATOR_OUT="$(...)"; VALIDATOR_RC=$?` here would trigger `set -e` on
+# a non-zero validator exit status and abort the script AT the assignment,
+# before either `echo "deny: ..."` line below ever runs: a fail-closed
+# refusal with no auditable reason on stderr, silently. Commands inside an
+# `if`/`while`/`until` condition are exempt from `set -e` by POSIX/bash
+# design; this is that idiom applied deliberately.
+if ! VALIDATOR_OUT="$("$PYTHON3" "$REPO_ROOT/tools/delegation_contract.py" "$CONTRACT" --repo-root "$TARGET_REPO" 2>&1)"; then
   echo "deny: delegation contract rejected" >&2
   echo "$VALIDATOR_OUT" >&2
   exit 1
 fi
 
-CONTRACT_AGENT="$("$PYTHON3" -c "import json,sys; print(json.load(open(sys.argv[1]))['agent'])" "$CONTRACT")"
+# Same `if !`-condition idiom as the validator call above: by this point
+# tools/delegation_contract.py has already confirmed `agent` and
+# `push_authority` are present and well-typed, so these two extractions are
+# not expected to fail — but a bare assignment would still let `set -e`
+# abort silently, with neither a "deny:" reason nor a Python traceback, if
+# something unrelated (e.g. a transient python3 failure) did fail here.
+if ! CONTRACT_AGENT="$("$PYTHON3" -c "import json,sys; print(json.load(open(sys.argv[1]))['agent'])" "$CONTRACT")"; then
+  echo "deny: could not read 'agent' back out of an already-validated contract ($CONTRACT)" >&2
+  exit 1
+fi
 if [[ "$CONTRACT_AGENT" != "$AGENT" ]]; then
   echo "deny: contract declares agent '$CONTRACT_AGENT' but spawn requested '$AGENT'" >&2
   exit 1
 fi
-PUSH_AUTHORITY="$("$PYTHON3" -c "import json,sys; print(json.load(open(sys.argv[1]))['push_authority'])" "$CONTRACT")"
+if ! PUSH_AUTHORITY="$("$PYTHON3" -c "import json,sys; print(json.load(open(sys.argv[1]))['push_authority'])" "$CONTRACT")"; then
+  echo "deny: could not read 'push_authority' back out of an already-validated contract ($CONTRACT)" >&2
+  exit 1
+fi
 
 echo "→ contract accepted: agent=$CONTRACT_AGENT push_authority=$PUSH_AUTHORITY" >&2
 
@@ -135,14 +154,25 @@ BRANCH="agent/${AGENT}/${STAMP}"
 LOCK_NAME="${AGENT}-${STAMP}"
 
 # ── Step 2: register the active-contract lock, then mutate ───────────────────
-LOCK_PATH="$("$PYTHON3" -c "
+# This re-runs dc.validate() (schema + overlap) rather than trusting the
+# Step-0 result, because a concurrent delegation could have registered an
+# overlapping lock in the window between Step 0 and here — the realistic
+# race HC-ZETETIC-004's concurrency policy exists to deny. A bare assignment
+# would let `set -e` swallow that denial (or any other validate() failure)
+# silently at this line, same trap as the Step-0 fix above; the `if !`
+# condition idiom keeps the failure output on stderr.
+if ! LOCK_PATH="$("$PYTHON3" -c "
 import sys
 sys.path.insert(0, '$REPO_ROOT/tools')
 import delegation_contract as dc
 from pathlib import Path
 contract = dc.validate(Path('$CONTRACT'), Path('$TARGET_REPO'))
 print(dc.register_active(contract, '$LOCK_NAME', Path('$TARGET_REPO')))
-")"
+" 2>&1)"; then
+  echo "deny: delegation contract rejected at lock-registration time (a concurrent delegation may have claimed an overlapping scope)" >&2
+  echo "$LOCK_PATH" >&2
+  exit 1
+fi
 
 release_lock() {
   "$PYTHON3" -c "
