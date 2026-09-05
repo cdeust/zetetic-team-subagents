@@ -140,6 +140,40 @@ under `fixtures/`, committed to this PR) and the fixed rubric per task
  `PairedComparison`) is reported as a tie, not resolved in either
  direction.
 
+**Completion threshold (pre-registered per task, alongside the rubric):**
+every task JSON must set `completion_threshold_points` -- the minimum
+blind-scored quality points (out of `rubric_max_points`) a run must reach
+to count as having *completed* the task, not merely attempted it. This is
+set by the task's author at the same time the rubric and non-inferiority
+margin are frozen, before any run exists (Move 1/Fisher discipline), and
+must be a defensible, stated rule tied to specific rubric criteria -- never
+an arbitrary global percentage cutoff (§8: no invented constants). For
+`review_small_diff`, the threshold is 5/10: the two load-bearing structural
+findings (`magic_number` 2pts + `srp_mixed_io_logic` 3pts) must both be
+identified for the review to count as completed; the remaining four
+criteria are quality-of-execution refinements on top of a review that
+already found what makes the fixture worth reviewing (full rationale in
+`tasks/review_small_diff.json`'s `completion_threshold_rationale` field). A
+task JSON without this field causes `analyze_results.py` to skip the
+completion-gated metric with an explicit message, never a silent default.
+
+**Why this metric exists:** reporting mean token count over "all valid
+runs" (this benchmark's original metric, still reported for transparency)
+treats a run that burned tokens on a low-quality or incomplete output
+identically to one that finished the task correctly. A condition that
+completes the task less often than its counterpart can look artificially
+cheap on that metric alone. `analyze_results.py` additionally reports, per
+condition: (1) the **completion rate** -- the fraction of valid runs whose
+blind quality score meets `completion_threshold_points`, always printed,
+never hidden even when it is 100% or 0%; and (2) **tokens per completed
+task** -- the mean total-token count among only the threshold-meeting runs,
+matching this document's own SCI functional-unit definition of R as "one
+*completed* task." When zero runs in a condition meet the threshold, this
+is reported as "0 completed runs, metric undefined" -- never silently
+computed as a mean over an empty list. The pre-fix metric (mean over all
+valid runs) is kept alongside it, unchanged, for comparability; the new
+metric is additive, not a replacement.
+
 **Non-inferiority margin:** the skill condition's mean blind quality score
 must not fall more than **1.0 point below** the subagent condition's mean,
 on each task's 10-point rubric (10%). Rationale (reasoned choice, not a
@@ -317,6 +351,21 @@ for being "just a smoke run."
 - Explanation candidate for the quality/margin result: single task, n=5,
   haiku/low tier -- underpowered by design (this run's purpose was to
   prove the tool's plumbing, not to answer the production question).
+- **Completion-gated re-check (added after the initial log entry, same
+  data, re-run with the updated `analyze_results.py`):** both conditions
+  scored 100% completion rate (5/5 runs each meet the pre-registered
+  `completion_threshold_points: 5` for `review_small_diff`) -- every run in
+  this smoke run cleared the bar. `tokens per completed task` therefore
+  equals the pre-existing "mean tokens among all valid runs" figure exactly
+  for both conditions (216,824 inline vs. 111,222 subagent); nothing was
+  excluded, and the qualitative conclusion above (non-inferiority not
+  established at this margin; token and dollar-cost proxies disagree in
+  direction) is unchanged. This is expected, not a surprise: it shows the
+  completion gate reduces to a no-op when no run actually produced a
+  low-quality/incomplete output, and confirms the metric doesn't silently
+  alter an already-reported result -- see the synthetic differential-
+  completion-rate test in `tests/test_bench_agent_cost.py` for the case
+  where the two metrics genuinely diverge.
 
 **Action:** re-run at the pinned production tier (sonnet/medium) across
 all 3 tasks before any Phase 4/7 decision leans on this benchmark's

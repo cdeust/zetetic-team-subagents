@@ -102,6 +102,46 @@ def report_quality(inline_runs: list[dict], subagent_runs: list[dict], task: dic
     print(json.dumps(verdict, indent=2))
 
 
+def report_completion_gated_tokens(inline_runs: list[dict], subagent_runs: list[dict], task: dict) -> None:
+    """Report completion rate and tokens-per-completed-task per condition.
+
+    Precondition: task carries a pre-registered `completion_threshold_points`
+    (set alongside the rubric, before any run -- see task JSON's
+    `completion_threshold_rationale`). Postcondition: prints, for each
+    condition, the completion rate (never hidden) and the mean total-token
+    count among only the runs that met the threshold -- reported as
+    "undefined" rather than silently computed as a mean over zero runs when
+    no run in a condition completed. This is additional to (never a
+    replacement for) the existing "mean tokens among all valid runs" metric
+    in report_all_cost_metrics, so a reader can see both figures side by
+    side and judge whether a lower all-valid-runs mean was earned by
+    actually finishing the task or by completing it less often.
+    """
+    threshold = task.get("completion_threshold_points")
+    if threshold is None:
+        print("\nCompletion-gated tokens: skipped -- task JSON has no "
+              "'completion_threshold_points' (pre-registration requirement, "
+              "see README). No completion-gated metric is computed without "
+              "one; a global default would be an unsourced constant (§8).")
+        return
+
+    print(f"\nCompletion-gated tokens (threshold: score >= {threshold}/{task['rubric_max_points']} points):")
+    for label, runs in (("inline_skill", inline_runs), ("subagent_spawn", subagent_runs)):
+        quality = [quality_score(r) for r in runs]
+        if any(q is None for q in quality):
+            print(f"  {label}: skipped -- quality scores not available for all runs.")
+            continue
+        rate = stats_lib.completion_rate(quality, threshold)
+        n_completed = sum(1 for q in quality if q >= threshold)
+        print(f"  {label}: completion rate = {n_completed}/{len(runs)} ({rate:.0%})")
+        tokens = [usage_lib.total_tokens(r["usage_raw"]) for r in runs]
+        mean_completed = stats_lib.mean_of_completed(tokens, quality, threshold)
+        if mean_completed is None:
+            print(f"    tokens per completed task: 0 completed runs, metric undefined")
+        else:
+            print(f"    tokens per completed task: mean={mean_completed:.2f} (n={n_completed})")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", required=True, type=Path)
@@ -128,6 +168,7 @@ def main() -> int:
 
     report_all_cost_metrics(inline_runs, subagent_runs)
     report_quality(inline_runs, subagent_runs, task, args.non_inferiority_margin)
+    report_completion_gated_tokens(inline_runs, subagent_runs, task)
     return 0
 
 

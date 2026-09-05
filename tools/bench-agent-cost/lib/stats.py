@@ -91,6 +91,47 @@ def paired_comparison(a: list[float], b: list[float]) -> PairedComparison:
     )
 
 
+def completion_mask(scores: list[float], threshold: float) -> list[bool]:
+    """Precondition: scores are per-run blind quality scores (one per run,
+    any order); threshold is the task's pre-registered
+    `completion_threshold_points` (frozen before any run existed, per the
+    task JSON -- never a blanket global percentage invented after the
+    fact). Postcondition: returns a same-length boolean mask, True where
+    the run's score meets or exceeds threshold ("completed" per the task
+    author's own pre-registered definition)."""
+    return [s >= threshold for s in scores]
+
+
+def completion_rate(scores: list[float], threshold: float) -> float:
+    """Precondition: scores is non-empty. Postcondition: returns the
+    fraction of scores meeting or exceeding threshold, in [0, 1]. Never
+    called on an empty list -- an empty completion rate is undefined, not
+    0.0 (§8: no invented values)."""
+    if not scores:
+        raise ValueError("completion_rate requires at least one score")
+    mask = completion_mask(scores, threshold)
+    return sum(mask) / len(mask)
+
+
+def mean_of_completed(values: list[float], scores: list[float], threshold: float) -> float | None:
+    """Precondition: values and scores are same-length, index-aligned lists
+    -- one cost value (e.g. total tokens) and one quality score per run.
+    Postcondition: returns the mean of `values` restricted to the runs
+    whose score meets the completion threshold, or None if zero runs met
+    it. A mean over zero elements is mathematically undefined; returning
+    None (never 0.0 or an empty-list statistics.mean() crash) forces the
+    caller to report the zero-completions case explicitly rather than
+    silently computing a number that looks like data (the exact gap this
+    function closes: an all-incomplete condition must not report a cheap
+    mean by construction)."""
+    if len(values) != len(scores):
+        raise ValueError(f"values and scores must be same length: {len(values)} vs {len(scores)}")
+    completed = [v for v, s in zip(values, scores) if s >= threshold]
+    if not completed:
+        return None
+    return statistics.mean(completed)
+
+
 def non_inferiority_verdict(skill_scores: list[float], subagent_scores: list[float], margin: float) -> dict:
     """Pre-registered one-sided non-inferiority test (Move 5/design doc):
     H0: mean(skill) - mean(subagent) <= -margin (skill is worse by more

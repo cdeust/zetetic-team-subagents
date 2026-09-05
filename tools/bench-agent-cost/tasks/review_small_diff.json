@@ -6,6 +6,8 @@
   "fixture_path": "tools/bench-agent-cost/fixtures/review_target.py",
   "task_instruction": "Review the attached file (tools/bench-agent-cost/fixtures/review_target.py) for Clean Architecture and SOLID violations, per this repo's rules/coding-standards.md. For each violation: cite the file:line, name the specific principle violated, state its severity, and suggest a fix. Do not fix the code yourself -- produce a review report only.",
   "rubric_max_points": 10,
+  "completion_threshold_points": 5,
+  "completion_threshold_rationale": "Pre-registered alongside the rubric, before any run: a review counts as a completed task only if it correctly identifies both structural violations that make this fixture worth reviewing at all -- magic_number (2pts) + srp_mixed_io_logic (3pts) = 5/10. The other four criteria (swallowed_error, file_line_citations, severity_proportional, no_fabrication) are quality-of-execution refinements on top of a review that already found the two load-bearing issues; a review that misses both structural violations but nails citation formatting has not completed the reviewing task this benchmark is measuring, regardless of its point total. This is a defensible, stated rule chosen by the task author before results existed, not a round-number global cutoff (coding-standards.md §8: no invented constants).",
   "rubric": [
     {"id": "magic_number", "points": 2, "criterion": "Identifies the unnamed/unsourced discount threshold (500) and multiplier (0.9) as a magic-number violation (coding-standards.md §3.1)."},
     {"id": "srp_mixed_io_logic", "points": 3, "criterion": "Identifies that process_order mixes I/O (DB read, HTTP call) with business logic (discount calculation) in one function -- an SRP/layering violation (§1.1, §3.1)."},
