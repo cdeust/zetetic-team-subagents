@@ -385,15 +385,73 @@ for being "just a smoke run."
   completion-rate test in `tests/test_bench_agent_cost.py` for the case
   where the two metrics genuinely diverge.
 
+**2026-09-05, `design_accessibility_audit`, sonnet/medium production run
+(n=5) -- non-inferiority ESTABLISHED.** Raw + scored data at
+`docs/bench-agent-cost/20260905-design/`. This is the first task run at
+the pinned production protocol (`--model sonnet --effort medium`), not a
+cost-bounded smoke run -- Phase 4's (`staged-rolling-shannon.md`) own
+verification gate for the `ux-designer` pilot. Independently re-derived
+from the committed raw/scored JSON with `analyze_results.py` before
+writing this entry (never trusted from a prior summary without
+re-running the tool against the committed artifacts).
+
+- Quality: inline_skill mean 10.00/10, subagent_spawn mean 8.50/10 (2
+  blind evaluators). Paired one-sided non-inferiority test at margin=1.0:
+  mean diff (skill - subagent) = 1.5, lower 95% confidence bound = 0.674,
+  which is >= -1.0 -> **`non_inferior_at_05: true`**. Seed-level: inline
+  scored higher on 4/5 replications, 1 tie, subagent never scored higher.
+  Unlike the `review_small_diff` smoke run (single task, underpowered,
+  n=5, haiku/low), this is the pinned production tier and the result is
+  a clean non-inferiority pass, not an inconclusive one.
+- Total tokens: inline_skill mean 319,701 vs. subagent_spawn mean
+  226,392 (paired t=2.481, df=4, critical(two-tailed,0.05)=2.776,
+  **not significant** -- underpowered at n=5 to resolve this difference
+  from noise, though the raw means diverge in the same direction on
+  every one of the 5 replications: subagent used fewer tokens on every
+  seed).
+- total_cost_usd: inline_skill mean $0.61 vs. subagent_spawn mean $0.97
+  (paired t=-18.303, df=4, **significant** at 0.05) -- inline is cheaper
+  in dollars on every one of the 5 replications, the opposite direction
+  from the token comparison. **This is the same tokens-vs-dollars
+  direction divergence flagged in the `review_small_diff` smoke run
+  above, now observed on 2 of 2 tasks in the same direction** -- worth
+  naming as a possible real pattern rather than one-off noise, but this
+  is **not established from n=2 tasks** and must not be over-interpreted
+  as such.
+- Candidate mechanism, checked against this run's own raw usage fields
+  rather than asserted: the hypothesis that a cold subagent spawn pays a
+  cache-creation penalty a warm inline session avoids does **not** hold
+  up here -- `usage_raw.cache_creation_input_tokens` mean is actually
+  *lower* for subagent_spawn (56,886) than for inline_skill (133,657),
+  the opposite of what that story predicts. What is more consistent with
+  the data (and with this document's own point 5 and the
+  `review_small_diff` entry's own explanation above): the top-level
+  session's usage JSON for `inline_skill` includes the full inlined
+  `skills/design/design.md` procedure text plus its own accumulated
+  conversation history repeated into the prompt, inflating its measured
+  token count relative to the subagent's smaller, separate context. This
+  is an observation from 2 tasks' worth of raw data, not a mechanism this
+  benchmark has isolated or proven -- flagged as a candidate explanation
+  only.
+- Wall-clock: no significant difference (paired t=-0.214, inline faster
+  on 3/5 seeds, subagent on 2/5).
+- Completion-gated re-check: both conditions 100% (5/5) completion at
+  `design_accessibility_audit`'s pre-registered `completion_threshold_
+  points: 5`; tokens-per-completed-task equals the raw means exactly
+  (nothing excluded by the gate here either).
+
 **Action:** re-run at the pinned production tier (sonnet/medium) across
-all 3 tasks before any Phase 4/7 decision leans on this benchmark's
-quality or cost axis. The token/cost divergence above should be
-investigated as its own question before being treated as either result.
+`review_small_diff`, `test_small_module`, and `debug_small_bug` (still
+only run at the haiku/low smoke tier) before treating non-inferiority as
+established repo-wide. The token/cost divergence is now a 2-of-2 pattern
+worth investigating directly (e.g. instrumenting the top-level session's
+own prompt-construction step) rather than continuing to infer it from
+aggregate token/cost proxies alone.
 
 ## Files
 
-- `tasks/*.json` -- frozen task corpus + rubric (3 tasks).
-- `fixtures/*.py` -- frozen synthetic fixtures, one per task.
+- `tasks/*.json` -- frozen task corpus + rubric (4 tasks).
+- `fixtures/*.py`, `fixtures/*.html` -- frozen synthetic fixtures, one per task.
 - `lib/usage.py` -- pure: parse a `claude -p --output-format json` result
  into the raw usage fields this benchmark records; manipulation-check.
 - `lib/provenance.py` -- build the reproducibility-manifest sidecar.
