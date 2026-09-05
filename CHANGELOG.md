@@ -17,6 +17,32 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`skills/design/design.md` + `/design` command + WCAG 2.2 citation fix
+  (Phase 4, #123).** `ux-designer` is classified skill-frontable (owner
+  decision, 2026-09-04): a new skill fronts it as the primary path,
+  adapted from its Move 1-6 procedure and dropping the subagent-only
+  boilerplate (`<memory>`, `<worktree>`, `<token-budget>`,
+  `<reference-docs>`) -- 415 lines in `agents/ux-designer.md` versus 148
+  in the skill (~64% smaller). `commands/design.md` wires `/design` to
+  it; investigated against the live Claude Code docs that plugin
+  commands namespace as `/<plugin-name>:<command-name>` (never bare),
+  so this resolves as `/zetetic-team-subagents:design` and cannot
+  collide with Claude Code's separate, host-native `/design` canvas
+  tool. Also fixes `agents/ux-designer.md`'s WCAG citation: 2.4.11 and
+  2.5.8 were cited under "WCAG 2.1 AA (W3C 2018)" but both criteria were
+  introduced in WCAG 2.2 (W3C Recommendation, 5 October 2023) -- verified
+  against the published W3C REC text before changing anything.
+  `tools/bench-agent-cost/` gained a new `design_accessibility_audit`
+  task (pre-registered `completion_threshold_points`, committed before
+  any run) and its pinned-production-tier (sonnet/medium, n=5) result:
+  non-inferiority established (mean diff 1.5, lower 95% CI bound 0.674).
+  The tokens-vs-dollar-cost direction divergence first seen on
+  `review_small_diff`'s smoke run reproduces here (2/2 tasks in the same
+  direction) -- documented as a pattern worth investigating, not
+  established from n=2; a specific cache-warm/cold-start mechanism
+  proposed for it was checked against the raw cache-token fields and
+  found not to hold in that direction.
+
 - **`tools/bench-agent-cost/`: completion-gated tokens-per-completed-task
   metric (#122).** `analyze_results.py` previously reported mean token
   count over all valid runs regardless of task-completion quality, letting
