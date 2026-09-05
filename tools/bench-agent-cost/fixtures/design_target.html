@@ -1,0 +1,33 @@
+<!--
+  Synthetic fixture for the `design` bench task. Contains four deliberately
+  planted WCAG 2.2 AA / usability violations, used only as a fixed benchmark
+  input -- never served or executed by production code.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Account Settings</title></head>
+<body>
+  <form>
+    <!-- Violation A: placeholder-as-only-label (WCAG 3.3.2). No persistent
+         <label>; the placeholder text disappears the moment the user types. -->
+    <input type="email" placeholder="Email address" name="email">
+
+    <!-- Violation B: color-only status indicator (WCAG 1.4.1). Red text with
+         no icon or textual status word conveys the error. -->
+    <span style="color: red;">Invalid format</span>
+
+    <!-- Violation C: custom clickable div standing in for a button. Not
+         keyboard-reachable, no role, no visible focus indicator -- fails
+         2.1.1 (Keyboard) and 2.4.11 (Focus Not Obscured). -->
+    <div onclick="submitForm()" style="display:inline-block; padding:2px 6px;">
+      Save changes
+    </div>
+
+    <!-- Violation D: icon-only mobile action button sized well under the
+         WCAG 2.2 AA minimum target size (2.5.8: 24x24 CSS px). -->
+    <button style="width:16px; height:16px; padding:0;" aria-label="">
+      &times;
+    </button>
+  </form>
+</body>
+</html>

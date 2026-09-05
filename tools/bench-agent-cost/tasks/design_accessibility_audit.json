@@ -1,0 +1,18 @@
+{
+  "task_id": "design_accessibility_audit",
+  "skill_name": "design",
+  "skill_path": "skills/design/design.md",
+  "primary_agent": "ux-designer",
+  "fixture_path": "tools/bench-agent-cost/fixtures/design_target.html",
+  "task_instruction": "Audit the attached markup (tools/bench-agent-cost/fixtures/design_target.html) for WCAG 2.2 AA violations and Nielsen heuristic issues, per this repo's agents/ux-designer.md / skills/design/design.md procedure. For each violation: cite the exact element, name the specific WCAG success criterion (or Nielsen heuristic) violated, state its severity, and propose the minimal fix. Do not edit the file yourself -- produce an audit report only.",
+  "rubric_max_points": 10,
+  "completion_threshold_points": 5,
+  "completion_threshold_rationale": "Pre-registered before any run of this task exists (Fisher discipline; corrects the retrospective labeling error PR #122 had to walk back for review_small_diff -- this task's threshold is fixed and committed before its first run, per tools/bench-agent-cost/README.md's go-forward rule). Chosen at 5/10: the two highest-weighted criteria (placeholder_as_label 3pts + color_only_indicator 2pts) sum to exactly this value, so a run must catch at least the two most severe, most textbook-canonical violations to count as having completed the audit rather than merely attempted it -- the same logic review_small_diff's rationale applies (summed against whichever criteria a run actually hits, not only this named combination).",
+  "rubric": [
+    {"id": "placeholder_as_label", "points": 3, "criterion": "Identifies the email input's placeholder-as-only-label as a WCAG 3.3.2 violation (Labels or Instructions) and recommends a persistent <label> element."},
+    {"id": "color_only_indicator", "points": 2, "criterion": "Identifies the red-text-only error status as a WCAG 1.4.1 violation (Use of Color) and recommends pairing with an icon or text label."},
+    {"id": "custom_div_button", "points": 2, "criterion": "Identifies the clickable <div onclick> as not keyboard-reachable / lacking a visible focus indicator (WCAG 2.1.1 Keyboard and/or 2.4.11 Focus Not Obscured) and recommends a native <button> element."},
+    {"id": "touch_target_size", "points": 2, "criterion": "Identifies the 16x16px icon button as failing the WCAG 2.2 AA minimum target size (2.5.8 Target Size Minimum, 24x24 CSS px) and recommends increasing it."},
+    {"id": "no_fabrication", "points": 1, "criterion": "Reports no violation that is not actually present in the fixture (no false positives)."}
+  ]
+}
