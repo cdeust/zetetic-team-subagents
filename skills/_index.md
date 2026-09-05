@@ -1,6 +1,6 @@
 # Skills Index
 
-This index covers 80 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 65 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
+This index covers 81 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 66 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
 
 ## Problem-shaped entry points (start here)
 
@@ -52,6 +52,7 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 | `/spec` | architecture | lamport, architect | Formal specification: states, transitions, invariants, failure model |
 | `/contract` | architecture | liskov, architect | Behavioral contracts: pre/post/invariant/history constraint |
 | `/evaluate-tool` | architecture | hopper, engelbart, architect, feynman | Tool evaluation with cargo-cult and obsolescence checks |
+| `/design` | design | ux-designer | UX/UI design and WCAG 2.2 AA accessibility audit |
 | `/literature-review` | research | research-scientist | Systematic search: find papers, read them, assess applicability |
 | `/explain` | research | professor, feynman | Multi-level explanation with understanding-gap diagnostic |
 | `/write-paper` | research | paper-writer, latex-engineer | Paper draft with claim-evidence chains and difficulty-book limitations |
@@ -78,6 +79,9 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 
 ### Architecture (structural decisions)
 5 skills — decompose, adr, spec, contract, evaluate-tool.
+
+### Design (UX/UI)
+1 skill — design (UX audit, WCAG 2.2 AA compliance, heuristic evaluation).
 
 ### Research (academic and ML)
 5 skills — literature-review, explain, write-paper, pre-submit-review, design-experiment.

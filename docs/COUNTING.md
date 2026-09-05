@@ -30,11 +30,11 @@ gate; the value in the last column was measured on 2026-08-04.
 | `team_agents` | team-role agents | `grep -l '^name:' agents/*.md \| wc -l` | 23 |
 | `agents_total` | agents, all kinds | `genius_agents + team_agents` | 120 |
 | `problem_skills` | problem-shaped skills | `find skills -name 'SKILL.md' \| wc -l` | 15 |
-| `category_skills` | category skills | `skills_total - problem_skills` | 65 |
-| `skills_total` | skill documents | `find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' \| wc -l` | 80 |
+| `category_skills` | category skills | `skills_total - problem_skills` | 66 |
+| `skills_total` | skill documents | `find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' \| wc -l` | 81 |
 | `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 21 |
 | `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 22 |
-| `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 27 |
+| `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 28 |
 | `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 53 |
 | `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 36 |
 | `memory_suites` | memory tool suites | `ls scripts/test-memory-*.sh \| wc -l` | 6 |
