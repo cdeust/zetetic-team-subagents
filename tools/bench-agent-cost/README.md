@@ -210,17 +210,18 @@ report -- it was not decided before data existed.
 
 ## Task corpus
 
-Three tasks, each pairing an already-skill-fronted `skills/engineering/*.md`
-with the same skill's primary named subagent (`rules/agent-vs-skill-
+Four tasks, each pairing an already-skill-fronted `skills/**/*.md` with the
+same skill's primary named subagent (`rules/agent-vs-skill-
 classification.md`'s worked table), each with a self-contained synthetic
-fixture (never live production code, so a run never touches this repo's
-own source as a side effect):
+fixture (never live production code or markup, so a run never touches this
+repo's own source as a side effect):
 
 | Task | Skill | Primary agent | Fixture |
 |---|---|---|---|
 | `review_small_diff` | `skills/engineering/review.md` | `code-reviewer` | `fixtures/review_target.py` -- 3 planted violations |
 | `test_small_module` | `skills/engineering/test.md` | `test-engineer` | `fixtures/test_target.py` -- pure function with edge cases |
 | `debug_small_bug` | `skills/engineering/debug.md` | `engineer` | `fixtures/debug_target.py` -- root cause one layer removed from the symptom |
+| `design_accessibility_audit` | `skills/design/design.md` | `ux-designer` | `fixtures/design_target.html` -- 4 planted WCAG 2.2 AA / usability violations (Phase 4, staged-rolling-shannon.md) |
 
 Each task's full rubric (points per criterion) is committed at
 `tasks/<task_id>.json` and frozen before any run.
