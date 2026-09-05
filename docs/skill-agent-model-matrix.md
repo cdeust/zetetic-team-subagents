@@ -8,7 +8,7 @@ exceeds the baseline (`sonnet`) that `tools/skill-runner.sh` compares against by
 default -- exactly the condition under which the runner's model-tier escalation banner
 fires. Regenerate with `scripts/generate-skill-agent-model-matrix.py`; verify with `--check`.
 
-Total skill files with a non-empty `agents:` field: **65**. Rows naming an escalation-tier agent: **211**.
+Total skill files with a non-empty `agents:` field: **66**. Rows naming an escalation-tier agent: **211**.
 
 | Skill | Agent | Model | Escalation |
 |---|---|---|---|
@@ -116,6 +116,7 @@ Total skill files with a non-empty `agents:` field: **65**. Rows naming an escal
 | `skills/compose/translation-across-systems.md` | `poincare` | `opus` | yes |
 | `skills/compose/translation-across-systems.md` | `midgley` | `opus` | yes |
 | `skills/compose/translation-across-systems.md` | `champollion` | `opus` | yes |
+| `skills/design/design.md` | `ux-designer` | `sonnet` | no |
 | `skills/engineering/autonomous-build-loop.md` | `orchestrator` | `fable` | yes |
 | `skills/engineering/autonomous-build-loop.md` | `dijkstra` | `opus` | yes |
 | `skills/engineering/autonomous-build-loop.md` | `popper` | `opus` | yes |
