@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "design_accessibility_audit",
+    "condition": "inline_skill",
+    "replication": 1,
+    "order_position": "first",
+    "code_hash": "8b72b70cb19d73c70a88b10023a1e14a409ac9d5",
+    "code_dirty": false,
+    "prompt_hash": "e74a56f3503e4430c4616ab4b30628622286e93852c04ce1899dc0c21cdfa221",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "64d17a3e-39f9-4cd5-9c1d-988a1d804aed",
+    "input_tokens": 4,
+    "output_tokens": 2167,
+    "cache_creation_input_tokens": 138579,
+    "cache_read_input_tokens": 178289,
+    "total_cost_usd": 0.6116518,
+    "duration_ms": 41519,
+    "duration_api_ms": 26405,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## R\u00e9sum\u00e9\n\nAudit WCAG 2.2 AA et heuristiques de Nielsen sur `tools/bench-agent-cost/fixtures/design_target.html` \u2014 un formulaire de param\u00e8tres de compte de 4 \u00e9l\u00e9ments interactifs. Quatre violations plant\u00e9es, confirm\u00e9es, plus une observation structurelle. Aucune modification apport\u00e9e (audit uniquement).\n\n## Utilisateur et t\u00e2che\n\n- **Utilisateur** : tout utilisateur du formulaire \"Account Settings\", y compris utilisateurs de lecteur d'\u00e9cran, de clavier seul, et \u00e0 basse vision.\n- **T\u00e2che** : saisir une adresse email, corriger une erreur de format, sauvegarder les modifications.\n- **Crit\u00e8re de succ\u00e8s** : le champ email est identifiable et accessible par tous les modes d'interaction ; l'erreur est perceptible sans d\u00e9pendre de la couleur ; l'action de sauvegarde est atteignable au clavier ; le contr\u00f4le de fermeture est actionnable au doigt.\n- **Modes d'\u00e9chec** : label perdu apr\u00e8s saisie, erreur invisible pour un daltonien, focus impossible sur \"Save changes\", cible tactile manqu\u00e9e.\n\n## Classification des enjeux\n\n**\u00c9lev\u00e9 (High)** \u2014 formulaire de compte (donn\u00e9es utilisateur), gestion d'erreur, chemin critique de sauvegarde des param\u00e8tres.\n\n## Violations\n\n| # | \u00c9l\u00e9ment | Crit\u00e8re viol\u00e9 | S\u00e9v\u00e9rit\u00e9 | Correctif minimal |\n|---|---------|----------------|----------|---------------------|\n| A | `<input type=\"email\" placeholder=\"Email address\" name=\"email\">` (ligne 13) | **WCAG 3.3.2 Labels or Instructions** (et 1.3.1 Info and Relationships, par absence de programmatic label) \u2014 le placeholder est le seul identifiant, il dispara\u00eet d\u00e8s la saisie | **Critique** | Ajouter `<label for=\"email\">Email address</label>` persistant, associ\u00e9 via `for`/`id`, et retirer ou conserver le placeholder comme aide compl\u00e9mentaire uniquement |\n| B | `<span style=\"color: red;\">Invalid format</span>` (ligne 17) | **WCAG 1.4.1 Use of Color** \u2014 le statut d'erreur n'est signal\u00e9 que par la couleur, aucun texte/ic\u00f4ne ne le porte ind\u00e9pendamment | **S\u00e9rieux** | Ajouter une ic\u00f4ne ou un pr\u00e9fixe textuel (ex. \"Error: Invalid format\"), et lier au champ via `aria-describedby` + `aria-invalid=\"true\"` sur l'input |\n| C | `<div onclick=\"submitForm()\" ...>Save changes</div>` (ligne 22-24) | **WCAG 2.1.1 Keyboard** (le `<div>` n'est pas nativement focusable/activable au clavier) et **2.4.11 Focus Not Obscured (Minimum)** (aucun indicateur de focus visible n'est d\u00e9fini) \u2014 \u00e9galement Nielsen H5 (pr\u00e9vention des erreurs) car l'action principale du formulaire est inatteignable sans souris | **Critique** | Remplacer par `<button type=\"submit\">Save changes</button>` natif ; supprime les deux probl\u00e8mes d'un coup (focusable, activable Entr\u00e9e/Espace, focus visible par d\u00e9faut du navigateur) |\n| D | `<button style=\"width:16px; height:16px; padding:0;\" aria-label=\"\">&times;</button>` (ligne 28-30) | **WCAG 2.5.8 Target Size (Minimum)** \u2014 16\u00d716 CSS px, sous le plancher AA de 24\u00d724 px ; de plus **`aria-label=\"\"` vide viole 4.1.2 Name, Role, Value** \u2014 le bouton n'a aucun nom accessible (le `&times;` seul n'est pas expos\u00e9 de fa\u00e7on fiable comme texte par tous les lecteurs d'\u00e9cran) | **Critique** (double d\u00e9faut : taille + nom accessible manquant) | Porter la zone cliquable \u00e0 \u226524\u00d724 px (padding ou min-width/min-height), et renseigner `aria-label=\"Close\"` (ou libell\u00e9 appropri\u00e9 au contexte) |\n\n## \u00c9valuation heuristique (Nielsen, pertinent ici)\n\n| Heuristique | Verdict | Preuve |\n|---|---|---|\n| Visibilit\u00e9 de l'\u00e9tat du syst\u00e8me | \u00c9chec | L'erreur (span rouge) n'a pas de statut annonc\u00e9 (pas de live region, pas d'`aria-invalid`) ; un lecteur d'\u00e9cran ne sait pas qu'une erreur est survenue |\n| Pr\u00e9vention des erreurs | \u00c9chec | L'action \"Save\" repose sur un `div` cliquable sans contrat de bouton \u2014 aucune garantie d'activation clavier |\n| Reconnaissance plut\u00f4t que rappel | \u00c9chec | Le label du champ email dispara\u00eet \u00e0 la saisie (placeholder-only) \u2014 l'utilisateur doit se souvenir de ce qu'il tape |\n| Aide \u00e0 la reconnaissance/diagnostic/r\u00e9cup\u00e9ration des erreurs | \u00c9chec | Le message d'erreur n'est ni associ\u00e9 au champ (`aria-describedby`) ni distinguable sans perception de la couleur rouge |\n\n## Refus appliqu\u00e9s\n\n- \u00c9l\u00e9ment D combine deux anti-patterns d\u00e9j\u00e0 couverts par l'enveloppe d'accessibilit\u00e9 (Move 3) : cible tactile sous le seuil, et contr\u00f4le sans nom accessible \u2014 les deux sont refus\u00e9s par d\u00e9faut, sans justification document\u00e9e pr\u00e9sente dans le fichier.\n- \u00c9l\u00e9ment C est un cas canonique de \"contr\u00f4le de formulaire personnalis\u00e9 rempla\u00e7ant un \u00e9l\u00e9ment natif sans conformit\u00e9 WAI-ARIA Authoring Practices\" \u2014 refus\u00e9 par d\u00e9faut (Move 3).\n\n## Hand-offs\n\nAucun \u2014 les quatre violations rel\u00e8vent directement du domaine accessibilit\u00e9/heuristique de ce skill ; pas de blind-spot n\u00e9cessitant un agent externe."
+}

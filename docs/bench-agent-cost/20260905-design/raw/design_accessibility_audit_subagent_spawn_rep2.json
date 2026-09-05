@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "design_accessibility_audit",
+    "condition": "subagent_spawn",
+    "replication": 2,
+    "order_position": "first",
+    "code_hash": "8b72b70cb19d73c70a88b10023a1e14a409ac9d5",
+    "code_dirty": false,
+    "prompt_hash": "01b45ac9ff54194650447f17434896755720a4c4eb0432a802253fc355ce755b",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "2281b36d-5a82-423d-a61e-caf05c4ba359",
+    "input_tokens": 4,
+    "output_tokens": 2943,
+    "cache_creation_input_tokens": 134273,
+    "cache_read_input_tokens": 182082,
+    "total_cost_usd": 0.93678845,
+    "duration_ms": 184841,
+    "duration_api_ms": 163899,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "Voici le rapport d'audit renvoy\u00e9 tel quel par le sous-agent `ux-designer` :\n\n---\n\n# WCAG 2.2 AA + Nielsen Heuristic Audit \u2014 `tools/bench-agent-cost/fixtures/design_target.html`\n\nAudit-only. No files were modified. Procedure followed: `agents/ux-designer.md` Moves 1\u20136 and `skills/design/design.md` \u00a73 (accessibility audit) / \u00a76 (heuristic evaluation). Severity taxonomy: this repo does not define a custom scale, so I applied the industry-standard four-level scale used by axe-core and the W3C WCAG-EM methodology: **Critical** / **Serious** / **Moderate** / **Minor**.\n\n## Audit context (Move 1 / stakes)\n- User segment: authenticated account holder, mixed competency (keyboard-only, screen-reader, low-vision).\n- Task: correct an invalid email address and save account settings.\n- Stakes classification: **Medium**.\n\n---\n\n## Violation A \u2014 Placeholder used as the only label\n\n**Element:** `<input type=\"email\" placeholder=\"Email address\" name=\"email\">` (line 13)\n\n**Criterion:** WCAG 2.2 **3.3.2 Labels or Instructions** (Level A). Secondary: **1.3.1 Info and Relationships** (Level A) \u2014 no `<label>` structurally associated; accessible name relies only on `placeholder`.\n\n**Severity:** Serious. Instruction disappears once the user types. Also touches **Nielsen Heuristic 6 (Recognition Rather Than Recall)**.\n\n**Minimal fix:** Add `id=\"email\"` and a persistent `<label for=\"email\">Email address</label>` before the input.\n\n---\n\n## Violation B \u2014 Error text not programmatically associated; borderline contrast failure\n\n**Element:** `<span style=\"color: red;\">Invalid format</span>` (line 17)\n\n**Criterion:** WCAG 2.2 **3.3.1 Error Identification** (Level A) \u2014 no `id`/`aria-describedby`/`aria-invalid` link to the input. If injected dynamically, also fails **4.1.3 Status Messages** (Level AA) for lacking a live region.\n\n**Rigor note:** the fixture comment labels this \"1.4.1 Use of Color,\" but the text already conveys the error independent of color, so 1.4.1 doesn't strictly hold. Instead, computed contrast of `red` (#FF0000) on white \u2248 4.0:1, which fails **1.4.3 Contrast (Minimum)** (Level AA, 4.5:1 threshold) \u2014 reporting the criterion the evidence actually supports.\n\n**Severity:** Serious.\n\n**Minimal fix:** Add `id=\"email-error\"` on the span, `aria-describedby=\"email-error\" aria-invalid=\"true\"` on the input, darken red to \u22654.5:1 (e.g. `#C00000`), and add `role=\"alert\"` if dynamically injected.\n\n---\n\n## Violation C \u2014 Custom clickable `<div>` standing in for a button\n\n**Element:** `<div onclick=\"submitForm()\" style=\"display:inline-block; padding:2px 6px;\">Save changes</div>` (lines 22\u201324)\n\n**Criterion:** WCAG 2.2 **2.1.1 Keyboard** (Level A) \u2014 not focusable at all, no keyboard handler. Secondary: **4.1.2 Name, Role, Value** (Level A) \u2014 no role/button semantics.\n\n**Rigor note:** fixture comment cites 2.4.11 (Focus Not Obscured), which presumes focusability that doesn't exist here \u2014 2.1.1/4.1.2 are the correct citations.\n\n**Severity:** Critical \u2014 the form's primary action is unreachable by keyboard/most screen readers. Also violates **Nielsen Heuristic 4 (Consistency and Standards)**.\n\n**Minimal fix:** Replace with native `<button type=\"button\" onclick=\"submitForm()\">Save changes</button>`.\n\n---\n\n## Violation D \u2014 Icon-only button under the minimum target size\n\n**Element:** `<button style=\"width:16px; height:16px; padding:0;\" aria-label=\"\">&times;</button>` (lines 28\u201330)\n\n**Criterion:** WCAG 2.2 **2.5.8 Target Size (Minimum)** (Level AA) \u2014 16\u00d716px target, below the 24\u00d724px AA floor.\n\n**Severity:** Serious.\n\n**Minimal fix:** Increase to \u226524\u00d724 CSS px (or add \u22654px padding around the glyph).\n\n---\n\n## Additional finding (found independently)\n\n**Element:** same button \u2014 `aria-label=\"\"` (line 28)\n\n**Criterion:** WCAG 2.2 **4.1.2 Name, Role, Value** (Level A) \u2014 an empty `aria-label` overrides the accessible name with nothing (worse than omitting it), leaving the control completely unlabeled for AT.\n\n**Severity:** Serious.\n\n**Minimal fix:** Replace `aria-label=\"\"` with a task-appropriate label, e.g. `aria-label=\"Close\"`.\n\n---\n\n## Summary table\n\n| # | Element | Criterion | Severity | Minimal fix |\n|---|---|---|---|---|\n| A | `<input placeholder=\"Email address\">` (line 13) | 3.3.2 Labels or Instructions (A) | Serious | Add `<label for=\"email\">` + `id=\"email\"` |\n| B | `<span style=\"color:red\">Invalid format</span>` (line 17) | 3.3.1 Error Identification (A); 1.4.3 Contrast Minimum (AA, ~4.0:1) | Serious | `aria-describedby`/`aria-invalid`, `id`, darker red, `role=\"alert\"` if dynamic |\n| C | `<div onclick=\"submitForm()\">Save changes</div>` (lines 22\u201324) | 2.1.1 Keyboard (A); 4.1.2 Name, Role, Value (A) | Critical | Replace with native `<button type=\"button\">` |\n| D | `<button style=\"width:16px;height:16px\">` (lines 28\u201330) | 2.5.8 Target Size Minimum (AA) | Serious | Resize to \u226524\u00d724 CSS px |\n| D+ | `aria-label=\"\"` on same button | 4.1.2 Name, Role, Value (A) | Serious | Replace with `aria-label=\"Close\"` |\n\n## Refusals appliqu\u00e9s par le sous-agent\n- Les citations WCAG du fichier lui-m\u00eame (1.4.1 pour B, 2.4.11 pour C) ont \u00e9t\u00e9 v\u00e9rifi\u00e9es contre le texte r\u00e9el des crit\u00e8res et corrig\u00e9es (3.3.1/1.4.3 pour B, 2.1.1/4.1.2 pour C).\n\n**Fichiers r\u00e9f\u00e9renc\u00e9s :** `tools/bench-agent-cost/fixtures/design_target.html` (audit\u00e9, non modifi\u00e9), `agents/ux-designer.md`, `skills/design/design.md`."
+}

@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "design_accessibility_audit",
+    "condition": "inline_skill",
+    "replication": 4,
+    "order_position": "first",
+    "code_hash": "8b72b70cb19d73c70a88b10023a1e14a409ac9d5",
+    "code_dirty": false,
+    "prompt_hash": "e74a56f3503e4430c4616ab4b30628622286e93852c04ce1899dc0c21cdfa221",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "7cb3eeb4-7340-41d6-81f2-28b57eb4d823",
+    "input_tokens": 4,
+    "output_tokens": 2125,
+    "cache_creation_input_tokens": 132453,
+    "cache_read_input_tokens": 184487,
+    "total_cost_usd": 0.6226484,
+    "duration_ms": 197662,
+    "duration_api_ms": 182162,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## R\u00e9sum\u00e9\nAudit du fixture synth\u00e9tique `design_target.html`, qui contient quatre violations volontaires (comment\u00e9es dans le fichier lui-m\u00eame). Confirmation de ces quatre violations plus une cinqui\u00e8me non annonc\u00e9e, d\u00e9tect\u00e9e par la proc\u00e9dure.\n\n## Utilisateur et t\u00e2che\n- Utilisateur : d\u00e9veloppeur int\u00e9grant un formulaire \"Account Settings\"\n- T\u00e2che : soumettre le formulaire pour modifier des param\u00e8tres de compte\n- Crit\u00e8re de succ\u00e8s : un utilisateur clavier/lecteur d'\u00e9cran peut identifier chaque champ, comprendre une erreur, et activer chaque contr\u00f4le\n- Modes d'\u00e9chec : label perdu au focus, erreur non per\u00e7ue par un daltonien/lecteur d'\u00e9cran, contr\u00f4le inatteignable au clavier, cible tactile trop petite pour un utilisateur \u00e0 mobilit\u00e9 r\u00e9duite\n\n## Stakes classification\n- **High** \u2014 formulaire de param\u00e8tres de compte (donn\u00e9es utilisateur, crit\u00e8re \"onboarding/critical flows/accessibility-critical forms\" du skill)\n\n## Violations relev\u00e9es\n\n| # | \u00c9l\u00e9ment | Crit\u00e8re viol\u00e9 | S\u00e9v\u00e9rit\u00e9 | Correctif minimal |\n|---|---|---|---|---|\n| 1 | `input.type=\"email\"` ligne 13 | **WCAG 3.3.2** (Labels or Instructions) \u2014 placeholder comme seule \u00e9tiquette, dispara\u00eet \u00e0 la saisie | Bloquant (High) | Ajouter `<label for=\"email\">Email address</label>` persistant ; garder le placeholder en compl\u00e9ment optionnel |\n| 2 | `<span style=\"color:red\">Invalid format</span>` ligne 17 | **WCAG 1.4.1** (Use of Color) \u2014 l'erreur n'est signal\u00e9e que par la couleur | Bloquant (High) | Ajouter une ic\u00f4ne ou un mot-texte (\"Error: Invalid format\") + associer via `aria-describedby` au champ ; ne pas d\u00e9pendre de la couleur seule |\n| 3 | `<div onclick=\"submitForm()\">` lignes 22-24 | **WCAG 2.1.1** (Keyboard) et **2.4.11** (Focus Not Obscured) \u2014 non focusable, pas de r\u00f4le, pas d'indicateur de focus visible | Bloquant (High) | Remplacer par `<button type=\"submit\">Save changes</button>` (\u00e9l\u00e9ment natif) plut\u00f4t qu'ajouter `tabindex`/`role=\"button\"`/gestion clavier manuelle |\n| 4 | `<button aria-label=\"\">` lignes 28-30 | **WCAG 2.5.8** (Target Size Minimum, AA) \u2014 16\u00d716px < 24\u00d724px minimum ; de plus `aria-label=\"\"` vide \u00e9quivaut \u00e0 une absence de nom accessible (**4.1.2** Name, Role, Value) | Bloquant (High) | Porter la cible \u00e0 \u226524\u00d724 CSS px (id\u00e9alement 44\u00d744, cf. AAA) ; remplir `aria-label=\"Close\"` ou texte \u00e9quivalent explicite |\n| 5 (non annonc\u00e9e) | `<form>` lignes 10-31, sans `<button type=\"submit\">` valide ni indication d'erreur au niveau du formulaire | **Heuristique Nielsen #1** (Visibility of system status) et **#9** (Help users recognize/diagnose/recover from errors) \u2014 le message \"Invalid format\" n'est li\u00e9 \u00e0 aucun champ (pas d'`aria-describedby`, pas d'`id` sur l'input) donc un lecteur d'\u00e9cran ne peut pas l'annoncer au bon moment | Mod\u00e9r\u00e9 | Donner un `id` \u00e0 l'input, r\u00e9f\u00e9rencer l'erreur via `aria-describedby`, et marquer le champ `aria-invalid=\"true\"` quand l'erreur est active |\n\n## Heuristiques Nielsen (10) \u2014 surface compl\u00e8te\n\n| Heuristique | Verdict | Preuve/fix |\n|---|---|---|\n| 1. Visibilit\u00e9 du statut syst\u00e8me | Fail | Message d'erreur non li\u00e9 au champ (voir #5) |\n| 2. Correspondance syst\u00e8me/monde r\u00e9el | N/A | Pas de contenu textuel m\u00e9tier \u00e0 \u00e9valuer sur ce fragment |\n| 3. Contr\u00f4le et libert\u00e9 utilisateur | N/A | Pas de flux multi-\u00e9tapes pr\u00e9sent |\n| 4. Coh\u00e9rence et standards | Fail | Bouton \"Save\" en `<div>` au lieu de `<button>` natif, rompt la convention de plateforme |\n| 5. Pr\u00e9vention des erreurs | Fail | Aucun `type`/`pattern`/`required` ni validation avant soumission visible |\n| 6. Reconnaissance plut\u00f4t que rappel | Fail | Label disparaissant (placeholder-only) force l'utilisateur \u00e0 se souvenir du champ |\n| 7. Flexibilit\u00e9 et efficacit\u00e9 | N/A | Hors p\u00e9rim\u00e8tre du fragment |\n| 8. Esth\u00e9tique et minimalisme | Pass | Pas de surcharge visuelle constat\u00e9e |\n| 9. Aide \u00e0 la reconnaissance/diagnostic/r\u00e9cup\u00e9ration des erreurs | Fail | \"Invalid format\" ne pr\u00e9cise pas le format attendu ni le champ concern\u00e9 |\n| 10. Aide et documentation | N/A | Hors p\u00e9rim\u00e8tre du fragment |\n\n## D\u00e9cisions composant/token\n- Aucun design system observable dans ce fixture isol\u00e9 (pas de CSS externe/tokens r\u00e9f\u00e9renc\u00e9s) \u2014 non applicable.\n\n## Preuves de recherche\n- Toutes les affirmations ci-dessus citent un crit\u00e8re WCAG 2.2 AA num\u00e9rot\u00e9 ou une heuristique Nielsen nomm\u00e9e ; aucune ne repose sur \"les utilisateurs veulent X\" \u2014 pas de labellisation \"opinion\" n\u00e9cessaire.\n\n## Refus appliqu\u00e9s\n- Aucun (fichier non modifi\u00e9, audit uniquement, conform\u00e9ment \u00e0 la consigne).\n\n## Renvois\n- Aucun \u2014 pas de pattern sombre d\u00e9tect\u00e9, pas de n\u00e9cessit\u00e9 de renvoi vers `arendt` ou un autre agent."
+}

@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "design_accessibility_audit",
+    "condition": "subagent_spawn",
+    "replication": 3,
+    "order_position": "second",
+    "code_hash": "8b72b70cb19d73c70a88b10023a1e14a409ac9d5",
+    "code_dirty": false,
+    "prompt_hash": "01b45ac9ff54194650447f17434896755720a4c4eb0432a802253fc355ce755b",
+    "cli_version": "2.1.261 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "413d91e7-635a-4e20-9398-89aeea293624",
+    "input_tokens": 2,
+    "output_tokens": 2122,
+    "cache_creation_input_tokens": 4786,
+    "cache_read_input_tokens": 156573,
+    "total_cost_usd": 0.9256601000000001,
+    "duration_ms": 32134,
+    "duration_api_ms": 86848,
+    "num_turns": 1,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "L'agent ux-designer a termin\u00e9 l'audit. Voici son rapport, tel quel :\n\n### Design Spec (UX Designer format) \u2014 Accessibility & Heuristic Audit\n\n## Summary\nAudit of `tools/bench-agent-cost/fixtures/design_target.html` (33 lines, a single settings form) against WCAG 2.2 AA and Nielsen's 10 heuristics. Four violations are flagged in the file's own comments (A\u2013D); the audit below verifies each against the current SC numbering and adds violations the comments did not name.\n\n## User and task\n- User segment: authenticated account holder editing account settings (assume mixed competency, including screen-reader and keyboard-only users).\n- Task: correct an invalid email address and save the change.\n- Success criterion: user perceives the error, corrects the field, and completes save via keyboard or mouse without ambiguity.\n- Failure modes: user cannot tell what's wrong (color-only cue), cannot find the field's purpose after typing (placeholder-as-label), cannot reach or activate Save via keyboard, cannot hit the close/dismiss target on mobile, screen reader announces nothing useful for any of these.\n\n## Stakes classification\n- Classification: High \u2014 accessibility-critical form (account settings, real user data entry).\n- Discipline applied: full Moves 1, 2, 3, 5 (Move 4 IA and Move 6 tokens not applicable \u2014 single form, no navigation, no design-system context to check against).\n\n## Violations found\n\n| # | Element (line) | Criterion / Heuristic | Severity | Fix |\n|---|---|---|---|\n| 1 | `<input type=\"email\" placeholder=\"Email address\" name=\"email\">` (line 13) | WCAG 2.2 \u2014 **3.3.2 Labels or Instructions** (A) and **1.3.1 Info and Relationships** (A) \u2014 no programmatic label exists at all, not merely a non-persistent one | Critical | Add `<label for=\"email\">Email address</label>` and `id=\"email\"` on the input; keep the placeholder only as a supplementary hint, not the label. |\n| 2 | `<span style=\"color: red;\">Invalid format</span>` (line 17) | WCAG 2.2 \u2014 **1.4.1 Use of Color** (A) | Serious | The color+text pairing partially mitigates 1.4.1, but the real gap is that it's not associated with the input: add `role=\"alert\"` (or `aria-live=\"polite\"`) and wire it via `aria-describedby=\"email-error\"` on the input. Also fails **4.1.3 Status Messages** (AA) \u2014 a static, unassociated `<span>` is never announced to assistive tech. |\n| 3 | `<div onclick=\"submitForm()\" ...>Save changes</div>` (line 22) | WCAG 2.2 \u2014 **2.1.1 Keyboard** (A), **4.1.2 Name, Role, Value** (A) | Critical | Replace with `<button type=\"submit\">Save changes</button>`. A native button gets keyboard focus, Enter/Space activation, an implicit role, and a default focus indicator for free \u2014 no failure of the native element was demonstrated, so the custom `div` has no justification. |\n| 3b | same `<div>` (line 22) | WCAG 2.2 \u2014 **2.4.7 Focus Visible** (AA) | Serious | Subsumed by the button fix above \u2014 inherit the native focus ring, don't suppress it with CSS. |\n| 4 | `<button style=\"width:16px; height:16px; padding:0;\" aria-label=\"\">\u00d7</button>` (line 28) | WCAG 2.2 \u2014 **2.5.8 Target Size (Minimum)** (AA) \u2014 16\u00d716px is under the 24\u00d724 CSS px AA floor | Critical | Set `min-width: 24px; min-height: 24px`. |\n| 4b | same `<button>` (line 28) | WCAG 2.2 \u2014 **4.1.2 Name, Role, Value** (A) | Critical | `aria-label=\"\"` is an *empty* override that suppresses the \"\u00d7\" text content, leaving the control with no accessible name at all \u2014 worse than no `aria-label`. Set a real label, e.g. `aria-label=\"Close\"` (confirm actual function against the real component). |\n| 5 | `<form>` (line 10) | WCAG 2.2 \u2014 **1.3.1 Info and Relationships** (A); Nielsen H1 | Moderate | The error span and submit control aren't scoped to a labelled form. Add an accessible name to the form or a heading referenced via `aria-labelledby`. |\n| 6 | `<body>` / whole document | Nielsen H1 \u2014 Visibility of system status | Serious | No loading/saved/failed state represented anywhere; a live region or disabled-state text is needed once save is a real button. |\n| 7 | document structure | WCAG 2.2 \u2014 **1.3.1** / **2.4.1** (arguable at this scale) | Minor | No `<main>` landmark, no visible `<h1>` despite a `<title>`. Add both. |\n| 8 | `<input type=\"email\">` (line 13) | Nielsen H5 \u2014 Error prevention | Minor | No `required`, no format hint, no client-side pattern feedback before submit. Add an inline hint tied via `aria-describedby`. |\n\n## Compliance notes\n- **Contrast (1.4.3)**: not evaluated \u2014 the red value/background aren't fully specified inline; flagged as **unverified, not passed**, not as passing.\n- **Touch targets**: fails \u2014 16\u00d716px is under the 24\u00d724 AA floor.\n\n## Heuristic evaluation (summary)\nFails: #1 Visibility of system status, #3 User control and freedom, #4 Consistency and standards, #5 Error prevention, #9 Error recognition and recovery. Passes: #2 Match with real world, #8 Aesthetic/minimalist design. N/A at this fragment size: #6, #7, #10.\n\n## Refusals applied\n- The custom clickable `<div>` (violation 3) is refused outright \u2014 no native-element failure was demonstrated to justify the substitution.\n- The empty `aria-label=\"\"` (violation 4b) is refused as its own category \u2014 an empty override is strictly worse than an absent one.\n\n## Hand-offs\nImplementation of the fixes (native `<button>`, `<label>` wiring, `aria-describedby`, live region, target-size CSS) \u2192 **frontend-engineer**."
+}
