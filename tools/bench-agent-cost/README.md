@@ -140,21 +140,34 @@ under `fixtures/`, committed to this PR) and the fixed rubric per task
  `PairedComparison`) is reported as a tie, not resolved in either
  direction.
 
-**Completion threshold (pre-registered per task, alongside the rubric):**
-every task JSON must set `completion_threshold_points` -- the minimum
-blind-scored quality points (out of `rubric_max_points`) a run must reach
-to count as having *completed* the task, not merely attempted it. This is
-set by the task's author at the same time the rubric and non-inferiority
-margin are frozen, before any run exists (Move 1/Fisher discipline), and
-must be a defensible, stated rule tied to specific rubric criteria -- never
-an arbitrary global percentage cutoff (§8: no invented constants). For
-`review_small_diff`, the threshold is 5/10: the two load-bearing structural
-findings (`magic_number` 2pts + `srp_mixed_io_logic` 3pts) must both be
-identified for the review to count as completed; the remaining four
-criteria are quality-of-execution refinements on top of a review that
-already found what makes the fixture worth reviewing (full rationale in
-`tasks/review_small_diff.json`'s `completion_threshold_rationale` field). A
-task JSON without this field causes `analyze_results.py` to skip the
+**Completion threshold -- pre-registration requirement, and one documented
+exception:** every task JSON must set `completion_threshold_points` -- the
+minimum blind-scored quality point *total* (summed across all rubric
+criteria, out of `rubric_max_points`; this is what `analyze_results.py`'s
+`quality_score`/`report_completion_gated_tokens` actually gates on -- a
+run can reach the threshold via any combination of criteria, not only the
+combination named in a task's rationale text) a run must reach to count as
+having *completed* the task, not merely attempted it. **The rule going
+forward:** this value must be fixed *before* that task's first run,
+committed in the same change that introduces the task, and never edited
+once any run exists for it (Move 1/Fisher discipline) -- a defensible,
+stated rule tied to specific rubric criteria, never an arbitrary global
+percentage (§8: no invented constants).
+
+`review_small_diff` is **the one documented exception to that rule, not an
+example of following it.** Its 10 runs (`docs/bench-agent-cost/20260905/`)
+were committed to `main` by PR #121 before `completion_threshold_points`
+existed as a field (added later by the PR that introduced this metric); the
+threshold (5/10) was therefore chosen with the resulting quality scores
+(7-10/10 across all 10 runs) already visible -- a retrospective criterion,
+not a blind pre-registration, however defensible its stated logic
+(`tasks/review_small_diff.json`'s `completion_threshold_rationale` field
+states this plainly and is the source of truth for this task; do not cite
+this README as having pre-registered it). Any task added after this one
+must actually satisfy the rule above -- pre-registered before its first
+run -- for its completion-gated numbers to carry the pre-registration
+discipline this benchmark otherwise claims throughout. A task JSON without
+`completion_threshold_points` causes `analyze_results.py` to skip the
 completion-gated metric with an explicit message, never a silent default.
 
 **Why this metric exists:** reporting mean token count over "all valid
@@ -353,9 +366,13 @@ for being "just a smoke run."
   prove the tool's plumbing, not to answer the production question).
 - **Completion-gated re-check (added after the initial log entry, same
   data, re-run with the updated `analyze_results.py`):** both conditions
-  scored 100% completion rate (5/5 runs each meet the pre-registered
-  `completion_threshold_points: 5` for `review_small_diff`) -- every run in
-  this smoke run cleared the bar. `tokens per completed task` therefore
+  scored 100% completion rate (5/5 runs each meet `review_small_diff`'s
+  `completion_threshold_points: 5`) -- every run in this smoke run cleared
+  the bar. This threshold is the documented **retrospective** exception
+  described above (chosen after these scores were already known, not
+  pre-registered before the runs); it is applied here for consistency with
+  the rest of this negative-result log, not presented as a blind
+  confirmation. `tokens per completed task` therefore
   equals the pre-existing "mean tokens among all valid runs" figure exactly
   for both conditions (216,824 inline vs. 111,222 subagent); nothing was
   excluded, and the qualitative conclusion above (non-inferiority not

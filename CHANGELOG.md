@@ -21,17 +21,23 @@ adheres to [Semantic Versioning](https://semver.org/).
   metric (#122).** `analyze_results.py` previously reported mean token
   count over all valid runs regardless of task-completion quality, letting
   a condition that completed the task less often look artificially cheap.
-  Each task JSON now pre-registers a `completion_threshold_points` field
-  (set alongside the rubric, before any run) defining what counts as a
-  completed task; `analyze_results.py` reports completion rate per
+  Each task JSON now carries a `completion_threshold_points` field defining
+  the minimum summed rubric points a run must reach to count as completed;
+  the rule going forward is that this value is fixed before a task's first
+  run and never edited once runs exist for it (Fisher-style
+  pre-registration). `analyze_results.py` reports completion rate per
   condition (always shown, including 0%/100%) and mean tokens among only
   the threshold-meeting runs, reporting "0 completed runs, metric
   undefined" rather than silently computing a mean over an empty list. The
   existing all-valid-runs metric is kept, unchanged, for comparability.
-  `review_small_diff`'s threshold (5/10: both structural findings,
-  `magic_number` + `srp_mixed_io_logic`) re-run against the committed
-  2026-09-05 raw data shows 100% completion both conditions -- the
-  qualitative conclusion (non-inferiority not established; token and
+  `review_small_diff`'s threshold (5/10) is a **documented exception** to
+  that rule, not an example of it: its 10 runs were already committed to
+  `main` by #121 before this field existed, so the value was chosen with
+  the resulting quality scores (7-10/10) already visible -- a retrospective
+  criterion, stated as such in the task JSON and README, not a blind
+  pre-registration. Re-run against the committed 2026-09-05 raw data it
+  shows 100% completion both conditions -- the qualitative conclusion
+  (non-inferiority not established; token and
   dollar-cost proxies disagree in direction) is unchanged.
 
 - **`tools/bench-agent-cost/`: pre-registered paired cost/quality benchmark
