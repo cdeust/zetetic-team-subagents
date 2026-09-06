@@ -154,9 +154,9 @@ references are to the agent's own file unless another path is given.
 | security-auditor | opus | Y | - | Y | - | Y | 1 (`engineering/secure`) | **Subagent-only.** No `Edit/Write` (`:8`); opus override (`:4`); the audit verdict must be independent of the code audited, and its refusals are all "require an artifact before proceeding", which an inlined procedure can satisfy with its own output. |
 | simplifier | sonnet | - | - | - | - | - | 0 | **Skill-frontable.** Write grant (`:8`), baseline tier, no assets, no coverage today. |
 | test-engineer | sonnet | - | - | - | - | - | 3 | **Skill-frontable.** Write grant (`:8`); already fronted by `engineering/test`, `implement`, `refactor`. |
-| ux-designer | sonnet | contested | - | - | - | contested | 0 | **Dual-surface**, matching plan Phase 4, but for a different reason than the plan gives. See the correction below. |
+| ux-designer | sonnet | - | - | - | - | - | 1 (`design/design`) | **Skill-frontable.** Owner resolved the contested reading (plan Phase 4, PR #123, 2026-09-06): `/design` must do real UX/UI work, so the widened grant (`:8`) is the intended end state, not a guardrail. `skills/design/design.md` now fronts it. See the correction below for the resolved history. |
 
-**Distribution: 9 subagent-only, 1 dual-surface, 13 skill-frontable.**
+**Distribution: 9 subagent-only, 0 dual-surface, 14 skill-frontable.** (Verified against `origin/main` at `2f7c802`, 2026-09-06 — supersedes the count below, which was current only up to PR #120/#123's `ux-designer` resolution.)
 
 ---
 
@@ -180,11 +180,10 @@ by removing the write-requiring boilerplate from a design agent. On the letter o
 the current file, tests 1 and 5 do not fire and `ux-designer` classifies as
 skill-frontable.
 
-The verdict above is nonetheless **dual-surface**, matching Phase 4's conclusion,
-because the question the widening settled was consistency, not authority: nobody
-has decided whether a design agent should be able to mutate code. Until the owner
-answers, the conservative surface is a skill running alongside the subagent. The
-classification then follows the answer:
+At the time this table was written (PR #120, commit `86fccf0`) the verdict was
+recorded as **dual-surface**, because the question the widening settled was
+consistency, not authority: nobody had yet decided whether a design agent should
+be able to mutate code. That was an open fork:
 
 - The widened grant is the intended end state, so `ux-designer` is
   **skill-frontable**.
@@ -192,11 +191,18 @@ classification then follows the answer:
   `<memory>` and `<worktree>` boilerplate a read-only path), so `ux-designer` is
   **subagent-only**, tests 1 and 5 both firing.
 
+**Resolved in Phase 4 (PR #123, 2026-09-06).** The owner took the first branch:
+`/design` must do real UX/UI work, so the widened grant is the intended end
+state. `skills/design/design.md` was built as `ux-designer`'s skill surface,
+confirmed by its `agents: [ux-designer]` frontmatter. The verdict in the table
+above is updated to **skill-frontable** accordingly; this is no longer an open
+fork.
+
 **2. `refactorer` is not skill-fronted.** `skills/engineering/refactor.md:9-12`
 names architect, engineer, and test-engineer. The `refactorer` team agent appears
-in no skill's `agents:` field. Nine agents have zero coverage today: advisor,
-data-scientist, frontend-engineer, git-historian, memory-writer, mlops,
-refactorer, simplifier, ux-designer.
+in no skill's `agents:` field. As of `ux-designer`'s Phase 4 resolution above,
+eight agents have zero coverage today: advisor, data-scientist,
+frontend-engineer, git-historian, memory-writer, mlops, refactorer, simplifier.
 
 ---
 
