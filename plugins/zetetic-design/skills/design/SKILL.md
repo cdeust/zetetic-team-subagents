@@ -1,37 +1,9 @@
 ---
 name: design
-description: >
-  UX/UI design and accessibility audit: name the user/task/success-criterion before any
-  layout decision, enforce WCAG 2.2 AA as a constraint from the first sketch, walk the
-  10 Nielsen heuristics, and refuse patterns that defeat usability or research integrity.
-category: design
-trigger: >
-  When user experience needs attention -- designing user flows, auditing accessibility
-  (WCAG 2.2 AA), restructuring information architecture, evaluating heuristic compliance,
-  or extending a design system.
-agents:
-  - ux-designer
-shapes: []
-input: A screen, flow, component, or existing markup/design to design or audit.
-output: >
-  Design spec or audit report: named user/task/success-criterion, WCAG 2.2 AA compliance
-  plan, 10-heuristic evaluation, component/token decisions, and labelled research evidence
-  (citation or "opinion").
-zetetic_gate:
-  logical: "Every design claim follows from a named principle (heuristic, WCAG criterion, research finding, platform convention) -- 'it feels right' is not an argument"
-  critical: "Every 'users want X' claim carries a method, sample size, and confidence, or is labelled an opinion"
-  rational: "Discipline calibrated to stakes -- full card-sort/tree-test on an internal admin tool is process theater; skipping it on checkout is negligence"
-  essential: "Every pixel, token, component, and label justified by the task; 'just in case' UI is removed, not hidden"
-composes: []
-aliases: [ux-audit, ux-design, accessibility-audit]
-portable:
-  package: zetetic-design
-hand_off:
-  implementation_feasibility: "frontend-engineer -- non-trivial engineering constraint before committing to the design"
-  system_architecture: "/decompose -- architect + alexander for pattern-language coherence when the design system itself is the object of change"
-  research_integrity: "/audit-integrity -- feynman when the underlying research sample or method is doubtful"
-  ethics: "arendt -- thoughtlessness audit for dark-pattern or autonomy/attention/dignity consequences"
+description: UX/UI design and accessibility audit -- name the user, task, and success criterion before any layout decision, enforce WCAG 2.2 AA as a constraint from the first sketch, walk the 10 Nielsen heuristics, and refuse patterns that defeat usability or research integrity.
 ---
+
+# Design
 
 ## Purpose
 
@@ -72,7 +44,7 @@ or justify the exception). Not aesthetic preference -- the procedure below, appl
    "are you sure?" on a reversible action; a disabled button with no explanation; a
    single-device-context design when the product serves more than one. Dark patterns (hidden
    cost, forced continuity, confirmshaming, disguised ads, misdirection) are refused
-   absolutely, no justification accepted -- hand off to arendt.
+   absolutely, no justification accepted -- flag for an explicit ethics review.
 
 5. **Information architecture is measured, not intuited (Move 4).** If the surface has >10
    navigable destinations or navigation is contested: plan or cite a card sort (n=15-30) and a
@@ -135,16 +107,5 @@ or justify the exception). Not aesthetic preference -- the procedure below, appl
 - [anti-patterns removed, with rationale, or "none"]
 
 ## Hand-offs
-- [none, or the specific blind-spot agent per the frontmatter's hand_off map]
+- [none, or the specific concern to route to: implementation feasibility, system architecture, research integrity, or ethics]
 ```
-
-## Notes on running this inline vs. as the `ux-designer` subagent
-
-This skill is the primary path for `/design`-shaped work: `ux-designer` is `model: sonnet`
-(matching this repo's caller baseline, `agents/ux-designer.md:4`), so inlining its procedure
-here does not silently drop a capability escalation the way inlining an opus/fable-tier agent
-would (`tools/skill-runner.sh`'s escalation banner does not fire for it -- verified empirically
-against a live run, not assumed). Spawn `ux-designer` as a real subagent instead when the work
-needs to survive the calling session's own compaction, or needs an isolated context independent
-of the caller's history (`rules/agent-vs-skill-classification.md`'s test 2) -- for example a
-long, multi-round accessibility audit spanning many files.

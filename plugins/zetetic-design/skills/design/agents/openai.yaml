@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design"
+  short_description: "UX/UI design and WCAG 2.2 AA accessibility audit"
+  default_prompt: "Use $design to audit this screen for accessibility and usability."

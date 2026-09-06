@@ -44,9 +44,14 @@ claude plugin marketplace add cdeust/zetetic-team-subagents
 claude plugin install zetetic-team-subagents
 ```
 
-For changes under `plugins/zetetic-reasoning`, preserve the isolation boundary:
-the package may contain skills and references, but no Claude-specific paths,
-hooks or server dependency. Run its contract test and both manifest validators:
+For changes under `plugins/zetetic-reasoning` or `plugins/zetetic-design` (or
+a new portable package), preserve the isolation boundary: a package may
+contain skills and references, but no Claude-specific paths, hooks or server
+dependency. A skill opts in to packaging with a `portable:` frontmatter block
+on its canonical `skills/**/*.md` source (`package:`, and `references:` if it
+vendors genius-agent reference material) -- see
+`tools/sync-portable-references.py`'s module docstring. Run the contract test
+and both manifest validators, once per package:
 
 ```bash
 python3 -m pytest tests/test_portable_package.py
@@ -54,6 +59,9 @@ python3 tools/sync-portable-references.py --check
 bash tools/run-codex-validators.sh \
   plugins/zetetic-reasoning \
   plugins/zetetic-reasoning/skills/evidence-synthesis
+bash tools/run-codex-validators.sh \
+  plugins/zetetic-design \
+  plugins/zetetic-design/skills/design
 ```
 
 ---

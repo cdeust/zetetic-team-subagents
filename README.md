@@ -101,20 +101,29 @@ These aren't prompts dressed up as commands. Each is a **multi-step pipeline** t
 
 ## Install
 
-### Portable evidence synthesis for Codex and Gemini CLI
+### Portable skills for Codex and Gemini CLI
 
-The isolated [`zetetic-reasoning`](plugins/zetetic-reasoning/README.md) package
-ships one evidence-synthesis skill and eight sourced reasoning references. It
-does not install the agent roster, lifecycle hooks or mechanical gates.
+Individual skills can be packaged in isolation, without the agent roster,
+lifecycle hooks, or mechanical gates. Two skills ship this way today:
+[`zetetic-reasoning`](plugins/zetetic-reasoning/README.md) (one
+evidence-synthesis skill and eight sourced reasoning references) and
+[`zetetic-design`](plugins/zetetic-design/README.md) (one self-contained
+UX/UI design and WCAG 2.2 AA accessibility-audit skill). Both packages are
+generated and drift-checked from the same mechanism
+(`tools/sync-portable-references.py`), driven by a `portable:` frontmatter
+block on each skill's canonical source.
 
 ```bash
 # Codex
 codex plugin marketplace add cdeust/zetetic-team-subagents
 codex plugin add zetetic-reasoning@zetetic-marketplace
+codex plugin add zetetic-design@zetetic-marketplace
 
 # Gemini CLI
 gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
   --path plugins/zetetic-reasoning/skills/evidence-synthesis
+gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
+  --path plugins/zetetic-design/skills/design
 ```
 
 ### Full Claude Code distribution

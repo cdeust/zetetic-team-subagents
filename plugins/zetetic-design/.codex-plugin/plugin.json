@@ -1,0 +1,40 @@
+{
+  "name": "zetetic-design",
+  "version": "1.0.0",
+  "description": "UX/UI design and WCAG 2.2 AA accessibility audit: name the user/task/success-criterion first, enforce accessibility as a constraint, walk the 10 Nielsen heuristics, and refuse dark patterns.",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools",
+    "url": "https://github.com/cdeust"
+  },
+  "homepage": "https://github.com/cdeust/zetetic-team-subagents/tree/main/plugins/zetetic-design",
+  "repository": "https://github.com/cdeust/zetetic-team-subagents",
+  "license": "MIT",
+  "keywords": [
+    "design",
+    "ux",
+    "accessibility",
+    "wcag",
+    "agent-skills",
+    "codex",
+    "gemini-cli"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Zetetic Design",
+    "shortDescription": "Design and audit interfaces without hiding accessibility debt",
+    "longDescription": "Name the user, task, and success criterion before any layout decision, enforce WCAG 2.2 AA as a constraint from the first sketch, walk the 10 Nielsen heuristics, and refuse patterns that defeat usability or research integrity.",
+    "developerName": "Clement Deust",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Web"
+    ],
+    "websiteURL": "https://github.com/cdeust/zetetic-team-subagents",
+    "privacyPolicyURL": "https://github.com/cdeust/zetetic-team-subagents/blob/main/PRIVACY.md",
+    "defaultPrompt": [
+      "Audit this screen for WCAG 2.2 AA compliance and Nielsen heuristics.",
+      "Design a flow for this task and name the failure modes."
+    ]
+  }
+}

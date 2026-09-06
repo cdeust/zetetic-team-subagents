@@ -1,0 +1,5 @@
+{
+  "name": "zetetic-design",
+  "version": "1.0.0",
+  "description": "UX/UI design and WCAG 2.2 AA accessibility audit: name the user/task/success-criterion first, enforce accessibility as a constraint, walk the 10 Nielsen heuristics, and refuse dark patterns."
+}

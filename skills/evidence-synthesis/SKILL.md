@@ -6,6 +6,9 @@ description: >
   actually say?", conflicting studies or benchmarks, "is this result trustworthy?",
   arguments that need claim-evidence-warrant structure, qualitative data needing
   coding, or a theory with no catalog of its own contradicting evidence.
+portable:
+  package: zetetic-reasoning
+  references: [cochrane, darwin, feynman, gadamer, geertz, laplace, strauss, toulmin]
 ---
 
 # Evidence Synthesis

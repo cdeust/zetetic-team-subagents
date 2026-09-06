@@ -17,6 +17,27 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Generalized cross-CLI skill packaging + `zetetic-design` package
+  (Phase 5, #124).** `tools/sync-portable-references.py` no longer
+  hardcodes a single skill: it discovers every skill that opts in via a
+  `portable:` frontmatter block on its canonical `skills/**/*.md` source
+  (`package:`, and an optional `references:` list of genius agents to
+  render), and generates/drift-checks each one's package under
+  `plugins/<package>/`. `evidence-synthesis` and `design` (from #123) both
+  opt in; `design` proves the mechanism generalizes to a self-contained
+  skill with nothing to generate, not just a refactor in the abstract.
+  Adds `plugins/zetetic-design/` (Codex `.codex-plugin/plugin.json` +
+  Gemini `gemini-extension.json` + `skills/design/SKILL.md`, verified
+  against the pinned OpenAI plugin/skill validators), registers it in
+  `.agents/plugins/marketplace.json` and `tools/build-release-bundle.sh`,
+  and parameterizes `tests/test_portable_package.py`
+  (`pytest.mark.parametrize`) over the discovered packages instead of one
+  hand-written test per fixture: 12/12 -> 20/20 passed. Verified by removing
+  `design`'s `portable:` block: collection drops from 20 to 13 cases (the 7
+  `zetetic-design`-parameterized cases disappear) and 2 discovery-guard
+  tests that assert `zetetic-design`'s presence fail, leaving 11/13 passing
+  -- restoring the block returns 20/20.
+
 - **`skills/design/design.md` + `/design` command + WCAG 2.2 citation fix
   (Phase 4, #123).** `ux-designer` is classified skill-frontable (owner
   decision, 2026-09-04): a new skill fronts it as the primary path,
