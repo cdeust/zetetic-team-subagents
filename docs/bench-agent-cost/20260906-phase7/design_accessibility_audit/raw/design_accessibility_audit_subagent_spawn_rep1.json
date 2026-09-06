@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "design_accessibility_audit",
+    "condition": "subagent_spawn",
+    "replication": 1,
+    "order_position": "second",
+    "code_hash": "a7a1a90da0a1b85d8ac60cdff53ec20f0f758401",
+    "code_dirty": false,
+    "prompt_hash": "01b45ac9ff54194650447f17434896755720a4c4eb0432a802253fc355ce755b",
+    "cli_version": "2.1.263 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "f716732e-7cc5-4050-908f-f6f6dca70e9b",
+    "input_tokens": 2,
+    "output_tokens": 1437,
+    "cache_creation_input_tokens": 6727,
+    "cache_read_input_tokens": 156876,
+    "total_cost_usd": 1.03618325,
+    "duration_ms": 24169,
+    "duration_api_ms": 99976,
+    "num_turns": 1,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "L'audit est termin\u00e9. Voici le rapport du subagent `ux-designer`, verbatim :\n\n## Rapport d'audit \u2014 `tools/bench-agent-cost/fixtures/design_target.html`\n\n### R\u00e9sum\u00e9\nAudit accessibilit\u00e9 et heuristiques d'un fragment HTML statique de benchmark (formulaire \"Account Settings\"). Aucune modification effectu\u00e9e \u2014 rapport seul.\n\n### Classification\nEnjeu **Low** (fixture synth\u00e9tique de benchmark, sans utilisateur r\u00e9el ni trafic de production).\n\n---\n\n### Violation 1 \u2014 Bouton d'action non natif, non accessible au clavier (**CRITIQUE**)\n\n```html\n<div onclick=\"submitForm()\" style=\"display:inline-block; padding:2px 6px;\">Save changes</div>\n```\n- **WCAG** : 2.1.1 Keyboard (A) \u2014 inatteignable/inactivable au clavier \u00b7 4.1.2 Name, Role, Value (A) \u2014 aucun r\u00f4le s\u00e9mantique expos\u00e9 \u00b7 2.4.11 Focus Not Obscured (Minimum) (AA) \u2014 jamais dans l'ordre de focus.\n- **Nielsen** : #4 Consistency and standards \u00b7 #1 Visibility of system status (aucun retour visuel).\n- **Correctif minimal** : remplacer par `<button type=\"submit\">Save changes</button>` natif (conserve le style existant).\n\n---\n\n### Violation 2 \u2014 Placeholder utilis\u00e9 comme seul label (**MAJEURE**)\n\n```html\n<input type=\"email\" placeholder=\"Email address\" name=\"email\">\n```\n- **WCAG** : 3.3.2 Labels or Instructions (A) \u2014 le placeholder dispara\u00eet \u00e0 la saisie \u00b7 1.3.1 Info and Relationships (A) \u2014 aucune relation programmatique label/champ.\n- **Nielsen** : #6 Recognition rather than recall \u00b7 #9 Help users recognize errors.\n- **Correctif minimal** :\n```html\n<label for=\"email\">Email address</label>\n<input type=\"email\" id=\"email\" placeholder=\"name@example.com\" name=\"email\">\n```\n\n---\n\n### Violation 3 \u2014 Message d'erreur : contraste insuffisant et non li\u00e9 au champ (**MAJEURE**)\n\n```html\n<span style=\"color: red;\">Invalid format</span>\n```\n- **WCAG** : 1.4.3 Contrast (Minimum) (AA) \u2014 rouge `#FF0000` sur blanc \u2248 4:1, sous le seuil 4.5:1 \u00b7 1.4.1 Use of Color (A) \u2014 pas de renfort iconographique.\n- **Nielsen** : #9 Help users recognize/diagnose/recover from errors \u00b7 #1 Visibility of system status.\n- **Correctif minimal** : couleur `#B00020` (\u22485.9:1) + ic\u00f4ne + texte explicite du format attendu, et `aria-describedby`/`aria-invalid=\"true\"` sur l'input associ\u00e9.\n\n---\n\n### Violation 4 \u2014 Bouton de fermeture : cible tactile trop petite + nom accessible vide (**CRITIQUE** pour le nom accessible / **MAJEURE** pour la taille)\n\n```html\n<button style=\"width:16px; height:16px; padding:0;\" aria-label=\"\">&times;</button>\n```\n- **WCAG** : 4.1.2 Name, Role, Value (A) \u2014 `aria-label=\"\"` annule tout nom accessible (critique) \u00b7 2.5.8 Target Size (Minimum) (AA) \u2014 16\u00d716px sous le minimum 24\u00d724px (majeure).\n- **Nielsen** : #4 Consistency and standards \u00b7 #2 Match between system and real world.\n- **Correctif minimal** :\n```html\n<button style=\"width:24px; height:24px; padding:0;\" aria-label=\"Close\">&times;</button>\n```\n\n---\n\n### \u00c9valuation heuristique globale (Nielsen, 10 heuristiques)\n\u00c9checs sur #1, #2, #4, #5, #6, #9 ; #8 passe (fragment minimal) ; #3, #7, #10 non applicables (fragment trop r\u00e9duit).\n\nL'agent note que le fichier contient \"quatre violations plant\u00e9es\" d'apr\u00e8s son propre commentaire d'en-t\u00eate, mais que deux des quatre \u00e9l\u00e9ments portent chacun deux d\u00e9fauts distincts, d'o\u00f9 6 crit\u00e8res WCAG cit\u00e9s au total."
+}

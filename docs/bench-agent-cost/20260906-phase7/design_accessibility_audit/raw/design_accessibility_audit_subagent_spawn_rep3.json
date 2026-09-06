@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "design_accessibility_audit",
+    "condition": "subagent_spawn",
+    "replication": 3,
+    "order_position": "second",
+    "code_hash": "a7a1a90da0a1b85d8ac60cdff53ec20f0f758401",
+    "code_dirty": false,
+    "prompt_hash": "01b45ac9ff54194650447f17434896755720a4c4eb0432a802253fc355ce755b",
+    "cli_version": "2.1.263 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "a9dbd753-e208-4184-a671-eabf68e95651",
+    "input_tokens": 4,
+    "output_tokens": 743,
+    "cache_creation_input_tokens": 133412,
+    "cache_read_input_tokens": 182361,
+    "total_cost_usd": 0.8067304500000001,
+    "duration_ms": 94750,
+    "duration_api_ms": 77818,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 1
+  },
+  "representation_check_passed": true,
+  "result_text": "Rapport du subagent `ux-designer` restitu\u00e9 tel quel ci-dessus. R\u00e9sum\u00e9 : 4 violations WCAG 2.2 AA plant\u00e9es dans la fixture, dont une **Critique** (bouton \"Save\" en `<div>` non focusable au clavier \u2014 2.1.1) et une seconde **Critique** (`aria-label=\"\"` vide sur le bouton `\u00d7`, qui masque le contenu textuel \u2014 4.1.2), plus deux **S\u00e9rieuses** (label manquant sur le champ email \u2014 3.3.2 ; erreur signal\u00e9e uniquement par la couleur, sans lien ni live-region \u2014 1.4.1/4.1.3). \u00c9valuation heuristique Nielsen jointe (5/10 en \u00e9chec)."
+}

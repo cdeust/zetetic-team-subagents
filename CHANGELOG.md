@@ -15,6 +15,43 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Phase 7 closeout of the agent-to-skill migration plan (#125).**
+  `rules/agent-vs-skill-classification.md`'s `ux-designer` row was stale
+  since PR #120 (predated Phase 4/#123's resolution to skill-frontable);
+  fixed, plus the zero-coverage count (9 -> 8 agents) and the verdict
+  distribution line (9/1/13 -> 9/0/14). Audited all 5 compatibility gates
+  named in the original external review (`agent-definition-auditor`,
+  `skill-routing-table-drift`, `manifest-gate`,
+  `pytest tests/test_portable_package.py`,
+  `scripts/generate-skill-agent-model-matrix.py --check`) and confirmed
+  every one is wired into `.github/workflows/ci.yml` -- no gap found, no
+  new wiring needed.
+
+  Re-ran both benchmark tasks at the pinned sonnet/medium production
+  tier: `review_small_diff` (first production-tier data point for this
+  task -- non-inferiority now **established**, reversing the prior
+  haiku/low smoke run's inconclusive result) and `design_accessibility_audit`
+  (second production run, reproducibility check against 2026-09-05's
+  baseline -- non-inferiority **re-established**, but this run surfaced
+  the benchmark's first-ever completion-rate divergence between
+  conditions: `subagent_spawn` completed only 4/5 replications at the
+  pre-registered quality threshold, `inline_skill` 5/5). The
+  tokens-vs-dollar-cost direction split (subagent cheaper in raw tokens,
+  more expensive in real CLI-reported dollars) now has three
+  production-tier confirmations in the same direction, still not treated
+  as established from this sample size. Full results in
+  `tools/bench-agent-cost/README.md`'s negative-result log; raw/scored
+  data at `docs/bench-agent-cost/20260906-phase7/`.
+
+  **This phase does not convert any additional team agents to skills.**
+  The mixed non-inferiority evidence and the newly observed completion-rate
+  divergence argue against a blanket rollout; converting the remaining
+  skill-frontable-but-uncovered agents (`data-scientist`,
+  `frontend-engineer`, `mlops`, `refactorer`, `simplifier`) is left as
+  individual, benchmark-gated follow-up work, never a batch conversion.
+
 ### Added
 
 - **Generalized cross-CLI skill packaging + `zetetic-design` package

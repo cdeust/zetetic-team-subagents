@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 5,
+    "order_position": "second",
+    "code_hash": "a7a1a90da0a1b85d8ac60cdff53ec20f0f758401",
+    "code_dirty": false,
+    "prompt_hash": "9cac4ffac2e1443b6e37bc2e3d29d9606869def7218cb5e4183497b57f34a7e2",
+    "cli_version": "2.1.263 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "0cf27b84-87ac-4829-acaf-8440600e98e4",
+    "input_tokens": 4,
+    "output_tokens": 2390,
+    "cache_creation_input_tokens": 130482,
+    "cache_read_input_tokens": 182839,
+    "total_cost_usd": 0.5824038,
+    "duration_ms": 53615,
+    "duration_api_ms": 36307,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: `tools/bench-agent-cost/fixtures/review_target.py`\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | review_target.py:11 | Security / Injection | coding-standards.md \u00a73.2 (validate at boundaries; no untyped raw string across boundary) \u2014 OWASP A03:2021 Injection | `order_id` is interpolated directly into a SQL string via f-string (`f\"SELECT total FROM orders WHERE id = {order_id}\"`). Any caller passing an attacker-influenced `order_id` can inject arbitrary SQL. | Use a parameterized query, e.g. `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))` (or the driver's placeholder syntax). |\n| 2 | review_target.py:24 | Security / Injection | coding-standards.md \u00a73.2 \u2014 OWASP A03:2021 Injection | Same f-string SQL injection pattern on the `UPDATE` statement. | Parameterize: `db_conn.execute(\"UPDATE orders SET status='paid' WHERE id = ?\", (order_id,))`. |\n| 3 | review_target.py:19-22 | Anti-pattern / Error handling | coding-standards.md \u00a79 (\"Catching / swallowing errors 'just in case' without a named failure mode\") and \u00a73.2 (handle errors at the appropriate layer) | A failed payment (`resp.status_code != 200`) is silently swallowed and reported as `None` \u2014 indistinguishable from any other `None`-returning path, and the caller has no way to know payment failed vs. some other condition. No named failure mode, no error surfaced, no logging. | Raise a typed exception (e.g. `PaymentFailedError(order_id, resp.status_code)`) or return a discriminated result type (`Result[float, PaymentError]`) so callers must handle the failure explicitly. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 4 | review_target.py:8-25 | SOLID / SRP | coding-standards.md \u00a71.1 (Single Responsibility Principle) \u2014 \"if you describe what the code does and the description contains 'and,' you are violating SRP\" | `process_order` reads from the DB, applies discount business logic, performs an outbound HTTP payment call, and writes back to the DB \u2014 four independent reasons to change (schema change, discount-policy change, payment-provider change, persistence change) in one function. | Split into: a repository/port for order lookup and status update, a pure `apply_discount(total) -> float` function, and a `PaymentGateway` port for the charge \u2014 orchestrated by a thin use-case function. |\n| 5 | review_target.py:5, 8, 18 | Clean Architecture / DIP | coding-standards.md \u00a72.2 (Dependency Rule) and \u00a75.1 (Reverse DI \u2014 core must not import concrete infrastructure types) | The function directly imports and calls `requests` (a concrete infra library) and takes a raw `db_conn` \u2014 business logic (discount calculation) is not separable from infrastructure I/O. If this function represents core/use-case logic, it violates the inward-dependency rule. | Define `PaymentGateway` and `OrderRepository` protocols in the core layer; inject concrete `requests`-based and DB-based implementations from a composition root. |\n| 6 | review_target.py:13-14 | Readability / No magic numbers | coding-standards.md \u00a73.1 (\"No magic numbers. Every numeric constant has a name or a source comment\") and \u00a78 (no invented constants without a source) | `500` (discount threshold) and `0.9` (10% discount rate) are unexplained literals with no name and no `# source:` comment justifying the business rule. | Extract to named constants, e.g. `BULK_DISCOUNT_THRESHOLD = 500` / `BULK_DISCOUNT_RATE = 0.9`, each with a `# source:` comment pointing to the pricing policy/spec that defines them. |\n\n### Minor (optional, improve later)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 7 | review_target.py:8 | Reliability / Typing | coding-standards.md \u00a73.2 (\"Use the language's type system fully... No untyped dict/interface{}\") | `order_id` and `db_conn` have no type annotations, and the function has no return type annotation (`Optional[float]`). | Add type hints: `def process_order(order_id: int, db_conn: DBConnection) -> float | None:` (with `DBConnection` as a Protocol). |\n\n### Architecture assessment\n\nThis is a single free function with no visible layer boundary \u2014 the whole file mixes what should be core discount logic with two distinct infrastructure concerns (SQL persistence and an HTTP payment call). Per the Dependency Rule (\u00a72.2), business logic must not import infrastructure directly; this function needs to be decomposed along the SRP violation (finding #4) so that the DIP violation (finding #5) can also be resolved via injected ports. The two SQL injection findings (#1, #2) are the most severe and must be fixed independent of any refactor."
+}

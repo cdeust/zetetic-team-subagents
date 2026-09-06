@@ -1,0 +1,22 @@
+{
+  "eval_a": {
+    "verdict": {
+      "placeholder_as_label": false,
+      "color_only_indicator": false,
+      "custom_div_button": false,
+      "touch_target_size": false,
+      "no_fabrication": true
+    },
+    "total_points": 1
+  },
+  "eval_b": {
+    "verdict": {
+      "placeholder_as_label": true,
+      "color_only_indicator": true,
+      "custom_div_button": true,
+      "touch_target_size": false,
+      "no_fabrication": true
+    },
+    "total_points": 8
+  }
+}

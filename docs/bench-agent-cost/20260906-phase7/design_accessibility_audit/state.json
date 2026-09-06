@@ -1,0 +1,12 @@
+[
+  "design_accessibility_audit::1::inline_skill",
+  "design_accessibility_audit::1::subagent_spawn",
+  "design_accessibility_audit::2::inline_skill",
+  "design_accessibility_audit::2::subagent_spawn",
+  "design_accessibility_audit::3::inline_skill",
+  "design_accessibility_audit::3::subagent_spawn",
+  "design_accessibility_audit::4::inline_skill",
+  "design_accessibility_audit::4::subagent_spawn",
+  "design_accessibility_audit::5::inline_skill",
+  "design_accessibility_audit::5::subagent_spawn"
+]

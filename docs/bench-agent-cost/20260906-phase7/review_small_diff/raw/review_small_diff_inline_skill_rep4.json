@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 4,
+    "order_position": "first",
+    "code_hash": "a7a1a90da0a1b85d8ac60cdff53ec20f0f758401",
+    "code_dirty": false,
+    "prompt_hash": "9cac4ffac2e1443b6e37bc2e3d29d9606869def7218cb5e4183497b57f34a7e2",
+    "cli_version": "2.1.263 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "177054eb-7f92-4b5c-a8c8-639d0b8218a0",
+    "input_tokens": 4,
+    "output_tokens": 2620,
+    "cache_creation_input_tokens": 130482,
+    "cache_read_input_tokens": 182839,
+    "total_cost_usd": 0.5847038,
+    "duration_ms": 48925,
+    "duration_api_ms": 33632,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: `tools/bench-agent-cost/fixtures/review_target.py`\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | `review_target.py:11,24` | Security \u2014 SQL injection | OWASP Top 10 (Injection); coding-standards.md \u00a73.2 (validate at boundaries, use safe idioms) | `order_id` is interpolated directly into the SQL string via an f-string in both the `SELECT` and the `UPDATE`. Any caller passing a non-sanitized `order_id` can inject arbitrary SQL. | Use parameterized queries: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))` (or the driver's placeholder syntax). |\n| 2 | `review_target.py:19-22` | Anti-pattern \u2014 swallowed error | coding-standards.md \u00a79 (\"Catching / swallowing errors 'just in case' without a named failure mode\"); \u00a73.2 (handle errors at the appropriate layer) | On a non-200 payment response the function silently returns `None`. The caller cannot distinguish \"payment declined,\" \"gateway timeout,\" and \"success with $0 total\" \u2014 all collapse to `None`. No failure mode is named or raised. | Raise a domain-specific exception (e.g., `PaymentFailedError(order_id, resp.status_code)`) or return a typed `Result`/`PaymentOutcome` object that the caller can pattern-match on, instead of an ambiguous sentinel. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 3 | `review_target.py:8-25` | SOLID \u2014 SRP | coding-standards.md \u00a71.1 (one reason to change); \u00a72.1 (Core/Domain must have zero I/O) | `process_order` mixes three concerns with independent reasons to change: reading order data (persistence), applying a discount (business rule), and charging a payment gateway (infrastructure I/O). A change to the discount policy, the DB schema, or the payment provider each force an edit to this one function. Description requires an \"and.\" | Split into: a pure `apply_discount(total: float) -> float` (core/domain, no I/O), an `OrderRepository` port for the DB reads/writes, and a `PaymentGateway` port for the charge call. `process_order` becomes an orchestrating use case that composes the three via injected dependencies. |\n| 4 | `review_target.py:8` (params `order_id`, `db_conn`) / whole function | SOLID \u2014 DIP; Clean Architecture layering | coding-standards.md \u00a71.5 (core must not depend on low-level modules); \u00a72.2 (dependency rule); \u00a75.1 (reverse DI \u2014 core declares interfaces, not concrete infra) | The function takes a concrete `db_conn` and calls the concrete `requests` module directly \u2014 there is no abstraction (`PaymentGateway`, `OrderRepository` protocol) between the business logic and the infrastructure. This is a direct infrastructure\u2192core layer violation: the \"core\" logic (discount calc) is welded to a DB connection object and a hard-coded HTTP client. | Declare `PaymentGateway` and `OrderRepository` protocols in the domain layer; inject concrete adapters (`RequestsPaymentGateway`, `SqlOrderRepository`) at a composition root. `process_order` depends only on the protocols. |\n| 5 | `review_target.py:13` | Coding standard \u2014 no magic numbers / no invented constants | coding-standards.md \u00a73.1 (\"No magic numbers. Every numeric constant has a name or a source comment\"); \u00a78 (\"No invented constants... every hardcoded number must have a source\") | `500` (discount threshold) and `0.9` (10% discount multiplier) are bare literals with no name and no `# source:` citation tracing them to a documented business rule. | Extract named constants, e.g. `BULK_ORDER_DISCOUNT_THRESHOLD = 500  # source: pricing policy doc \u00a74.2` and `BULK_ORDER_DISCOUNT_RATE = 0.9  # source: ...`. |\n\n### Minor (optional, improve later)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 6 | `review_target.py:8` | Coding standard \u2014 type system usage | coding-standards.md \u00a73.2 (\"Use the language's type system fully. Type hints... \u2014 all of it\") | `order_id`, `db_conn`, and the function's return type are untyped. Return type is implicitly `float \\| None`, which is not declared anywhere and is easy to misuse at call sites. | Add type hints: `def process_order(order_id: int, order_repo: OrderRepository) -> PaymentOutcome:` (once the DIP fix in finding 4 is applied). |\n\n### Architecture assessment\n\nThis file has no layer separation at all \u2014 it is a single function acting simultaneously as handler, use case, and infrastructure adapter, in direct violation of the Clean Architecture dependency rule (coding-standards.md \u00a72.2). The two Critical findings (SQL injection, swallowed payment failure) are correctness/security defects that must be fixed regardless of restructuring; the SRP/DIP findings (\u2462, \u2463) are the structural root cause that made both Critical defects easy to introduce in the first place \u2014 inlining raw SQL and an unchecked HTTP call directly into business logic is what a proper `OrderRepository`/`PaymentGateway` boundary would have prevented by construction."
+}

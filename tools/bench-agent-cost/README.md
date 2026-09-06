@@ -440,13 +440,98 @@ re-running the tool against the committed artifacts).
   points: 5`; tokens-per-completed-task equals the raw means exactly
   (nothing excluded by the gate here either).
 
-**Action:** re-run at the pinned production tier (sonnet/medium) across
-`review_small_diff`, `test_small_module`, and `debug_small_bug` (still
-only run at the haiku/low smoke tier) before treating non-inferiority as
-established repo-wide. The token/cost divergence is now a 2-of-2 pattern
-worth investigating directly (e.g. instrumenting the top-level session's
-own prompt-construction step) rather than continuing to infer it from
-aggregate token/cost proxies alone.
+**2026-09-06, `review_small_diff`, sonnet/medium production run (n=5) --
+non-inferiority ESTABLISHED (first production-tier data point for this
+task).** Raw + scored data at `docs/bench-agent-cost/20260906-phase7/review_small_diff/`.
+Phase 7 (`staged-rolling-shannon.md`) closeout re-run, addressing this
+log's own prior Action item for this task. Independently re-derived from
+the committed raw/scored JSON with `analyze_results.py` before writing
+this entry.
+
+- Quality: inline_skill mean 9.60/10, subagent_spawn mean 9.90/10 (2
+  blind evaluators). Non-inferiority test at margin=1.0: mean diff
+  (skill - subagent) = -0.3, lower 95% confidence bound = -0.844, which
+  is >= -1.0 -> **`non_inferior_at_05: true`**. This reverses the
+  haiku/low smoke run's inconclusive result for the same task -- the
+  smoke run was underpowered by design (cost-bounded plumbing check, not
+  the production question); this is the production-tier answer.
+- Total tokens: inline_skill mean 315,742 vs. subagent_spawn mean
+  286,638 (paired t=0.956, **not significant** at n=5) -- subagent used
+  fewer tokens on 4/5 seeds. Same direction as the smoke run, but no
+  longer overwhelmingly significant (the smoke run's t=134.5 at haiku/low
+  does not transfer to sonnet/medium token magnitudes).
+- Wall-clock: inline_skill mean 47.7s vs. subagent_spawn mean 88.4s
+  (paired t=-3.251, **significant**) -- inline faster on 4/5 seeds.
+- total_cost_usd: inline_skill mean $0.59 vs. subagent_spawn mean $0.85
+  (paired t=-11.794, **significant**) -- inline cheaper in dollars on
+  5/5 seeds, the opposite direction from the token comparison. **This is
+  now the third production-tier data point (this task once,
+  `design_accessibility_audit` twice below) showing the same
+  tokens-vs-dollars divergence in the same direction** -- still not
+  proof from 2 tasks, but the replication count within this one task's
+  own re-run adds weight to "real pattern, mechanism not yet isolated"
+  over "one-off noise."
+- Completion-gated re-check: both conditions 100% (5/5) completion at
+  `review_small_diff`'s `completion_threshold_points: 5`; nothing
+  excluded, tokens-per-completed-task equals the raw means.
+
+**2026-09-06, `design_accessibility_audit`, sonnet/medium production
+run #2 (n=5, different seed data from the 2026-09-05 run) --
+non-inferiority ESTABLISHED, but with a genuinely new finding: the first
+observed completion-rate divergence between conditions in this
+benchmark's history.** Raw + scored data at
+`docs/bench-agent-cost/20260906-phase7/design_accessibility_audit/`.
+Phase 7 closeout re-run of the same task, to check reproducibility of
+the 2026-09-05 result -- reported honestly where it agrees and where it
+does not, not smoothed into "replicated."
+
+- Quality: inline_skill mean 10.00/10, subagent_spawn mean 8.50/10 (2
+  blind evaluators) -- **identical means to the 2026-09-05 run** on this
+  metric. Non-inferiority test: mean diff = 1.5, lower 95% confidence
+  bound = -0.786, which is >= -1.0 -> **`non_inferior_at_05: true`**
+  (consistent with 2026-09-05). But the paired quality difference itself
+  is **not significant this time** (t=1.399, vs. t=3.873 and significant
+  on 2026-09-05) -- same direction, same means, wider variance in this
+  seed set (stdev of the paired difference: 2.40 vs. an implied tighter
+  spread previously). This is run-to-run variance at n=5, not a
+  contradiction; both runs independently clear the non-inferiority bar.
+- **Completion rate: inline_skill 5/5 (100%), subagent_spawn 4/5
+  (80%).** One `subagent_spawn` replication scored below
+  `completion_threshold_points: 5` and is excluded from the
+  completion-gated tokens-per-completed-task figure (n=4 for that
+  metric: mean=164,431 vs. the all-valid-runs mean of 194,849) -- the
+  first time in this benchmark's history that the two conditions'
+  completion rates have actually diverged. This is exactly the confound
+  PR #122's completion-gating fix exists to catch: without it, the one
+  low-quality subagent run's low token count would have been silently
+  averaged in as if it had completed the task, understating
+  `subagent_spawn`'s true per-completed-task token cost. With the gate,
+  the honest comparison is 320,790 (inline, 5/5 completed) vs. 164,431
+  (subagent, 4/5 completed) -- not directly comparable at face value
+  since the denominators differ, and this log does not attempt to force
+  a single "winner" number out of that asymmetry.
+- Total tokens (all valid runs, not completion-gated): inline_skill mean
+  320,790 vs. subagent_spawn mean 194,849 (paired t=4.134, **significant**
+  this time, vs. not significant on 2026-09-05 with means 319,701 vs.
+  226,392) -- same direction, tighter this run.
+- total_cost_usd: inline_skill mean $0.60 vs. subagent_spawn mean $0.93
+  (paired t=-8.766, significant) -- inline cheaper in dollars, matching
+  2026-09-05's $0.61/$0.97 almost exactly. This is now the third
+  production-tier confirmation (with `review_small_diff` above) of the
+  same tokens-vs-dollars direction split.
+- Wall-clock: no significant difference (paired t=1.405), consistent
+  with 2026-09-05.
+
+**Action, updated 2026-09-06:** `review_small_diff` is now re-run at the
+production tier (above) and no longer pending. `test_small_module` and
+`debug_small_bug` are named in the task corpus below but have not been
+run at any tier yet -- do so before treating non-inferiority as
+established repo-wide. The token/cost divergence now has three
+production-tier confirmations in the same direction (one task run twice,
+one task run once) and the completion-rate divergence observed on
+`design_accessibility_audit`'s second run is a new, real finding worth
+its own follow-up investigation (does it recur on a third run, or was it
+one low-quality outlier?) -- neither is resolved here.
 
 ## Files
 

@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "task_id": "review_small_diff",
+    "condition": "inline_skill",
+    "replication": 1,
+    "order_position": "first",
+    "code_hash": "a7a1a90da0a1b85d8ac60cdff53ec20f0f758401",
+    "code_dirty": false,
+    "prompt_hash": "9cac4ffac2e1443b6e37bc2e3d29d9606869def7218cb5e4183497b57f34a7e2",
+    "cli_version": "2.1.263 (Claude Code)",
+    "model": "sonnet",
+    "effort": "medium",
+    "rng_seed_for_order": 20260905,
+    "environment": {
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "python_version": "3.14.4"
+    }
+  },
+  "usage_raw": {
+    "session_id": "c25f61e2-c319-42c9-992d-91c504a25c73",
+    "input_tokens": 4,
+    "output_tokens": 2510,
+    "cache_creation_input_tokens": 136713,
+    "cache_read_input_tokens": 176572,
+    "total_cost_usd": 0.6072744,
+    "duration_ms": 45373,
+    "duration_api_ms": 30661,
+    "num_turns": 2,
+    "is_error": false,
+    "subtype": "success",
+    "subagents_spawned": 0
+  },
+  "representation_check_passed": true,
+  "result_text": "## Code Review: `tools/bench-agent-cost/fixtures/review_target.py`\n\n### Critical (blocks merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 1 | review_target.py:11 | Security \u2014 SQL injection | OWASP Top 10 / coding-standards.md \u00a73.2 (validate at boundaries) | `order_id` is interpolated directly into a SQL string via f-string. Any caller passing an unsanitized `order_id` (e.g. from a request) can inject arbitrary SQL. | Use a parameterized query: `db_conn.execute(\"SELECT total FROM orders WHERE id = ?\", (order_id,))` (or the driver's placeholder syntax). |\n| 2 | review_target.py:24 | Security \u2014 SQL injection (same defect, second occurrence) | OWASP Top 10 / coding-standards.md \u00a73.2 | Same f-string interpolation pattern on the `UPDATE` statement. | Same fix \u2014 parameterize `order_id`. |\n| 3 | review_target.py:19-22 | Anti-pattern \u2014 swallowed error | coding-standards.md \u00a79 (\"Catching/swallowing errors 'just in case' without a named failure mode\") and \u00a73.2 (handle errors at the appropriate layer) | A non-200 response from the payment gateway is silently converted to `return None`. The caller cannot distinguish \"payment declined\", \"gateway timeout\", and \"no order found\" \u2014 all collapse to `None`. In a payment path this risks orders being marked unpaid/paid inconsistently with no diagnostic trail. | Raise a typed exception (e.g. `PaymentFailedError(resp.status_code, resp.text)`) or return a `Result`/tagged union that carries the failure reason; let the caller (or an outer boundary) decide how to handle it. |\n\n### Important (should fix before merge)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 4 | review_target.py:8-25 | SOLID \u2014 SRP violation | coding-standards.md \u00a71.1 (one reason to change) | `process_order` reads from the DB, calls an external payment API, applies discount logic, and writes back to the DB \u2014 four responsibilities in one function. A change to the discount rule, the payment provider, or the persistence layer each forces an edit here. | Split into: a pure `apply_discount(total) -> float` (business logic, no I/O), a `PaymentGateway` port with a `charge(amount)` method, and an `OrderRepository` port with `get_total`/`mark_paid`. `process_order` becomes an orchestrator composing the three. |\n| 5 | review_target.py:8-25 | Clean Architecture \u2014 DIP / layering | coding-standards.md \u00a72.2, \u00a75.1 | The function directly imports `requests` (infrastructure) and calls `db_conn.execute` with no abstraction \u2014 there is no port/interface between the (implicit) business logic and its infrastructure dependencies, so core logic cannot be tested or swapped without touching real I/O. | Define `PaymentGateway` and `OrderRepository` as protocols/interfaces owned by the core/business layer; inject concrete implementations (`StripeGateway`, `SqlOrderRepository`) from a composition root. |\n| 6 | review_target.py:13 | Anti-pattern \u2014 magic number | coding-standards.md \u00a73.1, \u00a78 (no invented constants) | `500` (discount threshold) has no name and no `# source:` comment explaining why 500 was chosen. | Introduce a named, sourced constant, e.g. `BULK_DISCOUNT_THRESHOLD = 500  # source: <business rule / ticket / doc>`. |\n| 7 | review_target.py:14 | Anti-pattern \u2014 magic number | coding-standards.md \u00a73.1, \u00a78 (no invented constants) | `0.9` (10% discount multiplier) is an unnamed, unsourced constant. | Introduce a named, sourced constant, e.g. `BULK_DISCOUNT_MULTIPLIER = 0.9  # source: <business rule / ticket / doc>`. |\n\n### Minor (optional, improve later)\n\n| # | File:Line | Category | Principle | Issue | Fix |\n|---|-----------|----------|-----------|-------|-----|\n| 8 | review_target.py:8 | Reliability \u2014 missing type hints | coding-standards.md \u00a73.2 (use the type system fully) | `order_id`, `db_conn` and the return value have no type annotations, so a `None` return (the swallowed-error path) is invisible in the signature. | Annotate: `def process_order(order_id: int, db_conn: Connection) -> float | None:` (or better, a typed `Result` once finding #3 is fixed). |\n\n### Architecture assessment\n\nThis is a single free-standing function with no layer boundaries at all: business logic (discount calculation), a database adapter, and an HTTP payment adapter are fused together, violating the Dependency Rule (coding-standards.md \u00a72.2) by construction \u2014 there's no core module that infrastructure could instead depend on. Beyond the two security-critical SQL-injection sites and the silently-swallowed payment failure, the structural fix (extracting a discount policy plus `PaymentGateway`/`OrderRepository` ports) would resolve the SRP and DIP findings together, since they share the same root cause: no separation between orchestration, business rules, and I/O."
+}
