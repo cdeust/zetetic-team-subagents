@@ -20,7 +20,7 @@
   ],
   "postInstall": {
     "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh install",
-    "message": "Installing zetetic agents, skills, commands, and hooks to ~/.claude/ ..."
+    "message": "Installing zetetic commands, hooks, tools and reference docs to ~/.claude/ (agents and skills are served by the plugin itself) ..."
   },
   "agents": [
     "./agents/advisor.md",

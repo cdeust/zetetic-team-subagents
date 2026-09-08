@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <img src="https://img.shields.io/badge/suites-37-brightgreen" alt="Test suites">
+  <img src="https://img.shields.io/badge/suites-38-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-81-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-22_lifecycle-red" alt="Hooks">

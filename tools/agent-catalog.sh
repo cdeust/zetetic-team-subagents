@@ -8,18 +8,14 @@
 
 set -euo pipefail
 
-# Resolve agent directory: env var → ~/.claude/agents → plugin-relative → git root
-_resolve_agents_dir() {
-  local d
-  d="${ZETETIC_AGENTS:-}"
-  [[ -n "$d" && -d "$d/genius" ]] && { echo "$d"; return; }
-  d="$HOME/.claude/agents"
-  [[ -d "$d/genius" ]] && { echo "$d"; return; }
-  d="$(cd "$(dirname "$0")/.." && pwd)/agents"
-  [[ -d "$d/genius" ]] && { echo "$d"; return; }
-  d="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/agents"
-  echo "$d"
-}
+# Resolve the agents directory through the shared resolver (tools/lib/
+# plugin-content-dir.sh): env var > ~/.claude/agents > plugin-relative > the
+# marketplace install path > git root. `genius` is the marker of the
+# plugin-shipped tree.
+_TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/plugin-content-dir.sh
+source "$(dirname "$0")/lib/plugin-content-dir.sh"
+_resolve_agents_dir() { resolve_plugin_content_dir "${ZETETIC_AGENTS:-}" agents genius "$_TOOL_ROOT"; }
 
 AGENTS_DIR="$(_resolve_agents_dir)"
 GENIUS_DIR="$AGENTS_DIR/genius"
