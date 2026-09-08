@@ -8,7 +8,7 @@ Analyze a problem description, find matching genius agent shapes, and recommend 
 
 2. Run `tools/genius-invoker.sh route "$ARGUMENTS"` to grep INDEX.md for matching shapes.
 
-3. Read `rules/agent-routing-table.md` (installed: `~/.claude/rules/agent-routing-table.md`) — the compact generated table of all 116 agents (name + shape keywords + one-line description, ~25KB). Match the problem against shape keywords and descriptions:
+3. Read `rules/agent-routing-table.md` (installed: `~/.claude/reference/agent-routing-table.md`) — the compact generated table of all 116 agents (name + shape keywords + one-line description, ~25KB). Match the problem against shape keywords and descriptions:
    - Exact shape name matches
    - Semantic matches where the problem structure fits a shape even without keyword overlap
 

@@ -153,6 +153,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Rules are installed under `~/.claude/reference/`, not `~/.claude/rules/` (#129).**
+  Claude Code loads every Markdown file under `~/.claude/rules/` at launch, so
+  the routing table, coding standards and the agent-reference documents were
+  re-sent on every turn although agents only Read them on demand.
+  `scripts/setup.sh` now stages `rules/` to `~/.claude/reference/` and every
+  absolute reference follows. Owner correction 2026-09-08: CLAUDE.md should
+  be nearly empty; the host loads what it needs when it needs it.
+
 - **Worktrees live inside the repository (owner correction 2026-09-08, #128).**
   `scripts/spawn-agent.sh` now creates its worktree at
   `<target-repo>/.claude/worktrees/<agent>-<timestamp>` instead of a sibling

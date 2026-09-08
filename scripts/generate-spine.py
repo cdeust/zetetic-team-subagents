@@ -94,7 +94,7 @@ def _procedure(resource: str) -> list[str]:
         'conditions match yours. No source → say "I don\'t know" and stop; do '
         "not ship, then justify (coding-standards.md §8). "
         + resource
-        + " — `~/.claude/rules/agent-reference/research-resources.md`.",
+        + " — `~/.claude/reference/agent-reference/research-resources.md`.",
         '3. **Adversarial-verify** before "done" — design the test that '
         + "catches the error *if it exists* (severity, not ceremony); reproduce "
         + "before claiming a fix. **For code changes at High/Medium stakes, prove "
@@ -157,7 +157,7 @@ STANDING_RULES = [
     "",
     "Failed gate ⇒ **STOP** and surface the gap; never paper over a missing "
     + "source with confidence. Full procedure: "
-    + "`~/.claude/rules/agent-reference/zetetic-spine.md`.",
+    + "`~/.claude/reference/agent-reference/zetetic-spine.md`.",
 ]
 
 

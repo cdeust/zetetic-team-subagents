@@ -25,7 +25,7 @@
 set -euo pipefail
 
 # Ordinal ranking of model tiers, cheapest to most capable/expensive.
-# source: ~/.claude/rules/agent-reference/effort-calibration.md model catalog
+# source: ~/.claude/reference/agent-reference/effort-calibration.md model catalog
 # (Anthropic claude-api reference, cached 2026-06-24): Haiku 4.5 $1/$5,
 # Sonnet 5 $3/$15, Opus 5 $5/$25, Fable 5 $10/$50 per MTok.
 declare -A MODEL_TIER_RANK=( [haiku]=0 [sonnet]=1 [opus]=2 [fable]=3 )

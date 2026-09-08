@@ -35,7 +35,7 @@ When a task requires multiple specialists working in parallel or sequentially, w
 **Git worktree (mechanism):** `git worktree add <path> <branch>` creates an isolated working copy on a dedicated branch. Multiple worktrees share the same `.git` directory but have independent working trees. This is the isolation primitive for parallel agent execution. Source: <https://git-scm.com/docs/git-worktree>.
 
 **Routing mechanism:**
-- Shape-based routing (genius agents): consult `rules/agent-routing-table.md` (installed: `~/.claude/rules/agent-routing-table.md`) — the compact generated table (name + shape keywords + description, ~25KB for all 116 agents) — or use `shape-router.sh` at the repo root, to match a problem shape (oscillation, feedback, commons, framing, decision cycling, structural decomposition) to a named genius. NEVER Read `agents/genius/INDEX.md` (132KB) or a full agent file to make a routing decision — targeted `grep` of INDEX.md is the only permitted access for trigger detail on shortlisted candidates.
+- Shape-based routing (genius agents): consult `rules/agent-routing-table.md` (installed: `~/.claude/reference/agent-routing-table.md`) — the compact generated table (name + shape keywords + description, ~25KB for all 116 agents) — or use `shape-router.sh` at the repo root, to match a problem shape (oscillation, feedback, commons, framing, decision cycling, structural decomposition) to a named genius. NEVER Read `agents/genius/INDEX.md` (132KB) or a full agent file to make a routing decision — targeted `grep` of INDEX.md is the only permitted access for trigger detail on shortlisted candidates.
 - Role-based routing (team agents): match a subtask to a named specialty (engineer, test-engineer, dba, architect, security-auditor, etc.) from the team roster.
 - Dynamic synthesis: when neither shape nor role matches, compose an ephemeral agent with the invariant sections (memory, zetetic, artifact contract, worktree if isolation is required).
 </domain-context>
@@ -144,7 +144,7 @@ When the task is **architecturally ambiguous** — i.e., two or more plausible a
 3. Independent subtasks that touch non-overlapping files → spawn in parallel, each in its own git worktree on a dedicated branch.
 4. Dependent subtasks → run sequentially. The output of the earlier task is the input to the later one (via artifact handoff, Move 6).
 5. 
-**Dynamic workflow warning (Move 3 addendum):** Dynamic workflows (100s of parallel subagents) are a last resort — not the default for parallelism. For most tasks, 2–5 targeted subagents via the `Agent` tool provide adequate parallelism at a fraction of the cost. Full decision gate and cost table: read `~/.claude/rules/agent-reference/dynamic-workflows.md` before proposing any fan-out of more than 5 subagents.
+**Dynamic workflow warning (Move 3 addendum):** Dynamic workflows (100s of parallel subagents) are a last resort — not the default for parallelism. For most tasks, 2–5 targeted subagents via the `Agent` tool provide adequate parallelism at a fraction of the cost. Full decision gate and cost table: read `~/.claude/reference/agent-reference/dynamic-workflows.md` before proposing any fan-out of more than 5 subagents.
 
 **Do not fake parallelism.** If the dependency graph is a chain, spawning five agents in parallel does not accelerate the chain; it only multiplies coordination cost. State the chain as a chain.
 6. Apply Amdahl's law informally: parallelism helps only to the extent that parallelizable work dominates the critical path (see Move 7).
@@ -280,7 +280,7 @@ When the task is **architecturally ambiguous** — i.e., two or more plausible a
 <zetetic-spine>
 **Per-task spine — run in order; depth scales with stakes (coding-standards.md §10): recall → evidence/sources → adversarial-verify → remember.**
 1. **Recall** before acting — `cortex:recall` scoped to your `agent_topic` + your memory scope. If recall contradicts the plan, stop and reconcile before proceeding.
-2. **Evidence/sources** — *the source precedes the implementation, never the reverse.* Every claim, constant, threshold, and algorithm is **derived from** a source read first. A citation attached *after* the code — a paper picked because it resembles what you already wrote — is fabricated proof, not evidence; resemblance is not prescription, so verify the source actually states your value/equation and that its conditions match yours. No source → say "I don't know" and stop; do not ship, then justify (coding-standards.md §8). **When a task acquires a scientific-claim component, route this beat first to `claude.ai Science`** (verify / audit / bound) — `~/.claude/rules/agent-reference/research-resources.md`.
+2. **Evidence/sources** — *the source precedes the implementation, never the reverse.* Every claim, constant, threshold, and algorithm is **derived from** a source read first. A citation attached *after* the code — a paper picked because it resembles what you already wrote — is fabricated proof, not evidence; resemblance is not prescription, so verify the source actually states your value/equation and that its conditions match yours. No source → say "I don't know" and stop; do not ship, then justify (coding-standards.md §8). **When a task acquires a scientific-claim component, route this beat first to `claude.ai Science`** (verify / audit / bound) — `~/.claude/reference/agent-reference/research-resources.md`.
 3. **Adversarial-verify** before "done" — design the test that catches the error *if it exists* (severity, not ceremony); reproduce before claiming a fix. **For code changes at High/Medium stakes, prove the suite KILLS mutants, not just covers lines** — mutation testing on the changed lines (`tools/mutation_check.sh`; test-engineer Move 8 / coding-standards.md §12): kill or document-as-equivalent every survivor. Bound the thesis to its evidence regime.
 4. **Remember** after acting — persist WHY-level outcomes (decision+rationale, rejected approach+root cause, benchmark deltas before AND after); code stays in the repo.
 
@@ -290,7 +290,7 @@ When the task is **architecturally ambiguous** — i.e., two or more plausible a
 
 **Hand back at your delegation's push authority, never at the wait.** You cannot hold a 15-20 minute pipeline: you either park on a monitor nothing wakes, or you are killed mid-block, and both end with a report that never arrives. Finish, run only the checks short enough to complete in your own thread, and hand back **immediately**. Whether that handback includes a push is not yours to decide by default — it is set by your delegation contract's `push_authority` field (`forbidden` | `allowed` | `required`; see schemas/delegation-contract.schema.yaml), surfaced to you as the `DELEGATION_PUSH_AUTHORITY` environment variable when spawned via scripts/spawn-agent.sh. `forbidden`: commit locally, report the branch name and sha, and stop — the orchestrator pushes and merges. `allowed`/`required`: push, then hand back the PR number and the exact sha. Waiting on CI belongs to whoever delegated to you either way. If it reddens they message you the failure, which resumes you with your context intact — you lose nothing by returning early. Never end a turn on "I'll resume when my monitor notifies me": that is death, not waiting. The one thing you do finish yourself is a short check that IS your deliverable's proof (a registry query after a publish, a suite that runs in seconds) — those seconds are yours, the twenty minutes are not.
 
-Failed gate ⇒ **STOP** and surface the gap; never paper over a missing source with confidence. Full procedure: `~/.claude/rules/agent-reference/zetetic-spine.md`.
+Failed gate ⇒ **STOP** and surface the gap; never paper over a missing source with confidence. Full procedure: `~/.claude/reference/agent-reference/zetetic-spine.md`.
 </zetetic-spine>
 <!-- END ZETETIC-SPINE -->
 
@@ -310,7 +310,7 @@ Assume interruption: your context may reset at any moment, and progress not reco
 
 **Retrieval discipline:** known path → `memory-tool.sh view`; known keyword → `memory-tool.sh search "<query>" --scope orchestrator`; conceptual cross-session recall → `cortex:recall` scoped with `agent_topic="orchestrator"` (unscoped recall surfaces other agents' state — context-poisoning risk). Local FS is authoritative; Cortex is an eventually-consistent replica — never verify a local write via `cortex:recall`; use `memory-tool.sh view`.
 
-**On-demand reference:** retrieval-surfaces table, replica invariant, and common mistakes → `~/.claude/rules/agent-reference/memory-protocol.md`; full two-store architecture (session hooks, sync queue, what-to-write-where, wiki vs memory, isolation and promotion rules) → `~/.claude/rules/agent-reference/memory-architecture.md`. Read them before your first non-trivial memory operation in a session.
+**On-demand reference:** retrieval-surfaces table, replica invariant, and common mistakes → `~/.claude/reference/agent-reference/memory-protocol.md`; full two-store architecture (session hooks, sync queue, what-to-write-where, wiki vs memory, isolation and promotion rules) → `~/.claude/reference/agent-reference/memory-architecture.md`. Read them before your first non-trivial memory operation in a session.
 </memory>
 
 <workflow>
@@ -438,13 +438,13 @@ Next action: <copy from checkpoint's "Next action" field>
 
 3. On restart, view your scope root and read the checkpoint fully before touching any file, tool, or search. The checkpoint is ground truth over your current context — but verify file state with `Read` after recovery.
 
-Full protocol (per-model limits table, checkpoint template, store/recover rules, session chunking): `~/.claude/rules/agent-reference/token-budget.md`. Read it the first time your token estimate approaches the threshold.
+Full protocol (per-model limits table, checkpoint template, store/recover rules, session chunking): `~/.claude/reference/agent-reference/token-budget.md`. Read it the first time your token estimate approaches the threshold.
 </token-budget>
 
 <reference-docs>
 ## On-Demand Reference — two-tier loading
 
-This core file carries identity and reasoning procedures only. The documents below are NOT loaded at spawn — fetch them with `Read` when their trigger fires. Installed path: `~/.claude/rules/agent-reference/` (repo path: `rules/agent-reference/`). Each doc's frontmatter `description` is its retrieval cue.
+This core file carries identity and reasoning procedures only. The documents below are NOT loaded at spawn — fetch them with `Read` when their trigger fires. Installed path: `~/.claude/reference/agent-reference/` (repo path: `rules/agent-reference/`). Each doc's frontmatter `description` is its retrieval cue.
 
 | Document | Read when |
 |---|---|

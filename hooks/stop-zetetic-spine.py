@@ -138,7 +138,7 @@ REASON = (
     "evidence/sources (every claim cited; no source → \"I don't know\") → "
     "adversarial-verify (a test that catches the error if it exists) → remember "
     "(persist WHY-level outcomes). Full procedure: "
-    "~/.claude/rules/agent-reference/zetetic-spine.md."
+    "~/.claude/reference/agent-reference/zetetic-spine.md."
 )
 
 
