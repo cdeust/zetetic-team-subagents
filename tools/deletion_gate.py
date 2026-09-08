@@ -12,7 +12,12 @@ grep is the whole mechanism this gate automates and makes mandatory.
 
 For every top-level definition (function/class/etc.) removed by a diff:
   1. Search the POST-change tree for surviving references to its name.
-     Any survivor -> BLOCK, naming the caller(s). Not arguable.
+     Any survivor -> BLOCK, naming the caller(s). Not arguable. A file that
+     defines the same name at top level binds its own bare calls to that
+     definition; those lines are not survivors (attribute and import shapes
+     in such a file still are). An attribute shape (`x.name`) in a file that
+     never names the defining file is not a survivor either: it cannot hold
+     an object bound to that module.
   2. No survivors, but the same body reappears elsewhere under a different
      name/path (a rename or a move) -> PASS silently. Nobody owes a
      rationale for spelling something differently.
@@ -278,7 +283,7 @@ def _evaluate_one(rd: Definition, ctx: dict, added: list, consumed: set) -> Find
 
     survivors = find_survivors(
         ctx["repo"], ctx["ref"], ctx["mode"], rd.name, rd.lang,
-        exclude_paths=ctx["touched"],
+        exclude_paths=ctx["touched"], defined_in=rd.file,
     )
     if survivors:
         return Finding(True, format_survivor_block(label, rd.name, survivors))

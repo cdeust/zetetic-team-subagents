@@ -220,8 +220,123 @@ def test_find_survivors_exclude_path_drops_that_files_matches(git_repo: Path):
     assert survivors == []
 
 
+def test_find_survivors_ignores_a_same_named_local_definition(git_repo: Path):
+    # Every Stop hook in this repo defines its own _note/repo_root. Another
+    # file's definition, and its bare calls to it, are bound locally and are
+    # not references to the removed one (measured 2026-09-08: 23 false
+    # survivors on repo_root, all of this shape). The fixture name is not a
+    # real helper of this repository, so these strings never become
+    # survivors of a real removal.
+    (git_repo / "other_hook.py").write_text(
+        "def local_helper():\n    return '.'\n\n\ndef main():\n    root = local_helper()\n"
+    )
+    head = _commit(git_repo, "init")
+    assert dgg.find_survivors(str(git_repo), head, None, "local_helper", "python") == []
+
+
+def test_find_survivors_keeps_attribute_and_import_shapes_in_a_defining_file(git_repo: Path):
+    (git_repo / "mixed.py").write_text(
+        "from lib import local_helper as lib_helper\n"
+        "import lib\n\n\n"
+        "def local_helper():\n"
+        "    return lib.local_helper()\n"
+    )
+    head = _commit(git_repo, "init")
+    survivors = dgg.find_survivors(str(git_repo), head, None, "local_helper", "python")
+    assert any("lib.local_helper()" in s for s in survivors)
+    assert any("from lib import local_helper" in s for s in survivors)
+    assert not any("def local_helper" in s for s in survivors)
+
+
+def test_find_survivors_drops_attribute_refs_in_files_that_never_name_the_definer(git_repo: Path):
+    # `args.local_helper` on an argparse namespace, in a script that never
+    # names the hook, cannot hold an object bound to the hook's module.
+    (git_repo / "hooks").mkdir()
+    (git_repo / "hooks" / "stop-x.py").write_text("def local_helper():\n    return '.'\n")
+    (git_repo / "script.py").write_text("root = args.local_helper\n")
+    head = _commit(git_repo, "init")
+    with_definer = dgg.find_survivors(
+        str(git_repo), head, None, "local_helper", "python", defined_in="hooks/stop-x.py"
+    )
+    assert not any("script.py" in s for s in with_definer)
+    without = dgg.find_survivors(str(git_repo), head, None, "local_helper", "python")
+    assert any("script.py" in s for s in without)  # the rule needs the definer's path
+
+
+def test_find_survivors_keeps_attribute_refs_in_a_file_that_names_the_definer(git_repo: Path):
+    (git_repo / "hooks").mkdir()
+    (git_repo / "hooks" / "stop-x.py").write_text("def local_helper():\n    return '.'\n")
+    (git_repo / "test_stop_x.py").write_text(
+        'HOOK = "hooks/stop-x.py"\nhook = load(HOOK)\nassert hook.local_helper()\n'
+    )
+    (git_repo / "by_module.py").write_text("import stop_x\nstop_x.local_helper()\n")
+    head = _commit(git_repo, "init")
+    survivors = dgg.find_survivors(
+        str(git_repo), head, None, "local_helper", "python", defined_in="hooks/stop-x.py"
+    )
+    assert any("test_stop_x.py" in s for s in survivors)
+    assert any("by_module.py" in s for s in survivors)
+
+
+def test_find_survivors_ignores_a_match_that_sits_only_in_a_comment(git_repo: Path):
+    (git_repo / "notes.py").write_text(
+        "from lib import local_helper\n"
+        "# the fixture replaces `local_helper()` for every test\n"
+        "x = 1  # not local_helper() either\n"
+        "y = local_helper()  # this one is a call\n"
+    )
+    (git_repo / "notes.sh").write_text('# local_helper "x" is commented out\nlocal_helper "y"\n')
+    head = _commit(git_repo, "init")
+    py = dgg.find_survivors(str(git_repo), head, None, "local_helper", "python")
+    calls = [s for s in py if "local_helper()" in s]
+    assert len(calls) == 1 and "y = local_helper()" in calls[0]
+    sh = dgg.find_survivors(str(git_repo), head, None, "local_helper", "shell")
+    assert len(sh) == 1 and 'local_helper "y"' in sh[0]
+
+
+def test_find_survivors_python_bare_call_needs_an_import_to_count(git_repo: Path):
+    # LEGB: a free name resolves in the module's own globals. Without an
+    # import of `local_helper`, `local_helper()` is a local, a builtin, or
+    # text inside a docstring; it cannot reach the removed definition.
+    (git_repo / "docstring.py").write_text('def t():\n    """Replaces `local_helper()` here."""\n')
+    (git_repo / "imported.py").write_text("from lib import local_helper\nlocal_helper()\n")
+    (git_repo / "starred.py").write_text("from lib import *\nlocal_helper()\n")
+    head = _commit(git_repo, "init")
+    survivors = dgg.find_survivors(str(git_repo), head, None, "local_helper", "python")
+    assert not any("docstring.py" in s for s in survivors)
+    assert any("imported.py" in s and "local_helper()" in s for s in survivors)
+    assert any("starred.py" in s and "local_helper()" in s for s in survivors)
+
+
+def test_find_survivors_attribute_rule_in_worktree_mode(git_repo: Path):
+    (git_repo / "hooks").mkdir()
+    (git_repo / "hooks" / "stop-x.py").write_text("def local_helper():\n    return '.'\n")
+    (git_repo / "script.py").write_text("x = 1\n")
+    _commit(git_repo, "init")
+    (git_repo / "script.py").write_text("root = args.local_helper\n")  # unstaged
+    survivors = dgg.find_survivors(
+        str(git_repo), "HEAD", dgg.MODE_WORKTREE, "local_helper", "python",
+        defined_in="hooks/stop-x.py",
+    )
+    assert survivors == []
+
+
+def test_find_survivors_worktree_mode_ignores_a_local_definition(git_repo: Path):
+    (git_repo / "caller.py").write_text("x = 1\n")
+    _commit(git_repo, "init")
+    (git_repo / "caller.py").write_text("def emit():\n    pass\n\nemit()\n")  # unstaged
+    survivors = dgg.find_survivors(str(git_repo), "HEAD", dgg.MODE_WORKTREE, "emit", "python")
+    assert survivors == []
+
+
+def test_find_survivors_shell_local_function_is_not_a_survivor(git_repo: Path):
+    (git_repo / "other.sh").write_text('emit_event() {\n  echo 1\n}\nemit_event "x"\n')
+    head = _commit(git_repo, "init")
+    assert dgg.find_survivors(str(git_repo), head, None, "emit_event", "shell") == []
+
+
 def test_find_survivors_staged_mode_searches_the_index(git_repo: Path):
-    (git_repo / "caller.py").write_text("emit(1)\n")
+    (git_repo / "caller.py").write_text("from lib import emit\nemit(1)\n")
     _commit(git_repo, "init")
     subprocess.run(["git", "add", "-A"], cwd=git_repo, check=True, capture_output=True)
     survivors = dgg.find_survivors(str(git_repo), "HEAD", dgg.MODE_STAGED, "emit", "python")
@@ -231,7 +346,7 @@ def test_find_survivors_staged_mode_searches_the_index(git_repo: Path):
 def test_find_survivors_worktree_mode_searches_the_working_tree(git_repo: Path):
     (git_repo / "caller.py").write_text("x = 1\n")
     _commit(git_repo, "init")
-    (git_repo / "caller.py").write_text("emit(1)\n")  # unstaged
+    (git_repo / "caller.py").write_text("from lib import emit\nemit(1)\n")  # unstaged
     survivors = dgg.find_survivors(str(git_repo), "HEAD", dgg.MODE_WORKTREE, "emit", "python")
     assert any("caller.py" in s for s in survivors)
 

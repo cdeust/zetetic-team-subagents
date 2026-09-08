@@ -22,6 +22,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from deletion_gate_lang import LANG_REGISTRY, detect_lang, extract_definitions
 
@@ -184,9 +185,194 @@ def _line_path(line: str, ref: str | None) -> str:
     return body.split(":", 1)[0]
 
 
+def _line_body(line: str, ref: str | None) -> str:
+    """The content field of a `git grep -n` output line, after the optional
+    `<ref>:` prefix, the path and the line number."""
+    prefix = f"{ref}:" if ref else ""
+    body = line[len(prefix):] if prefix and line.startswith(prefix) else line
+    parts = body.split(":", 2)
+    return parts[2] if len(parts) == 3 else ""
+
+
+def _defining_paths(lines: list, name: str, lang: str, ref: str | None) -> set:
+    """Paths among the matches whose matched lines include a top-level
+    definition of `name` in `lang` (the registry's own definition patterns)."""
+    patterns = [pat for pat, _kind in LANG_REGISTRY.get(lang, {}).get("patterns", [])]
+    paths = set()
+    for line in lines:
+        body = _line_body(line, ref)
+        if any((m := pat.match(body)) and m.group(1) == name for pat in patterns):
+            paths.add(_line_path(line, ref))
+    return paths
+
+
+# Line-comment marker: by language first (shell is `#` although the registry
+# files it under the brace family for definition parsing), then by family:
+# `#` for indent (Python), `//` for brace (JavaScript/TypeScript, Rust). A
+# reference after the marker is text, not code.
+COMMENT_MARKER = {"shell": "#", "indent": "#", "brace": "//"}
+
+
+def _code_part(body: str, lang: str) -> str:
+    """`body` up to its line-comment marker. A marker inside a string literal
+    truncates early, which only ever drops a match, never adds one."""
+    family = LANG_REGISTRY.get(lang, {}).get("family", "")
+    marker = COMMENT_MARKER.get(lang) or COMMENT_MARKER.get(family, "#")
+    return body.split(marker, 1)[0]
+
+
+def drop_comment_only_matches(lines: list, name: str, lang: str, ref: str | None) -> list:
+    """Drop lines whose only match for `name` sits inside a line comment.
+
+    `git grep` reads a comment like ``# replaces `repo_root()` for every
+    test`` as a call shape; a comment calls nothing. The survivor shapes are
+    re-applied to the code part of the line, and a line that matches only in
+    its comment is dropped. Measured 2026-09-08: the last false survivor for
+    a hook's `repo_root` was such a comment in another hook's test file.
+    """
+    shapes = re.compile(
+        rf"\b{re.escape(name)}\s*\(|\.{re.escape(name)}\b"
+        rf"|\bimport\s+{re.escape(name)}\b"
+        rf"|\bfrom\s+\S+\s+import\s+[^\n]*\b{re.escape(name)}\b"
+        rf"|^\s*{re.escape(name)}\b"
+    )
+    return [
+        line for line in lines
+        if shapes.search(_code_part(_line_body(line, ref), lang))
+    ]
+
+
+def drop_unimported_bare_calls(target: GrepTarget, lines: list, name: str) -> list:
+    """Python only: drop bare `name(` matches in files that never import it.
+
+    A free name in a Python module resolves in that module's globals (LEGB,
+    Python Language Reference §4.2.2): it is the module's own definition, a
+    name it imported, or a builtin. A file with a bare `name(` and no import
+    of the name (plain, from-import, or a star import) therefore never
+    reaches the removed definition; the match is a local name, a builtin, a
+    docstring or a string. Attribute and import shapes are untouched.
+    Measured 2026-09-08: the last false survivor for a hook's root helper was
+    a call spelled inside another test file's docstring.
+    """
+    ref = target.search_ref
+    bare = re.compile(rf"(?<![\w.]){re.escape(name)}\s*\(")
+    import_shape = re.compile(
+        rf"\bimport\s+{re.escape(name)}\b|\bfrom\s+\S+\s+import\s+[^#\n]*\b{re.escape(name)}\b"
+    )
+    importing = {
+        _line_path(line, ref) for line in lines if import_shape.search(_line_body(line, ref))
+    }
+    bare_only = [
+        line for line in lines
+        if bare.search(_line_body(line, ref))
+        and not import_shape.search(_line_body(line, ref))
+        and rf".{name}" not in _line_body(line, ref)
+    ]
+    candidates = sorted({_line_path(line, ref) for line in bare_only} - importing)
+    if not candidates:
+        return lines
+    star = _paths_mentioning(target, {"import *"}, candidates)
+    unreachable = set(candidates) - star
+    return [
+        line for line in lines
+        if line not in bare_only or _line_path(line, ref) not in unreachable
+    ]
+
+
+def drop_locally_bound(lines: list, name: str, lang: str, ref: str | None) -> list:
+    """Drop the matches that a same-named local definition already binds.
+
+    A file that defines `name` at top level resolves a bare `name(` to that
+    definition (Python: module scope, LEGB; shell: the script's own function
+    table), so neither its definition line nor its bare calls reference the
+    removed definition. Attribute (`.name`) and import shapes in such a file
+    still count: they name another module's `name`, which may be the removed
+    one. Measured 2026-09-08 on this repository: every Stop hook defines its
+    own `_note` and `repo_root`, and removing either from one hook listed the
+    other hooks' definitions and local calls as 23 survivors.
+    """
+    defining = _defining_paths(lines, name, lang, ref)
+    if not defining:
+        return lines
+    attr_or_import = re.compile(
+        rf"\.{re.escape(name)}\b"
+        rf"|\bimport\s+{re.escape(name)}\b"
+        rf"|\bfrom\s+\S+\s+import\s+[^#\n]*\b{re.escape(name)}\b"
+    )
+    return [
+        line for line in lines
+        if _line_path(line, ref) not in defining
+        or attr_or_import.search(_line_body(line, ref))
+    ]
+
+
+class GrepTarget(NamedTuple):
+    """Where a survivor search looks: a commit ref, the index (MODE_STAGED)
+    or the working tree (MODE_WORKTREE, or ref=None with no mode)."""
+    repo: str
+    ref: str | None
+    mode: str | None
+
+    @property
+    def search_ref(self) -> str | None:
+        """The `<ref>:` prefix git grep prints, None for index and worktree."""
+        return self.ref if self.mode not in (MODE_STAGED, MODE_WORKTREE) else None
+
+
+def _paths_mentioning(target: GrepTarget, tokens: set, paths: list) -> set:
+    """The subset of `paths` whose content names any of `tokens` (fixed
+    strings), searched in the same tree as the survivor search."""
+    args = ["grep", "-l", "-I", "-F"]
+    if target.mode == MODE_STAGED:
+        args.append("--cached")
+    for tok in sorted(tokens):
+        args += ["-e", tok]
+    if target.search_ref:
+        args.append(target.search_ref)
+    args += ["--"] + paths
+    proc = subprocess.run(
+        ["git", "-C", target.repo] + args, capture_output=True, text=True, check=False
+    )
+    if proc.returncode not in (0, 1):
+        raise GitError(f"git grep -l failed: {proc.stderr.strip()}")
+    return {_line_path(line, target.search_ref) for line in proc.stdout.splitlines() if line.strip()}
+
+
+def drop_unlinked_attribute_refs(target: GrepTarget, lines: list, name: str, defined_in: str) -> list:
+    """Drop `x.name` matches in files that never name the defining file.
+
+    An attribute shape reaches the removed definition only through an object
+    bound to its module, and binding a module leaves the defining file's name
+    in the binding file (`import stop_x`, `from hooks.stop_x import ...`, a
+    `spec_from_file_location(..., "hooks/stop-x.py")` in a test). A file that
+    never names it (`args.repo_root` on an argparse namespace; a test of a
+    different hook) cannot hold that object. Bare calls, imports and
+    definitions are untouched. Measured 2026-09-08 on this repository: after
+    the local-binding rule, all 25 remaining survivors for a hook's
+    `repo_root` were this shape, in 12 files, none naming the hook.
+    """
+    ref = target.search_ref
+    non_attr = re.compile(
+        rf"(?<![\w.]){re.escape(name)}\s*\("
+        rf"|\bimport\s+{re.escape(name)}\b"
+        rf"|\bfrom\s+\S+\s+import\s+[^#\n]*\b{re.escape(name)}\b"
+    )
+    attr_only = [line for line in lines if not non_attr.search(_line_body(line, ref))]
+    if not attr_only:
+        return lines
+    stem = Path(defined_in).stem
+    tokens = {Path(defined_in).name, stem, stem.replace("-", "_")}
+    paths = sorted({_line_path(line, ref) for line in attr_only})
+    linked = _paths_mentioning(target, tokens, paths)
+    return [
+        line for line in lines
+        if line not in attr_only or _line_path(line, ref) in linked
+    ]
+
+
 def find_survivors(
     repo: str, ref: str | None, mode: str | None, name: str, lang: str,
-    exclude_paths: set | None = None,
+    exclude_paths: set | None = None, defined_in: str | None = None,
 ) -> list:
     """Lines that call, attribute-access, or import `name`, in the tree named
     by (ref, mode): a commit ref, the staged index (MODE_STAGED), or —
@@ -197,6 +383,15 @@ def find_survivors(
     removed definition's own language's file extensions (not docs, not
     CHANGELOGs, not another language's identically-spelled identifier) —
     the precision/recall tradeoff, see module docstring point 1.
+
+    A match that sits only inside a line comment is dropped
+    (`drop_comment_only_matches`): a comment calls nothing. A file that
+    defines `name` itself binds its own bare calls, so those lines are
+    dropped by `drop_locally_bound` (attribute and import shapes in such a
+    file are kept). In Python, a bare `name(` in a file that never imports
+    the name is dropped too (`drop_unimported_bare_calls`). With `defined_in` (the path of the file that
+    lost the definition), attribute shapes in files that never name that
+    file are dropped too (`drop_unlinked_attribute_refs`).
 
     `exclude_paths`, when given, drops matches in those files. Two distinct
     callers rely on this for two distinct reasons:
@@ -254,9 +449,16 @@ def find_survivors(
     if proc.returncode not in (0, 1):
         raise GitError(f"git grep failed (PCRE support required): {proc.stderr.strip()}")
     lines = [line for line in proc.stdout.splitlines() if line.strip()]
+    search_ref = ref if not staged and mode != MODE_WORKTREE else None
     if exclude_paths:
-        search_ref = ref if not staged and mode != MODE_WORKTREE else None
         lines = [line for line in lines if _line_path(line, search_ref) not in exclude_paths]
+    target = GrepTarget(repo, ref, mode)
+    lines = drop_comment_only_matches(lines, name, lang, search_ref)
+    lines = drop_locally_bound(lines, name, lang, search_ref)
+    if lang == "python":
+        lines = drop_unimported_bare_calls(target, lines, name)
+    if defined_in:
+        lines = drop_unlinked_attribute_refs(target, lines, name, defined_in)
     return lines
 
 
