@@ -15,6 +15,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Redaction gate on every returned message (#127).**
+  `hooks/stop-redaction-gate.py`, registered on `Stop` and `SubagentStop`,
+  runs the turn's final assistant text (`last_assistant_message`, with a
+  transcript fallback that reassembles the multi-row final message) through
+  `tools/redaction-checker.sh --stdin` and quotes each finding with its line
+  number and pattern name. The five prose-producing agents carried this as a
+  `<redaction-gate>` prompt section; a section is advisory, a hook runs every
+  time. Two-tier like `stop-acceptance-gate.py`: WARN on stderr by default,
+  BLOCK opt-in via `REDACTION_STOP_BLOCK=on` or a `.redaction-gate.json`
+  marker (loop-safe on `stop_hook_active`), fail-open on a missing checker or
+  a malformed payload. The block reason hands the skill's full eval back for
+  the rewrite; the judgment half (nothing invented, sourced attributions,
+  concrete ending) stays with the agent. New `--stdin` mode on the checker
+  (no path filter, findings labelled `<stdin>`), so staged copy and returned
+  messages share one detector set. Suites: `tools/tests/stop-redaction-gate`
+  (27 assertions) and T17 in `tools/tests/redaction-checker`.
+
 ### Fixed
 
 - **Phase 7 closeout of the agent-to-skill migration plan (#125).**

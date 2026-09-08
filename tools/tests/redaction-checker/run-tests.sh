@@ -137,6 +137,20 @@ run_case "T16 untracked banned file scanned by --full (#64)" grep -q "docs/untra
 run_case "T16 untracked finding fails strict --full, exit 1 (#64)" test "$rc" -eq 1
 rm -f docs/untracked-64.md
 
+# T17 --stdin: the text IS the copy. No path filter (a skills/-style path
+# cannot exist for stdin), findings labelled <stdin>, clean input silent.
+# Consumer: hooks/stop-redaction-gate.py on every returned assistant message.
+out=$(printf 'We leverage a robust pipeline.\n' | "$CHECKER" --stdin); rc=$?
+run_case "T17 --stdin banned word flagged" grep -q "BANNED_WORD" <<<"$out"
+run_case "T17 --stdin finding labelled <stdin>:1" grep -q "^<stdin>:1: BANNED_WORD" <<<"$out"
+run_case "T17 --stdin warn-only exit 0" test "$rc" -eq 0
+out=$(printf 'A plain sentence.\n' | "$CHECKER" --stdin); rc=$?
+run_case "T17 --stdin clean: silent, exit 0" test "$rc" -eq 0 -a -z "$out"
+out=$(printf 'Real copy.\n```\nstudies show\n```\n' | "$CHECKER" --stdin)
+run_case "T17 --stdin fenced block ignored" test -z "$out"
+out=$(printf 'no findings\n' | "$CHECKER" --stdin 2>&1); rc=$?
+run_case "T17 --stdin leaves no temp file behind" test "$(ls "${TMPDIR:-/tmp}"/redaction-stdin.* 2>/dev/null | wc -l)" -eq 0
+
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
