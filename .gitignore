@@ -1,6 +1,7 @@
 .DS_Store
 .claude/session-cache.json
 .claude/settings.local.json
+.claude/worktrees/
 __pycache__/
 *.pyc
 .web-ingest-cache/

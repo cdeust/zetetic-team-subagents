@@ -151,6 +151,21 @@ adheres to [Semantic Versioning](https://semver.org/).
   the pure precision/recall math in CI; the live router call is a separate,
   manually-run script.
 
+### Changed
+
+- **Worktrees live inside the repository (owner correction 2026-09-08, #128).**
+  `scripts/spawn-agent.sh` now creates its worktree at
+  `<target-repo>/.claude/worktrees/<agent>-<timestamp>` instead of a sibling
+  directory beside the repo, and warns when `.claude/worktrees/` is not
+  gitignored in the target. `rules/agent-reference/worktree-protocol.md` and
+  `agents/orchestrator.md` Move 4 no longer recommend the sibling-directory
+  convention or `~/.claude/worktrees/`: the only sanctioned location is the
+  one Claude Code's own worktree mechanism and cleanup sweep use. Outside
+  worktrees were invisible to that sweep and had accumulated (43 detached
+  plus 33 branch worktrees under `/private/tmp/cortex-green-*` on one
+  machine). `.claude/worktrees/` is now gitignored in this repo too.
+
+
 ## [2.39.0]: model-tier escalation banners, the agent-vs-skill classification rule, and the genius-agent Agent-tool registration retired
 
 ### Fixed
