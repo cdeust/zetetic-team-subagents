@@ -7,24 +7,23 @@ audience: team agents — loaded on demand via Read, never at spawn
 
 When spawned in an isolated worktree, you are working on a dedicated branch.
 
-**Worktree location — never `/tmp` or `/private/tmp` (issue #33).** `hooks/session-start.sh`
-runs `tools/worktree-manager.sh sweep` on every session start, and macOS periodically
-reaps `/tmp` contents outside git's control; a worktree placed there can lose its
-directory and be cleanly deregistered from `git worktree list` mid-task, discarding
-uncommitted work. `worktree-manager.sh`'s sweep now enforces a grace period (default
-60 min, `WORKTREE_GRACE_SECONDS`) and is scoped to the booting repo only, but `/tmp`
-remains unsafe for hours-long work because of the OS-level reaper, which git-based
-tooling cannot protect against. Prefer `scripts/spawn-agent.sh`'s own convention — a
-sibling directory next to the repo (`<repo>/../<repo-name>-<agent>-<timestamp>`,
-already the default when spawned via that script) — since it is outside `/tmp`'s
-reaper AND outside the auto-discovered sibling-repo set that `sweep`'s no-args form
-walks (that set is repos directly under the *parent* of the target repo, e.g.
-`~/Developments/anthropic-partnership/*`; a `<repo>-<agent>-<stamp>` sibling of the
-repo itself is not itself a top-level git repo there, so it is never enumerated).
-`~/.claude/worktrees/<repo-name>-wt-<slug>` is an acceptable alternative but has not
-been verified equally durable — no script in this repo targets that path, but its
-robustness under Claude Code's own session/sandbox lifecycle is unconfirmed; prefer
-the sibling-directory convention when in doubt.
+**Worktree location: inside the repository, under `<repo>/.claude/worktrees/<name>/`. Nowhere
+else.** That is the directory Claude Code's own worktree mechanism uses (`isolation: worktree` on
+the Agent tool, `EnterWorktree`, `claude --worktree <name>`), and the only one its cleanup sweep
+knows about; a worktree created anywhere else is invisible to that sweep and accumulates on disk.
+So: never `/tmp` or `/private/tmp` (issue #33: `hooks/session-start.sh` runs
+`tools/worktree-manager.sh sweep` there, and macOS reaps `/tmp` outside git's control, so an
+in-progress worktree can lose its directory mid-task and be deregistered from `git worktree list`
+with its uncommitted work); never a sibling directory beside the repo
+(`<repo>/../<repo-name>-<agent>-<timestamp>`, the former `scripts/spawn-agent.sh` default); never
+`~/.claude/worktrees/`. Owner correction, 2026-09-08: a green-software campaign had left 43
+detached worktrees and 33 branch worktrees under `/private/tmp/cortex-green-*`, on top of earlier
+`<repo>-wt-*` siblings, all outside the repo and all taking space nothing would reclaim; every
+line of guidance that named an outside location was retired that day, this paragraph included.
+`scripts/spawn-agent.sh` now creates its worktree under `<target-repo>/.claude/worktrees/` and
+warns when that directory is not gitignored in the target; add `.claude/worktrees/` to the
+repository's `.gitignore` in that case. `tools/worktree-manager.sh sweep` still clears `/tmp`
+leftovers from older sessions.
 
 After completing your changes:
 
