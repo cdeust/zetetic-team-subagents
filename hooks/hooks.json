@@ -12,6 +12,15 @@
         ]
       },
       {
+        "matcher": "Bash|mcp__github__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-redaction-gate.py\""
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "when": "command contains 'git commit'",
         "hooks": [

@@ -75,7 +75,7 @@ The orchestrator routes based on frontmatter: a sentence is enough. The invoked 
 
 ## Adding a new agent
 
-1. **Pick the slug**: must be unique across `agents/*.md` and `agents/genius/*.md`. Filename = `<slug>.md`.
+1. Pick the slug: must be unique across `agents/*.md` and `agents/genius/*.md`. Filename = `<slug>.md`.
 2. **Pick the scope:**
    - Team agent: add an entry to [`memory/scope-registry.json`](../memory/scope-registry.json) with `owners: ["<slug>", "_user"]`
    - Genius agent: use `memory_scope: genius` (shared scope, per-slug subpath convention `/memories/genius/<slug>/`)

@@ -10,6 +10,9 @@
 #   T6 excluded path (skills/) → NOT scanned even when passed via --files
 #   T7 strict profile (.zetetic.conf ZETETIC_PROFILE=strict) → findings exit 1
 #   T8 usage error (no mode) → exit 2
+#   T18 bold label + colon opening a line or list item → BOLD_LABEL; a code-span
+#       label, mid-sentence bold and a table row → NOT flagged
+#   T19 French renderings of the filler / leftover phrases → WEASEL / PUFFERY / SETUP
 set -uo pipefail
 
 CHECKER="$(cd "$(dirname "$0")/../.." && pwd)/redaction-checker.sh"
@@ -150,6 +153,38 @@ out=$(printf 'Real copy.\n```\nstudies show\n```\n' | "$CHECKER" --stdin)
 run_case "T17 --stdin fenced block ignored" test -z "$out"
 out=$(printf 'no findings\n' | "$CHECKER" --stdin 2>&1); rc=$?
 run_case "T17 --stdin leaves no temp file behind" test "$(ls "${TMPDIR:-/tmp}"/redaction-stdin.* 2>/dev/null | wc -l)" -eq 0
+
+# T18 BOLD_LABEL (redaction §15/§16): a list item or a line that opens with a
+# bold label and a colon is the inline-header list. Only prose labels count:
+# a code-span label is an identifier, mid-sentence bold is not a header, and a
+# table row never starts with the markers.
+out=$(printf -- '- **Git Bash**: install it first.\n' | "$CHECKER" --stdin)
+run_case "T18 bullet with bold label and colon flagged" grep -q "^<stdin>:1: BOLD_LABEL" <<<"$out"
+out=$(printf '1. **Pick the slug** : it must be unique.\n' | "$CHECKER" --stdin)
+run_case "T18 numbered item, spaced colon flagged" grep -q "BOLD_LABEL" <<<"$out"
+out=$(printf '**Current state**: two files changed.\n' | "$CHECKER" --stdin)
+run_case "T18 bare line with bold label flagged" grep -q "BOLD_LABEL" <<<"$out"
+out=$(printf -- '- **`hooks.json`**: the registration file.\n' | "$CHECKER" --stdin)
+run_case "T18 code-span label NOT flagged" test -z "$out"
+out=$(printf 'The suite is **green** and the branch: clean.\n' | "$CHECKER" --stdin)
+run_case "T18 mid-sentence bold NOT flagged" test -z "$out"
+out=$(printf '| **stop-gate** | Stop | runs it |\n' | "$CHECKER" --stdin)
+run_case "T18 table row NOT flagged" test -z "$out"
+out=$(printf -- '- **Résultat.** Deux fichiers changés.\n' | "$CHECKER" --stdin)
+run_case "T18 bold lead without colon NOT flagged" test -z "$out"
+
+# T19 French renderings of §5/§23 (WEASEL), §20 (PUFFERY) and §28/§34 (SETUP):
+# the hooks scan French sessions, so the phrase detectors carry both languages.
+out=$(printf 'Il convient de noter que le build est vert.\n' | "$CHECKER" --stdin)
+run_case "T19 'il convient de noter' → WEASEL" grep -q "WEASEL" <<<"$out"
+out=$(printf "N'hésitez pas à me contacter.\n" | "$CHECKER" --stdin)
+run_case "T19 'n'hésitez pas' (ASCII apostrophe) → PUFFERY" grep -q "PUFFERY" <<<"$out"
+out=$(printf 'N\xe2\x80\x99h\xc3\xa9sitez pas \xc3\xa0 revenir.\n' | "$CHECKER" --stdin)
+run_case "T19 'n’hésitez pas' (typographic apostrophe) → PUFFERY" grep -q "PUFFERY" <<<"$out"
+out=$(printf 'En conclusion, tout passe.\n' | "$CHECKER" --stdin)
+run_case "T19 'en conclusion' → SETUP" grep -q "SETUP" <<<"$out"
+out=$(printf 'Le hook est enregistr\xc3\xa9 et les tests passent.\n' | "$CHECKER" --stdin)
+run_case "T19 plain French sentence NOT flagged" test -z "$out"
 
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"

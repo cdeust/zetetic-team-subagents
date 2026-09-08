@@ -10,7 +10,9 @@
 #   tools/redaction-checker.sh --stdin               # scan prose fed on stdin (no path
 #                                                    #   filter; findings labelled <stdin>).
 #                                                    #   Used by hooks/stop-redaction-gate.py
-#                                                    #   on every returned assistant message.
+#                                                    #   on every returned assistant message and
+#                                                    #   by hooks/pre-tool-redaction-gate.py on
+#                                                    #   commit messages, PR bodies and comments.
 #
 # Checks (the greppable subset of skills/writing/redaction.md; judgment-level
 # patterns — puffery, -ing analysis, colon reveals in context — stay with the
@@ -18,6 +20,12 @@
 #   - EM_DASH  (warning): em dash in prose copy. House rule: zero in published copy.
 #   - BANNED_WORD (warning): the skill's banned-outright vocabulary (§7).
 #   - WEASEL (warning): unsourced-attribution and filler phrases (§5, §23).
+#   - CONTRAST / SETUP / PUFFERY (warning): binary contrasts, throat-clearing
+#     setups, puffery and conversation leftovers (§1/§4/§9/§20-22/§27-31/§35).
+#   - BOLD_LABEL (warning): a line or list item opening with a bold label and a
+#     colon, the inline-header list (§15/§16).
+#   The phrase detectors carry French renderings of the same sections, because
+#   the hooks scan French sessions; the inventory itself is language-neutral.
 #
 # Severity model:
 #   - All findings are WARNINGS by default: exit 0, findings on stdout. Prose
@@ -49,13 +57,20 @@ EM_DASH_RE=$'—'
 # extension — verified on bash 5.3.9, where `\b` silently matches nothing and
 # every BANNED_WORD finding disappears. The vocabulary is group 2.
 BANNED_RE='(^|[^[:alnum:]_])([Dd]elve|[Ff]oster(s|ing)?|[Ll]everag(e|es|ing)|[Uu]tiliz(e|es|ing)|[Ff]acilitat(e|es|ing)|[Ee]mpower(s|ing)?|[Ss]treamlin(e|es|ing)|[Rr]obust|[Cc]utting-edge|[Pp]aradigm shift|[Gg]ame.changer|[Tt]apestry|[Mm]ultifaceted|[Mm]eticulous|[Pp]aramount|[Tt]ransformative|[Ee]mbark(s|ing)?|[Ss]upercharg(e|es|ing)|[Hh]arness(es|ing)?|[Ee]ver-evolving)([^[:alnum:]_]|$)'
-WEASEL_RE="([Ss]tudies show|[Ee]xperts (agree|argue|believe)|[Ii]ndustry reports|[Ww]idely regarded|[Ii]t.s worth noting|[Ii]t.s important to note|[Ii]n today.s world|[Aa]t the end of the day|[Ll]et.s dive in|[Ii]n the ever-|[Gg]ame.changing)"
+# The French alternatives after the English ones render the same §5/§23 phrases.
+WEASEL_RE="([Ss]tudies show|[Ee]xperts (agree|argue|believe)|[Ii]ndustry reports|[Ww]idely regarded|[Ii]t.s worth noting|[Ii]t.s important to note|[Ii]n today.s world|[Aa]t the end of the day|[Ll]et.s dive in|[Ii]n the ever-|[Gg]ame.changing|[Ii]l convient de noter|[Ii]l est important de noter|[Ii]l est à noter|[Dd]ans le monde d.{1,3}aujourd.{1,3}hui)"
 # source: skills/writing/redaction.md §9/§35 (binary contrasts, negative listing, dramatic fragmentation)
 CONTRAST_RE="((It|This|That)('s| is) not [^.]{2,60}\.[[:space:]]*(It|This|That)('s| is)|[Nn]ot (a|an|the) [^.]{1,40}\.[[:space:]]*Not (a|an|the)|That.s it\.[[:space:]]*That.s|not just [^,.;]{2,40}, but)"
 # source: redaction.md §30/§31/§28/§27 (throat-clearing, faux insight, signposting, rhetorical setups)
-SETUP_RE="([Hh]ere.s the thing|[Ll]et me be clear|[Ww]hat nobody tells you|[Tt]he part everyone misses|[Ii]n this (article|section|page)|[Ww]e will explore|[Ii]n conclusion|[Ww]hat if I told you|[Pp]lot twist:|[Tt]hink about it:)"
+SETUP_RE="([Hh]ere.s the thing|[Ll]et me be clear|[Ww]hat nobody tells you|[Tt]he part everyone misses|[Ii]n this (article|section|page)|[Ww]e will explore|[Ii]n conclusion|[Ww]hat if I told you|[Pp]lot twist:|[Tt]hink about it:|[Ee]n conclusion|[Dd]ans cette section|[Pp]longeons)"
 # source: redaction.md §1/§4/§8/§20-22 (puffery, promotional, copula avoidance, AI conversation artifacts)
-PUFF_RE="([Tt]estament to|[Pp]ivotal moment|(vital|crucial) role|[Ii]ndelible mark|[Ee]volving landscape|[Nn]estled|[Bb]reathtaking|[Ss]tunning|[Rr]enowned|serves as (a|an|the)|stands as|I hope this helps|knowledge cutoff|[Gg]reat question|[Ll]et me know if you)"
+PUFF_RE="([Tt]estament to|[Pp]ivotal moment|(vital|crucial) role|[Ii]ndelible mark|[Ee]volving landscape|[Nn]estled|[Bb]reathtaking|[Ss]tunning|[Rr]enowned|serves as (a|an|the)|stands as|I hope this helps|knowledge cutoff|[Gg]reat question|[Ll]et me know if you|[Nn].{1,3}h[ée]sitez pas|[Jj].{1,3}esp[èe]re que cela|[Ee]xcellente question)"
+# source: redaction.md §15/§16 (decorative boldface, inline-header vertical lists):
+# a line or list item that opens with a bold label followed by a colon.
+# strip_noncopy removes code spans first, so a label that is an identifier
+# (**`hooks.json`**:) leaves no non-star text between the markers and does not
+# match; the rule targets prose labels only.
+LABEL_RE='^[[:space:]]*([-*+]|[0-9]+[.)])?[[:space:]]*\*\*[^*]{1,80}\*\*[[:space:]]*:'
 
 # ── Profile (same contract as zetetic-checker.sh: declared, not env-silent) ──
 ZETETIC_PROFILE="${ZETETIC_PROFILE:-standard}"
@@ -181,6 +196,10 @@ scan_file() {
     fi
     if [[ "$line" =~ $PUFF_RE ]]; then
       echo "$label:$lineno: PUFFERY: ${BASH_REMATCH[0]} (redaction §1/§4/§8/§20-22)"
+      findings=$((findings + 1))
+    fi
+    if [[ "$line" =~ $LABEL_RE ]]; then
+      echo "$label:$lineno: BOLD_LABEL: ${BASH_REMATCH[0]:0:60} (redaction §15/§16)"
       findings=$((findings + 1))
     fi
   done < "$f"

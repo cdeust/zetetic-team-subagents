@@ -10,7 +10,8 @@ belongs in a hook. This hook is that enforcement point: it takes the final
 assistant text of the turn (``last_assistant_message`` on Stop and
 SubagentStop) and runs the mechanical half of the inventory over it through
 ``tools/redaction-checker.sh --stdin`` — the same detectors the pre-commit
-hook runs on staged copy, so a message and a README are held to one rule set.
+hook runs on staged copy and ``pre-tool-redaction-gate.py`` runs on outbound
+actions, so a message, a README and a commit body are held to one rule set.
 The judgment half of the eval (nothing invented, every attribution sourced,
 ends on a concrete point) cannot be grepped; when the mechanical half fires,
 the hook's reason hands the whole eval back to the model to run on the rewrite.
@@ -27,14 +28,14 @@ product-safety lesson 2026-06-10):
   a turn already in a forced continuation (``stop_hook_active``) is never
   blocked again; residual findings on the rewrite are still reported.
 
-A Stop hook must not fail hard: a missing checker, a non-object payload, an
-empty message or a checker error allows the stop (exit 0). The only thing that
+The mechanism (checker resolution, finding quotes, the opt-in) lives in
+``tools/redaction_gate.py``, shared with the PreToolUse gate. A Stop hook must
+not fail hard: a missing module or checker, a non-object payload, an empty
+message or a checker error allows the stop (exit 0). The only thing that
 blocks is a real finding under an active opt-in.
 """
 import json
 import os
-import re
-import subprocess
 import sys
 from typing import List, NoReturn
 
@@ -45,21 +46,35 @@ _TOOL = "redaction-gate"
 # end of the file; 1 MiB covers a long message plus its tool_use rows.
 # source: stop-zetetic-spine.py TAIL_BYTES rationale.
 TAIL_BYTES = 1024 * 1024
-# The checker is a line loop over one message; 30 s bounds a stuck interpreter.
-# source: operational default, same order as run-python.sh's other stdin hooks.
-CHECKER_TIMEOUT_S = 30
-# Findings quoted in the block reason; the rest are counted, not listed, so the
-# reason stays readable in the transcript. source: stop-acceptance-gate.py
-# quotes unmet[:6] for the same reason.
-MAX_QUOTED = 8
-
-FINDING_RE = re.compile(r"^<stdin>:(\d+): ([A-Z_]+): (.*)$")
+SUBJECT = "the message being returned"
 
 
 def _note(what: str, exc: BaseException) -> None:
     """One-line stderr note for a deliberately non-fatal failure (degrade open,
     never silently)."""
     print(f"[{_TOOL}] {what}: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+
+
+def _load_gate():
+    """Import tools/redaction_gate.py from beside this hook or the plugin root.
+
+    Returns None when no copy exists, so the caller can fail open the way it
+    does for a missing checker (same resolution order as resolve_checker).
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [os.path.join(here, "..", "tools")]
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
+    if plugin_root:
+        candidates.append(os.path.join(plugin_root, "tools"))
+    for c in candidates:
+        c = os.path.normpath(c)
+        if os.path.isfile(os.path.join(c, "redaction_gate.py")):
+            sys.path.insert(0, c)
+            import redaction_gate  # noqa: E402  (path must be set first)
+            return redaction_gate
+    _note("tools/redaction_gate.py not found beside the hook; message not scanned",
+          FileNotFoundError(candidates[0]))
+    return None
 
 
 def allow() -> NoReturn:
@@ -74,35 +89,6 @@ def block(reason: str) -> NoReturn:
 def warn(reason: str) -> NoReturn:
     sys.stderr.write(reason + "\n")
     sys.exit(0)
-
-
-def repo_root() -> str:
-    try:
-        out = subprocess.run(["git", "rev-parse", "--show-toplevel"],
-                             capture_output=True, text=True, timeout=10).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return os.getcwd()
-    return out or os.getcwd()
-
-
-def resolve_checker() -> str:
-    """Path to the redaction checker that ships WITH this hook.
-
-    The hook and the checker are one contract (``--stdin`` is the hook's
-    interface), so the sibling copy is preferred over any repo-local
-    ``tools/redaction-checker.sh``, which may predate the mode. Returns "" when
-    no executable copy exists (fail-open upstream).
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    candidates = [os.path.join(here, "..", "tools", "redaction-checker.sh")]
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
-    if plugin_root:
-        candidates.append(os.path.join(plugin_root, "tools", "redaction-checker.sh"))
-    for c in candidates:
-        c = os.path.normpath(c)
-        if os.access(c, os.X_OK):
-            return c
-    return ""
 
 
 def read_tail(path) -> str:
@@ -148,56 +134,6 @@ def last_message_from_transcript(path) -> str:
     return "\n".join(texts)
 
 
-def run_checker(checker: str, text: str) -> List[str]:
-    """Run the checker on the message; return its finding lines (possibly empty).
-
-    ZETETIC_PROFILE is pinned to ``standard`` so the checker always exits 0 and
-    reports: the WARN/BLOCK decision is this hook's, not the checker's.
-    """
-    env = dict(os.environ, ZETETIC_PROFILE="standard")
-    try:
-        proc = subprocess.run([checker, "--stdin"], input=text, capture_output=True,
-                              text=True, timeout=CHECKER_TIMEOUT_S, env=env)
-    except (OSError, subprocess.SubprocessError) as exc:
-        _note("checker could not run; message not scanned", exc)
-        return []
-    if proc.returncode == 2:  # usage error: a checker without --stdin
-        _note("checker rejected --stdin; message not scanned",
-              RuntimeError(proc.stderr.strip()[:200]))
-        return []
-    return [ln for ln in proc.stdout.splitlines() if FINDING_RE.match(ln)]
-
-
-def quote_findings(findings: List[str]) -> str:
-    """'line N RULE: detail' for the first MAX_QUOTED findings, then a count."""
-    parts = []
-    for line in findings[:MAX_QUOTED]:
-        m = FINDING_RE.match(line)
-        if m:
-            parts.append(f"line {m.group(1)} {m.group(2)}: {m.group(3)}")
-    extra = len(findings) - MAX_QUOTED
-    if extra > 0:
-        parts.append(f"+{extra} more")
-    return "; ".join(parts)
-
-
-def reason_text(findings: List[str], blocking: bool) -> str:
-    quoted = quote_findings(findings)
-    head = ("Redaction gate: the message being returned carries %d candidate "
-            "AI-writing pattern(s) from skills/writing/redaction.md: %s."
-            % (len(findings), quoted))
-    if blocking:
-        return (head + " Rewrite it before returning: fix each quoted line, then run "
-                "the skill's eval on the whole message (nothing invented; zero em "
-                "dashes, antithesis constructions or triads; every attribution names "
-                "its source or the claim is cut; ends on a concrete point, no recap "
-                "and no closing offer). (.redaction-gate.json / REDACTION_STOP_BLOCK=on "
-                "active; remove the marker or unset the variable to downgrade to a "
-                "warning.)")
-    return ("⚠ " + head + " (non-blocking; set REDACTION_STOP_BLOCK=on or "
-            ".redaction-gate.json to enforce, REDACTION_STOP_WARN=off to silence.)")
-
-
 def main() -> None:
     try:
         data = json.loads(sys.stdin.read() or "{}")
@@ -212,26 +148,23 @@ def main() -> None:
     if not text.strip():
         allow()
 
-    checker = resolve_checker()
+    gate = _load_gate()
+    if gate is None:
+        allow()
+    checker = gate.resolve_checker(os.path.dirname(os.path.abspath(__file__)))
     if not checker:
         allow()
-    findings = run_checker(checker, text)
+    findings = gate.run_checker(checker, text)
     if not findings:
         allow()
 
     if data.get("stop_hook_active"):  # forced continuation: report, never re-block
-        warn(reason_text(findings, blocking=False))
-
-    root = repo_root()
-    blocking = (
-        os.path.isfile(os.path.join(root, ".redaction-gate.json"))
-        or os.environ.get("REDACTION_STOP_BLOCK", "").lower() == "on"
-    )
-    if blocking:
-        block(reason_text(findings, blocking=True))
-    if os.environ.get("REDACTION_STOP_WARN", "on").lower() == "off":
+        warn(gate.reason_text(findings, False, SUBJECT))
+    if gate.block_opt_in():
+        block(gate.reason_text(findings, True, SUBJECT))
+    if gate.warn_silenced():
         allow()
-    warn(reason_text(findings, blocking=False))
+    warn(gate.reason_text(findings, False, SUBJECT))
 
 
 if __name__ == "__main__":
