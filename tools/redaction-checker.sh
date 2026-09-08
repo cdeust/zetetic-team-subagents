@@ -7,6 +7,10 @@
 #   tools/redaction-checker.sh --files <f1> <f2> ... # check specific files (review / CI)
 #   tools/redaction-checker.sh --full                # audit sweep: all tracked
 #                                                    #   AND untracked-not-ignored copy paths
+#   tools/redaction-checker.sh --stdin               # scan prose fed on stdin (no path
+#                                                    #   filter; findings labelled <stdin>).
+#                                                    #   Used by hooks/stop-redaction-gate.py
+#                                                    #   on every returned assistant message.
 #
 # Checks (the greppable subset of skills/writing/redaction.md; judgment-level
 # patterns — puffery, -ing analysis, colon reveals in context — stay with the
@@ -89,9 +93,21 @@ case "$mode" in
     while IFS= read -r f; do files+=("$f"); done \
       < <(git ls-files --cached --others --exclude-standard 2>/dev/null | grep -E "$COPY_INCLUDE" | grep -Ev "$COPY_EXCLUDE" || true)
     ;;
+  --stdin)
+    # The text IS the copy: no COPY_INCLUDE/COPY_EXCLUDE filter applies, because
+    # the caller (a Stop hook holding the assistant's final message) has no path
+    # to filter on. Spooled to a temp file so scan_file's line reader and the
+    # fenced-block state machine stay the single implementation.
+    stdin_tmp="$(mktemp "${TMPDIR:-/tmp}/redaction-stdin.XXXXXX")"
+    trap 'rm -f "$stdin_tmp"' EXIT
+    cat > "$stdin_tmp"
+    files=("$stdin_tmp")
+    STDIN_LABEL="<stdin>"
+    ;;
   *)
-    echo "usage: $0 --staged | --files <f...> | --full" >&2
+    echo "usage: $0 --staged | --files <f...> | --full | --stdin" >&2
     echo "  --full scans tracked AND untracked-not-ignored copy paths" >&2
+    echo "  --stdin scans prose from standard input with no path filter" >&2
     exit 2
     ;;
 esac
@@ -120,8 +136,13 @@ strip_noncopy() {
   STRIPPED="$s"
 }
 
+# --stdin sets STDIN_LABEL above; every other mode leaves it empty.
+: "${STDIN_LABEL:=}"
 scan_file() {
   local f="$1" in_fence=0 lineno=0 line
+  # Findings name the file the reader will open; for --stdin there is none, so
+  # the label is the literal "<stdin>" rather than a throwaway temp path.
+  local label="${STDIN_LABEL:-$f}"
   [[ -f "$f" ]] || return 0
   while IFS= read -r line || [[ -n "$line" ]]; do
     lineno=$((lineno + 1))
@@ -139,27 +160,27 @@ scan_file() {
     # non-zero, which aborted the script before it could print its summary or
     # exit 0. A clean file reported failure.
     if [[ "$line" == *"$EM_DASH_RE"* ]]; then
-      echo "$f:$lineno: EM_DASH: house rule is zero em dashes in copy (redaction §14)"
+      echo "$label:$lineno: EM_DASH: house rule is zero em dashes in copy (redaction §14)"
       findings=$((findings + 1))
     fi
     if [[ "$line" =~ $BANNED_RE ]]; then
-      echo "$f:$lineno: BANNED_WORD: ${BASH_REMATCH[2]} (redaction §7)"
+      echo "$label:$lineno: BANNED_WORD: ${BASH_REMATCH[2]} (redaction §7)"
       findings=$((findings + 1))
     fi
     if [[ "$line" =~ $WEASEL_RE ]]; then
-      echo "$f:$lineno: WEASEL: ${BASH_REMATCH[0]} — name the source or cut (redaction §5/§23)"
+      echo "$label:$lineno: WEASEL: ${BASH_REMATCH[0]} — name the source or cut (redaction §5/§23)"
       findings=$((findings + 1))
     fi
     if [[ "$line" =~ $CONTRAST_RE ]]; then
-      echo "$f:$lineno: CONTRAST: ${BASH_REMATCH[0]:0:60} (redaction §9/§35)"
+      echo "$label:$lineno: CONTRAST: ${BASH_REMATCH[0]:0:60} (redaction §9/§35)"
       findings=$((findings + 1))
     fi
     if [[ "$line" =~ $SETUP_RE ]]; then
-      echo "$f:$lineno: SETUP: ${BASH_REMATCH[0]} (redaction §27-31)"
+      echo "$label:$lineno: SETUP: ${BASH_REMATCH[0]} (redaction §27-31)"
       findings=$((findings + 1))
     fi
     if [[ "$line" =~ $PUFF_RE ]]; then
-      echo "$f:$lineno: PUFFERY: ${BASH_REMATCH[0]} (redaction §1/§4/§8/§20-22)"
+      echo "$label:$lineno: PUFFERY: ${BASH_REMATCH[0]} (redaction §1/§4/§8/§20-22)"
       findings=$((findings + 1))
     fi
   done < "$f"

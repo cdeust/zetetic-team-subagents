@@ -387,6 +387,10 @@ no invented facts; zero em dashes, antithesis constructions, or triads in
 copy; every attribution names its source (unsourced attribution is a
 coding-standards §8 violation — name it or cut it); cutting proportional to
 actual slop; ends on a concrete point, not a recap or kicker. The vendored
-inventory in that skill is authoritative; this gate is its enforcement point
-(issue #43).
+inventory in that skill is authoritative (issue #43). The mechanical half of
+the eval is enforced on every message you return by
+`hooks/stop-redaction-gate.py` (Stop and SubagentStop, via
+`tools/redaction-checker.sh --stdin`): when it quotes a line, fix that line
+and re-run the whole eval on the rewrite; the judgment half (nothing
+invented, every attribution sourced, concrete ending) stays yours.
 </redaction-gate>
