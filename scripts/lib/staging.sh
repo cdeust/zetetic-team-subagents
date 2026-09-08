@@ -85,3 +85,17 @@ stage_tree() {
 
   printf -v "$counter_var" "%d" "$count"
 }
+
+# True when the marketplace plugin serves agents/ and skills/ itself: Claude Code
+# discovers both from the plugin cache and lists them under the
+# `zetetic-team-subagents:` prefix. Copying them into ~/.claude/ as well makes
+# every agent and skill appear twice in each session's prelude (measured
+# 2026-09-08: about 28K tokens for the duplicated agent listing alone), so
+# setup.sh copies them only for a standalone install with no plugin. Two
+# signals, either is enough: the installer runs from inside the plugin cache
+# (postInstall), or the plugin registry already lists the plugin.
+plugin_serves_agents() {
+  [[ "$PLUGIN_ROOT" == "$CLAUDE_DIR/plugins/"* ]] && return 0
+  local registry="$CLAUDE_DIR/plugins/installed_plugins.json"
+  [[ -f "$registry" ]] && grep -q '"zetetic-team-subagents@' "$registry"
+}

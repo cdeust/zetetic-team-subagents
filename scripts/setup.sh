@@ -151,12 +151,19 @@ count_tools=0
 count_rules=0
 count_overridden=0
 
-stage_tree "$PLUGIN_ROOT/agents"   "agents"   true  _n; count_agents=$_n
-# Count genius agents separately for reporting
-count_genius=$(find "$STAGING/agents/genius" -name "*.md" -not -name "INDEX.md" 2>/dev/null | wc -l | tr -d ' ')
-count_agents=$((count_agents - count_genius))
-
-stage_tree "$PLUGIN_ROOT/skills"   "skills"   false _n; count_skills=$_n
+PLUGIN_SERVED=false
+if plugin_serves_agents; then
+  # Agents and skills stay in the plugin (see plugin_serves_agents in
+  # lib/staging.sh); a previous install's copies become orphans below.
+  PLUGIN_SERVED=true
+  ok "Marketplace plugin present: agents and skills are served by it, not copied to ~/.claude/"
+else
+  stage_tree "$PLUGIN_ROOT/agents"   "agents"   true  _n; count_agents=$_n
+  # Count genius agents separately for reporting
+  count_genius=$(find "$STAGING/agents/genius" -name "*.md" -not -name "INDEX.md" 2>/dev/null | wc -l | tr -d ' ')
+  count_agents=$((count_agents - count_genius))
+  stage_tree "$PLUGIN_ROOT/skills"   "skills"   false _n; count_skills=$_n
+fi
 stage_tree "$PLUGIN_ROOT/commands" "commands" false _n; count_commands=$_n
 stage_tree "$PLUGIN_ROOT/hooks"    "hooks"    false _n; count_hooks=$_n
 stage_tree "$PLUGIN_ROOT/tools"    "tools"    false _n; count_tools=$_n
@@ -372,14 +379,30 @@ check_py_dep "mlx-lm" "mlx_lm" "pip install mlx-lm"
 # ── Self-test ──────────────────────────────────────────────────────────
 step "Verification"
 
-genius_count=$(find "$CLAUDE_DIR/agents/genius" -name "*.md" -not -name "INDEX.md" 2>/dev/null | wc -l | tr -d ' ')
-[[ "$genius_count" -ge 90 ]] && ok "Genius agents accessible ($genius_count agents)" || warn "Expected ~97 genius agents, found $genius_count"
+if [[ "$PLUGIN_SERVED" == true ]]; then
+  # Nothing copied on purpose; what must be true is that no earlier copy of a
+  # plugin-shipped agent or skill is still lying under ~/.claude/, where it
+  # would be listed a second time.
+  stale=0
+  while IFS= read -r f; do
+    rel="${f#"$PLUGIN_ROOT"/}"
+    [[ -f "$CLAUDE_DIR/$rel" ]] && stale=$((stale + 1))
+  done < <(find "$PLUGIN_ROOT/agents" "$PLUGIN_ROOT/skills" -name "*.md" 2>/dev/null)
+  if [[ "$stale" -eq 0 ]]; then
+    ok "Agents and skills served by the marketplace plugin, no duplicate copy under ~/.claude/"
+  else
+    warn "$stale plugin-shipped agent/skill file(s) still copied under ~/.claude/agents or ~/.claude/skills (listed twice per session); remove them"
+  fi
+else
+  genius_count=$(find "$CLAUDE_DIR/agents/genius" -name "*.md" -not -name "INDEX.md" 2>/dev/null | wc -l | tr -d ' ')
+  [[ "$genius_count" -ge 90 ]] && ok "Genius agents accessible ($genius_count agents)" || warn "Expected ~97 genius agents, found $genius_count"
 
-team_count=$(find "$CLAUDE_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-ok "Team agents installed ($team_count)"
+  team_count=$(find "$CLAUDE_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+  ok "Team agents installed ($team_count)"
 
-skill_count=$(find "$CLAUDE_DIR/skills" -name "*.md" -not -name "_*" 2>/dev/null | wc -l | tr -d ' ')
-ok "Skills installed ($skill_count)"
+  skill_count=$(find "$CLAUDE_DIR/skills" -name "*.md" -not -name "_*" 2>/dev/null | wc -l | tr -d ' ')
+  ok "Skills installed ($skill_count)"
+fi
 
 cmd_count=$(find "$CLAUDE_DIR/commands" -name "*.md" -not -name "_*" 2>/dev/null | wc -l | tr -d ' ')
 ok "Commands installed ($cmd_count)"
@@ -391,8 +414,12 @@ ok "Rules installed ($rules_count)"
 echo ""
 echo -e "${GREEN}${BOLD}Zetetic Team Subagents v${PLUGIN_VERSION} setup complete!${NC}"
 echo ""
-echo "  $count_agents team + $count_genius genius agents → ~/.claude/agents/"
-echo "  $count_skills skills                              → ~/.claude/skills/"
+if [[ "$PLUGIN_SERVED" == true ]]; then
+  echo "  agents and skills                      → served by the marketplace plugin (not copied)"
+else
+  echo "  $count_agents team + $count_genius genius agents → ~/.claude/agents/"
+  echo "  $count_skills skills                              → ~/.claude/skills/"
+fi
 echo "  $count_commands commands                            → ~/.claude/commands/"
 echo "  $count_hooks hooks                                → ~/.claude/hooks/"
 echo "  $count_tools tools                                → ~/.claude/tools/"

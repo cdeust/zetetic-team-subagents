@@ -36,6 +36,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`setup.sh` no longer copies agents and skills into `~/.claude/` when the
+  marketplace plugin is installed (#131).** Claude Code lists a plugin's
+  agents and skills from the plugin cache, so the copies made every one of
+  them appear twice in each session's prelude and came back on every
+  `update` after being removed. The installer now detects the plugin, skips
+  both, drops earlier copies as orphans and warns if any remain; standalone
+  installs are unchanged. New suite `tools/tests/setup-plugin-served`.
+
 - **Phase 7 closeout of the agent-to-skill migration plan (#125).**
   `rules/agent-vs-skill-classification.md`'s `ux-designer` row was stale
   since PR #120 (predated Phase 4/#123's resolution to skill-frontable);

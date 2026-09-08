@@ -34,24 +34,15 @@ declare -A MODEL_TIER_RANK=( [haiku]=0 [sonnet]=1 [opus]=2 [fable]=3 )
 # for a caller known to run at a different default (e.g. an all-opus fleet).
 BASELINE_MODEL="${ZETETIC_SKILL_BASELINE_MODEL:-sonnet}"
 
-# Resolve a plugin-relative content directory (skills/, agents/): env var →
-# ~/.claude/<dirname> → plugin-relative → git root. Shared by the skills-dir
-# and agents-dir resolvers below since both ship side by side in this
-# plugin's layout and are looked up by the same precedence.
-_resolve_plugin_dir() {
-  local env_value="$1" dirname="$2" d
-  d="$env_value"
-  [[ -n "$d" && -d "$d" ]] && { echo "$d"; return; }
-  d="$HOME/.claude/$dirname"
-  [[ -d "$d" ]] && { echo "$d"; return; }
-  d="$(cd "$(dirname "$0")/.." && pwd)/$dirname"
-  [[ -d "$d" ]] && { echo "$d"; return; }
-  d="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/$dirname"
-  echo "$d"
-}
-
-_resolve_skills_dir() { _resolve_plugin_dir "${ZETETIC_SKILLS:-}" "skills"; }
-_resolve_agents_dir() { _resolve_plugin_dir "${ZETETIC_AGENTS:-}" "agents"; }
+# Resolve the skills/ and agents/ directories through the shared resolver
+# (tools/lib/plugin-content-dir.sh): env var > ~/.claude/<dir> > plugin-relative
+# > the marketplace install path > git root. Markers of the plugin-shipped
+# trees: `_index.md` for skills, `genius` for agents.
+_TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/plugin-content-dir.sh
+source "$(dirname "$0")/lib/plugin-content-dir.sh"
+_resolve_skills_dir() { resolve_plugin_content_dir "${ZETETIC_SKILLS:-}" skills _index.md "$_TOOL_ROOT"; }
+_resolve_agents_dir() { resolve_plugin_content_dir "${ZETETIC_AGENTS:-}" agents genius "$_TOOL_ROOT"; }
 
 # Precondition: skill_file is a readable path to a skill Markdown file whose
 # frontmatter, if it declares `agents:`, uses block-list style
