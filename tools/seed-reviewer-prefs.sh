@@ -122,7 +122,7 @@ reviewed and shipped code. It is NOT yet a set of confirmed preferences: a revie
 agent treats every item below as a COMMENT-level suggestion, never a blocking rule,
 until the lead (or the orchestrator/curator on the lead's behalf) abstracts it into
 confirmed preferences and sets \`status: confirmed\`. A preference never overrides a
-\`~/.claude/rules/coding-standards.md\` blocking rule.
+\`~/.claude/reference/coding-standards.md\` blocking rule.
 
 ## How to confirm
 Read the evidence below, abstract the recurring patterns into stated preferences

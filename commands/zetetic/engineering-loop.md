@@ -146,7 +146,7 @@ Instruct the reviewer to flag only what affects correctness or the stated requir
 reviewer asked for gaps will find some regardless, and chasing all of them produces
 over-engineering.
 
-Note the model-specific rule (`~/.claude/rules/model-behavior.md`): on Opus 5, do **not** spawn
+Note the model-specific rule (`~/.claude/reference/model-behavior.md`): on Opus 5, do **not** spawn
 a subagent to verify your own work; on Fable 5, a fresh-context verifier is recommended.
 
 ### 8. Remember — record what a future session needs

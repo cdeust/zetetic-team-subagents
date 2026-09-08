@@ -160,7 +160,7 @@ stage_tree "$PLUGIN_ROOT/skills"   "skills"   false _n; count_skills=$_n
 stage_tree "$PLUGIN_ROOT/commands" "commands" false _n; count_commands=$_n
 stage_tree "$PLUGIN_ROOT/hooks"    "hooks"    false _n; count_hooks=$_n
 stage_tree "$PLUGIN_ROOT/tools"    "tools"    false _n; count_tools=$_n
-stage_tree "$PLUGIN_ROOT/rules"    "rules"    false _n; count_rules=$_n
+stage_tree "$PLUGIN_ROOT/rules"    "reference" false _n; count_rules=$_n
 
 ok "Staged: $count_agents team + $count_genius genius agents, $count_skills skills, $count_commands commands, $count_hooks hooks, $count_tools tools, $count_rules rules"
 [[ "$count_overridden" -gt 0 ]] && ok "Applied $count_overridden model overrides"
@@ -384,7 +384,7 @@ ok "Skills installed ($skill_count)"
 cmd_count=$(find "$CLAUDE_DIR/commands" -name "*.md" -not -name "_*" 2>/dev/null | wc -l | tr -d ' ')
 ok "Commands installed ($cmd_count)"
 
-rules_count=$(find "$CLAUDE_DIR/rules" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+rules_count=$(find "$CLAUDE_DIR/reference" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 ok "Rules installed ($rules_count)"
 
 # ── Summary ────────────────────────────────────────────────────────────
@@ -396,7 +396,7 @@ echo "  $count_skills skills                              → ~/.claude/skills/"
 echo "  $count_commands commands                            → ~/.claude/commands/"
 echo "  $count_hooks hooks                                → ~/.claude/hooks/"
 echo "  $count_tools tools                                → ~/.claude/tools/"
-echo "  $count_rules rules                                → ~/.claude/rules/"
+echo "  $count_rules rules                                → ~/.claude/reference/"
 [[ "$count_overridden" -gt 0 ]] && echo "  $count_overridden model overrides applied from ~/.claude/zetetic-agent-models.json"
 echo ""
 echo "  Next steps:"

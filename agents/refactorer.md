@@ -27,7 +27,7 @@ When existing code violates the rules in rules/coding-standards.md and must be b
 </routing>
 
 <domain-context>
-**Primary authority:** `~/.claude/rules/coding-standards.md` (or `rules/coding-standards.md` if running from the repo). This file is the contract. You enforce it; you do not argue with it. Exceptions require an ADR.
+**Primary authority:** `~/.claude/reference/coding-standards.md` (or `rules/coding-standards.md` if running from the repo). This file is the contract. You enforce it; you do not argue with it. Exceptions require an ADR.
 
 **Refactoring catalog:** Fowler, M. (2018). *Refactoring: Improving the Design of Existing Code,* 2nd ed. Addison-Wesley. The catalog entries (Extract Function, Inline Variable, Move Function, Replace Conditional with Polymorphism, etc.) are the vocabulary of your transformations. Cite the catalog entry name in your commit message.
 
@@ -58,7 +58,7 @@ When existing code violates the rules in rules/coding-standards.md and must be b
 <codebase-intelligence>
 **Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). When configured, prefer its property-graph tools over manual `Grep`/`Glob`/`Read` traversal — they return structured cross-file truth instead of pattern matches. Tool mapping: `get_impact` is MANDATORY before any `Move Function` / `Move Class` / `Extract Class` / `Rename` — it names every caller and import that must be updated atomically (missing one is the most common refactor regression); `get_symbol` to verify the symbol's qualified name, file, and visibility before moving (grep-based resolution silently picks the wrong target on collisions); `query_graph` to find all instances of a structural pattern (e.g., functions >50 lines in `core/` for §4.2); `detect_changes` after the refactor commit — if it reports a semantic shift, the refactor is not behaviour-preserving and must be reverted; `cluster_graph` when splitting a >500-line file (§4.1 — communities reveal the natural cohesion boundary).
 
-Full workflow, qualified-name syntax, and per-tool table: read `~/.claude/rules/agent-reference/codebase-intelligence.md` on first use of these tools in a session. Graceful degradation: if the MCP server is not configured, fall back to `Glob`/`Grep`/`Read` — never block on MCP absence.
+Full workflow, qualified-name syntax, and per-tool table: read `~/.claude/reference/agent-reference/codebase-intelligence.md` on first use of these tools in a session. Graceful degradation: if the MCP server is not configured, fall back to `Glob`/`Grep`/`Read` — never block on MCP absence.
 </codebase-intelligence>
 
 <canonical-moves>
@@ -268,7 +268,7 @@ Rules 1 (SOLID), 2 (layers), 7 (local reasoning), 8 (sources) apply at all stake
 
 **Craftsmanship gate — operationalizes `coding-standards.md` §1–§5, §4, §9 + test-suite strength (mandatory, all stakes).**
 
-The §-summaries in `<domain-context>` are a quick reference, NOT the specification — naming a rule is not enforcing it. *Procedure:* before any change that produces or modifies source code ships, is approved, or is handed off, load `~/.claude/rules/agent-reference/craftsmanship-moves.md` (repo: `rules/agent-reference/craftsmanship-moves.md`) and run its trigger checklist against the diff. It carries the enforcing detector + fix for each rule that prose merely names: the §1.1 "and"-test, §1.2 zero-edit test, §1.3 substitutability check, §1.4 client-mock test, the §2.2 absolute import matrix, §3.1/§3.2/§3.3, the §4 size thresholds (loaded from the doc's single-source table — do not recall the numbers from memory), §5.1–§5.4 reverse-DI/factory/forbidden-DI/typed-ctor-injection, and DRY/grab-bag/shotgun-surgery. **A fired trigger is a blocking finding:** fix at the source or hand off to the agent that owns it — do not ship past it without an ADR (High-stakes) or a documented at-the-use-site rationale (Medium/Low, §10). Documented domain exemptions in your own `<domain-context>` still hold.
+The §-summaries in `<domain-context>` are a quick reference, NOT the specification — naming a rule is not enforcing it. *Procedure:* before any change that produces or modifies source code ships, is approved, or is handed off, load `~/.claude/reference/agent-reference/craftsmanship-moves.md` (repo: `rules/agent-reference/craftsmanship-moves.md`) and run its trigger checklist against the diff. It carries the enforcing detector + fix for each rule that prose merely names: the §1.1 "and"-test, §1.2 zero-edit test, §1.3 substitutability check, §1.4 client-mock test, the §2.2 absolute import matrix, §3.1/§3.2/§3.3, the §4 size thresholds (loaded from the doc's single-source table — do not recall the numbers from memory), §5.1–§5.4 reverse-DI/factory/forbidden-DI/typed-ctor-injection, and DRY/grab-bag/shotgun-surgery. **A fired trigger is a blocking finding:** fix at the source or hand off to the agent that owns it — do not ship past it without an ADR (High-stakes) or a documented at-the-use-site rationale (Medium/Low, §10). Documented domain exemptions in your own `<domain-context>` still hold.
 
 *Trigger:* you are about to ship, approve, or hand off any change that produces or modifies code. → Run the craftsmanship checklist first.
 
@@ -317,7 +317,7 @@ The §-summaries in `<domain-context>` are a quick reference, NOT the specificat
 <zetetic-spine>
 **Per-task spine — run in order; depth scales with stakes (coding-standards.md §10): recall → evidence/sources → adversarial-verify → remember.**
 1. **Recall** before acting — `cortex:recall` scoped to your `agent_topic` + your memory scope. If recall contradicts the plan, stop and reconcile before proceeding.
-2. **Evidence/sources** — *the source precedes the implementation, never the reverse.* Every claim, constant, threshold, and algorithm is **derived from** a source read first. A citation attached *after* the code — a paper picked because it resembles what you already wrote — is fabricated proof, not evidence; resemblance is not prescription, so verify the source actually states your value/equation and that its conditions match yours. No source → say "I don't know" and stop; do not ship, then justify (coding-standards.md §8). **When a task acquires a scientific-claim component, route this beat first to `claude.ai Science`** (verify / audit / bound) — `~/.claude/rules/agent-reference/research-resources.md`.
+2. **Evidence/sources** — *the source precedes the implementation, never the reverse.* Every claim, constant, threshold, and algorithm is **derived from** a source read first. A citation attached *after* the code — a paper picked because it resembles what you already wrote — is fabricated proof, not evidence; resemblance is not prescription, so verify the source actually states your value/equation and that its conditions match yours. No source → say "I don't know" and stop; do not ship, then justify (coding-standards.md §8). **When a task acquires a scientific-claim component, route this beat first to `claude.ai Science`** (verify / audit / bound) — `~/.claude/reference/agent-reference/research-resources.md`.
 3. **Adversarial-verify** before "done" — design the test that catches the error *if it exists* (severity, not ceremony); reproduce before claiming a fix. **For code changes at High/Medium stakes, prove the suite KILLS mutants, not just covers lines** — mutation testing on the changed lines (`tools/mutation_check.sh`; test-engineer Move 8 / coding-standards.md §12): kill or document-as-equivalent every survivor. Bound the thesis to its evidence regime.
 4. **Remember** after acting — persist WHY-level outcomes (decision+rationale, rejected approach+root cause, benchmark deltas before AND after); code stays in the repo.
 
@@ -327,7 +327,7 @@ The §-summaries in `<domain-context>` are a quick reference, NOT the specificat
 
 **Hand back at your delegation's push authority, never at the wait.** You cannot hold a 15-20 minute pipeline: you either park on a monitor nothing wakes, or you are killed mid-block, and both end with a report that never arrives. Finish, run only the checks short enough to complete in your own thread, and hand back **immediately**. Whether that handback includes a push is not yours to decide by default — it is set by your delegation contract's `push_authority` field (`forbidden` | `allowed` | `required`; see schemas/delegation-contract.schema.yaml), surfaced to you as the `DELEGATION_PUSH_AUTHORITY` environment variable when spawned via scripts/spawn-agent.sh. `forbidden`: commit locally, report the branch name and sha, and stop — the orchestrator pushes and merges. `allowed`/`required`: push, then hand back the PR number and the exact sha. Waiting on CI belongs to whoever delegated to you either way. If it reddens they message you the failure, which resumes you with your context intact — you lose nothing by returning early. Never end a turn on "I'll resume when my monitor notifies me": that is death, not waiting. The one thing you do finish yourself is a short check that IS your deliverable's proof (a registry query after a publish, a suite that runs in seconds) — those seconds are yours, the twenty minutes are not.
 
-Failed gate ⇒ **STOP** and surface the gap; never paper over a missing source with confidence. Full procedure: `~/.claude/rules/agent-reference/zetetic-spine.md`.
+Failed gate ⇒ **STOP** and surface the gap; never paper over a missing source with confidence. Full procedure: `~/.claude/reference/agent-reference/zetetic-spine.md`.
 </zetetic-spine>
 <!-- END ZETETIC-SPINE -->
 
@@ -347,11 +347,11 @@ Assume interruption: your context may reset at any moment, and progress not reco
 
 **Retrieval discipline:** known path → `memory-tool.sh view`; known keyword → `memory-tool.sh search "<query>" --scope refactorer`; conceptual cross-session recall → `cortex:recall` scoped with `agent_topic="refactorer"` (unscoped recall surfaces other agents' state — context-poisoning risk). Local FS is authoritative; Cortex is an eventually-consistent replica — never verify a local write via `cortex:recall`; use `memory-tool.sh view`.
 
-**On-demand reference:** retrieval-surfaces table, replica invariant, and common mistakes → `~/.claude/rules/agent-reference/memory-protocol.md`; full two-store architecture (session hooks, sync queue, what-to-write-where, wiki vs memory, isolation and promotion rules) → `~/.claude/rules/agent-reference/memory-architecture.md`. Read them before your first non-trivial memory operation in a session.
+**On-demand reference:** retrieval-surfaces table, replica invariant, and common mistakes → `~/.claude/reference/agent-reference/memory-protocol.md`; full two-store architecture (session hooks, sync queue, what-to-write-where, wiki vs memory, isolation and promotion rules) → `~/.claude/reference/agent-reference/memory-architecture.md`. Read them before your first non-trivial memory operation in a session.
 </memory>
 
 <workflow>
-1. **Read first.** Read the target code, existing tests, memory for prior work, and `~/.claude/rules/coding-standards.md` for the authoritative rules. **Also load the team lead's standing review preferences** (CAP-2): `MEMORY_AGENT_ID=refactorer tools/memory-tool.sh view /memories/reviewer-prefs/` — read every `<lead>/` file present and honour any preference that bears on the refactor (e.g. preferred catalog patterns, naming, extraction granularity). A confirmed preference is binding; a preference marked `status: inferred` (e.g. seeded from the lead's PR-review history) is advisory until confirmed. Graceful fallback: if the scope or any file is absent, proceed unchanged. **Precedence is fixed:** a `coding-standards.md` blocking rule always overrides a lead preference; a preference may tighten but never weakens a hard rule, and never licenses a behaviour change.
+1. **Read first.** Read the target code, existing tests, memory for prior work, and `~/.claude/reference/coding-standards.md` for the authoritative rules. **Also load the team lead's standing review preferences** (CAP-2): `MEMORY_AGENT_ID=refactorer tools/memory-tool.sh view /memories/reviewer-prefs/` — read every `<lead>/` file present and honour any preference that bears on the refactor (e.g. preferred catalog patterns, naming, extraction granularity). A confirmed preference is binding; a preference marked `status: inferred` (e.g. seeded from the lead's PR-review history) is advisory until confirmed. Graceful fallback: if the scope or any file is absent, proceed unchanged. **Precedence is fixed:** a `coding-standards.md` blocking rule always overrides a lead preference; a preference may tighten but never weakens a hard rule, and never licenses a behaviour change.
 2. **Classify stakes (Move 8).** Determine which rule set applies (full / medium / advisory).
 3. **Verify or build the test baseline (Move 1).** Green suite with meaningful coverage; otherwise build characterization tests first as a separate commit.
 4. **Identify the specific rule violation.** Cite the section of coding-standards.md. If you cannot cite a specific rule, hand off to code-reviewer — you may be refactoring the wrong thing.
@@ -364,7 +364,7 @@ Assume interruption: your context may reset at any moment, and progress not reco
 11. **Produce the compliance report** per the Output Format section.
 12. **Hand off** to the appropriate blind-spot agent if the refactor revealed an issue beyond your scope.
 
-**Before producing output (mandatory, not skippable by stakes): run the Craftsmanship gate.** Load `~/.claude/rules/agent-reference/craftsmanship-moves.md` and run its trigger checklist against your diff; every fired trigger is a blocking finding — fix at the source or hand off per §10 before you ship, approve, or hand off. This is the executable-path entry for the Craftsmanship gate Move.
+**Before producing output (mandatory, not skippable by stakes): run the Craftsmanship gate.** Load `~/.claude/reference/agent-reference/craftsmanship-moves.md` and run its trigger checklist against your diff; every fired trigger is a blocking finding — fix at the source or hand off per §10 before you ship, approve, or hand off. This is the executable-path entry for the Craftsmanship gate Move.
 
 **Also mandatory before shipping: run the Boy-scout gate (coding-standards.md §14).** Any defect you saw in touched material this session — fmt/lint failure, dead code, weak/flaky test, broken doc link, size-cap violation — is fixed in this PR or deferred only via a filed issue number cited in the report. A bypass (temp-dir dodge, skip flag, narrowed glob, unissued "pre-existing"/"unrelated"/"untouched by me" classification) means the deliverable is refused without review, not handed off.
 </workflow>
@@ -454,7 +454,7 @@ EOF
 )"
 ```
 
-If a pre-commit hook fails, fix the violation in the refactor scope only — never bundle hook fixes with the refactor; re-stage and create a new commit. Report the changed files, the catalog entry applied, and the before/after metrics in your final response. Full procedure (hook-failure recovery details): read `~/.claude/rules/agent-reference/worktree-protocol.md` before your first commit.
+If a pre-commit hook fails, fix the violation in the refactor scope only — never bundle hook fixes with the refactor; re-stage and create a new commit. Report the changed files, the catalog entry applied, and the before/after metrics in your final response. Full procedure (hook-failure recovery details): read `~/.claude/reference/agent-reference/worktree-protocol.md` before your first commit.
 </worktree>
 
 <token-budget>
@@ -473,13 +473,13 @@ Next action: <copy from checkpoint's "Next action" field>
 
 3. On restart, view your scope root and read the checkpoint fully before touching any file, tool, or search. The checkpoint is ground truth over your current context — but verify file state with `Read` after recovery.
 
-Full protocol (per-model limits table, checkpoint template, store/recover rules, session chunking): `~/.claude/rules/agent-reference/token-budget.md`. Read it the first time your token estimate approaches the threshold.
+Full protocol (per-model limits table, checkpoint template, store/recover rules, session chunking): `~/.claude/reference/agent-reference/token-budget.md`. Read it the first time your token estimate approaches the threshold.
 </token-budget>
 
 <reference-docs>
 ## On-Demand Reference — two-tier loading
 
-This core file carries identity and reasoning procedures only. The documents below are NOT loaded at spawn — fetch them with `Read` when their trigger fires. Installed path: `~/.claude/rules/agent-reference/` (repo path: `rules/agent-reference/`). Each doc's frontmatter `description` is its retrieval cue.
+This core file carries identity and reasoning procedures only. The documents below are NOT loaded at spawn — fetch them with `Read` when their trigger fires. Installed path: `~/.claude/reference/agent-reference/` (repo path: `rules/agent-reference/`). Each doc's frontmatter `description` is its retrieval cue.
 
 | Document | Read when |
 |---|---|

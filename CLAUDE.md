@@ -5,8 +5,8 @@ repository runs under. Python tooling, Markdown agent definitions.
 
 Global rules are imported, not restated:
 
-@~/.claude/rules/model-behavior.md
-@~/.claude/rules/coding-standards.md
+@~/.claude/reference/model-behavior.md
+@~/.claude/reference/coding-standards.md
 
 ## Repo-specific constraints
 

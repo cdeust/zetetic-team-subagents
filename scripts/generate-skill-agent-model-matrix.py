@@ -38,7 +38,7 @@ FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 MODEL_RE = re.compile(r"^model:\s*(\S+)\s*$", re.MULTILINE)
 
 # Ordinal ranking of model tiers, cheapest to most capable/expensive.
-# source: ~/.claude/rules/agent-reference/effort-calibration.md model catalog
+# source: ~/.claude/reference/agent-reference/effort-calibration.md model catalog
 # (Anthropic claude-api reference, cached 2026-06-24).
 TIER_RANK = {"haiku": 0, "sonnet": 1, "opus": 2, "fable": 3}
 BASELINE_MODEL = "sonnet"  # matches tools/skill-runner.sh's ZETETIC_SKILL_BASELINE_MODEL default
