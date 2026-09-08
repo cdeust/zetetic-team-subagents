@@ -13,9 +13,36 @@ adheres to [Semantic Versioning](https://semver.org/).
 > no longer evidence of what was said at the time; the record should be honest
 > about having been edited. The pre-edit text is in git history.
 
+> **Copy edit, 2026-09-08 (action-side redaction gate).** Sixteen list items
+> below opened with a bold label followed by a colon. The bold was removed so
+> the tree passes the new BOLD_LABEL detector (`skills/writing/redaction.md`
+> §15/§16). Wording, claims, counts, dates and references are unchanged.
+
 ## [Unreleased]
 
 ### Added
+
+- **Redaction gate on every outbound action, and a wider detector set (#133).**
+  `hooks/pre-tool-redaction-gate.py`, registered on `PreToolUse` for `Bash`
+  and the GitHub MCP tools, extracts the prose an action is about to publish
+  (commit messages via `-m`/`-F`; PR, issue and release bodies, titles and
+  notes via `gh ... --body/--title/--notes/--body-file`; the `body`, `title`
+  and `commit_message` fields of `mcp__github__*` calls) and runs it through
+  `tools/redaction-checker.sh --stdin`. Same two tiers and the same opt-in as
+  the Stop gate: WARN on stderr by default, BLOCK (exit 2, the action is
+  refused) under `REDACTION_STOP_BLOCK=on` or `.redaction-gate.json`. The
+  mechanism the two hooks share (checker resolution, finding quotes, the
+  opt-in) moved to `tools/redaction_gate.py`, so a message and a commit body
+  cannot drift onto different rules. The checker gains `BOLD_LABEL` (a line
+  or list item opening with a bold label and a colon, redaction.md §15/§16)
+  and French renderings of the §5/§20/§23/§28 phrases it already detected in
+  English, because the gates scan French sessions. Sixteen list items in
+  this file, two in README, one in `docs/AGENT-INTERNALS.md` and two in
+  `enterprise/managed-agents/README.md` lost their bold label so the
+  tree-wide sweep stays at zero. Suites:
+  `tools/tests/pre-tool-redaction-gate` and T18/T19 in
+  `tools/tests/redaction-checker`; pytest `tests/test_redaction_gate.py` and
+  `tests/test_pre_tool_redaction_gate.py`.
 
 - **Redaction gate on every returned message (#127).**
   `hooks/stop-redaction-gate.py`, registered on `Stop` and `SubagentStop`,
@@ -643,7 +670,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   genius agents, 23 team agents, 76 skills, 19 hook registrations, 20 hook
   scripts, 26 commands and 44 tools. Every claim is regenerated from the
   convention and gated. (#79)
-- **Two test-count claims were not reproducible by any command**: a `tests-288`
+- Two test-count claims were not reproducible by any command: a `tests-288`
   badge and "241 tests passing" in the memory section. The bash suites report
   their tallies in incompatible formats, so no total was derivable. Both are
   replaced by counts a command actually prints: the suite count, and the number
@@ -677,7 +704,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   (repository and MCP server key) across `.github/workflows/scorecard.yml`,
   the dev-symlink example and the historical LinkedIn asset that describes the
   rename itself. (#97)
-- **Routine dependency maintenance**: the `github-actions` group bumped to
+- Routine dependency maintenance: the `github-actions` group bumped to
   `codeql-action` 4.37.4 (#91), and `requirements-dev.lock` recompiled for
   `packaging` 26.3 after the committed lock stopped matching a fresh resolution
   (#96).
@@ -739,7 +766,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   transcript could ever satisfy the spine's evidence beat.
 
 ### Added
-- **Check `FP` in `tools/agent-definition-auditor.sh`**: every
+- Check `FP` in `tools/agent-definition-auditor.sh`: every
   `mcp__plugin_..__` prefix an agent names must appear in
   `KNOWN_MCP_PREFIXES`. A file naming no MCP tool is not tallied, so the check
   cannot pass by vacuity. The auditor already runs as a hard gate in `ci.yml`
@@ -759,9 +786,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - **`tools/plugin-version-check.sh`** answers "is the plugin I am running the one that was published?" by comparing **three** values, not two: what is **installed**, what the marketplace **pins**, and what the repo has **released**. It names two defects with different owners: `INSTALL_LAG` (`installed < pinned`, which the user fixes) and `PIN_LAG` (`pinned < released`, meaning **the release was never delivered**, fixed in the marketplace-owning repo, which the message names). A two-value check reports "up to date" against a stale pin, which for a rules-enforcement plugin is a false compliance statement one level up (issue #52; counterpart publishing-side gate: cdeust/Cortex#179).
 - **Session-start currency panel** runs the check, time-boxed and warn-only, and stays **silent when current**. Fail-open by construction: no network, no `jq`, unreadable metadata or an unparseable version prints a single `NOTICE` and exits 0. A boot check that can fail a session is a check that gets disabled, and then the gap recurs with the check nominally in place.
-- **Rules-change discrimination**: when the withheld gap crosses a commit touching `rules/coding-standards.md`, the report says so explicitly: that is the case where agents are enforcing a superseded standard, as opposed to a docs-only bump not worth interrupting for.
-- **`--version` / `--rules-version`**: every agent and hook run can name the plugin build and the rules version it operates under.
-- **Compliance reports now stamp their standard**: the generated zetetic-spine (118 agents) requires any rule-compliance verdict to state the rules version it was evaluated under. A verdict read later is uninterpretable without it.
+- Rules-change discrimination: when the withheld gap crosses a commit touching `rules/coding-standards.md`, the report says so explicitly: that is the case where agents are enforcing a superseded standard, as opposed to a docs-only bump not worth interrupting for.
+- `--version` / `--rules-version`: every agent and hook run can name the plugin build and the rules version it operates under.
+- Compliance reports now stamp their standard: the generated zetetic-spine (118 agents) requires any rule-compliance verdict to state the rules version it was evaluated under. A verdict read later is uninterpretable without it.
 - **`tools/tests/plugin-version-check/`**: 31 hermetic assertions covering every arm: current (silent, negative assertion), install lag, pin lag with the owning repo named, rules-changed vs rules-unchanged, both lags at once, undeterminable version, offline probe, malformed release tag, no-marketplace, usage error, withheld-release count, and a regression test pinning that releases are probed from the **plugin's** repo rather than the marketplace owner's.
 
 - **Attested release bundle** (#53): a release now delivers a deterministic tarball of exactly what it ships, an `EXECUTABLE-MANIFEST` hashing every hook and every shell/python tool, and a CycloneDX SBOM. All three are attested through Sigstore, self-verified before publishing, and uploaded with checksums; the workflow's actions are SHA-pinned with least-privilege OIDC. Everything this plugin ships executes in the user's session with no sandbox, and until now it shipped unattested: #52 showed that a five-releases-stale bundle went unnoticed, and a modified one would have too. Verify a download with `gh attestation verify zetetic-team-subagents.tar.gz --repo cdeust/zetetic-team-subagents`.
@@ -789,7 +816,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [2.33.0]: redaction checker: full mechanical inventory
 
 ### Changed
-- **`tools/redaction-checker.sh`: full mechanical inventory**: three new check groups mirror the Cortex-side expansion (cdeust/Cortex#167): CONTRAST (binary contrasts, negative listing, dramatic fragmentation; redaction §9/§35), SETUP (throat-clearing, faux insight, signposting, rhetorical setups; §27-31), PUFFERY (importance puffery, promotional language, copula avoidance, AI conversation artifacts; §1/§4/§8/§20-22). Suite grows 9 → 13 cases including an FP-guard: technical prose brushing pattern shapes stays silent.
+- `tools/redaction-checker.sh`, full mechanical inventory: three new check groups mirror the Cortex-side expansion (cdeust/Cortex#167): CONTRAST (binary contrasts, negative listing, dramatic fragmentation; redaction §9/§35), SETUP (throat-clearing, faux insight, signposting, rhetorical setups; §27-31), PUFFERY (importance puffery, promotional language, copula avoidance, AI conversation artifacts; §1/§4/§8/§20-22). Suite grows 9 → 13 cases including an FP-guard: technical prose brushing pattern shapes stays silent.
 
 ## [2.32.1]: redaction: first-party identity
 
@@ -812,7 +839,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - **`skills/writing/no-slop.md`**: vendored AI-writing-pattern inventory: 36 patterns merged from `blader/humanizer` v2.9.1 (MIT, Wikipedia "Signs of AI writing" base) and `petergyang/no-ai-slop` (MIT: minimum-effective-edit + eval + detect-with-quoted-evidence method), extended with stricter house deltas (zero em dashes in copy, no antithesis, no triads, weasel attribution treated as coding-standards §8 violation, LinkedIn formula). Kept in-tree for periodic refinement; review-cadence log included.
 
 ### Changed
-- **`orchestrator` agent model: opus → fable**: aligns the plan/dispatch/verify role with Anthropic's **Orchestrator loop** (same webinar: ~96% of Fable-alone quality at ~46% of cost on BrowseComp when Fable coordinates parallel Sonnet workers). Executor-class agents stay on sonnet; the existing tiering already matched the pattern's execution half.
+- `orchestrator` agent model, opus → fable: aligns the plan/dispatch/verify role with Anthropic's **Orchestrator loop** (same webinar: ~96% of Fable-alone quality at ~46% of cost on BrowseComp when Fable coordinates parallel Sonnet workers). Executor-class agents stay on sonnet; the existing tiering already matched the pattern's execution half.
 
 ## [2.30.0]: zetetic-gates micro-plugin + 11 problem-shaped skills + directory-policy metadata
 
@@ -822,8 +849,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - **`PRIVACY.md`**: privacy policy covering both plugins (local-only processing, no telemetry, what hooks read/write), required by the plugin Directory Policy. (#38)
 
 ### Fixed
-- **`hooks/pre-tool-secret-shield.py` §4.5 nesting violation**: `_strip_write_dest_and_urls` nested 5 levels deep; the transfer-destination drop is extracted into `_drop_transfer_destination` (behavior unchanged, hook-layer suite 96/96).
-- **GitHub license detection reported NOASSERTION**: the descriptive preamble, independence statement, and trailing attribution note inside `LICENSE` broke `licensee`, awesome-list license bots, the official marketplace's validate-licenses CI, and anything reading the GitHub license API. `LICENSE` is now the verbatim MIT text; the three explanatory blocks moved to the README license section. (#36)
+- `hooks/pre-tool-secret-shield.py` §4.5 nesting violation: `_strip_write_dest_and_urls` nested 5 levels deep; the transfer-destination drop is extracted into `_drop_transfer_destination` (behavior unchanged, hook-layer suite 96/96).
+- GitHub license detection reported NOASSERTION: the descriptive preamble, independence statement, and trailing attribution note inside `LICENSE` broke `licensee`, awesome-list license bots, the official marketplace's validate-licenses CI, and anything reading the GitHub license API. `LICENSE` is now the verbatim MIT text; the three explanatory blocks moved to the README license section. (#36)
 
 ## [2.29.0]: Boy-Scout Rule + Definition of Done + CMA facilitators + worktree/ACL fixes
 
@@ -841,8 +868,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [2.28.1]: CI audit gate fix + subagent alignment
 
 ### Fixed
-- **`agent-definition-auditor.sh` now actually gates in CI**: the script's default `ROOT` was a hardcoded personal absolute path that didn't exist on the CI runner, so the glob silently matched 0 files and the whole audit (F1-F9, FD, B1-B3, G1-G3, P1) passed vacuously. `ROOT` now resolves relative to the script's own location, and a 0-match glob fails explicitly (exit 2) instead of reporting an empty pass. All 97 genius agents also gained an explicit `tools:` frontmatter field (previously scoped only via the plugin manifest's blanket "All tools" grant), bringing F8/F9 from 22/119 to 119/119 passing.
-- **26 genius agent descriptions repaired**: 4 agents (`deming`, `fisher`, `leguin`, `ranganathan`) shipped with frontmatter `description` truncated mid-sentence by a JSON double-encoding bug (e.g. `"W."`); a further 10 had the same corruption undetected until a new quality gate (check FD: description ≥ 40 chars, no broken escape artifacts) was added to the auditor, and 16 more had valid-but-terse descriptions. Since `description` is the spawn/routing criterion, corrupted values made these agents unroutable; `rules/agent-routing-table.md` was regenerated so the fix reaches routing consumers.
+- `agent-definition-auditor.sh` now actually gates in CI: the script's default `ROOT` was a hardcoded personal absolute path that didn't exist on the CI runner, so the glob silently matched 0 files and the whole audit (F1-F9, FD, B1-B3, G1-G3, P1) passed vacuously. `ROOT` now resolves relative to the script's own location, and a 0-match glob fails explicitly (exit 2) instead of reporting an empty pass. All 97 genius agents also gained an explicit `tools:` frontmatter field (previously scoped only via the plugin manifest's blanket "All tools" grant), bringing F8/F9 from 22/119 to 119/119 passing.
+- 26 genius agent descriptions repaired: 4 agents (`deming`, `fisher`, `leguin`, `ranganathan`) shipped with frontmatter `description` truncated mid-sentence by a JSON double-encoding bug (e.g. `"W."`); a further 10 had the same corruption undetected until a new quality gate (check FD: description ≥ 40 chars, no broken escape artifacts) was added to the auditor, and 16 more had valid-but-terse descriptions. Since `description` is the spawn/routing criterion, corrupted values made these agents unroutable; `rules/agent-routing-table.md` was regenerated so the fix reaches routing consumers.
 - Orchestrator now validates a subagent's result against its artifact contract before forwarding it downstream, and isolates a failed subtask so it does not invalidate already-validated independent results: encoded as new Move 6 steps and refusal conditions.
 - Encoded the anti-passive-waiting lesson (long-running work is foreground-blocking or terminate-and-handoff, never a sleep/poll loop on a background monitor) as binding §8c in the shared memory contract.
 
@@ -1141,7 +1168,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   `scripts/generate-routing-table.py`) replaces full Reads of the 132KB
   INDEX.md in genius:route, genius:index and the orchestrator (~30K tokens
   saved per routing decision). pre-commit warns when the table is stale.
-- **R3: checkpoint stubs follow the letta summary schema**: goals / file
+- R3: checkpoint stubs follow the letta summary schema: goals / file
   references (paths + line ranges) / errors and fixes / current state / next
   steps, ≤500 words, tool outputs clipped to 2K chars, frontmatter
   description retrieval cue. Resume contract: checkpoint + ONE targeted
@@ -1159,7 +1186,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - **R5: mandatory `description:` frontmatter on memory .md files**, enforced
   at the memory-tool.sh chokepoint on create/rethink (instructive error,
   `MEMORY_NO_DESC_CHECK=1` test escape hatch). Contract §4.8.
-- **R6: conflict-aware memory verbs**: `rethink <path> <text>
+- R6: conflict-aware memory verbs: `rethink <path> <text>
   [expected_sha]` (atomic whole-file rewrite, letta memory_rethink) and
   `sha <path>` (CAS token); `str_replace` gains optional compare-and-swap.
   Contract §3.6b/§3.6c/§4.7; exposed via the memory_extensions MCP tool.
@@ -1255,7 +1282,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   full MCP wire compatibility. 241 tests passing across functional, ACL,
   concurrency, stale-lock, MCP, and PII suites.
 - **PII / secret scrubbing on memory write path** (contract §7.2).
-- **`pre-tool-secret-shield` hook**: blocks any agent from reading
+- `pre-tool-secret-shield` hook: blocks any agent from reading
   `.env`, `.aws/credentials`, `*.pem`, `*.key`, or shell-history files.
 - **PII scanner daemon.** Persistent process eliminates Python cold-start;
   median scan time reduced 34→8 ms.

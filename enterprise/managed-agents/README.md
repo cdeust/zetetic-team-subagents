@@ -10,12 +10,12 @@ enterprise pilot engagement, plus the shared environment they attach to.
 The engagement runs on two distinct planes, decided in the issue #26
 "Architecture finale" comment (2026-07-15):
 
-1. **The field (local, at the client site)**: the architect brings the
+1. The field (local, at the client site): the architect brings the
    zetetic-team-subagents roster and the Cortex/zetetic ecosystem, installed
    locally at the client under the Claude Enterprise edition. This plane does
    the actual engineering work. Nothing about it changes here, no agent is
    ported to CMA.
-2. **The engagement's meta-work (CMA, server-side)**: 4 small, specialized,
+2. The engagement's meta-work (CMA, server-side): 4 small, specialized,
    versioned facilitator agents that handle the steps the field plane
    should not carry: reporting, analysis, fleet health, and security audit.
 
