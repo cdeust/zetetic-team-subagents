@@ -120,7 +120,8 @@ def _block_reason(repo: str, rel_path: str, lang: str, removed: dict) -> str | N
     same words the CLI/CI Tier and Tier 2 show for the same defect."""
     for name, (kind, _body) in removed.items():
         survivors = dgg.find_survivors(
-            repo, ref=None, mode=None, name=name, lang=lang, exclude_paths={rel_path}
+            repo, ref=None, mode=None, name=name, lang=lang, exclude_paths={rel_path},
+            defined_in=rel_path,
         )
         if survivors:
             label = f"{rel_path}::{name} ({kind})"

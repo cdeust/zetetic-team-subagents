@@ -44,6 +44,24 @@ adheres to [Semantic Versioning](https://semver.org/).
   both, drops earlier copies as orphans and warns if any remain; standalone
   installs are unchanged. New suite `tools/tests/setup-plugin-served`.
 
+- **Deletion gate: four false-survivor shapes no longer block a move (#130).**
+  `find_survivors` in `tools/deletion_gate_git.py` listed, for a removed
+  `repo_root`, the `def repo_root()` line of every other Stop hook, their
+  bare calls to it, and `args.repo_root` in scripts that never name the hook
+  as 23 survivors, so moving one hook's private helper into a shared module
+  was blocked at edit time on names the diff never touched. Four rules: a
+  file that defines `name` at top level binds its own bare `name(` to that
+  definition (Python module scope; a shell script's own function table), so
+  the definition line and those calls are dropped, attribute and import
+  shapes in such a file still counting; and an attribute shape (`x.name`) in
+  a file that never names the defining file is dropped, because it cannot
+  hold an object bound to that module (both hook tiers and the CLI pass the
+  defining path); a match that sits only inside a line comment is dropped,
+  because a comment calls nothing; and in Python a bare `name(` in a file
+  that never imports the name is dropped, because a free name resolves in
+  its own module's globals (LEGB). Nine tests in
+  `tests/test_deletion_gate_git.py`.
+
 - **Phase 7 closeout of the agent-to-skill migration plan (#125).**
   `rules/agent-vs-skill-classification.md`'s `ux-designer` row was stale
   since PR #120 (predated Phase 4/#123's resolution to skill-frontable);
