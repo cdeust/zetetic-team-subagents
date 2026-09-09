@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.40.1]: the worktree sweep finally sweeps, squash merges and .claude/worktrees included, plus a readable inventory
+
 ### Fixed
 
 - **The worktree sweep now recognises squash merges and the repo's own
