@@ -41,8 +41,11 @@ jobs:
           # Outside the working tree on purpose: the contract lists the revoked
           # prefixes, so downloading it into the repo would make the scan below
           # find them in the file it just wrote.
+          # --retry-all-errors so a mid-transfer connection reset retries too,
+          # rather than failing a gate against an unchanged tree.
           curl --fail --location --silent --show-error \
-               --connect-timeout 5 --max-time 30 --retry 2 \
+               --connect-timeout 10 --max-time 60 \
+               --retry 5 --retry-delay 3 --retry-all-errors \
                "$CONTRACT_URL" -o "$RUNNER_TEMP/contract.json"
           jq -e '.schema_version == 1' "$RUNNER_TEMP/contract.json" > /dev/null \
             || { echo "::error::unsupported contract schema_version"; exit 1; }

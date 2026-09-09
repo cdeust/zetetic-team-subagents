@@ -9,8 +9,6 @@ import os
 import stat
 from pathlib import Path
 
-import pytest
-
 from tools import redaction_gate as rg
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
