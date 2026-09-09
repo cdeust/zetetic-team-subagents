@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.40.0]: redaction gates on every outbound action and returned message, worktrees inside the repository, rules served on demand, cross-CLI skill packaging
+
 ### Fixed
 
 - Both open code-scanning alerts closed, and the CI download flake that
@@ -269,6 +271,20 @@ adheres to [Semantic Versioning](https://semver.org/).
   worktrees were invisible to that sweep and had accumulated (43 detached
   plus 33 branch worktrees under `/private/tmp/cortex-green-*` on one
   machine). `.claude/worktrees/` is now gitignored in this repo too.
+
+- **CLAUDE.md is short again; its body moved to `docs/agent-guidance.md` (#132).**
+  Owner ruling 2026-09-08: CLAUDE.md is re-sent to the model on every turn,
+  so it carries the one-line project description, the build/test/gate
+  commands and at most three non-negotiables. The two
+  `@~/.claude/reference/...` import lines (about 50K characters re-imported
+  each turn) are dropped, and the etiquette line "Do not merge your own PR
+  without the owner's go-ahead" is retired. A pull request merges when CI is
+  green and a review verdict is posted on it.
+
+- **GitHub Actions pins bumped as a group (#115).** actions/checkout 4.2.2 to
+  7.0.1, astral-sh/setup-uv 9.0.0 to 10.0.1, github/codeql-action 4.37.4 to
+  4.37.9, actions/attest-build-provenance 4.1.1 to 4.2.2,
+  softprops/action-gh-release 3.0.2 to 3.0.3.
 
 
 ## [2.39.0]: model-tier escalation banners, the agent-vs-skill classification rule, and the genius-agent Agent-tool registration retired
