@@ -290,103 +290,6 @@ def test_thresholds_reject_an_entry_that_breaks_the_postcondition(
     assert guard._thresholds("claude-opus-5") == (180_000, 200_000)
 
 
-# ── _usage_from_line ─────────────────────────────────────────────────────────
-
-def test_usage_line_sums_all_three_input_token_fields():
-    line = json.dumps({"message": {"model": "m", "usage": {
-        "input_tokens": 10, "cache_creation_input_tokens": 5,
-        "cache_read_input_tokens": 2}}})
-    assert guard._usage_from_line(line) == (17, "m")
-
-
-def test_usage_line_falls_back_to_a_top_level_model():
-    line = json.dumps({"model": "top", "message": {"usage": {"input_tokens": 3}}})
-    assert guard._usage_from_line(line) == (3, "top")
-
-
-@pytest.mark.parametrize(
-    "line",
-    [
-        "",
-        "   ",
-        "not json",
-        json.dumps({"message": {}}),                                  # no usage
-        json.dumps({"message": {"usage": {}}}),                       # empty usage
-        json.dumps({"message": {"usage": {"input_tokens": 0}}}),      # zero
-        json.dumps({"message": {"usage": {"input_tokens": None}}}),   # null
-        json.dumps({"type": "user", "content": "hi"}),                # not assistant
-    ],
-)
-def test_usage_line_returns_none_for_a_non_usage_line(line):
-    assert guard._usage_from_line(line) is None
-
-
-# ── _read_last_usage: the bounded reverse-tail read ──────────────────────────
-
-def test_read_last_usage_finds_the_most_recent_record(isolate_guard):
-    path = _jsonl(isolate_guard, _usage(100), {"type": "user"}, _usage(999))
-    assert guard._read_last_usage(path) == (999, "claude-opus-5")
-
-
-def test_read_last_usage_skips_trailing_non_usage_lines(isolate_guard):
-    path = _jsonl(isolate_guard, _usage(42), {"type": "user"}, {"type": "user"})
-    assert guard._read_last_usage(path) == (42, "claude-opus-5")
-
-
-@pytest.mark.parametrize("path", [None, "", 42, [], "/nonexistent/transcript.jsonl"])
-def test_read_last_usage_is_none_for_an_unusable_path(path):
-    assert guard._read_last_usage(path) == (None, None)
-
-
-def test_read_last_usage_is_none_for_an_empty_file(isolate_guard):
-    path = isolate_guard / "empty.jsonl"
-    path.write_text("")
-    assert guard._read_last_usage(str(path)) == (None, None)
-
-
-def test_read_last_usage_is_none_when_no_line_carries_usage(isolate_guard):
-    path = _jsonl(isolate_guard, {"type": "user"}, {"type": "user"})
-    assert guard._read_last_usage(path) == (None, None)
-
-
-def test_read_last_usage_steps_back_across_chunk_boundaries(
-    isolate_guard, monkeypatch
-):
-    """The record can sit further back than one chunk; the loop must step."""
-    monkeypatch.setattr(guard, "TAIL_CHUNK", 64)
-    padding = [{"type": "user", "pad": "x" * 100} for _ in range(20)]
-    path = _jsonl(isolate_guard, _usage(777), *padding)
-    assert guard._read_last_usage(path) == (777, "claude-opus-5")
-
-
-def test_read_last_usage_reassembles_a_line_split_by_a_chunk_boundary(
-    isolate_guard, monkeypatch
-):
-    """A usage line longer than one chunk must still parse, via the carry."""
-    monkeypatch.setattr(guard, "TAIL_CHUNK", 32)
-    record = {"message": {"model": "m", "usage": {"input_tokens": 5}},
-              "pad": "y" * 500}
-    path = _jsonl(isolate_guard, record)
-    assert guard._read_last_usage(path) == (5, "m")
-
-
-def test_read_last_usage_stops_at_the_scan_cap(isolate_guard, monkeypatch):
-    """The hard safety bound: a record beyond the cap is not found, and the
-    read still terminates rather than walking a 1 GB file."""
-    monkeypatch.setattr(guard, "TAIL_CHUNK", 64)
-    monkeypatch.setattr(guard, "TAIL_MAX_BYTES", 128)
-    padding = [{"type": "user", "pad": "z" * 200} for _ in range(10)]
-    path = _jsonl(isolate_guard, _usage(1234), *padding)
-    assert guard._read_last_usage(path) == (None, None)
-
-
-def test_read_last_usage_tolerates_invalid_utf8(isolate_guard):
-    """A chunk boundary can split a multi-byte sequence; it must not raise."""
-    path = isolate_guard / "t.jsonl"
-    path.write_bytes(b"\xff\xfe garbage\n" + json.dumps(_usage(11)).encode() + b"\n")
-    assert guard._read_last_usage(str(path)) == (11, "claude-opus-5")
-
-
 # ── _git and the checkpoint stub ─────────────────────────────────────────────
 
 def test_git_returns_stripped_stdout(monkeypatch):
@@ -404,7 +307,7 @@ def test_git_returns_empty_on_any_failure(monkeypatch):
 
 def test_write_stub_creates_per_session_and_latest(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    path = guard._write_stub("sess123", "/work", 150_000, "claude-opus-5", "warn")
+    path = guard._write_stub(guard.Trigger("sess123", "/work", 150_000, "claude-opus-5", "warn"))
     assert path.endswith("sess123.md")
     body = Path(path).read_text()
     latest = Path(path).parent / "latest.md"
@@ -413,7 +316,7 @@ def test_write_stub_creates_per_session_and_latest(isolate_guard, monkeypatch):
 
 def test_stub_records_the_session_facts(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    path = guard._write_stub("sess123", "/work", 150_000, "claude-opus-5", "warn")
+    path = guard._write_stub(guard.Trigger("sess123", "/work", 150_000, "claude-opus-5", "warn"))
     body = Path(path).read_text()
     assert "150,000" in body
     assert "claude-opus-5" in body
@@ -424,7 +327,7 @@ def test_stub_records_the_session_facts(isolate_guard, monkeypatch):
 def test_stub_carries_the_letta_schema_sections(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
     body = Path(
-        guard._write_stub("s", "/w", 1, "m", "warn")
+        guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn"))
     ).read_text()
     for section in ("### Goals", "### File references", "### Errors and fixes",
                     "### Current state", "### Next steps", "### Resume contract"):
@@ -436,14 +339,14 @@ def test_stub_seeds_file_references_from_git_status(isolate_guard, monkeypatch):
         guard, "_git",
         lambda cwd, *a: " M tools/x.sh" if a[0] == "status" else "branchy",
     )
-    body = Path(guard._write_stub("s", "/w", 1, "m", "hard")).read_text()
+    body = Path(guard._write_stub(guard.Trigger("s", "/w", 1, "m", "hard"))).read_text()
     assert "- M tools/x.sh" in body
     assert "branchy" in body
 
 
 def test_stub_says_so_when_the_tree_is_clean(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    body = Path(guard._write_stub("s", "/w", 1, "m", "warn")).read_text()
+    body = Path(guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn"))).read_text()
     assert "(working tree clean)" in body
 
 
@@ -456,7 +359,7 @@ def test_write_stub_returns_empty_when_the_directory_cannot_be_made(
         raise OSError("read-only")
 
     monkeypatch.setattr(os, "makedirs", _raise)
-    assert guard._write_stub("s", "/w", 1, "m", "warn") == ""
+    assert guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn")) == ""
 
 
 def test_write_stub_returns_empty_when_the_file_cannot_be_written(
@@ -473,7 +376,7 @@ def test_write_stub_returns_empty_when_the_file_cannot_be_written(
 
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
     monkeypatch.setattr(builtins, "open", _open)
-    assert guard._write_stub("s", "/w", 1, "m", "warn") == ""
+    assert guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn")) == ""
 
 
 # ── state (level + telemetry) ────────────────────────────────────────────────
@@ -514,41 +417,40 @@ def test_save_state_reports_but_survives_an_unwritable_state_dir(
 
 # ── activity gate helpers ────────────────────────────────────────────────────
 
-def test_line_has_tool_use(isolate_guard):
-    assert guard._line_has_tool_use(json.dumps(_tool_use())) is True
-    assert guard._line_has_tool_use(json.dumps(_usage(1))) is False
-    assert guard._line_has_tool_use("not json") is False
-    assert guard._line_has_tool_use("") is False
+def test_read_last_usage_delegates_to_the_shared_scanner(isolate_guard):
+    """The hook's wrapper must return what tools/transcript_scan.py found."""
+    path = _jsonl(isolate_guard, _usage(100), {"type": "user"}, _usage(999))
+    assert guard._read_last_usage(path) == (999, "claude-opus-5")
 
 
-def test_has_activity_since_finds_a_tool_use(isolate_guard):
-    path = _jsonl(isolate_guard, _usage(1), _tool_use())
+def test_read_last_usage_is_none_when_the_scanner_is_missing(monkeypatch):
+    """Contract on a partial install: unmeasurable context exits 0, it does
+    not raise inside a Stop hook."""
+    monkeypatch.setattr(guard, "_load_scan", lambda: None)
+    assert guard._read_last_usage("/any/path") == (None, None)
+
+
+def test_has_activity_since_delegates_and_injects_the_note_reporter(isolate_guard):
+    path = _jsonl(isolate_guard, _usage(10), _tool_use())
     assert guard._has_activity_since(path, 0) is True
+    usage_only = _jsonl(isolate_guard, _usage(10), _usage(20))
+    assert guard._has_activity_since(usage_only, 0) is False
 
 
-def test_has_activity_since_is_false_for_usage_only_transcript(isolate_guard):
-    path = _jsonl(isolate_guard, _usage(1), _usage(2))
-    assert guard._has_activity_since(path, 0) is False
+def test_has_activity_since_fails_open_when_the_scanner_is_missing(monkeypatch):
+    """Fail-open: a redundant checkpoint costs far less than a dropped one."""
+    monkeypatch.setattr(guard, "_load_scan", lambda: None)
+    assert guard._has_activity_since("/any/path", 0) is True
 
 
-def test_has_activity_since_ignores_activity_before_the_offset(isolate_guard):
-    path = _jsonl(isolate_guard, _tool_use(), _usage(1))
-    size = Path(path).stat().st_size
-    assert guard._has_activity_since(path, size) is False
+def test_load_scan_reports_a_missing_scanner_rather_than_failing_silently(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setattr(guard.os.path, "abspath", lambda p: str(tmp_path / "hook.py"))
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    assert guard._load_scan() is None
+    assert "transcript_scan.py not found" in capsys.readouterr().err
 
-
-def test_has_activity_since_rescans_when_the_offset_is_stale(isolate_guard):
-    """An offset larger than the current file (transcript rotated/replaced
-    between fires) must not be trusted as 'caught up' -- rescan from 0."""
-    path = _jsonl(isolate_guard, _tool_use())
-    assert guard._has_activity_since(path, 10_000_000) is True
-
-
-def test_has_activity_since_fails_open_on_a_missing_file(isolate_guard):
-    assert guard._has_activity_since(str(isolate_guard / "missing.jsonl"), 0) is True
-
-
-# ── reason strings ───────────────────────────────────────────────────────────
 
 def test_warn_reason_is_actionable(isolate_guard):
     reason = guard._warn_reason(185_000, "/stub.md", 180_000, 200_000)

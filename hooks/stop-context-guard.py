@@ -16,9 +16,8 @@ Contract (source of truth: agents/orchestrator.md <token-budget>):
   is the embedded fallback when the config is absent or malformed. First
   substring match against the lowercased model id wins.
 
-  Context tokens are measured exactly as Claude Code's `used_percentage`:
-      input_tokens + cache_creation_input_tokens + cache_read_input_tokens
-  read from the most recent assistant turn in the transcript.
+  Context tokens are read from the most recent assistant turn by
+  tools/transcript_scan.py, which owns the `used_percentage` formula.
 
   Precondition:  invoked as a Stop hook with JSON on stdin containing
                  session_id, transcript_path, cwd, stop_hook_active.
@@ -59,7 +58,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-from typing import NoReturn
+from typing import NamedTuple, NoReturn
 
 _TOOL = "ctxguard"
 
@@ -130,23 +129,17 @@ def _thresholds(model_id: str):
 STATE_DIR = "/tmp"
 LEVEL_ORDER = {"none": 0, "warn": 1, "hard": 2}
 
-# --- Bounded reverse-tail read parameters ------------------------------------
-# Claude Code transcripts grow to 100MB–1GB in long sessions, and this hook
-# fires on every Stop. Reading the whole file (readlines) is O(file size) in
-# memory; we instead seek to the tail and scan backward.
-#
-# TAIL_CHUNK = 64 KiB (a power-of-two block multiple). Justification, measured
-# on a real 24.5MB transcript at
-#   ~/.claude/projects/-Users-cdeust-Developments-Cortex/<uuid>.jsonl :
-#   - the last assistant `usage` record was 7,591 bytes from EOF;
-#   - usage JSONL lines were min=1,016 / median=1,729 / max=32,769 bytes.
-# A single 64 KiB tail read covers the last-usage offset ~8.6x over and the
-# largest single usage line ~2x over, so one chunk suffices in practice.
-# The usage record is rewritten on every assistant turn, so it is always near
-# the end. Chunk-stepping with TAIL_MAX_BYTES is a hard safety bound, not a
-# tuning knob.
-TAIL_CHUNK = 64 * 1024          # 65536 bytes
-TAIL_MAX_BYTES = 4 * 1024 * 1024  # cap total bytes scanned at 4 MiB
+
+class Trigger(NamedTuple):
+    """The five facts that describe one firing: who, where, how much, on what
+    model, at which level. They are read together by the stub writer, the state
+    record and the block builder, so they travel as one value rather than as
+    five parallel parameters."""
+    session_id: str
+    cwd: str
+    ctx: int
+    model_id: str
+    level: str
 
 
 def _exit(payload=None) -> NoReturn:
@@ -162,187 +155,47 @@ def _exit(payload=None) -> NoReturn:
     sys.exit(0)
 
 
-def _usage_from_line(line: str):
-    """Parse one JSONL line; return (ctx, model) if it carries a positive
-    assistant usage record, else None. Pure, no I/O."""
-    line = line.strip()
-    if not line:
-        return None
-    try:
-        obj = json.loads(line)
-    except json.JSONDecodeError:
-        return None
-    msg = obj.get("message") or {}
-    usage = msg.get("usage")
-    if not usage:
-        return None
-    ctx = (
-        int(usage.get("input_tokens", 0) or 0)
-        + int(usage.get("cache_creation_input_tokens", 0) or 0)
-        + int(usage.get("cache_read_input_tokens", 0) or 0)
-    )
-    if ctx <= 0:
-        return None
-    return ctx, msg.get("model") or obj.get("model")
+def _load_scan():
+    """Import tools/transcript_scan.py from beside this hook or the plugin root.
+
+    Same resolution order as stop-redaction-gate's _load_gate. Returns None
+    when no copy exists; the caller then exits 0, which is this hook's
+    standing contract for anything it cannot measure (see module docstring:
+    non-fatal by construction).
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [os.path.join(here, "..", "tools")]
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
+    if plugin_root:
+        candidates.append(os.path.join(plugin_root, "tools"))
+    for c in candidates:
+        c = os.path.normpath(c)
+        if os.path.isfile(os.path.join(c, "transcript_scan.py")):
+            sys.path.insert(0, c)
+            import transcript_scan  # noqa: E402  (path must be set first)
+            return transcript_scan
+    _note("tools/transcript_scan.py not found beside the hook; context not measured",
+          FileNotFoundError(candidates[0]))
+    return None
 
 
 def _read_last_usage(transcript_path: str):
-    """Return (context_tokens, model_id) from the most recent assistant usage,
-    or (None, None) if unavailable.
-
-    Precondition:  transcript_path is a path string (or None).
-    Postcondition: returns (ctx, model) for the last line carrying a positive
-                   usage record within the scanned tail, else (None, None).
-                   On any missing/unreadable file or non-str path, returns
-                   (None, None) — identical to the previous readlines() contract.
-
-    Bounded reverse-tail read: seeks to max(0, size - TAIL_CHUNK) and scans the
-    tail backward, stepping back chunk by chunk until a usage record is found
-    or TAIL_MAX_BYTES have been scanned. Peak memory is O(TAIL_CHUNK), not
-    O(file size). Decoded as UTF-8 with errors='replace' so a chunk boundary
-    that splits a multi-byte sequence cannot raise.
-    """
-    try:
-        size = os.stat(transcript_path).st_size
-    except (OSError, TypeError, ValueError):
+    """(context_tokens, model_id) at the most recent assistant turn, or
+    (None, None) when the transcript is unusable or the scanner is missing."""
+    scan = _load_scan()
+    if scan is None:
         return None, None
-    if size == 0:
-        return None, None
-
-    try:
-        fh = open(transcript_path, "rb")
-    except (OSError, TypeError, ValueError):
-        return None, None
-
-    try:
-        carry = ""          # bytes of a line split across the chunk boundary
-        pos = size          # exclusive high-water mark of bytes not yet read
-        scanned = 0
-        while pos > 0 and scanned < TAIL_MAX_BYTES:
-            read_size = min(TAIL_CHUNK, pos)
-            pos -= read_size
-            scanned += read_size
-            fh.seek(pos)
-            chunk = fh.read(read_size).decode("utf-8", errors="replace")
-            # Prepend; carry holds the partial line that started inside this chunk.
-            buf = chunk + carry
-            # If we have not reached the start of the file, the first segment of
-            # buf is a partial line (its true beginning is in an earlier chunk).
-            # Hold it back as carry and scan only the complete lines after it.
-            if pos > 0:
-                nl = buf.find("\n")
-                if nl == -1:
-                    # No newline in the whole window yet: keep accumulating,
-                    # but bound carry growth by the scan cap (handled by loop).
-                    carry = buf
-                    continue
-                carry = buf[:nl]
-                lines = buf[nl + 1:].split("\n")
-            else:
-                # Reached file start: buf begins at a real line boundary.
-                carry = ""
-                lines = buf.split("\n")
-            for line in reversed(lines):
-                hit = _usage_from_line(line)
-                if hit is not None:
-                    return hit
-        # Cap reached or whole file consumed; check any final carried line.
-        if carry:
-            hit = _usage_from_line(carry)
-            if hit is not None:
-                return hit
-        return None, None
-    except OSError:
-        return None, None
-    finally:
-        fh.close()
-
-
-def _line_has_tool_use(line: str) -> bool:
-    """True if a JSONL transcript line's assistant message content carries
-    a tool_use block. Pure, no I/O."""
-    line = line.strip()
-    if not line:
-        return False
-    try:
-        obj = json.loads(line)
-    except json.JSONDecodeError:
-        return False
-    content = (obj.get("message") or {}).get("content")
-    if not isinstance(content, list):
-        return False
-    return any(
-        isinstance(block, dict) and block.get("type") == "tool_use"
-        for block in content
-    )
+    return scan.read_last_usage(transcript_path)
 
 
 def _has_activity_since(transcript_path: str, since_offset: int) -> bool:
-    """True if the transcript contains at least one tool_use content block
-    at or after byte `since_offset`.
-
-    Forward bounded scan mirroring the backward TAIL_CHUNK/TAIL_MAX_BYTES
-    scan already used by _read_last_usage: seek to since_offset, read
-    forward in TAIL_CHUNK blocks up to TAIL_MAX_BYTES total, early-exit on
-    the first tool_use found. Fail-open: if the scan cap is hit without
-    finding one, return True (preserve the previous always-fire behavior
-    rather than risk silently dropping a checkpoint we could not fully
-    verify is safe to skip). since_offset larger than the current file size
-    means the offset is stale (the transcript was replaced/rotated between
-    fires) and cannot be trusted as "caught up" -- rescan from 0 instead of
-    concluding there is nothing new.
-
-    Precondition:  transcript_path is a path string (or None); since_offset
-                   is a non-negative int (0 scans the whole file).
-    Postcondition: True if a tool_use block was found or the file could not
-                   be read/parsed at all (fail-open); False only after a
-                   clean scan to EOF within the byte cap found none.
-    """
-    try:
-        size = os.stat(transcript_path).st_size
-    except (OSError, TypeError, ValueError) as exc:
-        _note("ctxguard activity scan: transcript unreadable", exc)
-        return True  # can't tell -> don't silently skip
-
-    since_offset = max(0, since_offset or 0)
-    if since_offset > size:
-        since_offset = 0  # stale baseline -> rescan whole file
-    elif since_offset == size:
-        return False  # nothing appended since last fire / session start
-
-    try:
-        fh = open(transcript_path, "rb")
-    except (OSError, TypeError, ValueError) as exc:
-        _note("ctxguard activity scan: transcript unopenable", exc)
+    """True if a tool_use block appears at or after `since_offset`. Fail-open
+    (True) when the scan cannot conclude, including a missing scanner: the
+    cost of a redundant checkpoint is far below that of a dropped one."""
+    scan = _load_scan()
+    if scan is None:
         return True
-
-    try:
-        pos = since_offset
-        scanned = 0
-        carry = ""
-        while pos < size and scanned < TAIL_MAX_BYTES:
-            fh.seek(pos)
-            chunk_bytes = fh.read(min(TAIL_CHUNK, size - pos))
-            if not chunk_bytes:
-                break
-            pos += len(chunk_bytes)
-            scanned += len(chunk_bytes)
-            buf = carry + chunk_bytes.decode("utf-8", errors="replace")
-            lines = buf.split("\n")
-            carry = lines[-1]  # last (possibly partial) line held for next chunk
-            for line in lines[:-1]:
-                if _line_has_tool_use(line):
-                    return True
-        if carry and _line_has_tool_use(carry):
-            return True
-        if pos >= size:
-            return False  # reached EOF cleanly, no tool_use found
-        return True  # cap hit before EOF -> fail-open
-    except OSError as exc:
-        _note("ctxguard activity scan failed mid-read", exc)
-        return True
-    finally:
-        fh.close()
+    return scan.has_activity_since(transcript_path, since_offset, _note)
 
 
 def _git(cwd: str, *args: str) -> str:
@@ -356,8 +209,9 @@ def _git(cwd: str, *args: str) -> str:
         return ""
 
 
-def _write_stub(session_id: str, cwd: str, ctx: int, model_id: str, level: str) -> str:
+def _write_stub(trigger: Trigger) -> str:
     """Capture mechanical session state for free. Returns the stub path (or '')."""
+    session_id, cwd, ctx, model_id, level = trigger
     root = os.path.join(os.path.expanduser("~"), ".claude", "memories", "checkpoints")
     try:
         os.makedirs(root, exist_ok=True)
@@ -432,6 +286,10 @@ def _load_state(session_id: str) -> dict:
         if isinstance(data, dict) and "level" in data:
             return data
     except (OSError, json.JSONDecodeError):
+        # Deliberate: an unreadable, absent or legacy state file is not an
+        # error here. The guard's contract is to degrade to the "none" level
+        # and re-derive from the transcript, never to fail the Stop hook and
+        # block the session on its own bookkeeping.
         pass
     return {"level": "none"}
 
@@ -530,19 +388,17 @@ def _level_for(ctx: int, warn: int, hard: int):
     return None
 
 
-def main():
-    data = _read_payload()
+def _gate(data: dict):
+    """Decide whether this Stop should fire, and at which level.
 
-    # Valid JSON that is not an object (e.g. a bare number, string, list, or
-    # null) parses without error but has no .get(); treating it as a missing
-    # payload preserves the fail-open contract (parse/shape problems exit 0).
-    # `None` from a parse failure lands here too — same contract, one check.
-    if not isinstance(data, dict):
-        _exit()
-
+    Returns (trigger, warn, hard, since_offset, state) when it should, or None
+    when it should not — every "not" is a silent exit 0, this hook's standing
+    contract. Split out of ``main()`` so the decision is one readable sequence
+    of guards and the caller is left with the side effects only.
+    """
     # Loop guard: if we already forced a continuation, do not act again.
     if data.get("stop_hook_active"):
-        _exit()
+        return None
 
     session_id = data.get("session_id") or "unknown"
     transcript_path = data.get("transcript_path")
@@ -550,18 +406,17 @@ def main():
 
     ctx, model_id = _read_last_usage(transcript_path)
     if ctx is None:
-        _exit()
+        return None
 
     warn, hard = _thresholds(model_id)
     level = _level_for(ctx, warn, hard)
     if level is None:
-        _exit()
+        return None
 
     state = _load_state(session_id)
-    prev = state.get("level", "none")
     # Only act when crossing UP into a not-yet-fired level.
-    if LEVEL_ORDER[level] <= LEVEL_ORDER[prev]:
-        _exit()
+    if LEVEL_ORDER[level] <= LEVEL_ORDER[state.get("level", "none")]:
+        return None
 
     # Activity gate: skip silently if nothing checkpointable happened since
     # the last fire (or session start). The byte offset is only meaningful
@@ -577,43 +432,68 @@ def main():
         if state.get("transcript_path") == transcript_path else 0
     )
     if not _has_activity_since(transcript_path, since_offset):
-        _exit()
+        return None
 
-    stub_path = _write_stub(session_id, cwd, ctx, model_id, level)
+    return Trigger(session_id, cwd, ctx, model_id, level), warn, hard, since_offset, state
+
+
+def _record_fire(trigger: Trigger, data: dict, since_offset: int, state: dict) -> None:
+    """Persist the level/offset baseline the next Stop compares against."""
     try:
-        new_offset = os.stat(transcript_path).st_size
+        new_offset = os.stat(data.get("transcript_path")).st_size
     except (OSError, TypeError, ValueError):
         new_offset = since_offset
-    _save_state(session_id, {
-        "level": level,
-        "initial_ctx": state.get("initial_ctx") or ctx,
-        "last_fire_ctx": ctx,
+    _save_state(trigger.session_id, {
+        "level": trigger.level,
+        "initial_ctx": state.get("initial_ctx") or trigger.ctx,
+        "last_fire_ctx": trigger.ctx,
         "last_fire_offset": new_offset,
-        "transcript_path": transcript_path,
+        "transcript_path": data.get("transcript_path"),
         "fired_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     })
 
-    if level == "hard":
-        _exit({
-            "decision": "block",
-            "reason": _block_reason(ctx, stub_path, hard),
-            "systemMessage": (
-                f"[context-guard] {ctx:,} tokens ≥ {hard:,} soft cap "
-                f"({model_id or 'model'}) — forcing a checkpoint before the "
-                f"session continues."
-            ),
-        })
-    else:  # warn — one-time reflection block: persist memory while headroom remains
-        _exit({
-            "decision": "block",
-            "reason": _warn_reason(ctx, stub_path, warn, hard),
-            "systemMessage": (
-                f"[context-guard] {ctx:,} tokens ≥ {warn:,} checkpoint threshold "
-                f"({(model_id or 'model')}) — spawning a budgeted memory-writer to "
-                f"persist the semantic checkpoint, then the session continues. "
-                f"Mechanical stub: {stub_path or 'n/a'}. Hard stop at {hard:,}."
-            ),
-        })
+
+def _block(trigger: Trigger, stub_path: str, warn: int, hard: int) -> dict:
+    """The Stop payload for a firing. At "warn" this is a one-time reflection
+    block (persist memory while headroom remains, then continue); at "hard" it
+    forces the checkpoint before the session may go on."""
+    if trigger.level == "hard":
+        reason = _block_reason(trigger.ctx, stub_path, hard)
+        message = (
+            f"[context-guard] {trigger.ctx:,} tokens ≥ {hard:,} soft cap "
+            f"({trigger.model_id or 'model'}) — forcing a checkpoint before the "
+            f"session continues."
+        )
+    else:
+        reason = _warn_reason(trigger.ctx, stub_path, warn, hard)
+        message = (
+            f"[context-guard] {trigger.ctx:,} tokens ≥ {warn:,} checkpoint threshold "
+            f"({trigger.model_id or 'model'}) — spawning a budgeted memory-writer to "
+            f"persist the semantic checkpoint, then the session continues. "
+            f"Mechanical stub: {stub_path or 'n/a'}. Hard stop at {hard:,}."
+        )
+    return {"decision": "block", "reason": reason, "systemMessage": message}
+
+
+def main():
+    data = _read_payload()
+
+    # Valid JSON that is not an object (e.g. a bare number, string, list, or
+    # null) parses without error but has no .get(); treating it as a missing
+    # payload preserves the fail-open contract (parse/shape problems exit 0).
+    # `None` from a parse failure lands here too — same contract, one check.
+    if not isinstance(data, dict):
+        _exit()
+
+    decision = _gate(data)
+    if decision is None:
+        _exit()
+    trigger, warn, hard, since_offset, state = decision
+
+    stub_path = _write_stub(trigger)
+    _record_fire(trigger, data, since_offset, state)
+
+    _exit(_block(trigger, stub_path, warn, hard))
 
 
 if __name__ == "__main__":

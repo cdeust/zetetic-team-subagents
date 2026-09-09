@@ -20,6 +20,31 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Both open code-scanning alerts closed, and the CI download flake that
+  reddened `main` on an unchanged tree (#134). The ShellCheck job died at
+  `curl: (35) Recv failure: Connection reset by peer` fetching the pinned
+  shellcheck tarball; `--retry` covers transient HTTP codes and connection
+  refusals but not a mid-transfer reset, which needs `--retry-all-errors`.
+  Added there and in `.github/workflows/identity.yml`, which had the same
+  gap. Alert #43 (`py/unused-import`): `tests/test_redaction_gate.py`
+  imported `pytest` without using it. Alert #42 (`py/empty-except`):
+  `_load_state` in `hooks/stop-context-guard.py` swallowed `OSError` and
+  `JSONDecodeError` with a bare `pass` and no rationale; the behaviour is
+  intended (an unreadable, absent or legacy state file degrades the guard to
+  the `"none"` level rather than failing the Stop hook), so the fix states
+  that at the site. Touching that file put it under the whole-file
+  craftsmanship gate, which surfaced eight pre-existing violations: the two
+  bounded transcript scans moved to `tools/transcript_scan.py`, loaded by the
+  same resolve-beside-the-hook pattern `stop-redaction-gate` uses for
+  `redaction_gate.py`, taking the hook from 624 to 500 lines; the three
+  over-long functions each split into a guard clause and its loop, which also
+  removed all three depth-4 nests; and `_write_stub`'s five parameters became
+  one `Trigger` NamedTuple. The scan tests moved with the mechanism to
+  `tests/test_transcript_scan.py` unchanged, and the hook gained tests for
+  its wrappers including the missing-scanner path on a partial install.
+
 ### Added
 
 - **Redaction gate on every outbound action, and a wider detector set (#133).**
