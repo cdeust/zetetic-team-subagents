@@ -20,6 +20,42 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The worktree sweep now recognises squash merges and the repo's own
+  `.claude/worktrees/` (#135).** `tools/worktree-manager.sh sweep` decided "merged"
+  with `git merge-base --is-ancestor` alone, which is false for every branch
+  a GitHub squash merge closes, and it only looked under `/tmp`, so the
+  `.claude/worktrees/` location the owner mandated on 2026-09-08 was skipped
+  as "deliberate". Measured 2026-09-10 across the anthropic-partnership
+  repos: 30 worktrees whose PRs had merged were still standing (10 in
+  cortex-viz, 8 in ai-architect-mcp-spec, 11 registered by Cortex under
+  `/private/tmp`), the audit log held two lines in two months, and the disk
+  had filled to 162 MiB free. A branch is now merged when its tip is an
+  ancestor of `origin/main` OR when the patch-id of its cumulative diff
+  equals the patch-id of a commit `origin/main` gained since their
+  merge-base (bounded by `SQUASH_SCAN_LIMIT`, default 500); the match is
+  conservative, so a branch rebased across an overlapping hunk is kept.
+  Paths under `<repo>/.claude/worktrees/` are sweepable; anything else
+  outside `/tmp` is still never touched. A squash-proven branch is deleted
+  with `-D` and the audit line records `merge=squash`. Worktree paths are
+  compared physically (`pwd -P`), which the macOS `/var` symlink otherwise
+  defeats. `scripts/test-worktree-sweep-safety.sh` gains P4-P7 for the
+  squash and in-repo cases. Also fixed on the way: on GNU coreutils the age
+  probe ran `stat -f`, which there means file-system status, so the age came
+  out empty, read as 0, and every worktree on Linux stayed inside the grace
+  period forever; the dialect is now detected before probing.
+
+### Added
+
+- **`tools/worktree-manager.sh inventory [repo ...]` (#135).** One line per linked
+  worktree: the verdict sweep will apply (`sweep`, `keep:unmerged`,
+  `keep:dirty`, `keep:deliberate-path`), the merge state (`ancestor`,
+  `squash`, `unmerged`), the dirty file count, age in days, size, branch
+  and path. The owner's ask on 2026-09-10: what an agent leaves on disk has
+  to be readable at a glance, not reconstructed from `git worktree list`
+  and `du` by hand.
+
 ## [2.40.0]: redaction gates on every outbound action and returned message, worktrees inside the repository, rules served on demand, cross-CLI skill packaging
 
 ### Fixed
