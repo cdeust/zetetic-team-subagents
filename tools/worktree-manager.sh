@@ -8,6 +8,9 @@
 #   tools/worktree-manager.sh sweep [--fetch] [repo ...]
 #                                                    # remove merged tmp worktrees + stale
 #                                                    # branches across one or more repos
+#   tools/worktree-manager.sh inventory [repo ...]  # one line per worktree: merge state,
+#                                                    # dirty count, age, size — what sweep
+#                                                    # would remove and why the rest stays
 #
 # sweep contract:
 #   - No repo args: discovers top-level git repos under the parent of this
@@ -17,14 +20,23 @@
 #     below); the multi-repo form is for deliberate, explicit hygiene runs.
 #   - --fetch: runs `git fetch origin --prune` first (never on by default —
 #     session-start calls sweep without it to avoid network at boot).
-#   - A worktree is removed only if: its path is under /tmp or /private/tmp
-#     (never a deliberate ~/Developments worktree), its branch is not
-#     `live/*` (dev-symlink targets), its tip is an ancestor of origin/main,
-#     its working tree is clean, AND it is older than WORKTREE_GRACE_SECONDS
-#     (see below). Removal never uses --force; branch deletion never uses -D.
+#   - A worktree is removed only if: its path is under /tmp, /private/tmp or
+#     the repo's own `.claude/worktrees/` (never a deliberate ~/Developments
+#     worktree), its branch is not `live/*` (dev-symlink targets), its branch
+#     is merged into origin/main, its working tree is clean, AND it is older
+#     than WORKTREE_GRACE_SECONDS (see below). Removal never uses --force.
+#   - "Merged" means one of: the tip is an ancestor of origin/main, OR the
+#     branch was squash-merged, detected offline by comparing the patch-id of
+#     the branch's cumulative diff (merge-base..tip) with the patch-id of each
+#     commit main gained since that merge-base (bounded by SQUASH_SCAN_LIMIT).
+#     Measured 2026-09-10: every repo under anthropic-partnership squash-merges
+#     its PRs, so the ancestor test alone had swept nothing in two months
+#     (audit log: 2 lines) while 30 merged worktrees accumulated.
+#   - Branch deletion uses `-d` for ancestors and `-D` only for a branch the
+#     squash check proved merged; both are written to the audit log.
 #   - After worktree removal, local branches merged into origin/main with no
 #     worktree (excluding main/master/live/*/checked-out branches) are
-#     deleted with `git branch -d`.
+#     deleted the same way.
 #   - Every removal (and skip-by-grace-period) is appended to
 #     ~/.claude/worktree-sweep-audit.log for post-hoc attribution.
 #
@@ -52,6 +64,11 @@ ACTION="${1:-}"; AGENT="${2:-}"
 # source: measured incident, issue #33 (loss observed ~15-20 min post-creation;
 # 3600s = 60 min gives >=3x safety margin). Override for tests only.
 WORKTREE_GRACE_SECONDS="${WORKTREE_GRACE_SECONDS:-3600}"
+# Upper bound on main commits scanned for a squash-merge match. source:
+# measured 2026-09-10, the widest merge-base..origin/main gap among the 30
+# stale worktrees was 23 commits (Cortex); 500 leaves a 20x margin while
+# keeping the boot-time sweep bounded.
+SQUASH_SCAN_LIMIT="${SQUASH_SCAN_LIMIT:-500}"
 AUDIT_LOG="${WORKTREE_AUDIT_LOG:-$HOME/.claude/worktree-sweep-audit.log}"
 
 # Appends one audit line: ISO-timestamp, repo, path, branch, decision.
@@ -68,22 +85,84 @@ audit_log() {
 # else mtime as a documented fallback). macOS/BSD: `stat -f %B`. Linux with
 # statx birth-time support: `stat -c %W` (returns 0 when unsupported, in
 # which case we fall back to mtime `%Y`/`%m`).
+#
+# Dialect is detected first (`stat --version` succeeds only on GNU): on GNU
+# coreutils `-f` means "file system status", so the former BSD-first probe
+# printed a multi-line report into the arithmetic and the age came out
+# empty. Under `[[ "" -lt N ]]` an empty age reads as 0, so on Linux every
+# worktree looked younger than the grace period and was never swept.
+# Reproduced 2026-09-10 in ubuntu:24.04 (coreutils 9.4).
 worktree_age_seconds() {
-  local path="$1" now created
+  local path="$1" now created=""
   now="$(date +%s)"
-  created="$(stat -f "%B" "$path" 2>/dev/null || true)"
-  if [[ -z "$created" || "$created" == "0" ]]; then
+  if stat --version >/dev/null 2>&1; then
     created="$(stat -c "%W" "$path" 2>/dev/null || true)"
+    case "$created" in ''|0|-) created="$(stat -c "%Y" "$path" 2>/dev/null || echo "$now")" ;; esac
+  else
+    created="$(stat -f "%B" "$path" 2>/dev/null || true)"
+    case "$created" in ''|0) created="$(stat -f "%m" "$path" 2>/dev/null || echo "$now")" ;; esac
   fi
-  if [[ -z "$created" || "$created" == "0" ]]; then
-    created="$(stat -f "%m" "$path" 2>/dev/null || stat -c "%Y" "$path" 2>/dev/null || echo "$now")"
-  fi
+  [[ "$created" =~ ^[0-9]+$ ]] || created="$now"
   echo $(( now - created ))
 }
 
-[[ -z "$ACTION" ]] && { echo "usage: $0 <list|cleanup|status|sweep> [args]" >&2; exit 2; }
+[[ -z "$ACTION" ]] && { echo "usage: $0 <list|cleanup|status|sweep|inventory> [args]" >&2; exit 2; }
 
 # --- sweep helpers --------------------------------------------------------
+
+# patch-id of one diff read on stdin; empty when the diff is empty.
+_patch_id() { git patch-id --stable | awk '{print $1}'; }
+
+# True when <branch> was squash-merged into origin/main: the patch-id of its
+# cumulative diff equals the patch-id of one commit main gained since their
+# merge-base. Conservative by construction: a branch rebased across an
+# overlapping hunk yields a different patch-id and is kept.
+branch_squash_merged() {
+  local repo="$1" branch="$2" base tip branch_id commit_id commit
+  base="$(git -C "$repo" merge-base "$branch" origin/main 2>/dev/null)" || return 1
+  tip="$(git -C "$repo" rev-parse "$branch" 2>/dev/null)" || return 1
+  [[ "$base" == "$tip" ]] && return 1
+  branch_id="$(git -C "$repo" diff "$base" "$tip" 2>/dev/null | _patch_id)"
+  [[ -n "$branch_id" ]] || return 1
+  while IFS= read -r commit; do
+    commit_id="$(git -C "$repo" diff "${commit}^" "$commit" 2>/dev/null | _patch_id)"
+    [[ "$commit_id" == "$branch_id" ]] && return 0
+  done < <(git -C "$repo" rev-list --max-count="$SQUASH_SCAN_LIMIT" "$base..origin/main" 2>/dev/null)
+  return 1
+}
+
+# Echoes "ancestor", "squash" or nothing; exit 0 only when merged.
+branch_merge_kind() {
+  local repo="$1" branch="$2"
+  if git -C "$repo" merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
+    echo ancestor; return 0
+  fi
+  if branch_squash_merged "$repo" "$branch"; then
+    echo squash; return 0
+  fi
+  return 1
+}
+
+# Deletes a merged branch: -d for an ancestor, -D only for a proven squash merge.
+delete_merged_branch() {
+  local repo="$1" branch="$2" kind="$3"
+  if [[ "$kind" == "squash" ]]; then
+    git -C "$repo" branch -D "$branch" >/dev/null 2>&1
+  else
+    git -C "$repo" branch -d "$branch" >/dev/null 2>&1
+  fi
+}
+
+# True for the only two places an agent worktree may live: the system tmp
+# roots and the repo's own `.claude/worktrees/` (the owner rule since
+# 2026-09-08, and the directory Claude Code's own sweep looks at).
+sweepable_path() {
+  local path="$1" primary="$2"
+  case "$path" in
+    /tmp/*|/private/tmp/*|"$primary"/.claude/worktrees/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # Prints "<path>\t<branch>" one per worktree (branch empty/"(detached)" if unnamed).
 list_worktrees() {
@@ -102,9 +181,12 @@ list_worktrees() {
 sweep_worktrees() {
   local repo="$1" primary="$2" primary_branch="$3"
   local removed=0 path branch rc=0 age
+  # Physical paths on both sides: git reports worktrees resolved through
+  # symlinks (macOS /var -> /private/var), the caller's repo path may not be.
+  primary="$(cd "$primary" 2>/dev/null && pwd -P || echo "$primary")"
   while IFS=$'\t' read -r path branch; do
     [[ -z "$path" ]] && continue
-    path="$(cd "$path" 2>/dev/null && pwd || echo "$path")"
+    path="$(cd "$path" 2>/dev/null && pwd -P || echo "$path")"
     [[ "$path" == "$primary" ]] && continue
 
     if [[ -z "$branch" || "$branch" == "(detached)" ]]; then
@@ -116,10 +198,9 @@ sweep_worktrees() {
     if [[ "$branch" == live/* ]]; then
       echo "  skip $path: protected branch ($branch)"; continue
     fi
-    case "$path" in
-      /tmp/*|/private/tmp/*) ;;
-      *) echo "  skip $path: not under /tmp (deliberate worktree)"; continue ;;
-    esac
+    if ! sweepable_path "$path" "$primary"; then
+      echo "  skip $path: not under /tmp or .claude/worktrees (deliberate worktree)"; continue
+    fi
     # Root-cause fix (issue #33): a brand-new branch with zero commits is
     # (by definition of its tip) an ancestor of origin/main, so the
     # merge-check below cannot by itself distinguish "already merged, safe
@@ -131,18 +212,19 @@ sweep_worktrees() {
       audit_log "$repo" "$path" "$branch" "skip-grace-period age=${age}s"
       continue
     fi
-    if ! git -C "$repo" merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
+    local kind
+    if ! kind="$(branch_merge_kind "$repo" "$branch")"; then
       echo "  skip $path ($branch): not merged into origin/main"; continue
     fi
     if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
       echo "  skip $path ($branch): dirty working tree"; continue
     fi
 
-    echo "  remove $path ($branch): merged + clean"
+    echo "  remove $path ($branch): merged ($kind) + clean"
     if git -C "$repo" worktree remove "$path" 2>/dev/null; then
-      git -C "$repo" branch -d "$branch" 2>/dev/null || true
+      delete_merged_branch "$repo" "$branch" "$kind" || true
       removed=$((removed + 1))
-      audit_log "$repo" "$path" "$branch" "removed age=${age}s"
+      audit_log "$repo" "$path" "$branch" "removed merge=${kind} age=${age}s"
     else
       echo "  error: worktree remove failed for $path"
       audit_log "$repo" "$path" "$branch" "error-remove-failed age=${age}s"
@@ -164,9 +246,11 @@ sweep_stale_branches() {
     local skip=0 k
     for k in "${kept[@]}"; do [[ "$branch" == "$k" ]] && { skip=1; break; }; done
     [[ "$skip" == "1" ]] && continue
-    if git -C "$repo" merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
-      if git -C "$repo" branch -d "$branch" 2>/dev/null; then
-        echo "  deleted branch: $branch (merged, no worktree)"
+    local kind
+    if kind="$(branch_merge_kind "$repo" "$branch")"; then
+      if delete_merged_branch "$repo" "$branch" "$kind"; then
+        echo "  deleted branch: $branch (merged ($kind), no worktree)"
+        audit_log "$repo" "-" "$branch" "deleted-branch merge=${kind}"
         deleted=$((deleted + 1))
       fi
     fi
@@ -237,6 +321,45 @@ sweep_main() {
   return "$rc"
 }
 
+# --- inventory -------------------------------------------------------------
+
+# One line per linked worktree of <repo>: what sweep would do and why.
+# Columns: verdict, merge state, dirty file count, age in days, size, branch, path.
+inventory_repo() {
+  local repo="$1" primary path branch kind dirty age size verdict
+  primary="$(cd "$repo" 2>/dev/null && pwd -P)" || return 1
+  echo "Repo: $primary"
+  while IFS=$'\t' read -r path branch; do
+    [[ -z "$path" ]] && continue
+    path="$(cd "$path" 2>/dev/null && pwd -P || echo "$path")"
+    [[ "$path" == "$primary" ]] && continue
+    kind="$(branch_merge_kind "$repo" "$branch" 2>/dev/null || echo unmerged)"
+    dirty="$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    age=$(( $(worktree_age_seconds "$path") / 86400 ))
+    size="$(du -sh "$path" 2>/dev/null | cut -f1)"
+    verdict="keep"
+    if ! sweepable_path "$path" "$primary"; then verdict="keep:deliberate-path"
+    elif [[ "$kind" == "unmerged" ]]; then verdict="keep:unmerged"
+    elif [[ "$dirty" != "0" ]]; then verdict="keep:dirty"
+    else verdict="sweep"; fi
+    printf '  %-22s %-9s dirty=%-5s age=%3sd %6s  %s  %s\n' \
+      "$verdict" "$kind" "$dirty" "$age" "$size" "$branch" "$path"
+  done < <(list_worktrees "$repo")
+}
+
+inventory_main() {
+  local repos=("$@") r
+  [[ ${#repos[@]} -eq 0 ]] && repos=("$REPO_ROOT")
+  for r in "${repos[@]}"; do
+    [[ -d "$r/.git" || -f "$r/.git" ]] || { echo "Repo: $r"; echo "  skip: not a git repository"; continue; }
+    if ! git -C "$r" rev-parse --verify origin/main >/dev/null 2>&1; then
+      echo "Repo: $r"; echo "  skip: no origin/main ref locally (fetch first)"; continue
+    fi
+    inventory_repo "$r"
+    echo ""
+  done
+}
+
 # --- dispatch --------------------------------------------------------------
 
 case "$ACTION" in
@@ -281,5 +404,10 @@ case "$ACTION" in
     sweep_main "$@"
     ;;
 
-  *) echo "usage: $0 <list|cleanup|status|sweep> [args]" >&2; exit 2 ;;
+  inventory)
+    shift
+    inventory_main "$@"
+    ;;
+
+  *) echo "usage: $0 <list|cleanup|status|sweep|inventory> [args]" >&2; exit 2 ;;
 esac
