@@ -59,7 +59,13 @@ jobs:
         run: |
           set -euo pipefail
           url="https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
-          curl -sSL --retry 3 --max-time 180 -o /tmp/shellcheck.tar.xz "$url"
+          # --retry alone only covers transient HTTP codes and connection
+          # refusals; a mid-transfer "Recv failure: Connection reset by peer"
+          # (curl exit 35) is not retried without --retry-all-errors, and that
+          # is what reddened main on 2026-09-08 against an unchanged tree.
+          curl -sSL --retry 5 --retry-delay 5 --retry-all-errors \
+               --connect-timeout 30 --max-time 180 \
+               -o /tmp/shellcheck.tar.xz "$url"
           echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c -
           tar -xJf /tmp/shellcheck.tar.xz -C /tmp
           sudo install -m 0755 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
