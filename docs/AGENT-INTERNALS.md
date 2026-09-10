@@ -53,7 +53,7 @@ The orchestrator routes based on frontmatter: a sentence is enough. The invoked 
 | `name` | yes | The agent slug; matches the filename and `MEMORY_AGENT_ID` |
 | `description` | yes | One-sentence routing signal; appears in the agent picker |
 | `when_to_use` | yes | One-clause trigger; helps the orchestrator pick |
-| `model` | yes | `opus` / `sonnet` / `haiku`: overridable via `~/.claude/zetetic-agent-models.json` |
+| `model` | yes | `opus` / `sonnet` / `haiku`: overridable via `~/.claude/zetetic/agent-models.json` |
 | `effort` | yes | `low` / `medium` / `high` / `max`: reasoning-token budget |
 | `shapes` | genius only | Problem-shape labels matched by the shape-router |
 | `tools` | yes | Subset of `Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, Agent` |

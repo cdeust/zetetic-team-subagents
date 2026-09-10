@@ -61,6 +61,9 @@ agreement, part of the measured kappa is family, not rubric ambiguity.
    verbatim, substituting `<CASES_PATH>` and `<OUT_PATH>`. Where the prompt refers to
    `~/.claude/goa-phase0/label-rubric.md`, read it as this directory's copy. The path
    is left as-is because the prompt is frozen and must not be edited between runs.
+   (Since issue #136 the on-disk workspace, when one exists, is
+   `~/.claude/zetetic/goa-phase0/`: `setup.sh` moved it there with the rest of the
+   plugin's state.)
 
    Constraint 5 of the prompt is the load-bearing one: a labeller who sees another
    labeller's output destroys the measurement. Enforce it.

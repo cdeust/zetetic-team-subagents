@@ -20,6 +20,35 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The plugin's state lives under `~/.claude/zetetic/`, not flat at the root
+  of `~/.claude` (#137).** `setup.sh` and the tools wrote `.zetetic-manifest`,
+  `.zetetic-manifest.json`, `.zetetic-version`, `zetetic-agent-models.json`,
+  `worktree-sweep-audit.log`, `dev-symlink.map` and `dev-symlink.versions`
+  straight into `~/.claude`, beside the `goa-phase0/` and `goa-design/`
+  labelling workspaces; measured 2026-09-10, the root held 324 entries. Owner
+  ruling the same day: what a plugin leaves on disk is managed by the plugin
+  and readable at a glance. The files are now `~/.claude/zetetic/manifest`,
+  `manifest.json`, `version`, `agent-models.json`, `worktree-sweep-audit.log`,
+  `dev-symlink.map`, `dev-symlink.versions`, `goa-phase0/`, `goa-design/`;
+  the staged trees (`agents/`, `skills/`, `commands/`, `hooks/`, `tools/`,
+  `reference/`) stay where Claude Code expects them. The first `setup.sh` run
+  moves a flat install once (a move, so the root entries disappear; a
+  user-tuned `zetetic-agent-models.json` is moved as is, never overwritten;
+  a second run finds nothing to move), `install`, `update`, `configure` and
+  `uninstall` all read the new paths, the `WORKTREE_AUDIT_LOG`,
+  `DEV_SYMLINK_MAP` and `DEV_SYMLINK_VERSIONS` overrides keep working, and
+  `setup.sh` ends by printing the resulting layout with sizes and per-tree
+  counts. Found on the way: `tools/dev-symlink-doctor.sh` created its temp
+  file before its state directory existed, which under `set -e` would have
+  killed the doctor on the first run into the new directory; the `mkdir -p`
+  now comes first. `scripts/test-state-layout.sh` (in CI) covers the
+  migration, the idempotent re-run, the fresh install writing only
+  `zetetic/` plus the staged trees, the dry run, and both tools' default
+  paths, all under a throwaway `HOME` and a throwaway copy of the plugin.
+  Issue #136.
+
 ## [2.40.1]: the worktree sweep finally sweeps, squash merges and .claude/worktrees included, plus a readable inventory
 
 ### Fixed

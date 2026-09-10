@@ -4,7 +4,7 @@
 # Cross-platform: pure bash + python3 (probed via command -v); no OS-specific calls.
 
 # ── Agent override resolution (model + effort) ─────────────────────────
-# Reads ~/.claude/zetetic-agent-models.json and resolves model + effort per agent.
+# Reads ~/.claude/zetetic/agent-models.json and resolves model + effort per agent.
 # Config schema (backward compatible):
 #   { "agents": {
 #       "engineer": "sonnet",                                 # shorthand: model only

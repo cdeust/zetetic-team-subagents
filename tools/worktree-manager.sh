@@ -38,7 +38,8 @@
 #     worktree (excluding main/master/live/*/checked-out branches) are
 #     deleted the same way.
 #   - Every removal (and skip-by-grace-period) is appended to
-#     ~/.claude/worktree-sweep-audit.log for post-hoc attribution.
+#     ~/.claude/zetetic/worktree-sweep-audit.log for post-hoc attribution
+#     (WORKTREE_AUDIT_LOG overrides the path; issue #136 moved it under zetetic/).
 #
 # ISSUE #33 ROOT CAUSE (fixed here, reproduced empirically 2026-07-17):
 # `git merge-base --is-ancestor <branch> origin/main` returns TRUE for a
@@ -69,7 +70,7 @@ WORKTREE_GRACE_SECONDS="${WORKTREE_GRACE_SECONDS:-3600}"
 # stale worktrees was 23 commits (Cortex); 500 leaves a 20x margin while
 # keeping the boot-time sweep bounded.
 SQUASH_SCAN_LIMIT="${SQUASH_SCAN_LIMIT:-500}"
-AUDIT_LOG="${WORKTREE_AUDIT_LOG:-$HOME/.claude/worktree-sweep-audit.log}"
+AUDIT_LOG="${WORKTREE_AUDIT_LOG:-$HOME/.claude/zetetic/worktree-sweep-audit.log}"
 
 # Appends one audit line: ISO-timestamp, repo, path, branch, decision.
 # Never fails the sweep — a log write failure is swallowed (best-effort).

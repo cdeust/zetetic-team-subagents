@@ -15,9 +15,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$SCRIPT_DIR")}"
 CLAUDE_DIR="${HOME}/.claude"
-MANIFEST="${CLAUDE_DIR}/.zetetic-manifest"
-VERSION_FILE="${CLAUDE_DIR}/.zetetic-version"
-MODEL_CONFIG="${CLAUDE_DIR}/zetetic-agent-models.json"
+# Every state file the plugin owns lives here (issue #136); a flat install
+# is moved in once by lib/state.sh. The staged trees (agents/, skills/,
+# commands/, hooks/, tools/, reference/) are Claude Code conventions and
+# stay directly under ~/.claude/.
+STATE_DIR="${CLAUDE_DIR}/zetetic"
+MANIFEST="${STATE_DIR}/manifest"
+VERSION_FILE="${STATE_DIR}/version"
+MODEL_CONFIG="${STATE_DIR}/agent-models.json"
 BACKUP_SUFFIX=".zetetic-backup"
 
 # ── Colors ─────────────────────────────────────────────────────────────
@@ -39,7 +44,7 @@ step() { echo ""; echo -e "${TEAL}───${NC} ${WHITE}${BOLD}$1${NC} ${TEAL}�
 # ── Sourced modules (lib/) ─────────────────────────────────────────────
 # Behavior-preserving split for coding-standards §4 (file/function size).
 # shellcheck source=/dev/null
-for _mod in overrides staging actions; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
+for _mod in overrides staging actions state; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
 
 # ── Flag parsing ───────────────────────────────────────────────────────
 ACTION="install"
@@ -84,10 +89,22 @@ read_version() {
   fi
 }
 
+# Reads the recorded version. In a dry run the flat file has not been moved
+# yet, so the legacy root path is consulted there and only there.
+installed_version() {
+  if [[ -f "$VERSION_FILE" ]]; then
+    cat "$VERSION_FILE"
+  elif [[ "$DRY_RUN" == true && -f "${CLAUDE_DIR}/.zetetic-version" ]]; then
+    cat "${CLAUDE_DIR}/.zetetic-version"
+  fi
+}
+
 # ── Install dispatch guards ────────────────────────────────────────────
+# uninstall and configure read the state files too, so a flat install is
+# moved under ~/.claude/zetetic/ before either runs.
 case "$ACTION" in
-  uninstall)  do_uninstall; exit 0 ;;
-  configure)  do_configure; exit 0 ;;
+  uninstall)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_uninstall; exit 0 ;;
+  configure)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_configure; exit 0 ;;
   install|update) ;;
   *) echo "usage: $0 [install|update|uninstall|configure] [--dry-run] [--verbose]" >&2; exit 2 ;;
 esac
@@ -113,11 +130,14 @@ step "Prerequisites"
 [[ -w "$CLAUDE_DIR" ]] || fail "~/.claude/ is not writable"
 ok "Claude Code directory exists"
 
+# ── State layout (issue #136) ──────────────────────────────────────────
+migrate_flat_state
+
 # ── Version gate ───────────────────────────────────────────────────────
 step "Version check"
 
-if [[ -f "$VERSION_FILE" ]]; then
-  INSTALLED_VERSION="$(cat "$VERSION_FILE")"
+INSTALLED_VERSION="$(installed_version)"
+if [[ -n "$INSTALLED_VERSION" ]]; then
   if [[ "$INSTALLED_VERSION" == "$PLUGIN_VERSION" ]]; then
     ok "Version $PLUGIN_VERSION already installed — reinstalling"
   elif [[ "$INSTALLED_VERSION" > "$PLUGIN_VERSION" ]]; then
@@ -415,20 +435,19 @@ echo ""
 echo -e "${GREEN}${BOLD}Zetetic Team Subagents v${PLUGIN_VERSION} setup complete!${NC}"
 echo ""
 if [[ "$PLUGIN_SERVED" == true ]]; then
-  echo "  agents and skills                      → served by the marketplace plugin (not copied)"
+  echo "  agents and skills served by the marketplace plugin (not copied)"
 else
-  echo "  $count_agents team + $count_genius genius agents → ~/.claude/agents/"
-  echo "  $count_skills skills                              → ~/.claude/skills/"
+  echo "  $count_agents team + $count_genius genius agents, $count_skills skills"
 fi
-echo "  $count_commands commands                            → ~/.claude/commands/"
-echo "  $count_hooks hooks                                → ~/.claude/hooks/"
-echo "  $count_tools tools                                → ~/.claude/tools/"
-echo "  $count_rules rules                                → ~/.claude/reference/"
-[[ "$count_overridden" -gt 0 ]] && echo "  $count_overridden model overrides applied from ~/.claude/zetetic-agent-models.json"
+echo "  $count_commands commands, $count_hooks hooks, $count_tools tools, $count_rules rules"
+[[ "$count_overridden" -gt 0 ]] && echo "  $count_overridden model overrides applied from ~/.claude/zetetic/agent-models.json"
 echo ""
 echo "  Next steps:"
 echo "    1. Restart Claude Code to activate"
 echo -e "    2. Configure models:  ${CYAN}$0 configure${NC}"
 echo -e "    3. Update:            ${CYAN}$0 update${NC}"
 echo -e "    4. Uninstall:         ${CYAN}$0 uninstall${NC}"
+
+# Last thing printed, so the user reads at a glance what the plugin put where.
+print_layout
 echo ""

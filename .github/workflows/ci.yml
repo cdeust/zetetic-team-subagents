@@ -166,6 +166,14 @@ jobs:
       - name: Run sweep-safety suite (issue #33)
         run: bash scripts/test-worktree-sweep-safety.sh
 
+      # setup.sh requires jq; the suite runs a real install into a throwaway
+      # HOME and a throwaway copy of the plugin (issue #136).
+      - name: Install jq (required by setup.sh)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run state-layout suite (issue #136)
+        run: bash scripts/test-state-layout.sh
+
   zetetic-checker:
     name: Zetetic Standard Checker (hard gate)
     runs-on: ubuntu-latest
