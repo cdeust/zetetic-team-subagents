@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <img src="https://img.shields.io/badge/suites-39-brightgreen" alt="Test suites">
+  <img src="https://img.shields.io/badge/suites-40-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-81-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-23_lifecycle-red" alt="Hooks">
@@ -133,7 +133,7 @@ claude plugin marketplace add cdeust/zetetic-team-subagents
 claude plugin install zetetic-team-subagents
 ```
 
-That's the whole install. The plugin's installer copies agents, skills, hooks, and tools into `~/.claude/`. Manual install + advanced config: [`docs/INSTALL.md`](docs/INSTALL.md).
+That's the whole install. The plugin's installer copies agents, skills, hooks, and tools into `~/.claude/` and keeps its own state (install manifest, version, model overrides, sweep audit log, dev-symlink map) under `~/.claude/zetetic/`; it prints that layout when it finishes. Manual install + advanced config: [`docs/INSTALL.md`](docs/INSTALL.md).
 
 **Just want the enforcement gates, no agents?** Install the 30-second micro-plugin instead: `claude plugin install zetetic-gates`. It ships the pre-commit zetetic + craftsmanship checkers and the secret-shield, nothing else. See [`plugins/zetetic-gates/`](plugins/zetetic-gates/README.md).
 

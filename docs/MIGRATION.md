@@ -63,4 +63,4 @@ For algorithms from papers, financial logic, crypto, ML hyperparameters, and the
 Eight agents auto-delegate by default (refactorer, code-reviewer, test-engineer, security-auditor, architect, Feynman, Curie, Dijkstra). To make them less aggressive on existing-project transition:
 
 1. Edit the installed agent copy in `~/.claude/agents/` to remove the `Proactively` lead-in and scenario examples (survives plugin updates: `setup.sh` detects user-modified files and backs them up before overwriting).
-2. Or set specific agents to `model: haiku` in `~/.claude/zetetic-agent-models.json` for cheaper evaluation during the transition.
+2. Or set specific agents to `model: haiku` in `~/.claude/zetetic/agent-models.json` for cheaper evaluation during the transition.

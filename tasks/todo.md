@@ -23,7 +23,8 @@ Terra/Luna 0.591. Against the historical raters, all three align more often with
 B on shape decisions.
 
 The durable private archive is
-`~/.claude/goa-phase0/replays/2026-08-04-codex-gpt56/`; the public, non-sensitive
+`~/.claude/zetetic/goa-phase0/replays/2026-08-04-codex-gpt56/` (moved there from
+`~/.claude/goa-phase0/` by `setup.sh`, issue #136); the public, non-sensitive
 method/report is `docs/goa-phase0/REPLAY-CODEX-GPT56-2026-08-04.md`.
 
 Limitation: historical A/B/C files were OS-quarantined, and a trace audit found

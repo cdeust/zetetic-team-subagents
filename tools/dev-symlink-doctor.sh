@@ -7,7 +7,8 @@
 # Usage:
 #   tools/dev-symlink-doctor.sh [--repair|prune-bridges]
 #
-# Map file (default ~/.claude/dev-symlink.map, override via DEV_SYMLINK_MAP):
+# Map file (default ~/.claude/zetetic/dev-symlink.map, override via DEV_SYMLINK_MAP;
+# issue #136 moved every plugin state file under ~/.claude/zetetic/):
 #   <cache_install_dir>|<dev_repo_dir>|<mode>
 #   mode = "tree" (every top-level cache entry whose name ALSO exists at the
 #          top level of the dev repo — a "montable" entry, see
@@ -37,7 +38,7 @@
 # restarts. The owner directive is: do not prevent the purge — instead,
 # re-attach the old path via a symlink to the current version the moment the
 # purge is detected, so in-flight sessions stay live):
-#   - State file (default ~/.claude/dev-symlink.versions, override via
+#   - State file (default ~/.claude/zetetic/dev-symlink.versions, override via
 #     DEV_SYMLINK_VERSIONS): one line per plugin dir,
 #     `<plugin_dir>|<v1>,<v2>,...` (oldest to newest, deduplicated) — the
 #     full history of versions this doctor has ever observed for that
@@ -73,8 +74,8 @@ case "${1:-}" in
   *) echo "usage: $0 [--repair|prune-bridges]" >&2; exit 2 ;;
 esac
 
-MAP_FILE="${DEV_SYMLINK_MAP:-$HOME/.claude/dev-symlink.map}"
-VERSIONS_FILE="${DEV_SYMLINK_VERSIONS:-$HOME/.claude/dev-symlink.versions}"
+MAP_FILE="${DEV_SYMLINK_MAP:-$HOME/.claude/zetetic/dev-symlink.map}"
+VERSIONS_FILE="${DEV_SYMLINK_VERSIONS:-$HOME/.claude/zetetic/dev-symlink.versions}"
 
 expand_tilde() {
   local p="$1"
@@ -247,6 +248,10 @@ versions_history_get() {
 # never leaves a truncated state file.
 versions_history_set() {
   local plugin_dir="$1" hist="$2" tmp p_dir rest trimmed_pdir found=0
+  # The directory first: mktemp creates the temp file beside VERSIONS_FILE,
+  # and under set -e a missing ~/.claude/zetetic/ killed the doctor here on
+  # the first run after issue #136 moved the state file.
+  mkdir -p "$(dirname "$VERSIONS_FILE")"
   tmp="$(mktemp "${VERSIONS_FILE}.XXXXXX")"
   if [[ -f "$VERSIONS_FILE" ]]; then
     while IFS='|' read -r p_dir rest || [[ -n "$p_dir" ]]; do
@@ -266,7 +271,6 @@ versions_history_set() {
   if [[ "$found" -eq 0 && -n "$hist" ]]; then
     printf '%s|%s\n' "$plugin_dir" "$hist" >> "$tmp"
   fi
-  mkdir -p "$(dirname "$VERSIONS_FILE")"
   mv "$tmp" "$VERSIONS_FILE"
 }
 

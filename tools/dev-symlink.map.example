@@ -1,5 +1,5 @@
 # dev-symlink.map — "edition live" montage between plugin cache installs and
-# dev repos. Copy to ~/.claude/dev-symlink.map (or point DEV_SYMLINK_MAP at
+# dev repos. Copy to ~/.claude/zetetic/dev-symlink.map (or point DEV_SYMLINK_MAP at
 # a copy) and keep it updated: plugin versions change on every install/update,
 # so the cache path's version segment below WILL go stale — update the line
 # after each `claude plugin install`/`update` rather than trusting this file.

@@ -137,8 +137,11 @@ change.
 Canonical private directory:
 
 ```text
-~/.claude/goa-phase0/replays/2026-08-04-codex-gpt56/
+~/.claude/zetetic/goa-phase0/replays/2026-08-04-codex-gpt56/
 ```
+
+(Recorded as `~/.claude/goa-phase0/...` at the time; `setup.sh` moved the
+workspace under `~/.claude/zetetic/` with the plugin's other state, issue #136.)
 
 Aggregate SHA-256 values are computed by hashing the six ordered per-lot file
 hashes for each model:

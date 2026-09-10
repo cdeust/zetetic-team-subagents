@@ -46,9 +46,35 @@ bash scripts/setup.sh install
 |---|---|
 | `install` | Install or re-install: copies tracked files to `~/.claude/` |
 | `update` | Re-apply agent models, pull new assets, prune orphans |
-| `configure` | Create `~/.claude/zetetic-agent-models.json` with calibrated defaults |
+| `configure` | Create `~/.claude/zetetic/agent-models.json` with calibrated defaults |
 | `uninstall` | Remove tracked files; keeps user-modified copies |
 | `--dry-run` | Preview any of the above |
+
+## Where the plugin writes
+
+Everything the plugin owns on disk sits in one directory, `~/.claude/zetetic/`,
+so it can be read at a glance and removed as a unit:
+
+| File | Written by | Purpose |
+|---|---|---|
+| `manifest` | `setup.sh` | checksum and path of every installed file (updates, orphan removal, uninstall) |
+| `version` | `setup.sh` | the installed plugin version |
+| `agent-models.json` | `setup.sh configure`, then you | per-agent model and effort overrides |
+| `worktree-sweep-audit.log` | `tools/worktree-manager.sh` | one line per worktree the sweep removed or kept (`WORKTREE_AUDIT_LOG` overrides) |
+| `dev-symlink.map`, `dev-symlink.versions` | you, `tools/dev-symlink-doctor.sh` | the "edition live" montage and its version history (`DEV_SYMLINK_MAP`, `DEV_SYMLINK_VERSIONS` override) |
+| `goa-phase0/`, `goa-design/` | the GOA Phase 0 labelling protocol | labelling workspaces, when you ran one |
+
+The staged trees (`~/.claude/agents/`, `skills/`, `commands/`, `hooks/`,
+`tools/`, `reference/`) are where Claude Code looks for them and stay where
+they are. `setup.sh` prints this layout, with file sizes and per-tree counts,
+as the last thing it does.
+
+Before v2.41.0 the same files sat flat at the root of `~/.claude/`
+(`.zetetic-manifest`, `.zetetic-version`, `zetetic-agent-models.json`,
+`worktree-sweep-audit.log`, `dev-symlink.map`, `dev-symlink.versions`). The
+first `setup.sh` run after the update moves them (a move, not a copy: the root
+entries disappear) and reports each one; a later run finds nothing to move.
+A user-tuned `zetetic-agent-models.json` is moved as is, never overwritten.
 
 ## Skills-only install (no agents)
 
@@ -58,7 +84,7 @@ cp -r zetetic-team-subagents/skills/ ~/.claude/skills/
 
 ## Per-agent model + effort overrides
 
-`~/.claude/zetetic-agent-models.json`: yours to keep, plugin updates never overwrite. Run `setup.sh configure` to seed with calibrated defaults.
+`~/.claude/zetetic/agent-models.json`: yours to keep, plugin updates never overwrite. Run `setup.sh configure` to seed with calibrated defaults.
 
 ```json
 {

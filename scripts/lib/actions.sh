@@ -68,7 +68,10 @@ with open('$plugin_json', 'w') as f: json.dump(d, f, indent=2); f.write('\n')
 " 2>/dev/null && ok "Removed hooks from plugin.json" || warn "Could not clean plugin.json"
   fi
 
+  # The override config, audit log and dev-symlink files are the user's;
+  # only the install records go, and the directory with them when empty.
   rm -f "$MANIFEST" "$VERSION_FILE"
+  rmdir "$STATE_DIR" 2>/dev/null || true
 }
 
 do_uninstall() {
