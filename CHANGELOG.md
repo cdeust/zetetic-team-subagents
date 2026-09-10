@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.41.0]: the plugin's state lives under ~/.claude/zetetic/, migrated once, with a layout report at the end of setup
+
 ### Fixed
 
 - **The plugin's state lives under `~/.claude/zetetic/`, not flat at the root
