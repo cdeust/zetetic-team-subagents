@@ -7,8 +7,8 @@ import tempfile
 
 gate = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory() as td:
-    for lang in ('rs', 'js'):
-        if not shutil.which('cargo' if lang == 'rs' else 'npm'):
+    for lang in ('rs', 'js', 'go'):
+        if not shutil.which({'rs': 'cargo', 'js': 'npm', 'go': 'go'}[lang]):
             print(f'{lang}: runner unavailable; real-runner probe not executed')
             continue
         repo = Path(td) / lang
@@ -29,6 +29,17 @@ with tempfile.TemporaryDirectory() as td:
                 'compile': ('this is not rust\n', 'INCONCLUSIVE'),
             }
             path = repo / 'tests/check.rs'
+        elif lang == 'go':
+            (repo / 'go.mod').write_text('module probe\n\ngo 1.20\n')
+            (repo / 'answer.go').write_text('package probe\nfunc Answer() int { return 1 }\n')
+            prefix = 'package probe\nimport "testing"\n'
+            cases = {
+                'pass': (prefix + 'func TestAnswer(t *testing.T) { if Answer() != 1 { t.Fatal("wrong") } }\n', 'VACUOUS'),
+                'fail': (prefix + 'func TestAnswer(t *testing.T) { if Answer() != 42 { t.Fatal("wrong") } }\n', 'as they must'),
+                'zero': ('package probe\n', 'INCONCLUSIVE'),
+                'compile': (prefix + 'func TestAnswer(t *testing.T) { invalid }\n', 'INCONCLUSIVE'),
+            }
+            path = repo / 'answer_test.go'
         else:
             (repo / 'package.json').write_text(json.dumps({'scripts': {'test': 'node --test'}}))
             (repo / 'answer.js').write_text('exports.answer = () => 1;\n')
@@ -42,7 +53,7 @@ with tempfile.TemporaryDirectory() as td:
             path = repo / 'tests/check.test.js'
         run('git', 'add', '.')
         run('git', 'commit', '-qm', 'base')
-        path.parent.mkdir()
+        path.parent.mkdir(exist_ok=True)
         for name, (body, expected) in cases.items():
             path.write_text(body)
 
@@ -64,3 +75,12 @@ with tempfile.TemporaryDirectory() as td:
             assert result.returncode == 1 and 'VACUOUS' in result.stdout, result
             assert 'as they must' in result.stdout, result
             print('js mixed pass/fail files: strict block with both verdicts', flush=True)
+
+        if lang == 'go':
+            path.write_text(cases['pass'][0])
+            (repo / 'other_test.go').write_text(cases['fail'][0].replace('TestAnswer', 'TestOther'))
+            (repo / '.zetetic.conf').write_text('ZETETIC_PROFILE=strict\n')
+            result = run(str(gate), '--base', 'HEAD')
+            assert result.returncode == 1 and 'VACUOUS' in result.stdout, result
+            assert 'as they must' in result.stdout, result
+            print('go mixed files: independent test-name selectors', flush=True)

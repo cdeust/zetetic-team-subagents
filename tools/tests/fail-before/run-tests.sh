@@ -214,6 +214,18 @@ for specimen in 'go|0|--- PASS: TestAnswer (0.00s)|passed' 'go|1|--- FAIL: TestA
   check "reporter ${FILES[0]}/$status/$summary" "$expected" "$actual"
 done
 
+mkdir -p "$WORK/go"
+printf 'package probe\nfunc TestOwned(t *testing.T) {}\nfunc ExampleOwned() {}\n' > "$WORK/go/owned_test.go"
+FILES=("$WORK/go/owned_test.go")
+TARGETS=()
+nonpython_targets
+check "Go selects only functions declared in the current file" '^(TestOwned|ExampleOwned)$' "${TARGETS[1]}"
+printf 'package probe\n' > "$WORK/go/empty_test.go"
+FILES=("$WORK/go/empty_test.go")
+TARGETS=()
+nonpython_targets
+check "Go empty selection never falls back to whole package" 0 "${#TARGETS[@]}"
+"$PYTHON" test_cli.py "$GATE"
 "$PYTHON" test_real_runners.py "$GATE"
 
 leftovers="$(find "$WORK" -type d -name 'zetetic-fail-before-*' | wc -l | tr -d ' ')"

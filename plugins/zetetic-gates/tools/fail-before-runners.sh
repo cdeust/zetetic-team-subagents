@@ -66,7 +66,12 @@ nonpython_targets() {
   local file
   for file in "${FILES[@]}"; do
     case "$file" in
-      *.go) TARGETS+=("./$(dirname "$file")") ;;
+      *.go)
+        local names
+        names="$(sed -nE 's/^[[:space:]]*func[[:space:]]+((Test|Example|Fuzz)[A-Za-z0-9_]*)[[:space:]]*\(.*/\1/p' "$file" | paste -sd '|' -)"
+        [ -n "$names" ] || continue
+        TARGETS+=(-run "^($names)$" "./$(dirname "$file")")
+        ;;
       *.rs) TARGETS+=(--test "$(basename "$file" .rs)") ;;
       *) TARGETS+=("$file") ;;
     esac

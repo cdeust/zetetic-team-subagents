@@ -273,7 +273,10 @@ run_selection() {
   fi
   prepare_targets
   if [ ${#TARGETS[@]} -eq 0 ]; then
-    echo "fail-before: the diff adds no new test against ${BASE:0:12}; nothing to prove."
+    case "${FILES[0]}" in
+      *.py) echo "fail-before: the diff adds no new test against ${BASE:0:12}; nothing to prove." ;;
+      *) echo "INCONCLUSIVE fail-before: no recognized tests in ${FILES[0]}." ;;
+    esac
     return
   fi
   run_against_base "$BASE" || status=$?
