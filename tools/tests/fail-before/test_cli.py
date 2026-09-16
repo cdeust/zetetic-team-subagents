@@ -47,7 +47,8 @@ def main():
         (fake / 'git').write_text('#!/bin/sh\nif [ "$1" = worktree ] && [ "$2" = add ]; then exit 1; fi\nexec ' + real_git + ' "$@"\n')
         (fake / 'git').chmod(0o755)
         run(['--base', 'HEAD'], injected, text='could not check out')
-        assert len(subprocess.check_output(['git', 'worktree', 'list'], cwd=repo).splitlines()) == 1
+        worktrees = subprocess.check_output(['git', 'worktree', 'list'], cwd=repo)
+        assert len(worktrees.splitlines()) == 1
         print('9 CLI/error-path assertions passed')
 
 

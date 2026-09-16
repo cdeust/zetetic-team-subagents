@@ -58,8 +58,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 "$PYTHON" -c "import pytest" 2>/dev/null || {
-  echo "SKIP: pytest is not importable by $PYTHON; the gate has no runner to exercise."
-  exit 0
+  echo "FATAL: pytest is not importable by $PYTHON; install requirements-dev.lock before running this suite."
+  exit 1
 }
 
 FAILS_ON_OLD='

@@ -369,6 +369,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check
+          --require-hashes -r requirements-dev.lock
+
       - name: Install ripgrep and jq
         run: sudo apt-get update && sudo apt-get install -y ripgrep jq
 
@@ -377,6 +387,14 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
+
+      - name: Verify fail-before runner prerequisites
+        run: |
+          set -euo pipefail
+          python -c 'import pytest; print("pytest", pytest.__version__)'
+          go version
+          cargo --version
+          npm --version
 
       # Orphan check (issue #93): a run-tests.sh nested deeper than
       # tools/tests/<suite>/run-tests.sh matches neither this job's glob below

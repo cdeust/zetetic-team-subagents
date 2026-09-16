@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The tools CI job installs the hashed Python test lock before running the
+  fail-before suite. Missing pytest now fails that suite instead of reporting
+  a successful skip (#140).
+
 - Propagation-test cleanup removes only its owned temporary directory. An empty
   parent array previously made its EXIT trap remove unrelated linked worktrees,
   including dirty worktrees, during local full-suite validation (#140).
