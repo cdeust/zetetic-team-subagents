@@ -14,18 +14,16 @@ if ! [ -t 0 ]; then
     HOOK_INPUT="$(cat 2>/dev/null || true)"
   fi
 fi
-if command -v jq &>/dev/null; then
-  BASH_CMD=$(echo "$HOOK_INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null || echo "")
-else
-  BASH_CMD=$(echo "$HOOK_INPUT" | grep -oE '"command":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"command":\s*"//' | sed 's/"$//' || echo "")
-fi
-
-# The same push-verb regex the full plugin's pre-push-review.sh uses (A7).
-GIT_PUSH_RE='(^|[;&|({])[[:space:]]*((sudo|command|env)[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|({]*/)?git[[:space:]]+(-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?[[:space:]]+)*push([[:space:];&|)<>]|$)'
-if ! echo "$BASH_CMD" | grep -qE "$GIT_PUSH_RE" 2>/dev/null; then exit 0; fi
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$SCRIPT_DIR")}"
+# Resolve event cwd and git -C/leading cd without evaluating shell input.
+TARGET="$(printf '%s' "$HOOK_INPUT" | bash "$PLUGIN_ROOT/hooks/run-python.sh" \
+  "$PLUGIN_ROOT/hooks/git-push-context.py")"
+[ -n "$TARGET" ] || exit 0
+if ! cd "$TARGET"; then
+  echo "INCONCLUSIVE fail-before: push directory is unavailable: $TARGET" >&2
+  exit 0
+fi
 GATE="${PLUGIN_ROOT}/tools/fail-before-checker.sh"
 if [[ ! -x "$GATE" ]]; then
   echo "WARNING: fail-before-checker.sh not found — skipping the fail-before gate." >&2
@@ -40,6 +38,11 @@ if [[ $rc -eq 1 ]]; then
   echo "BLOCKED: a new test passes against the old code (docs/fail-before.md)." >&2
   echo "$output" >&2
   exit 2
+fi
+if [[ $rc -ne 0 ]]; then
+  echo "INCONCLUSIVE fail-before: checker exited $rc; inspect the diagnostic below." >&2
+  echo "$output" >&2
+  exit 0
 fi
 if echo "$output" | grep -qE '^(VACUOUS|INCONCLUSIVE) '; then
   echo "$output" >&2

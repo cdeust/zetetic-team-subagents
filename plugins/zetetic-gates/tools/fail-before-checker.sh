@@ -33,7 +33,7 @@ is_test_path() {
     *.test.ts | *.test.tsx | *.test.js | *.spec.ts | *.spec.js) return 0 ;;
     */__tests__/*) return 0 ;;
     *_test.go) return 0 ;;
-    */tests/*.rs) return 0 ;;
+    tests/*.rs | */tests/*.rs) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -46,7 +46,9 @@ load_profile() {
   local conf="$1/.zetetic.conf" value
   ZETETIC_PROFILE="standard"
   TIMEOUT_SECONDS="$DEFAULT_TIMEOUT_SECONDS"
+  CONFIG_BASE=""
   [ -f "$conf" ] || return 0
+  CONFIG_BASE="$(conf_value "$conf" ZETETIC_FAIL_BEFORE_BASE)"
   value="$(conf_value "$conf" ZETETIC_PROFILE)"
   [ -n "$value" ] && ZETETIC_PROFILE="$value"
   value="$(conf_value "$conf" ZETETIC_FAIL_BEFORE_TIMEOUT)"
@@ -65,9 +67,17 @@ load_profile() {
 # Empty when the repository has no commit yet: there is no old tree to run
 # the tests against, and the caller says so instead of aborting.
 resolve_base() {
-  git rev-parse --verify --quiet "@{upstream}" >/dev/null 2>&1 &&
-    git merge-base HEAD "@{upstream}" 2>/dev/null && return 0
-  git rev-parse --verify --quiet HEAD 2>/dev/null || true
+  local candidate
+  for candidate in '@{upstream}' origin/HEAD origin/main; do
+    if git rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
+      git merge-base HEAD "$candidate" 2>/dev/null && return 0
+    fi
+  done
+  # A clean first push needs a known base: HEAD compared with itself hides it.
+  if [ -n "$(git status --porcelain)" ]; then
+    git rev-parse --verify --quiet HEAD 2>/dev/null || true
+  fi
+  return 0
 }
 
 changed_test_files() {
@@ -84,37 +94,8 @@ changed_test_files() {
   done
 }
 
-# The interpreter of the CURRENT tree, so the base worktree borrows its
-# dependencies: a fresh checkout has no virtual environment of its own, and a
-# runner that cannot start would otherwise read as a test that failed.
-resolve_python() {
-  local root="$1"
-  if [ -f "$root/uv.lock" ] && command -v uv >/dev/null 2>&1; then
-    (cd "$root" && uv run --no-sync python -c "import sys; print(sys.executable)" 2>/dev/null) && return 0
-  fi
-  command -v python3 || true
-}
-
-# Fills RUNNER, an argv array so an interpreter path with spaces survives.
-# Left empty when the tree declares no runner this gate understands.
-detect_runner() {
-  local root="$1" first="$2" python=""
-  RUNNER=()
-  case "$first" in
-    *.py)
-      python="$(resolve_python "$root")"
-      [ -n "$python" ] || return 0
-      "$python" -c "import pytest" 2>/dev/null || return 0
-      RUNNER=("$python" -m pytest -q -p no:cacheprovider --tb=no -rA)
-      ;;
-    *.go) command -v go >/dev/null 2>&1 && RUNNER=(go test) ;;
-    *.rs) command -v cargo >/dev/null 2>&1 && RUNNER=(cargo test --) ;;
-    *.ts | *.tsx | *.js) [ -f "$root/package.json" ] && RUNNER=(npm test --silent --) ;;
-  esac
-  # An absent runner is a finding for the caller, not a failed command: under
-  # `set -e` a falsy last branch would kill the gate before it could say so.
-  return 0
-}
+# shellcheck source=plugins/zetetic-gates/tools/fail-before-runners.sh
+source "$(dirname "$0")/fail-before-runners.sh"
 
 parse_args() {
   BASE=""
@@ -207,29 +188,7 @@ report_vacuous() { # nodes...
   exit "$EXIT_CLEAN"
 }
 
-main() {
-  parse_args "$@"
-  ROOT="$(repo_root)" || { echo "fail-before: not a git repository" >&2; exit "$EXIT_USAGE"; }
-  cd "$ROOT"
-  load_profile "$ROOT"
-  [ -n "$BASE" ] || BASE="$(resolve_base)"
-  if [ -z "$BASE" ]; then
-    echo "fail-before: no commit yet; there is no old tree to prove anything against."
-    exit "$EXIT_CLEAN"
-  fi
-  collect_files "$BASE"
-  if [ ${#FILES[@]} -eq 0 ]; then
-    echo "fail-before: no changed test file against ${BASE:0:12}; nothing to prove."
-    exit "$EXIT_CLEAN"
-  fi
-
-  local status=0
-  detect_runner "$ROOT" "${FILES[0]}"
-  if [ ${#RUNNER[@]} -eq 0 ]; then
-    echo "INCONCLUSIVE fail-before: no runner detected for ${FILES[0]}; ran nothing."
-    exit "$EXIT_CLEAN"
-  fi
-
+prepare_targets() {
   local targets=()
   case "${FILES[0]}" in
     *.py)
@@ -238,34 +197,74 @@ main() {
         while IFS= read -r node; do [ -n "$node" ] && targets+=("$node"); done \
           < <(new_pytest_nodes "$BASE" "$file")
       done
-      if [ ${#targets[@]} -eq 0 ]; then
-        echo "fail-before: the diff adds no new test against ${BASE:0:12}; nothing to prove."
-        exit "$EXIT_CLEAN"
+      ;;
+    *) TARGETS=(); nonpython_targets; return ;;
+  esac
+  TARGETS=("${targets[@]}")
+}
+
+report_run() {
+  local status="$1" vacuous=()
+  case "${FILES[0]}" in
+    *.py)
+      while IFS= read -r node; do [ -n "$node" ] && vacuous+=("$node"); done < <(passed_nodes)
+      [ ${#vacuous[@]} -eq 0 ] || report_vacuous "${vacuous[@]}"
+      if [ "$status" -eq 1 ] && grep -q "^FAILED " "$RUN_OUTPUT" &&
+          ! grep -qE "^(ERROR|SKIPPED|XFAIL|XPASS) " "$RUN_OUTPUT"; then
+        echo "fail-before: the changed tests fail against ${BASE:0:12}, as they must."
+        return
       fi
       ;;
-    *) targets=("${FILES[@]}") ;;
-  esac
-
-  TARGETS=("${targets[@]}")
-  run_against_base "$BASE" || status=$?
-  # 1 is "a test failed", the only code that proves the tests can tell the two
-  # trees apart. Everything else means the run did not reach that verdict:
-  # pytest returns 5 for "no tests collected", 4 for usage, 127 is a missing
-  # command. Reading those as proof is how a gate blesses a run it never made.
-  local vacuous=()
-  case "${FILES[0]}" in
-    *.py) while IFS= read -r node; do [ -n "$node" ] && vacuous+=("$node"); done < <(passed_nodes) ;;
+    *)
+      case "$(nonpython_verdict "$status")" in
+        passed) report_vacuous "${FILES[@]}" ;;
+        failed) echo "fail-before: the changed tests fail against ${BASE:0:12}, as they must."; return ;;
+      esac
+      ;;
   esac
   case "$status" in
-    0) report_vacuous "${vacuous[@]:-${TARGETS[@]}}" ;;
-    1)
-      [ ${#vacuous[@]} -gt 0 ] && report_vacuous "${vacuous[@]}"
-      echo "fail-before: the changed tests fail against ${BASE:0:12}, as they must."
-      ;;
     124) echo "INCONCLUSIVE fail-before: the base-tree run exceeded ${TIMEOUT_SECONDS}s." ;;
     125) echo "INCONCLUSIVE fail-before: could not check out ${BASE:0:12}; ran nothing." ;;
-    *) echo "INCONCLUSIVE fail-before: the runner exited $status without a test verdict." ;;
+    *) echo "INCONCLUSIVE fail-before: the runner exited $status without a failing test verdict." ;;
   esac
+}
+
+main() {
+  parse_args "$@"
+  ROOT="$(repo_root)" || { echo "fail-before: not a git repository" >&2; exit "$EXIT_USAGE"; }
+  cd "$ROOT"
+  load_profile "$ROOT"
+  [ -n "$BASE" ] || BASE="${CONFIG_BASE:-$(resolve_base)}"
+  if [ -z "$BASE" ]; then
+    if git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+      echo "INCONCLUSIVE fail-before: no comparison base; configure ZETETIC_FAIL_BEFORE_BASE."
+    else
+      echo "fail-before: no commit yet; there is no old tree to prove anything against."
+    fi
+    exit "$EXIT_CLEAN"
+  fi
+  if ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+    echo "INCONCLUSIVE fail-before: base $BASE is not a commit; ran nothing."
+    exit "$EXIT_CLEAN"
+  fi
+  collect_files "$BASE"
+  if [ ${#FILES[@]} -eq 0 ]; then
+    echo "fail-before: no changed test file against ${BASE:0:12}; nothing to prove."
+    exit "$EXIT_CLEAN"
+  fi
+  local status=0
+  detect_runner "$ROOT" "${FILES[0]}"
+  if [ ${#RUNNER[@]} -eq 0 ]; then
+    echo "INCONCLUSIVE fail-before: no runner detected for ${FILES[0]}; ran nothing."
+    exit "$EXIT_CLEAN"
+  fi
+  prepare_targets
+  if [ ${#TARGETS[@]} -eq 0 ]; then
+    echo "fail-before: the diff adds no new test against ${BASE:0:12}; nothing to prove."
+    exit "$EXIT_CLEAN"
+  fi
+  run_against_base "$BASE" || status=$?
+  report_run "$status"
   exit "$EXIT_CLEAN"
 }
 

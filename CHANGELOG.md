@@ -20,6 +20,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fail-before verdicts require reported test outcomes; setup errors and skipped
+  pytest nodes remain inconclusive. Push hooks resolve the target repository
+  and relay configuration failures (#140).
+
 ### Added
 
 - **zetetic-gates 1.1.0: a fail-before gate (#140).** `rules/coding-standards.md` §12

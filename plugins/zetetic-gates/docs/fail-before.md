@@ -23,9 +23,11 @@ That procedure is mechanical, so it does not need a reviewer.
 
 ## What it does
 
-1. Resolves a base: `git merge-base HEAD @{upstream}`, or `HEAD` when the
-   branch has no upstream. A repository with no commit yet has no old tree;
-   the gate says so and exits clean.
+1. Resolves a base from `--base`, `ZETETIC_FAIL_BEFORE_BASE`, or the merge
+   base with the upstream, `origin/HEAD`, then `origin/main`. With uncommitted
+   edits and no remote base, it compares against `HEAD`. A clean committed
+   branch without a known base reports INCONCLUSIVE. A repository without a
+   commit reports that it has no old tree.
 2. Lists changed test files: committed since the base, staged, unstaged, and
    untracked (a brand-new test file is the common case).
 3. Checks the base out in a throwaway worktree under `.claude/worktrees/`,
@@ -33,8 +35,11 @@ That procedure is mechanical, so it does not need a reviewer.
 4. Copies the current test files over that old tree: new tests, old code.
 5. Runs them there, scoped to those files, under a wall-clock budget.
 
-At least one must fail. A test that errors at import in the old tree counts:
-the bar is that it can tell the two trees apart, not how it tells them apart.
+Pytest must report failed test verdicts. Import errors, fixture errors and
+runs containing skipped or xfailed tests are INCONCLUSIVE. Go verbose output,
+Cargo integration-test summaries and npm TAP/Jest/Vitest summaries provide
+non-Python verdicts. Empty selections, unrecognized reporters and compilation
+errors are INCONCLUSIVE; a process exit alone supplies no test verdict.
 
 ## What it reports
 
@@ -48,11 +53,12 @@ reports that it did not, rather than a clean bill.
 
 ## Configuration
 
-Both settings live in `.zetetic.conf`, committed and auditable, never in the
+Settings live in `.zetetic.conf`, committed and auditable, never in the
 environment:
 
 ```
 ZETETIC_PROFILE=strict
+ZETETIC_FAIL_BEFORE_BASE=origin/main
 ZETETIC_FAIL_BEFORE_TIMEOUT=120
 ```
 
@@ -74,8 +80,8 @@ and the `test` script of a `package.json`. Anything else reports
 
 New pytest nodes are found by diffing module-level `def test_*` and
 `async def test_*` names between the base and the current file. A new test
-method inside a class, a renamed test, or a test moved from another file is
-not seen as new, so the gate does not run it against the base. For the other
+method inside a class is not seen as new. Renamed tests and tests moved from
+another file are seen as new names and may be reported VACUOUS. For the other
 runners the whole changed file is the unit and the verdict is per file.
 
 That the tests are good, only that they are not empty. A test can fail on the
