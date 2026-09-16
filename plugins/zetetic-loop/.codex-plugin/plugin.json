@@ -1,0 +1,42 @@
+{
+  "name": "zetetic-loop",
+  "version": "1.0.0",
+  "description": "Goal-driven iteration for any host: compile a goal contract with executable acceptance checks, plan against it, verify with real commands, and refine the next iteration from the evidence.",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools",
+    "url": "https://github.com/cdeust"
+  },
+  "homepage": "https://github.com/cdeust/zetetic-team-subagents/tree/main/plugins/zetetic-loop",
+  "repository": "https://github.com/cdeust/zetetic-team-subagents",
+  "license": "MIT",
+  "keywords": [
+    "goal",
+    "plan",
+    "verify",
+    "refine",
+    "agent-skills",
+    "codex",
+    "gemini-cli",
+    "iteration"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Zetetic Loop",
+    "shortDescription": "Goal, plan, verify, refine: iterate on evidence, not on self-grading",
+    "longDescription": "Write the goal as a contract with executable acceptance checks, plan against it and verify the plan, run the checks as real commands and ledger their output, then refine the next iteration from what the evidence showed. The same four skills drive every host.",
+    "developerName": "Clement Deust",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Shell"
+    ],
+    "websiteURL": "https://github.com/cdeust/zetetic-team-subagents",
+    "privacyPolicyURL": "https://github.com/cdeust/zetetic-team-subagents/blob/main/PRIVACY.md",
+    "defaultPrompt": [
+      "Set a goal for this task with executable acceptance criteria.",
+      "Verify the active goal and refine the next iteration."
+    ]
+  }
+}

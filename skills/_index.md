@@ -1,6 +1,6 @@
 # Skills Index
 
-This index covers 81 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 66 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
+This index covers 85 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 70 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
 
 ## Problem-shaped entry points (start here)
 
@@ -53,6 +53,10 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 | `/contract` | architecture | liskov, architect | Behavioral contracts: pre/post/invariant/history constraint |
 | `/evaluate-tool` | architecture | hopper, engelbart, architect, feynman | Tool evaluation with cargo-cult and obsolescence checks |
 | `/design` | design | ux-designer | UX/UI design and WCAG 2.2 AA accessibility audit |
+| `/goal` | loop | engineer | Compile a request into a goal contract with executable acceptance checks (portable) |
+| `/plan` | loop | architect, engineer | Plan an active goal and verify the plan against its criteria (portable) |
+| `/verify-goal` | loop | test-engineer | Run every acceptance check of a goal and ledger the evidence (portable) |
+| `/refine-goal` | loop | code-reviewer | Turn a verification ledger into the next iteration's backlog (portable) |
 | `/literature-review` | research | research-scientist | Systematic search: find papers, read them, assess applicability |
 | `/explain` | research | professor, feynman | Multi-level explanation with understanding-gap diagnostic |
 | `/write-paper` | research | paper-writer, latex-engineer | Paper draft with claim-evidence chains and difficulty-book limitations |
@@ -79,6 +83,10 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 
 ### Architecture (structural decisions)
 5 skills — decompose, adr, spec, contract, evaluate-tool.
+
+### Loop (goal-driven iteration)
+
+4 skills, packaged as `plugins/zetetic-loop` for Codex and Gemini CLI: goal, plan, verify-goal, refine-goal. Driven on Claude Code by `/zetetic:goal-loop` under the native `/goal` or `/loop`.
 
 ### Design (UX/UI)
 1 skill — design (UX audit, WCAG 2.2 AA compliance, heuristic evaluation).

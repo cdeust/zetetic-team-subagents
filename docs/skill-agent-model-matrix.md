@@ -8,7 +8,7 @@ exceeds the baseline (`sonnet`) that `tools/skill-runner.sh` compares against by
 default -- exactly the condition under which the runner's model-tier escalation banner
 fires. Regenerate with `scripts/generate-skill-agent-model-matrix.py`; verify with `--check`.
 
-Total skill files with a non-empty `agents:` field: **66**. Rows naming an escalation-tier agent: **211**.
+Total skill files with a non-empty `agents:` field: **70**. Rows naming an escalation-tier agent: **212**.
 
 | Skill | Agent | Model | Escalation |
 |---|---|---|---|
@@ -158,6 +158,10 @@ Total skill files with a non-empty `agents:` field: **66**. Rows naming an escal
 | `skills/engineering/security-audit.md` | `wu` | `opus` | yes |
 | `skills/engineering/test.md` | `test-engineer` | `sonnet` | no |
 | `skills/engineering/test.md` | `dijkstra` | `opus` | yes |
+| `skills/goal/goal.md` | `engineer` | `sonnet` | no |
+| `skills/plan/plan.md` | `architect` | `opus` | yes |
+| `skills/plan/plan.md` | `engineer` | `sonnet` | no |
+| `skills/refine-goal/refine-goal.md` | `code-reviewer` | `sonnet` | no |
 | `skills/research/autoresearch-loop.md` | `peirce` | `opus` | yes |
 | `skills/research/autoresearch-loop.md` | `fisher` | `opus` | yes |
 | `skills/research/autoresearch-loop.md` | `curie` | `opus` | yes |
@@ -233,6 +237,7 @@ Total skill files with a non-empty `agents:` field: **66**. Rows naming an escal
 | `skills/research/web-to-semantic.md` | `liskov` | `opus` | yes |
 | `skills/research/write-paper.md` | `paper-writer` | `sonnet` | no |
 | `skills/research/write-paper.md` | `latex-engineer` | `haiku` | no |
+| `skills/verify-goal/verify-goal.md` | `test-engineer` | `sonnet` | no |
 | `skills/writing/redaction.md` | `feynman` | `opus` | yes |
 | `skills/zetetic/cargo-cult-check.md` | `feynman` | `opus` | yes |
 | `skills/zetetic/citation-verifier.md` | `feynman` | `opus` | yes |
