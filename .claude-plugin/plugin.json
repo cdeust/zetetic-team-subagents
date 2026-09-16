@@ -50,23 +50,12 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash|Grep|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
-        "when": "command contains 'git commit'",
+        "when": "command contains 'git push'",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-review.sh\""
           }
         ]
       },
@@ -76,49 +65,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-review.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-provenance.sh\""
           }
         ]
       },
       {
-        "matcher": "Bash",
-        "when": "command contains 'git push'",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-provenance.sh\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-deletion-gate.py\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -130,8 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-difficulty.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-difficulty.sh\""
           }
         ]
       },
@@ -141,8 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-lab-notebook.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-lab-notebook.sh\""
           }
         ]
       },
@@ -151,8 +104,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-balance.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-balance.sh\""
           }
         ]
       },
@@ -161,18 +113,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh\""
           }
         ]
       },
       {
-        "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-deletion-gate.py\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -182,8 +131,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-error-routing.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-error-routing.sh\""
           }
         ]
       }
@@ -193,8 +141,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
-            "timeout": 10
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\""
           }
         ]
       },
@@ -202,8 +149,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh\"",
-            "timeout": 10
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -213,8 +167,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-acceptance-gate.py\"",
-            "timeout": 10
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-acceptance-gate.py\""
           }
         ]
       },
@@ -222,8 +175,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-zetetic-spine.py\"",
-            "timeout": 10
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-zetetic-spine.py\""
           }
         ]
       },
@@ -231,8 +183,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh\"",
-            "timeout": 10
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh\""
           }
         ]
       },
@@ -240,8 +191,25 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-memory-drain.sh\"",
-            "timeout": 10
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-memory-drain.sh\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -251,8 +219,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/notification-handler.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/notification-handler.sh\""
           }
         ]
       }

@@ -20,7 +20,7 @@ REPO="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 SPAWN="$REPO/scripts/spawn-agent.sh"
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"; for t in "${TARGETS[@]:-}"; do git -C "$t" worktree list --porcelain 2>/dev/null | awk "/^worktree/ {print \$2}" | grep -v "^$t\$" | xargs -I{} git -C "$t" worktree remove --force {} 2>/dev/null || true; rm -rf "$t"; done' EXIT
+trap 'rm -rf "$TMP"; for t in "${TARGETS[@]:-}"; do [[ -n "$t" ]] || continue; git -C "$t" worktree list --porcelain 2>/dev/null | awk "/^worktree/ {print \$2}" | grep -v "^$t\$" | xargs -I{} git -C "$t" worktree remove --force {} 2>/dev/null || true; rm -rf "$t"; done' EXIT
 TARGETS=()
 
 PASS_COUNT=0

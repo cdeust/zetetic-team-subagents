@@ -56,14 +56,16 @@ fi
 # Plugin manifest: valid JSON with the fields the marketplace requires.
 MANIFEST="$GATES/.claude-plugin/plugin.json"
 if command -v jq >/dev/null 2>&1; then
-  if jq -e '.name == "zetetic-gates" and (.version | length > 0) and (.hooks.PreToolUse | length >= 2)' "$MANIFEST" >/dev/null 2>&1; then
-    ok "plugin.json valid (name, version, 2 PreToolUse hook groups)"
+  if jq -e '.name == "zetetic-gates" and (.version | length > 0) and .hooks == "./hooks/gates.json"' "$MANIFEST" >/dev/null 2>&1; then
+    ok "plugin.json valid (name, version, shared hook manifest)"
   else
     bad "plugin.json invalid or missing required fields"
   fi
 else
   echo "  skip plugin.json check (jq not installed)"
 fi
+
+python3 "$REPO_ROOT/scripts/sync-gates.py" --check
 
 # Marketplace registration: the micro-plugin must be listed at the root.
 if command -v jq >/dev/null 2>&1; then

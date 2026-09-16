@@ -124,7 +124,7 @@ def test_repo_marketplace_points_to_the_isolated_packages() -> None:
     marketplace = _json(ROOT / ".agents" / "plugins" / "marketplace.json")
     assert marketplace["name"] == "zetetic-marketplace"
     entries = {entry["name"]: entry for entry in marketplace["plugins"]}
-    assert set(entries) == set(PACKAGES)
+    assert set(entries) == set(PACKAGES) | {"zetetic-gates", "zetetic-team-subagents"}
     for package in PACKAGES:
         entry = entries[package]
         assert entry["source"] == {

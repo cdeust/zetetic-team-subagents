@@ -1,0 +1,15 @@
+{
+  "name": "zetetic-team-subagents",
+  "version": "2.41.0",
+  "description": "Shared source, craftsmanship, secret and prose checks for Claude Code and Codex.",
+  "hooks": "./hooks/gates.json",
+  "author": {
+    "name": "Clement Deust"
+  },
+  "interface": {
+    "displayName": "Zetetic team subagents",
+    "shortDescription": "Shared code and prose quality gates",
+    "category": "Productivity"
+  },
+  "skills": "./plugins/zetetic-reasoning/skills/"
+}

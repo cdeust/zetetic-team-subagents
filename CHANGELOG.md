@@ -20,6 +20,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Shared Claude Code and Codex gates in both plugin packages: host event
+  adaptation, source and craftsmanship validation, indexed-content checks,
+  blocking prose checks and common policy loading. Hook trust stays under
+  Codex control (#139).
+
+### Fixed
+
+- The agent-ID test cleanup ignores empty target paths, preserving the
+  active checkout and its worktrees when no target repository was created (#139).
+
 ## [2.41.0]: the plugin's state lives under ~/.claude/zetetic/, migrated once, with a layout report at the end of setup
 
 ### Fixed

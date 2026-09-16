@@ -1,0 +1,15 @@
+{
+  "name": "zetetic-gates",
+  "version": "1.1.0",
+  "description": "Shared source, craftsmanship, secret and prose checks for Claude Code and Codex.",
+  "hooks": "./hooks/gates.json",
+  "author": {
+    "name": "Clement Deust"
+  },
+  "interface": {
+    "displayName": "zetetic-gates",
+    "shortDescription": "Shared code and prose quality gates",
+    "category": "Productivity"
+  },
+  "skills": "./codex-skills/"
+}

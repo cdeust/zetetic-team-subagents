@@ -5,14 +5,14 @@
     "email": "admin@ai-architect.tools"
   },
   "metadata": {
-    "description": "Zetetic Agents — 97 reasoning patterns from history's greatest minds + 23 team specialists under one epistemic standard",
+    "description": "Zetetic Agents \u2014 97 reasoning patterns from history's greatest minds + 23 team specialists under one epistemic standard",
     "version": "2.41.0"
   },
   "plugins": [
     {
       "name": "zetetic-team-subagents",
       "source": "./",
-      "description": "Complete system: 15 problem-shaped skills backed by 97 genius agents, 23 team agents (incl. refactorer, simplifier, memory-writer), 81 skills total, 28 commands, 57 tools, 24 hooks, authoritative coding-standards rules",
+      "description": "Complete system: 15 problem-shaped skills backed by 97 genius agents, 23 team agents (incl. refactorer, simplifier, memory-writer), 81 skills total, 28 commands, 57 tools, 26 hooks, authoritative coding-standards rules",
       "version": "2.41.0",
       "author": {
         "name": "Clement Deust",
@@ -21,14 +21,23 @@
       "homepage": "https://ai-architect.tools",
       "repository": "https://github.com/cdeust/zetetic-team-subagents",
       "license": "MIT",
-      "keywords": ["agents", "reasoning", "research", "zetetic", "epistemic", "claude-code", "refactoring", "clean-architecture"],
+      "keywords": [
+        "agents",
+        "reasoning",
+        "research",
+        "zetetic",
+        "epistemic",
+        "claude-code",
+        "refactoring",
+        "clean-architecture"
+      ],
       "category": "research"
     },
     {
       "name": "zetetic-gates",
       "source": "./plugins/zetetic-gates",
-      "description": "Commits with unsourced constants get BLOCKED. The mechanical gates only, zero agents: zetetic checker (unsourced constants and absolute claims), craftsmanship checker (size limits, .craftsmanship.conf tunable), secret-shield (credential-read blocking). 30-second install.",
-      "version": "1.0.1",
+      "description": "Shared source, craftsmanship, secret and prose checks for Claude Code and Codex.",
+      "version": "1.1.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -36,7 +45,15 @@
       "homepage": "https://ai-architect.tools",
       "repository": "https://github.com/cdeust/zetetic-team-subagents",
       "license": "MIT",
-      "keywords": ["pre-commit", "quality-gates", "zetetic", "source-discipline", "craftsmanship", "secrets", "claude-code"],
+      "keywords": [
+        "pre-commit",
+        "quality-gates",
+        "zetetic",
+        "source-discipline",
+        "craftsmanship",
+        "secrets",
+        "claude-code"
+      ],
       "category": "productivity"
     }
   ]

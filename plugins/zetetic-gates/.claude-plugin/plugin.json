@@ -1,7 +1,7 @@
 {
   "name": "zetetic-gates",
-  "description": "Commits with unsourced constants get BLOCKED. Three mechanical gates, zero agents: a zetetic checker (absolute claims and 3+ decimal constants need a source: annotation), a craftsmanship checker (coding-standards size limits, tunable via .craftsmanship.conf), and a secret-shield that stops credential-file reads. Installs in 30 seconds.",
-  "version": "1.0.1",
+  "description": "Shared source, craftsmanship, secret and prose checks for Claude Code and Codex.",
+  "version": "1.1.0",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
@@ -18,29 +18,5 @@
     "secrets",
     "claude-code"
   ],
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Read|Bash|Grep|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "when": "command contains 'git commit'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh\"",
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": "./hooks/gates.json"
 }

@@ -3,34 +3,6 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash|Grep|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|mcp__github__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-redaction-gate.py\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "when": "command contains 'git commit'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh\""
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "when": "command contains 'git push'",
         "hooks": [
@@ -51,29 +23,10 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-deletion-gate.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -118,11 +71,10 @@
         ]
       },
       {
-        "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-deletion-gate.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -153,6 +105,14 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
+          }
+        ]
       }
     ],
     "Stop": [
@@ -176,14 +136,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-redaction-gate.py\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh\""
           }
         ]
@@ -195,6 +147,14 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-memory-drain.sh\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
+          }
+        ]
       }
     ],
     "SubagentStop": [
@@ -202,7 +162,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-redaction-gate.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
