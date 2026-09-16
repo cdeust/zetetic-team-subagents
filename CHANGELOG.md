@@ -27,12 +27,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   the `/zetetic:goal-loop` command that runs one tick of the cycle under the
   native `/goal` or `/loop`. The goal file `.zetetic/goals/<slug>.md` is the
   contract: end state, non-goals, criteria as commands with expected results,
-  budget, iteration ledger. The native goal command receives a one-line mirror.
+  budget, iteration ledger. The native goal command receives a one-line mirror (#141).
 
 ### Fixed
 
 - The agent-ID test cleanup skips empty target paths; an empty target made the
-  trap sweep every real linked worktree of the repository (same fix as #139).
+  trap sweep every real linked worktree of the repository (same fix as #139) (#141).
 
 ## [2.41.0]: the plugin's state lives under ~/.claude/zetetic/, migrated once, with a layout report at the end of setup
 
