@@ -20,8 +20,9 @@ REPO="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 SPAWN="$REPO/scripts/spawn-agent.sh"
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"; for t in "${TARGETS[@]:-}"; do git -C "$t" worktree list --porcelain 2>/dev/null | awk "/^worktree/ {print \$2}" | grep -v "^$t\$" | xargs -I{} git -C "$t" worktree remove --force {} 2>/dev/null || true; rm -rf "$t"; done' EXIT
-TARGETS=()
+# source: 2026-09-17 cleanup regression, tests/test_agent_id_cleanup.py.
+# Every fixture repository and spawned worktree is owned by this directory.
+trap 'rm -rf -- "$TMP"' EXIT
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -44,7 +45,6 @@ make_target_repo() {
   git -C "$t" init -q -b main
   git -C "$t" add -A
   git -C "$t" commit -q -m init
-  TARGETS+=("$t")
   echo "$t"
 }
 
