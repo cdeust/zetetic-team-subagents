@@ -214,6 +214,14 @@ for specimen in 'go|0|--- PASS: TestAnswer (0.00s)|passed' 'go|1|--- FAIL: TestA
   check "reporter ${FILES[0]}/$status/$summary" "$expected" "$actual"
 done
 
+WORKTREE="$WORK/node20"
+mkdir -p "$WORKTREE"
+"$PYTHON" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).read_text().replace("/private/tmp/pr140-node20", str(Path(sys.argv[2]).resolve())), end="")' fixtures/node20-empty.tap "$WORKTREE" > "$RUN_OUTPUT"
+FILES=(tests/empty.test.js)
+actual="$(nonpython_verdict 0)"
+check "Node 20 absolute-path wrapper is inconclusive" "" "$actual"
+WORKTREE=""
+
 mkdir -p "$WORK/go"
 printf 'package probe\nfunc TestOwned(t *testing.T) {}\nfunc ExampleOwned() {}\n' > "$WORK/go/owned_test.go"
 FILES=("$WORK/go/owned_test.go")

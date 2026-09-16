@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Empty-file TAP wrappers are recognized using canonical absolute paths as well
+  as relative paths. Node 20 otherwise reported an empty JavaScript file as a
+  passing test and caused a false VACUOUS finding (#140).
+
 - The tools CI job installs the hashed Python test lock before running the
   fail-before suite. Missing pytest now fails that suite instead of reporting
   a successful skip (#140).

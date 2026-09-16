@@ -37,15 +37,23 @@ detect_runner() {
 # https://doc.rust-lang.org/cargo/commands/cargo-test.html
 # https://nodejs.org/api/test.html#test-reporters
 # https://jestjs.io/docs/cli and https://vitest.dev/guide/reporters
+# Node 20 reports file-wrapper names as absolute paths; Node 24 uses relative
+# paths. Both can count an empty file as one passing test. Source: captured
+# Node 20.20.2 TAP specimen in tools/tests/fail-before/fixtures/node20-empty.tap
+# and the real Node 24.7.0 runner regression, 2026-09-17.
+node_wrapper_only() {
+  local relative="# Subtest: ${FILES[0]}" absolute
+  absolute="$relative"
+  if [ -n "${WORKTREE:-}" ]; then
+    absolute="# Subtest: $(cd "$WORKTREE" && pwd -P)/${FILES[0]}"
+  fi
+  grep -Fxq -e "$relative" -e "$absolute" "$RUN_OUTPUT" &&
+    ! grep '^# Subtest: ' "$RUN_OUTPUT" | grep -Fxvq -e "$relative" -e "$absolute"
+}
+
 nonpython_verdict() { # status
   local status="$1" passed="" failed=""
-  # Node reports a file wrapper as one passing test even when the file has
-  # no test declarations, and as one failed test when parsing the file fails.
-  # Source: Node v24.7.0 TAP pass/fail/empty/syntax-error probes, 2026-09-17.
-  if grep -Fxq "# Subtest: ${FILES[0]}" "$RUN_OUTPUT" &&
-      ! grep '^# Subtest: ' "$RUN_OUTPUT" | grep -Fvq "# Subtest: ${FILES[0]}"; then
-    return 0
-  fi
+  if node_wrapper_only; then return 0; fi
   case "${FILES[0]}" in
     *.go) passed='^--- PASS: '; failed='^--- FAIL: ' ;;
     *.rs) passed='^test result: ok\. [1-9][0-9]* passed;'; failed='^test result: FAILED\..* [1-9][0-9]* failed;' ;;
