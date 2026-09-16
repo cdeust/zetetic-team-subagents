@@ -16,6 +16,12 @@ The goal file is the single source of truth. A host's native goal command, where
 one exists, receives a one-line mirror of the end state so its own stop check and
 the contract agree.
 
+An iteration is counted when a plan verdict is recorded, including an unsound
+verdict. Its execution and verification may finish at the last allowed iteration.
+Unspecified limits are `null` and unbounded. A finite token limit requires usage
+accounting; missing accounting blocks the goal. Budget checks happen between
+operations, and a hard token cap depends on host support. Repair preserves counters.
+
 ## Install in Codex
 
 ```bash

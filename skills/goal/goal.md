@@ -17,10 +17,10 @@ shapes: []
 input: >
   A request in prose, or the path of a file describing one. Optional slug and budget.
 output: >
-  A goal file at .zetetic/goals/<slug>.md with status draft or active, plus the one-line
+  A goal file at .zetetic/goals/<slug>.md with status draft, active or blocked, plus the one-line
   condition handed to the host's native goal command.
 zetetic_gate:
-  logical: "Every criterion is a command with an expected result; a criterion the transcript cannot demonstrate is rewritten or dropped"
+  logical: "Every criterion has an external check or named review with an expected result; an uncheckable requirement keeps the goal draft until clarified"
   critical: "The end state is stated so that a fresh evaluator reading only the transcript can decide met or not met"
   rational: "One goal, one end state; a request with two independent end states becomes two goal files"
   essential: "Non-goals are written down so later iterations cannot widen the contract silently"
@@ -35,11 +35,10 @@ hand_off:
 
 ## Purpose
 
-A native goal command stores one sentence and asks a small model to judge it from the
-transcript after each turn. That is enough to keep a session running and not enough to keep
-the work honest: the sentence carries no acceptance commands, no non-goals, no budget, and it
-does not survive a change of host. This skill writes the contract the sentence stands for,
-in a file both hosts and every later session can read, and then hands the host the sentence.
+Native goal commands differ by host. This skill keeps the end state, acceptance checks,
+non-goals and budget in a file that another session or host can read. Mirror the condition
+through an available native goal capability; when none exists, report the file and the
+next skill without claiming that automatic continuation was configured.
 
 ## Procedure
 
@@ -56,14 +55,25 @@ in a file both hosts and every later session can read, and then hands the host t
 4. **Write the non-goals.** What this goal will not change, so that a later iteration cannot
    widen the scope to make a criterion pass.
 5. **Set the budget.** Maximum iterations and, when the host reports it, a token ceiling.
-   A goal with no budget runs until the user stops it; say so explicitly if that is intended.
-6. **Write the file** at `.zetetic/goals/<slug>.md` using the format below, status `active`.
+   Use the user's limits; otherwise write `null` and disclose that limit as unbounded.
+   An iteration starts when plan writes its current verdict, including an unsound verdict.
+   Initialize `iterations_used` to zero only for a new contract. Verify/refine entries use
+   that same iteration number. When repairing an existing goal, preserve usage counters,
+   accounting baselines and ledger history. Reactivate a blocked goal only with evidence
+   that its recorded blocker is resolved and its budgets permit the next phase.
+   Token accounting is cumulative for this goal across sessions, with a recorded host usage
+   baseline for each session. If a requested token limit cannot be measured, leave the goal
+   blocked with that reason; do not invent usage or silently remove the limit.
+6. **Write the file** at `.zetetic/goals/<slug>.md` using the format below, status `active`
+   only when budget accounting permits it; preserve a budget-accounting `blocked` state.
    If no check could be named in step 3, leave status `draft` and stop: the request is not
    ready to run.
-7. **Mirror into the host.** Hand the host's native goal command a condition of the form:
+7. **Mirror into the host.** Activate a native goal only when the user explicitly requested
+   a goal and the host provides that capability. Hand it a condition of the form:
    `verify-goal reports every criterion of .zetetic/goals/<slug>.md met, with the command
-   output in the transcript, or the iteration budget of N is spent`. The native evaluator
-   reads only the transcript, so the condition must name what the transcript will show.
+   output in the transcript, or the file reports blocked or exhausted`. Mirror a token cap
+   only when the user supplied one and the host supports it. Print the state so a host
+   evaluator that reads the transcript can distinguish achievement from stopping.
 8. **Record the decision** in the memory layer: the slug, the end state, and the reason for
    each non-goal.
 
@@ -75,8 +85,10 @@ slug: <slug>
 status: draft | active | met | blocked | exhausted
 created: YYYY-MM-DD
 budget:
-  iterations: <N>
+  iterations: <N or null>
   tokens: <N or null>
+iterations_used: 0
+tokens_used: <reported cumulative usage or null>
 ---
 # Goal: <one-sentence end state>
 
@@ -92,6 +104,9 @@ budget:
 ## Plan
 <written by the plan skill>
 
+## Token accounting
+<session identifier, host usage baseline and latest cumulative usage; or unavailable>
+
 ## Iterations
 <appended by verify-goal and refine-goal, newest last>
 
@@ -99,11 +114,24 @@ budget:
 <appended by refine-goal>
 ```
 
+## Budget boundaries
+
+Before each skill and before each new command or implementation step, refresh reported
+token usage. At a reached finite token limit, set `exhausted` and stop. Missing accounting
+for a finite token limit sets `blocked`. Preserve counters across resumes; only the user
+may extend limits. Record any overshoot from an in-flight operation. These procedural
+checks act between operations; a hard token cap requires host support.
+
+Before starting plan, require `iterations_used < budget.iterations` when the limit is
+finite; otherwise set `exhausted`. A sound plan at the last allowed iteration may still
+execute its step, verify and refine. The next plan is refused. An unsound replan also
+consumes an iteration, so repeated planning cannot bypass the bound.
+
 ## Zetetic Gates
 
 | Pillar | Gate | Failure action |
 |--------|------|----------------|
-| Logical | every criterion has a command and an expected result | rewrite or drop the criterion |
+| Logical | every criterion has an external check or named review and an expected result | clarify the check; keep the requirement and leave the goal draft |
 | Critical | the end state is decidable from the transcript alone | rephrase until a fresh reader can judge it |
 | Rational | one end state per goal | split into two goal files |
 | Essential | non-goals written before activation | do not set status active |
@@ -119,6 +147,7 @@ with their kind. Nothing else: planning belongs to the plan skill.
 |-----------|------------|--------|
 | status active | plan | the contract exists; order the work |
 | status draft | none | no check could be named; scope with the user |
+| status blocked | none | report the accounting blocker and preserve the existing contract |
 
 ## Anti-patterns
 

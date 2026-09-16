@@ -15,9 +15,12 @@ exists, is a fine place to draft; the goal file is where the plan is kept.
 ## Procedure
 
 1. **Read the goal file.** Refuse to plan a goal whose status is not `active`, or whose
-   criteria table is empty.
-2. **Read the code the criteria touch.** Open every file a criterion's command reads or a
-   step will change. Never plan a change to code that has not been opened.
+   criteria table is empty. Enforce its token budget before further work; unavailable
+   accounting for a finite token limit blocks. Refuse a new plan when `iterations_used`
+   has reached the finite iteration limit: set `exhausted`, retain evidence and stop.
+2. **Read the code the criteria touch.** Open every existing file a criterion reads or a
+   step will change. For a new file, record its absence and inspect its parent directory
+   and neighboring conventions before planning its creation.
 3. **Draft the steps.** Each step states: what changes, in which files, which criteria it
    serves, and the check that proves the step is done (a command, or a reviewer reading a
    named artifact). A step with no check is split until each part has one.
@@ -27,11 +30,16 @@ exists, is a fine place to draft; the goal file is where the plan is kept.
 5. **Verify the plan** against the goal file:
    - coverage: every criterion id appears in at least one step; list any orphan criterion;
    - scope: no step writes inside a non-goal; list any violation;
-   - order: the first step retires more uncertainty than the second; state why;
-   - budget: the step count fits the iteration budget, or the plan says which steps merge.
+   - order: explain why the first step retires the most uncertainty; for a one-step plan,
+     record that comparison with a second step is not applicable;
+   - budget: a sound plan executes one step before verification; estimate whether remaining
+     iterations cover the steps, and state any uncertainty without increasing the limit.
    Record the verdict `sound` or `unsound` with the findings.
 6. **Write the Plan section** of the goal file: the steps, the mapping, the verdict. Replace
-   the previous Plan section; keep its verdict line in the Iterations ledger.
+   the previous Plan section. Increment `iterations_used` and use that number as the plan
+   revision. Append the CURRENT verdict and revision as the newest entry `by plan` in the
+   Iterations ledger; earlier entries remain history. The Plan and latest plan entry must
+   agree before execution. Recheck token usage before each implementation step or command.
 7. **Stop** when the verdict is unsound. Rewrite with the findings as input. Do not execute
    an unsound plan to "see what happens".
 
@@ -48,11 +56,17 @@ exists, is a fine place to draft; the goal file is where the plan is kept.
 
 ```markdown
 ## Plan
+revision: <iterations_used>
 verify-plan: sound | unsound (<date>)
 | step | change | files | serves | check |
 |------|--------|-------|--------|-------|
 | S1 | <what> | <paths> | C1, C3 | `<command>` exits 0 |
 findings: <coverage / scope / order / budget notes, or "none">
+
+### Iteration <iterations_used> (<date>) by plan
+plan revision: <iterations_used>
+verify-plan: sound | unsound
+findings: <current findings>
 ```
 
 ## Hand-offs

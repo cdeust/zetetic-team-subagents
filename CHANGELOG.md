@@ -31,6 +31,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The goal cycle dispatches from the current plan verdict, reopens completed
+  goals when criteria change, and checks portable budgets without resetting
+  counters on repair. The final permitted iteration can complete verification
+  before the next plan is refused (#141).
 - The agent-ID test cleanup skips empty target paths; an empty target made the
   trap sweep every real linked worktree of the repository (same fix as #139) (#141).
 

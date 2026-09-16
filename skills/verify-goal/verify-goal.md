@@ -43,7 +43,11 @@ only evidence that evaluator will ever see.
 ## Procedure
 
 1. **Read the goal file.** Refuse when status is not `active`. Refuse when a criterion row
-   lacks a check or an expected result: send it back to the goal skill.
+   lacks a check or an expected result: send it back to the goal skill. Enforce the goal's
+   token budget before every check, setting `exhausted` at the limit or `blocked` when a
+   finite token limit cannot be measured. Do not start another check after either state.
+   Use `iterations_used` for this entry; verification does not allocate another iteration,
+   including when the current iteration is the last allowed one.
 2. **Run every deterministic check**, one at a time, exactly as written in the `check`
    column. Capture exit code, stdout and stderr. Never edit the command to make it pass;
    never substitute a similar command.
@@ -55,7 +59,8 @@ only evidence that evaluator will ever see.
 5. **Write the ledger entry** in the Iterations section (format below), newest last. Quote at
    most twenty lines of output per criterion; keep the full output in the transcript.
 6. **Update status**: `met` when every row is met; `active` when at least one row is unmet
-   and none is error; `blocked` when any row is error.
+   and none is error; `blocked` when any row is error. Preserve `exhausted` or a budget
+   accounting block from step 1; unchecked rows are unmet, not evidence of completion.
 7. **Print the summary** to the transcript verbatim: goal slug, iteration number, per-row
    verdicts, status. This line is what a native evaluator matches against the condition.
 
