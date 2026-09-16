@@ -26,7 +26,7 @@ detect_runner() {
       ;;
     *.go) command -v go >/dev/null 2>&1 && RUNNER=(go test -v) ;;
     *.rs) command -v cargo >/dev/null 2>&1 && RUNNER=(cargo test) ;;
-    *.ts | *.tsx | *.js) [ -f "$root/package.json" ] && command -v npm >/dev/null 2>&1 && RUNNER=(npm test --silent --) ;;
+    *.ts | *.tsx | *.js) [ -f "$root/package.json" ] && command -v npm >/dev/null 2>&1 && RUNNER=(env "NODE_OPTIONS=${NODE_OPTIONS:-} --test-reporter=tap" npm test --silent --) ;;
   esac
   # An absent runner is a finding for the caller, not a failed command: under
   # `set -e` a falsy last branch would kill the gate before it could say so.
@@ -39,6 +39,13 @@ detect_runner() {
 # https://jestjs.io/docs/cli and https://vitest.dev/guide/reporters
 nonpython_verdict() { # status
   local status="$1" passed="" failed=""
+  # Node reports a file wrapper as one passing test even when the file has
+  # no test declarations, and as one failed test when parsing the file fails.
+  # Source: Node v24.7.0 TAP pass/fail/empty/syntax-error probes, 2026-09-17.
+  if grep -Fxq "# Subtest: ${FILES[0]}" "$RUN_OUTPUT" &&
+      ! grep '^# Subtest: ' "$RUN_OUTPUT" | grep -Fvq "# Subtest: ${FILES[0]}"; then
+    return 0
+  fi
   case "${FILES[0]}" in
     *.go) passed='^--- PASS: '; failed='^--- FAIL: ' ;;
     *.rs) passed='^test result: ok\. [1-9][0-9]* passed;'; failed='^test result: FAILED\..* [1-9][0-9]* failed;' ;;

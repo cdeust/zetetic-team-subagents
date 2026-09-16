@@ -146,7 +146,7 @@ run_against_base() { # base
   WORKTREE="$ROOT/.claude/worktrees/zetetic-fail-before-$$"
   trap cleanup_worktree EXIT
   git worktree add --detach "$WORKTREE" "$base" >/dev/null 2>&1 || return 125
-  for file in "${FILES[@]}"; do
+  for file in "${COPY_FILES[@]}"; do
     mkdir -p "$WORKTREE/$(dirname "$file")"
     cp "$file" "$WORKTREE/$file"
   done
@@ -184,8 +184,8 @@ report_vacuous() { # nodes...
   echo "VACUOUS fail-before: new tests that pass against ${BASE:0:12}:"
   printf '  %s\n' "$@"
   echo "  They pin nothing this diff introduced. Make each fail on the old tree first."
-  [ "$ZETETIC_PROFILE" = "strict" ] && exit "$EXIT_BLOCKED"
-  exit "$EXIT_CLEAN"
+  if [ "$ZETETIC_PROFILE" = "strict" ]; then EXIT_STATUS="$EXIT_BLOCKED"; fi
+  return 0
 }
 
 prepare_targets() {
@@ -208,7 +208,10 @@ report_run() {
   case "${FILES[0]}" in
     *.py)
       while IFS= read -r node; do [ -n "$node" ] && vacuous+=("$node"); done < <(passed_nodes)
-      [ ${#vacuous[@]} -eq 0 ] || report_vacuous "${vacuous[@]}"
+      if [ ${#vacuous[@]} -gt 0 ]; then
+        report_vacuous "${vacuous[@]}"
+        return
+      fi
       if [ "$status" -eq 1 ] && grep -q "^FAILED " "$RUN_OUTPUT" &&
           ! grep -qE "^(ERROR|SKIPPED|XFAIL|XPASS) " "$RUN_OUTPUT"; then
         echo "fail-before: the changed tests fail against ${BASE:0:12}, as they must."
@@ -217,7 +220,7 @@ report_run() {
       ;;
     *)
       case "$(nonpython_verdict "$status")" in
-        passed) report_vacuous "${FILES[@]}" ;;
+        passed) report_vacuous "${FILES[@]}"; return ;;
         failed) echo "fail-before: the changed tests fail against ${BASE:0:12}, as they must."; return ;;
       esac
       ;;
@@ -252,20 +255,33 @@ main() {
     echo "fail-before: no changed test file against ${BASE:0:12}; nothing to prove."
     exit "$EXIT_CLEAN"
   fi
+  COPY_FILES=("${FILES[@]}")
+  local selected
+  for selected in "${COPY_FILES[@]}"; do
+    FILES=("$selected")
+    run_selection
+  done
+  exit "$EXIT_STATUS"
+}
+
+run_selection() {
   local status=0
   detect_runner "$ROOT" "${FILES[0]}"
   if [ ${#RUNNER[@]} -eq 0 ]; then
     echo "INCONCLUSIVE fail-before: no runner detected for ${FILES[0]}; ran nothing."
-    exit "$EXIT_CLEAN"
+    return
   fi
   prepare_targets
   if [ ${#TARGETS[@]} -eq 0 ]; then
     echo "fail-before: the diff adds no new test against ${BASE:0:12}; nothing to prove."
-    exit "$EXIT_CLEAN"
+    return
   fi
   run_against_base "$BASE" || status=$?
   report_run "$status"
-  exit "$EXIT_CLEAN"
+  cleanup_worktree
+  WORKTREE=""
+  RUN_OUTPUT=""
 }
 
+EXIT_STATUS=0
 main "$@"

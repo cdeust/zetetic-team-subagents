@@ -22,12 +22,14 @@ def main():
             (f'(cd "{other}" && git push)', other),
             ('env FLAG=1 git push', root),
             ('command git push', root),
+            ('echo ready\ngit push', root),
+            (f'cd \"{other}\"\ngit push', other),
         ]
         for command, expected in cases:
             event = {'cwd': str(root), 'tool_input': {'command': command}}
             result = subprocess.run([sys.executable, parser], input=json.dumps(event),
                                     text=True, capture_output=True, check=True)
-            assert result.stdout.strip() == (str(expected) if expected else ''), (command, result)
+            assert result.stdout.rstrip('\0') == (str(expected) if expected else ''), (command, result)
         malformed = subprocess.run([sys.executable, parser], input='[1]', text=True,
                                    capture_output=True, check=True)
         assert 'INCONCLUSIVE' in malformed.stderr and not malformed.stdout

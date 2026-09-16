@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Propagation-test cleanup removes only its owned temporary directory. An empty
+  parent array previously made its EXIT trap remove unrelated linked worktrees,
+  including dirty worktrees, during local full-suite validation (#140).
+
 - Fail-before verdicts require reported test outcomes; setup errors and skipped
   pytest nodes remain inconclusive. Push hooks resolve the target repository
   and relay configuration failures (#140).

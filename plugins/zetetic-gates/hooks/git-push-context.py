@@ -15,7 +15,7 @@ import sys
 # Shell command boundaries emitted as standalone tokens by the configured
 # ``shlex`` punctuation set. Sources: POSIX Shell Command Language §2.9.3 and
 # Python 3 ``shlex.shlex(..., punctuation_chars=...)`` documentation.
-SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "{", "}"}
+SEPARATORS = {";", "\n", "&&", "||", "|", "&", "(", ")", "{", "}"}
 
 
 def _git_target(tokens: list[str], base: str) -> str | None:
@@ -64,12 +64,13 @@ def main() -> None:
         base = tool.get("workdir") or tool.get("cwd") or event.get("cwd") or os.getcwd()
         if not isinstance(command, str) or not isinstance(base, str):
             raise ValueError("command and cwd must be strings")
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|(){}")
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|(){}\n")
+        lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
         tokens = []
         for token in lexer:
-            if all(char in ";&|(){}" for char in token):
-                tokens.extend(re.findall(r"&&|\|\||.", token))
+            if all(char in ";&|(){}\n" for char in token):
+                tokens.extend(re.findall(r"&&|\|\||[\s\S]", token))
             else:
                 tokens.append(token)
     except (ValueError, AttributeError) as error:
@@ -84,11 +85,10 @@ def main() -> None:
             segment.append(token)
             continue
         if target := _git_target(segment, current):
-            print(target)
-            return
+            print(target, end="\0")
         # A successful `cd path &&` (or `cd path;`) changes the cwd used by the
         # following command. Pipelines/background jobs do not share that cwd.
-        if token in {"&&", ";"} and (target := _cd_target(segment, current)):
+        if token in {"&&", ";", "\n"} and (target := _cd_target(segment, current)):
             current = target
         if token == "(":
             scopes.append(current)

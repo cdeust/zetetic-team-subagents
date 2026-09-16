@@ -62,9 +62,9 @@ ZETETIC_FAIL_BEFORE_BASE=origin/main
 ZETETIC_FAIL_BEFORE_TIMEOUT=120
 ```
 
-The default budget is 120 seconds for the whole base-tree run. A pre-push gate
-that outruns the push it guards gets disabled by whoever it annoys, and a run
-scoped to the changed test files sits far under that. The value must be a
+The default budget is an operational policy of 120 seconds per file run.
+The hook has a separate 150-second host limit in the plugin manifest. These
+limits do not establish a measured execution-time guarantee. The value must be a
 whole number of seconds; anything else is a usage error (exit 2). The budget
 is enforced through `timeout` or `gtimeout`; macOS ships neither, so without
 `brew install coreutils` the run is unbounded there.
@@ -73,7 +73,8 @@ is enforced through `timeout` or `gtimeout`; macOS ships neither, so without
 
 Detected from the first changed test file: `pytest` (through `uv run --no-sync`
 when the tree has a `uv.lock` and `uv` is on PATH), `go test`, `cargo test`,
-and the `test` script of a `package.json`. Anything else reports
+and the `test` script of a `package.json`. Each file gets its own runner and
+verdict; npm runs request Node TAP output through `NODE_OPTIONS`. Anything else reports
 `INCONCLUSIVE` rather than guessing.
 
 ## What it does not prove

@@ -214,6 +214,8 @@ for specimen in 'go|0|--- PASS: TestAnswer (0.00s)|passed' 'go|1|--- FAIL: TestA
   check "reporter ${FILES[0]}/$status/$summary" "$expected" "$actual"
 done
 
+"$PYTHON" test_real_runners.py "$GATE"
+
 leftovers="$(find "$WORK" -type d -name 'zetetic-fail-before-*' | wc -l | tr -d ' ')"
 if [[ "$leftovers" == "0" ]]; then
   echo "  PASS: no worktree left behind"; PASS=$((PASS + 1))
