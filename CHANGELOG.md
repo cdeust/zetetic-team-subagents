@@ -20,6 +20,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **zetetic-gates 1.1.0: a fail-before gate (#140).** `rules/coding-standards.md` §12
+  states that coverage proves code ran, not that a test would fail if the code
+  were wrong; until now only a reviewer's diligence enforced it, and a reviewer
+  reading a test cannot see that it passes on the old code. On 2026-09-16 a
+  Cortex test meant to pin "this script imports without the MCP SDK" used the
+  pre-PEP 451 finder protocol CPython ignores, blocked nothing, and passed
+  against the very commit that had broken CI; the author, the CI run and a
+  first review pass all missed it. `plugins/zetetic-gates/tools/fail-before-checker.sh`
+  mechanises the check that caught it: it copies the changed test files over a
+  throwaway checkout of the base, runs the tests the diff added, and names
+  every new pytest node that still passes (`VACUOUS`, warning by default,
+  blocking under strict). A run that reaches no verdict, no runner, budget
+  exceeded, a runner exiting without testing, is `INCONCLUSIVE` and never a
+  pass. `hooks/pre-push-fail-before.sh` wires it to `git push`. Eleven regression
+  cases in `tools/tests/fail-before/`, including a vacuous test beside a failing
+  sibling, which a file-level verdict would hide. Rationale: `plugins/zetetic-gates/docs/fail-before.md`.
+
 ## [2.41.0]: the plugin's state lives under ~/.claude/zetetic/, migrated once, with a layout report at the end of setup
 
 ### Fixed
