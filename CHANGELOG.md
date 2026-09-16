@@ -29,6 +29,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Shared gates preserve the declared source profile and Git verb, allow
+  repository selectors on non-commit/push commands, and tolerate malformed
+  shell quoting after tool execution. Tool matchers retain secret coverage;
+  unchanged Claude hooks retain their timeouts. Checker-error and prose
+  blocking policies are documented (#139).
 - The agent-ID test cleanup ignores empty target paths, preserving the
   active checkout and its worktrees when no target repository was created (#139).
 

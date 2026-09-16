@@ -22,7 +22,7 @@ def _mentions_command(command, words):
     return re.search(r'\b(?:' + words + r')\s', candidate)
 
 
-def git_directories(command, base):
+def git_commands(command, base):
     if not _mentions_command(command, 'git'):
         return []
     lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
@@ -37,13 +37,17 @@ def git_directories(command, base):
             segment.append(token)
             continue
         directory, verb = _git_command(segment, current)
-        target = directory if verb in {'commit', 'push'} else None
+        target = (directory, verb) if verb in {'commit', 'push'} else None
         if target and target not in targets:
             targets.append(target)
         if token in {'&&', ';'}:
             current = git_cwd._cd_target(segment, current) or current
         segment = []
     return targets
+
+
+def git_directories(command, base):
+    return list(dict.fromkeys(directory for directory, _verb in git_commands(command, base)))
 
 def _direct_tokens(tokens):
     remaining = list(tokens)
@@ -56,11 +60,12 @@ def _direct_tokens(tokens):
     return remaining
 
 
-def _git_command(tokens, base):
+def _git_command(tokens, base, *, validate=True):
     """Identify a direct git command and its first verb, never argument text."""
-    if any(re.match(r'^(?:GIT_DIR|GIT_WORK_TREE|GIT_INDEX_FILE)=', token) for token in tokens):
-        raise ValueError('Explicit Git repository/index environment selectors are unsupported; use git -C')
-    tokens = _direct_tokens(tokens)
+    direct = _direct_tokens(tokens)
+    prefix = tokens[:len(tokens) - len(direct)]
+    unsupported = any(re.match(r'^(?:GIT_DIR|GIT_WORK_TREE|GIT_INDEX_FILE)=', token) for token in prefix)
+    tokens = direct
     if not tokens or os.path.basename(tokens[0]) != 'git':
         return None, None
     current, index = base, 1
@@ -68,7 +73,7 @@ def _git_command(tokens, base):
     while index < len(tokens):
         token = tokens[index]
         if token.split('=', 1)[0] in {'--git-dir', '--work-tree'}:
-            raise ValueError('Explicit Git repository selectors are unsupported; use git -C')
+            unsupported = True
         if token in valued and index + 1 < len(tokens):
             if token == '-C':
                 current = os.path.abspath(os.path.join(current, tokens[index + 1]))
@@ -79,6 +84,10 @@ def _git_command(tokens, base):
         elif token.startswith('-'):
             index += 1
         else:
+            if unsupported and validate and token in {'commit', 'push'}:
+                raise ValueError('Explicit Git repository/index selectors are unsupported; use git -C')
+            if unsupported:
+                return None, token
             return current, token
     return None, None
 
@@ -88,12 +97,18 @@ def _shell_directories(command, base):
         return []
     lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
     lexer.whitespace_split = True
-    current, segment, result = base, [], list(git_directories(command, base))
-    for token in [*list(lexer), ';']:
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        # Post-tool inspection retains the known event directory. An invalid
+        # shell command supplies no reliable additional directory targets.
+        return []
+    current, segment, result = base, [], []
+    for token in [*tokens, ';']:
         if token not in git_cwd.SEPARATORS:
             segment.append(token)
             continue
-        target, _verb = _git_command(segment, current)
+        target, _verb = _git_command(segment, current, validate=False)
         if target:
             result.append(target)
         if token in {'&&', ';'}:

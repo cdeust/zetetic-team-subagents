@@ -18,10 +18,28 @@ manifest is checked against hooks/hooks.json so the actual loader stays wired.
 | PostToolUse | Removed definitions in the affected repository after shell or file operations. |
 | Stop / SubagentStop | Returned prose; findings request a rewrite. |
 
-Source checking defaults to strict at the shared entry point; repository
-configuration remains authoritative. Craftsmanship retains configured limits
-and severities. Prose hooks receive blocking mode automatically. Existing Stop
-continuation-loop protection remains in effect.
+Source checking keeps the checker's standard default. Declare
+`ZETETIC_PROFILE=strict` in `.zetetic.conf` to make source warnings blocking.
+The shared entry point does not inject a strict profile. Staged prose follows
+the declared profile, replacing the old hook's unconditional warning mode.
+Craftsmanship retains configured limits and severities.
+
+Two blocking-policy changes are deliberate: checker execution/configuration
+errors refuse commit/push because validation did not complete; returned and
+outbound prose hooks receive blocking mode automatically. The latter replaces
+the legacy opt-in behavior for calls through the shared entry point, including
+when `REDACTION_STOP_BLOCK=off` is inherited. Standalone legacy hook invocation
+retains its opt-in contract. Stop continuation-loop protection remains in effect.
+
+Commit and push retain their actual verbs during dispatch. Both run staged
+checks, as the previous full-plugin hook already did. These checks do not prove
+that the commits being pushed passed validation. Existing Claude push-specific
+review and provenance hooks remain separate.
+
+Unchanged Claude hooks retain their previous explicit timeouts. Shared hooks
+use the host's default timeout; that default is host-dependent. Tool matchers
+limit pre-tool execution to supported secret/edit/shell and MCP actions, and
+post-tool execution to supported file/shell actions.
 
 Edit hints are advisory. Commit checks enforce mechanical rules. Neither a
 source marker nor a prose scan establishes scientific validity or authorship;
@@ -37,10 +55,13 @@ repositories without reconstructing preimages after modification.
 Shell aliases and workdir fields normalize to Bash. Git -C and simple cd lists
 identify commit targets; affected paths identify post-edit roots. Quoted Git
 commands are tokenized before dispatch, and argument text is not treated as a
-commit command. Explicit unsupported Git repository selectors are refused. This is not
+commit command. Explicit unsupported Git repository selectors are refused only
+for commit/push. Other verbs pass without guessing a selected repository. This is not
 a shell interpreter. Opaque scripts, dynamic shell construction and human
 commits need native Git hooks for enforcement independent of the assistant.
-Post-tool checks can detect a completed removal but cannot undo it.
+Post-tool checks can detect a completed removal but cannot undo it. Malformed
+shell quoting leaves post-tool inspection at the known event directory rather
+than raising a parsing error or guessing additional targets.
 
 Structural and staged-prose checks read frozen index blobs and indexed policy
 files. An unstaged clean replacement cannot hide a staged violation. Symlinks

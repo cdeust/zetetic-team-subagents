@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from lib.host_events import HostEventError, normalize_event
-from lib.gate_targets import git_directories, post_directories
+from lib.gate_targets import git_commands, post_directories
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,7 +20,6 @@ def invoke(name, event):
         raise HostEventError('Bundled redaction checker is missing or not executable')
     command = [sys.executable if path.suffix == '.py' else 'bash', str(path)]
     env = dict(os.environ, CLAUDE_PLUGIN_ROOT=str(ROOT))
-    env.setdefault('ZETETIC_PROFILE', 'strict')
     env['REDACTION_STOP_BLOCK'] = 'on'
     result = subprocess.run(command, input=json.dumps(event), text=True,
                             capture_output=True, cwd=event.get('cwd') or os.getcwd(),
@@ -46,11 +45,10 @@ def before(event):
                 context.extend([output] if output else [])
         if name == 'Bash':
             command = normalized['tool_input'].get('command', '')
-            for directory in git_directories(command, normalized.get('cwd') or os.getcwd()):
-                # Target parser confirmed commit/push; avoid interpreting its
-                # quoting again in legacy shell guards. Both verbs run these checks.
+            for directory, verb in git_commands(command, normalized.get('cwd') or os.getcwd()):
+                # Preserve the parsed verb when dispatching legacy shell guards.
                 gated = {**normalized, 'cwd': directory,
-                         'tool_input': {'command': 'git commit'}}
+                         'tool_input': {'command': f'git {verb}'}}
                 invoke('pre-commit-zetetic.sh', gated)
         if name.startswith('mcp__codex_apps__github_'):
             normalized = {**normalized, 'tool_name': name.replace('mcp__codex_apps__github_', 'mcp__github__', 1)}

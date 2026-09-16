@@ -27,6 +27,7 @@ def consumer(tmp_path):
 
 def repository(path):
     subprocess.run(['git', 'init', '-q', str(path)], check=True)
+    (path / '.zetetic.conf').write_text('ZETETIC_PROFILE=strict\n')
     return path
 
 
@@ -171,3 +172,70 @@ def test_explicit_git_repository_selector_refused(package, consumer, command):
                     tool_input={'command': command})
     assert result.returncode == 2, result.stdout + result.stderr
     assert 'unsupported' in result.stderr
+
+
+@pytest.mark.parametrize('command', [
+    'GIT_DIR=/x git log', 'git --git-dir=/x status', 'GIT_INDEX_FILE=/x git add -A',
+])
+def test_other_git_verbs_allow_selectors(package, consumer, command):
+    result = invoke(package, consumer, 'PreToolUse', tool_name='Bash',
+                    tool_input={'command': command})
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('command', ['cd /tmp && echo "x', 'git status && echo "x'])
+def test_post_tool_malformed_quotes_do_not_crash(package, consumer, command):
+    result = invoke(package, consumer, 'PostToolUse', tool_name='Bash',
+                    tool_input={'command': command})
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('profile', [None, 'standard', 'strict'])
+def test_source_profile_is_declared(package, consumer, profile):
+    config = consumer / '.zetetic.conf'
+    if profile is None:
+        config.unlink()
+    else:
+        config.write_text(f'ZETETIC_PROFILE={profile}\n')
+    (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
+    git(consumer, 'add', '.')
+    result = invoke(package, consumer, 'PreToolUse', tool_name='Bash',
+                    tool_input={'command': 'git commit -m fix'})
+    assert result.returncode == (2 if profile == 'strict' else 0), result.stderr
+
+
+@pytest.mark.parametrize('profile', ['standard', 'strict'])
+def test_staged_prose_follows_declared_profile(package, consumer, profile):
+    (consumer / '.zetetic.conf').write_text(f'ZETETIC_PROFILE={profile}\n')
+    (consumer / 'README.md').write_text('We delve into this topic.\n')
+    git(consumer, 'add', '.')
+    result = invoke(package, consumer, 'PreToolUse', tool_name='Bash',
+                    tool_input={'command': 'git commit -m fix'})
+    assert result.returncode == (2 if profile == 'strict' else 0), result.stderr
+
+
+def test_checker_config_error_blocks(package, consumer):
+    (consumer / '.craftsmanship.conf').write_text('if then\n')
+    (consumer / 'sample.py').write_text('value = None\n')
+    git(consumer, 'add', '.')
+    result = invoke(package, consumer, 'PreToolUse', tool_name='Bash',
+                    tool_input={'command': 'git commit -m fix'})
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert 'validation failed' in result.stderr
+
+
+@pytest.mark.parametrize('filename', ['hooks/hooks.json', 'hooks/gates.json'])
+@pytest.mark.parametrize('kind', ['PreToolUse', 'PostToolUse'])
+def test_matchers_cover_secret_tools_and_skip_unrelated_tools(filename, kind):
+    import re
+    hooks = json.loads((ROOT / filename).read_text())['hooks']
+    group = next(
+        group for group in hooks[kind]
+        if any('zetetic-gates.py' in hook['command'] for hook in group['hooks']))
+    matcher = group['matcher']
+    names = ['Bash', 'exec_command', 'apply_patch', 'Edit', 'Write']
+    if kind == 'PreToolUse':
+        names += ['Read', 'Grep', 'NotebookEdit', 'mcp__github__create_pull_request']
+    for name in names:
+        assert re.fullmatch(matcher, name)
+    assert not re.fullmatch(matcher, 'TodoWrite')

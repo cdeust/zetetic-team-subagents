@@ -26,7 +26,7 @@ or the full plugin to avoid duplicate checks.
 ## Controls
 
 - Agent-issued commits and pushes: source discipline, craftsmanship and staged
-  prose. Source checking defaults to strict. Structural and prose checks read
+  prose. Source checking uses the declared project profile. Structural and prose checks read
   the index version, not a possibly different working file.
 - Edits: source/layer hints and checks for removed definitions. Codex patches
   are translated before these checks, without writing their proposed content.

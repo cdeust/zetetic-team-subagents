@@ -92,3 +92,24 @@ def test_git_arguments_are_not_commit_commands(tmp_path, command):
 def test_explicit_repository_selectors_refuse(tmp_path, command):
     with pytest.raises(ValueError, match='unsupported'):
         module.git_directories(command, str(tmp_path))
+
+
+@pytest.mark.parametrize('command', [
+    'GIT_DIR=/x git log', 'git --git-dir=/x status',
+    'GIT_INDEX_FILE=/x git add -A', 'env GIT_WORK_TREE=/x git diff',
+    'GIT_DIR=/x echo hello', 'echo GIT_DIR=/x',
+    'git commit -m GIT_DIR=/x',
+])
+def test_selectors_are_only_special_in_the_command_prefix(tmp_path, command):
+    expected = [str(tmp_path)] if command.startswith('git commit') else []
+    assert module.git_directories(command, str(tmp_path)) == expected
+
+
+@pytest.mark.parametrize('command', ['cd /tmp && echo "x', 'git status && echo "x'])
+def test_malformed_post_shell_retains_event_directory(tmp_path, command):
+    assert module.post_directories(event(tmp_path, 'Bash', command=command)) == [str(tmp_path)]
+
+
+def test_git_commands_preserve_both_verbs(tmp_path):
+    assert module.git_commands('git push; git commit', str(tmp_path)) == [
+        (str(tmp_path), 'push'), (str(tmp_path), 'commit')]
