@@ -58,6 +58,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The fail-before gate runs from the shared dispatcher, so it is active under
+  Codex as well as Claude Code; the Bash-only hook entry that made Claude Code
+  the only host is gone, and the gate runs once per push (#144).
+
 - The goal cycle dispatches from the current plan verdict, reopens completed
   goals when criteria change, and checks portable budgets without resetting
   counters on repair. The final permitted iteration can complete verification

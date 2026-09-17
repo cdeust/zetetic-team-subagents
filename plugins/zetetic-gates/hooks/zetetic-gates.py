@@ -50,6 +50,8 @@ def before(event):
                 gated = {**normalized, 'cwd': directory,
                          'tool_input': {'command': f'git {verb}'}}
                 invoke('pre-commit-zetetic.sh', gated)
+                if verb == 'push':
+                    invoke('pre-push-fail-before.sh', gated)
         if name.startswith('mcp__codex_apps__github_'):
             normalized = {**normalized, 'tool_name': name.replace('mcp__codex_apps__github_', 'mcp__github__', 1)}
         if name == 'Bash' or name.startswith('mcp__'):

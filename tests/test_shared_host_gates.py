@@ -239,3 +239,39 @@ def test_matchers_cover_secret_tools_and_skip_unrelated_tools(filename, kind):
     for name in names:
         assert re.fullmatch(matcher, name)
     assert not re.fullmatch(matcher, 'TodoWrite')
+
+
+def pushing_repository(consumer, test_body):
+    """A committed source and test, then the source changed and a test added."""
+    git(consumer, 'config', 'user.email', 't@t.t')
+    git(consumer, 'config', 'user.name', 't')
+    (consumer / 'src').mkdir()
+    (consumer / 'tests').mkdir()
+    (consumer / 'src/thing.py').write_text('def answer():\n    return 1\n')
+    (consumer / 'tests/test_thing.py').write_text(
+        'def test_answer_exists():\n    from src.thing import answer\n\n    assert answer()\n')
+    git(consumer, 'add', '.')
+    git(consumer, 'commit', '-qm', 'base')
+    (consumer / 'src/thing.py').write_text('def answer():\n    return 42\n')
+    (consumer / 'tests/test_new.py').write_text(test_body)
+    return {'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH']}
+
+
+@pytest.mark.parametrize('body, code, marker', [
+    ('def test_truthy():\n    from src.thing import answer\n\n    assert answer()\n', 2, 'VACUOUS'),
+    ('def test_is_42():\n    from src.thing import answer\n\n    assert answer() == 42\n', 0, ''),
+])
+def test_push_runs_fail_before_gate(package, consumer, body, code, marker):
+    extra_env = pushing_repository(consumer, body)
+    event = dict(hook_event_name='PreToolUse', cwd=str(consumer), tool_name='Bash',
+                 tool_input={'command': 'git push'})
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(('ZETETIC_', 'CLAUDE_', 'REDACTION_'))}
+    env.update(extra_env)
+    result = subprocess.run([sys.executable, str(package / 'hooks/zetetic-gates.py')],
+                            input=json.dumps(event), text=True, capture_output=True,
+                            cwd=consumer, env=env)
+    assert result.returncode == code, result.stdout + result.stderr
+    # A test that fails on the old tree is the quiet path: nothing relayed.
+    assert marker in result.stderr, result.stdout + result.stderr
+    assert ('VACUOUS' in result.stderr) == bool(marker), result.stderr
