@@ -1,0 +1,4 @@
+interface:
+  display_name: "Advisor Model"
+  short_description: "Consult a separate model at consequential goal-loop decisions"
+  default_prompt: "Use $advisor-model for one evidence-grounded plan, fork, or completion consultation."

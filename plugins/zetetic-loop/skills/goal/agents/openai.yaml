@@ -1,0 +1,4 @@
+interface:
+  display_name: "Goal"
+  short_description: "Compile an objective into a persistent goal contract"
+  default_prompt: "Use $goal to compile this request into a goal contract with executable criteria."

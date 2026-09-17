@@ -20,25 +20,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- Empty-file TAP wrappers are recognized using canonical absolute paths as well
-  as relative paths. Node 20 otherwise reported an empty JavaScript file as a
-  passing test and caused a false VACUOUS finding (#140).
-
-- The tools CI job installs the hashed Python test lock before running the
-  fail-before suite. Missing pytest now fails that suite instead of reporting
-  a successful skip (#140).
-
-- Propagation-test cleanup removes only its owned temporary directory. An empty
-  parent array previously made its EXIT trap remove unrelated linked worktrees,
-  including dirty worktrees, during local full-suite validation (#140).
-
-- Fail-before verdicts require reported test outcomes; setup errors and skipped
-  pytest nodes remain inconclusive. Push hooks resolve the target repository
-  and relay configuration failures (#140).
-
 ### Added
+
+- Portable `advisor-model` consultation and `/zetetic:advisor-loop`, composed with
+  goal iteration while retaining executor ownership. Advisor records survive
+  resume and share the goal budget. Accepted criterion proposals verify the old
+  contract before refinement; a required declined advisor blocks execution (#142).
+
+- Goal-driven iteration as four portable skills (`goal`, `plan`, `verify-goal`,
+  `refine-goal`) packaged in `plugins/zetetic-loop` for Codex and Gemini CLI, and
+  the `/zetetic:goal-loop` command that runs one tick of the cycle under the
+  native `/goal` or `/loop`. The goal file `.zetetic/goals/<slug>.md` is the
+  contract: end state, non-goals, criteria as commands with expected results,
+  budget, iteration ledger. The native goal command receives a one-line mirror (#141).
 
 - **zetetic-gates 1.1.0: a fail-before gate (#140).** `rules/coding-standards.md` §12
   states that coverage proves code ran, not that a test would fail if the code
@@ -56,6 +50,32 @@ adheres to [Semantic Versioning](https://semver.org/).
   pass. `hooks/pre-push-fail-before.sh` wires it to `git push`. Eleven regression
   cases in `tools/tests/fail-before/`, including a vacuous test beside a failing
   sibling, which a file-level verdict would hide. Rationale: `plugins/zetetic-gates/docs/fail-before.md`.
+
+### Fixed
+
+- The goal cycle dispatches from the current plan verdict, reopens completed
+  goals when criteria change, and checks portable budgets without resetting
+  counters on repair. The final permitted iteration can complete verification
+  before the next plan is refused (#141).
+- The agent-ID test cleanup skips empty target paths; an empty target made the
+  trap sweep every real linked worktree of the repository (same fix as #139) (#141).
+
+- Empty-file TAP wrappers are recognized using canonical absolute paths as well
+  as relative paths. Node 20 otherwise reported an empty JavaScript file as a
+  passing test and caused a false VACUOUS finding (#140).
+
+- The tools CI job installs the hashed Python test lock before running the
+  fail-before suite. Missing pytest now fails that suite instead of reporting
+  a successful skip (#140).
+
+- Propagation-test cleanup removes only its owned temporary directory. An empty
+  parent array previously made its EXIT trap remove unrelated linked worktrees,
+  including dirty worktrees, during local full-suite validation (#140).
+
+- Fail-before verdicts require reported test outcomes; setup errors and skipped
+  pytest nodes remain inconclusive. Push hooks resolve the target repository
+  and relay configuration failures (#140).
+
 
 ## [2.41.0]: the plugin's state lives under ~/.claude/zetetic/, migrated once, with a layout report at the end of setup
 

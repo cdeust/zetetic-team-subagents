@@ -6,7 +6,7 @@
   <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/suites-41-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
-  <img src="https://img.shields.io/badge/skills-81-green" alt="Skills">
+  <img src="https://img.shields.io/badge/skills-86-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-23_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
@@ -104,11 +104,14 @@ These aren't prompts dressed up as commands. Each is a **multi-step pipeline** t
 ### Portable skills for Codex and Gemini CLI
 
 Individual skills can be packaged in isolation, without the agent roster,
-lifecycle hooks, or mechanical gates. Two skills ship this way today:
+lifecycle hooks, or mechanical gates. Three packages ship this way today:
 [`zetetic-reasoning`](plugins/zetetic-reasoning/README.md) (one
-evidence-synthesis skill and eight sourced reasoning references) and
+evidence-synthesis skill and eight sourced reasoning references),
 [`zetetic-design`](plugins/zetetic-design/README.md) (one self-contained
-UX/UI design and WCAG 2.2 AA accessibility-audit skill). Both packages are
+UX/UI design and WCAG 2.2 AA accessibility-audit skill) and
+[`zetetic-loop`](plugins/zetetic-loop/README.md) (five skills, goal, plan,
+verify-goal, refine-goal and advisor-model, that drive goal-driven iteration from a goal
+file both hosts read). All packages are
 generated and drift-checked from the same mechanism
 (`tools/sync-portable-references.py`), driven by a `portable:` frontmatter
 block on each skill's canonical source.
@@ -118,12 +121,15 @@ block on each skill's canonical source.
 codex plugin marketplace add cdeust/zetetic-team-subagents
 codex plugin add zetetic-reasoning@zetetic-marketplace
 codex plugin add zetetic-design@zetetic-marketplace
+codex plugin add zetetic-loop@zetetic-marketplace
 
 # Gemini CLI
 gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
   --path plugins/zetetic-reasoning/skills/evidence-synthesis
 gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
   --path plugins/zetetic-design/skills/design
+gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
+  --path plugins/zetetic-loop/skills/goal
 ```
 
 ### Full Claude Code distribution
@@ -184,7 +190,7 @@ Agents, rules, skills, and commands are static Markdown and work natively. The
 | Capability | What it gives you (concretely) |
 |---|---|
 | **97 documented refusals** | Each genius agent's body documents conditions under which it refuses (when to stop, what to cite, when to hand off). Refusal conditions are intent statements, not enforced contracts. |
-| **81 multi-step workflows** | 15 problem-shaped skills route you to the right reasoning procedure; 66 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
+| **86 multi-step workflows** | 15 problem-shaped skills route you to the right reasoning procedure; 71 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
 | **Commit-time gates** | `pre-commit-zetetic.sh` blocks commits with `UNSOURCED` keywords (always/never/obviously) at any profile. `MAGIC_NUMBER` floats (3+ decimals without `source:`) and `TODO_NO_REF` warn at default profile, block under `ZETETIC_PROFILE=strict`. Active only when `git commit` is invoked through Claude Code's hook system. |
 | **Craftsmanship gate** | `tools/craftsmanship-checker.sh` mechanically enforces `coding-standards.md` §4 size limits + select structural rules. `FILE_TOO_LONG` (>500 lines) blocks; function/class/parameter/nesting block for recognized languages; grab-bag module names and layer-direction advise. Every threshold and per-rule severity (`block`/`advise`/`off`) is tunable per-repo via `.craftsmanship.conf`; defaults are the sourced §4 numbers. Runs at commit (local hook, changed files) and in CI (hard on newly-added files, informational full-tree sweep). Judgment rules (SRP/OCP/LSP/ISP, rule-of-three) are deliberately **not** mechanized, because a hook that fakes a verdict it can't reach just trains you to ignore it. |
 | **650+ problem-shape triggers** | [`agents/genius/INDEX.md`](agents/genius/INDEX.md) maps natural-language problem descriptions to reasoning methods. <!-- source: 759 table content rows (grep -cE '^\|' agents/genius/INDEX.md = 843, minus 84 separator rows), counted 2026-06-23; "650+" is a conservative floor. --> |

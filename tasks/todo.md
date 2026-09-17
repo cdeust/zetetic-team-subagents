@@ -1,3 +1,9 @@
+# Advisor composition (2026-09-17)
+
+- [x] Bind the requested behavior to Claude Code's native `/advisor`.
+- [x] Deliver the separate advisor composition in PR #142 using the checkable plan in
+      [advisor-goal-review.md](advisor-goal-review.md).
+
 # GOA Phase 0 Codex replay (2026-08-04)
 
 - [x] Resume `/memories/zetetic-team-subagents/checkpoint.md` and read the

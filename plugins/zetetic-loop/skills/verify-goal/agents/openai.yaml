@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify Goal"
+  short_description: "Run a goal's acceptance checks and ledger the evidence"
+  default_prompt: "Use $verify-goal to run every acceptance check of the active goal."
