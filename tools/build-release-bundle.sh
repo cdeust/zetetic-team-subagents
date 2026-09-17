@@ -38,7 +38,7 @@ BUNDLE_NAME="zetetic-team-subagents"
 BUNDLE_PATHS=(
   agents hooks tools rules skills commands
   .claude-plugin/plugin.json .mcp.json
-  .agents/plugins/marketplace.json plugins/zetetic-reasoning plugins/zetetic-design
+  .agents/plugins/marketplace.json plugins/zetetic-reasoning plugins/zetetic-design plugins/zetetic-loop
   README.md LICENSE PRIVACY.md SECURITY.md CHANGELOG.md
 )
 

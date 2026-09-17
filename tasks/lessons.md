@@ -1,5 +1,9 @@
 # Lessons
 
+- When the user refers to a host command, check its native documentation as
+  well as local plugin files. Claude Code's `/advisor` is a native server tool;
+  `agents/advisor.md` is a separate implementation with different context access.
+
 - Distinguish model-family independence from distinct-model validation.
   Sol, Terra, and Luna are one GPT-5.6 family, so only one is independent for a
   cross-family test; however, when the user requests all three, Terra and Luna

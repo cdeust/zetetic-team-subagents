@@ -24,6 +24,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 HOST_COUPLING = re.compile(r"\b(?:claude|hooks?|mcp)\b", re.IGNORECASE)
+PUBLIC_URL = re.compile(r"https?://\S+", re.IGNORECASE)
+
+
+def _host_runtime_tokens(text: str) -> list[str]:
+    """Find host runtime coupling while ignoring words inside public citations."""
+    return HOST_COUPLING.findall(PUBLIC_URL.sub("", text))
 
 
 def _json(path: Path) -> dict:
@@ -237,13 +243,27 @@ def test_portable_package_contains_no_host_specific_runtime_tokens(package: str)
         if path.is_file() and path.suffix in {".json", ".md", ".yaml", ".yml"}
     ]
     violations = {
-        str(path.relative_to(package_dir)): HOST_COUPLING.findall(
+        str(path.relative_to(package_dir)): _host_runtime_tokens(
             path.read_text(encoding="utf-8")
         )
         for path in text_files
-        if HOST_COUPLING.search(path.read_text(encoding="utf-8"))
+        if _host_runtime_tokens(path.read_text(encoding="utf-8"))
     }
     assert violations == {}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("See https://code.claude.com/docs/en/advisor for the native advisor contract.", []),
+        ("The executor must not configure the hook runtime.", ["hook"]),
+        ("Use the claude runtime and its mcp server for this skill.", ["claude", "mcp"]),
+    ],
+)
+def test_host_runtime_scan_ignores_citation_urls_but_catches_instructions(
+    text: str, expected: list[str]
+) -> None:
+    assert _host_runtime_tokens(text) == expected
 
 
 def test_release_bundle_includes_every_portable_package() -> None:

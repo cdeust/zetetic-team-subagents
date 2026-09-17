@@ -22,6 +22,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Portable `advisor-model` consultation and `/zetetic:advisor-loop`, composed with
+  goal iteration while retaining executor ownership. Advisor records survive
+  resume and share the goal budget. Accepted criterion proposals verify the old
+  contract before refinement; a required declined advisor blocks execution (#142).
+
+- Goal-driven iteration as four portable skills (`goal`, `plan`, `verify-goal`,
+  `refine-goal`) packaged in `plugins/zetetic-loop` for Codex and Gemini CLI, and
+  the `/zetetic:goal-loop` command that runs one tick of the cycle under the
+  native `/goal` or `/loop`. The goal file `.zetetic/goals/<slug>.md` is the
+  contract: end state, non-goals, criteria as commands with expected results,
+  budget, iteration ledger. The native goal command receives a one-line mirror (#141).
+
 - Shared Claude Code and Codex gates in both plugin packages: host event
   adaptation, source and craftsmanship validation, indexed-content checks,
   blocking prose checks and common policy loading. Hook trust stays under
@@ -29,13 +41,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The goal cycle dispatches from the current plan verdict, reopens completed
+  goals when criteria change, and checks portable budgets without resetting
+  counters on repair. The final permitted iteration can complete verification
+  before the next plan is refused (#141).
+- The agent-ID test cleanup skips empty target paths; an empty target made the
+  trap sweep every real linked worktree of the repository (same fix as #139) (#141).
 - Shared gates preserve the declared source profile and Git verb, allow
   repository selectors on non-commit/push commands, and tolerate malformed
   shell quoting after tool execution. Tool matchers retain secret coverage;
   unchanged Claude hooks retain their timeouts. Checker-error and prose
   blocking policies are documented (#139).
-- The agent-ID test cleanup ignores empty target paths, preserving the
-  active checkout and its worktrees when no target repository was created (#139).
 
 ## [2.41.0]: the plugin's state lives under ~/.claude/zetetic/, migrated once, with a layout report at the end of setup
 
