@@ -12,8 +12,8 @@
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
-> **Cross-platform evidence synthesis for Codex, Gemini CLI, and Claude Code, plus a full Claude-native distribution of 15 problem-shaped skills backed by 97 sourced reasoning patterns.**
-> The portable package audits primary sources, counter-evidence, and uncertainty on all three hosts. The full Claude Code package additionally routes skills such as `causal-audit`, `failure-forensics`, and `estimation` across 97 genius agents (plus 23 team-role agents = 120 total), lifecycle hooks, and a pre-commit gate that blocks any floating-point constant with 3+ significant digits unless it carries a `source:` annotation.
+> **One epistemic standard on three hosts: portable skills for Codex and Gemini CLI, shared quality gates for Claude Code and Codex, and a full Claude-native distribution of 15 problem-shaped skills backed by 97 sourced reasoning patterns.**
+> Three portable packages ship without the agent roster: evidence synthesis, UX design and accessibility audit, and goal-driven iteration (goal, plan, verify-goal, refine-goal, advisor-model). The mechanical gates run on both coding hosts from one shared runtime: source discipline and craftsmanship at commit, a fail-before check at push, secret-read refusal, deletion detection, and prose checks on returned and published text. The full Claude Code package additionally routes skills such as `causal-audit`, `failure-forensics`, and `estimation` across 97 genius agents (plus 23 team-role agents = 120 total), with the lifecycle hooks and the research and memory tooling.
 > Not a prompt library. A methodology with **commit-time enforcement**.
 
 ---
@@ -93,6 +93,12 @@ Each skill body names the relevant genius agents, when to use each, and how to l
 
 /genius route "p99 latency exceeds the sum of profiled components"
 → Routes to the reasoning procedure that fits the problem shape
+
+/zetetic:goal-loop make the auth tests pass without touching the fixtures
+→ Writes the goal contract → plans against it → runs one step → runs every criterion as a command → refines the next iteration
+
+/zetetic:engineering-loop <request>
+→ recall → refine → implement → verify → benchmark → review → remember, under /loop, with every gate run
 ```
 
 These aren't prompts dressed up as commands. Each is a **multi-step pipeline** that names the procedure used, surfaces blind spots in its output, and refuses to ship if a step fails. See [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for full session transcripts.
@@ -141,7 +147,9 @@ claude plugin install zetetic-team-subagents
 
 That's the whole install. The plugin's installer copies agents, skills, hooks, and tools into `~/.claude/` and keeps its own state (install manifest, version, model overrides, sweep audit log, dev-symlink map) under `~/.claude/zetetic/`; it prints that layout when it finishes. Manual install + advanced config: [`docs/INSTALL.md`](docs/INSTALL.md).
 
-**Just want the enforcement gates, no agents?** Install the 30-second micro-plugin instead: `claude plugin install zetetic-gates`. It ships the pre-commit zetetic + craftsmanship checkers and the secret-shield, nothing else. See [`plugins/zetetic-gates/`](plugins/zetetic-gates/README.md).
+**Just want the enforcement gates, no agents?** Install the micro-plugin instead: `claude plugin install zetetic-gates`, or `codex plugin add zetetic-gates@zetetic-marketplace`. One shared runtime ([`hooks/zetetic-gates.py`](hooks/zetetic-gates.py)) serves both hosts: Claude Edit/Write calls and Codex `apply_patch` payloads are normalised to the same events before the checks run. It carries the source and craftsmanship checkers at commit and push, the fail-before gate at push, the secret shield, the deletion gate and the prose gates. In Codex, review and trust the hooks through `/hooks` after installing; installation alone grants no execution. See [`plugins/zetetic-gates/`](plugins/zetetic-gates/README.md) and [`docs/shared-host-gates.md`](docs/shared-host-gates.md).
+
+The full plugin is also declared for Codex ([`.codex-plugin/plugin.json`](.codex-plugin/plugin.json)): the same shared gates plus the portable reasoning skills. It does not port the Claude agents or the research lifecycle hooks; those stay Claude-native.
 
 ### Staying current, and why a release can fail to reach you
 
@@ -191,7 +199,9 @@ Agents, rules, skills, and commands are static Markdown and work natively. The
 |---|---|
 | **97 documented refusals** | Each genius agent's body documents conditions under which it refuses (when to stop, what to cite, when to hand off). Refusal conditions are intent statements, not enforced contracts. |
 | **86 multi-step workflows** | 15 problem-shaped skills route you to the right reasoning procedure; 71 category skills run full pipelines: type one slash command, get a sourced research brief / debugging trace / ADR. Each agent in the chain produces output and declares what it could not verify. |
-| **Commit-time gates** | `pre-commit-zetetic.sh` blocks commits with `UNSOURCED` keywords (always/never/obviously) at any profile. `MAGIC_NUMBER` floats (3+ decimals without `source:`) and `TODO_NO_REF` warn at default profile, block under `ZETETIC_PROFILE=strict`. Active only when `git commit` is invoked through Claude Code's hook system. |
+| **Commit-time gates** | `pre-commit-zetetic.sh` blocks commits with `UNSOURCED` keywords (always/never/obviously) at any profile. `MAGIC_NUMBER` floats (3+ decimals without `source:`) and `TODO_NO_REF` warn at default profile, block under `ZETETIC_PROFILE=strict`. Structural and prose checks read the frozen index blobs, so an unstaged clean copy cannot hide a staged violation. Active when `git commit` or `git push` is issued through Claude Code's or Codex's hook system. |
+| **Fail-before gate** | `tools/fail-before-checker.sh` copies the test files a diff changes over a throwaway checkout of the base and runs the tests the diff added there. A new test that passes against the old code is `VACUOUS` (warning by default, blocking under strict); a run that reaches no verdict is `INCONCLUSIVE`, never a pass. Runs at push. Rationale and limits: [`plugins/zetetic-gates/docs/fail-before.md`](plugins/zetetic-gates/docs/fail-before.md). |
+| **Prose gates** | `tools/redaction-checker.sh` scans returned messages, outbound publications and staged reader-facing Markdown for the AI-writing patterns listed in [`skills/writing/redaction.md`](skills/writing/redaction.md) and asks for a rewrite. A mechanical scan does not judge prose quality; it names candidates. |
 | **Craftsmanship gate** | `tools/craftsmanship-checker.sh` mechanically enforces `coding-standards.md` §4 size limits + select structural rules. `FILE_TOO_LONG` (>500 lines) blocks; function/class/parameter/nesting block for recognized languages; grab-bag module names and layer-direction advise. Every threshold and per-rule severity (`block`/`advise`/`off`) is tunable per-repo via `.craftsmanship.conf`; defaults are the sourced §4 numbers. Runs at commit (local hook, changed files) and in CI (hard on newly-added files, informational full-tree sweep). Judgment rules (SRP/OCP/LSP/ISP, rule-of-three) are deliberately **not** mechanized, because a hook that fakes a verdict it can't reach just trains you to ignore it. |
 | **650+ problem-shape triggers** | [`agents/genius/INDEX.md`](agents/genius/INDEX.md) maps natural-language problem descriptions to reasoning methods. <!-- source: 759 table content rows (grep -cE '^\|' agents/genius/INDEX.md = 843, minus 84 separator rows), counted 2026-06-23; "650+" is a conservative floor. --> |
 
@@ -260,6 +270,22 @@ The acceptance gate is independently unit-tested (`tools/tests/acceptance-gate/`
 
 ---
 
+## Goal-driven iteration: a contract both hosts read
+
+Claude Code and Codex each have a native `/goal` that keeps a session working until a sentence holds, and a native plan mode. Neither carries acceptance commands, non-goals or a budget, and neither survives a change of host. The `zetetic-loop` package puts that contract in a file, `.zetetic/goals/<slug>.md`, and drives it with five portable skills:
+
+| Skill | Does |
+|---|---|
+| `goal` | compiles the request: one end state, non-goals, criteria as commands with an expected exit code, budget; mirrors the end state into the host's native `/goal` |
+| `plan` | ordered steps with a check each, verified against the criteria before any code |
+| `verify-goal` | runs every criterion as a real process and ledgers command, exit code and output per criterion |
+| `refine-goal` | turns the ledger into the next backlog, tightens criteria that passed by accident, records the lesson; never widens the end state |
+| `advisor-model` | consults a separate model at a decision point while the executor keeps ownership |
+
+On Claude Code, `/zetetic:goal-loop <slug>` runs one tick of the cycle; the native `/goal` evaluator decides from the `verify-goal` summary printed to the transcript, because that evaluator reads only the conversation. `/zetetic:engineering-loop` is the code-touching counterpart: recall, refine, implement, verify, benchmark, review, remember, designed to run under `/loop`.
+
+---
+
 ## The Zetetic Standard
 
 Every agent, skill, and hook inherits the same epistemic gates. Not optional.
@@ -290,7 +316,7 @@ The rules:
 The same standard applied to itself. Honest limits:
 
 1. **Citation presence ≠ citation validity.** `// source: Knuth 1998` satisfies the checker whether or not Knuth 1998 exists or supports the constant. The hook enforces that a citation IS THERE, not that it's true.
-2. **Hooks fire only inside Claude Code's invocation path.** Direct terminal commits, CI scripts, and other editors bypass the gates. A developer who works outside Claude Code is unaffected.
+2. **Hooks fire only inside a host's invocation path.** Claude Code and Codex (after `/hooks` trust) run the gates on the commands the agent issues. Direct terminal commits, CI scripts, opaque shell scripts and other editors bypass them; native Git hooks are the enforcement independent of the assistant.
 3. **Refusal conditions are intent, not contract.** Each genius agent documents conditions under which it should refuse; these are prompt-level guidance, not runtime guarantees. An agent can name a blind spot in its own description and exhibit it anyway.
 4. **The checker has a narrow scope.** It flags absolute-claim keywords in comments, floats with 3+ decimals lacking `source:` annotations, and TODOs without issue references. It does **not** check code correctness, architectural soundness, or whether the reasoning in agent output is logically valid.
 5. **Integer constants are not flagged by design.** `batch_size=128`, `timeout=30`, `max_retries=3` pass unchecked, because there would be too many false positives. Only floating-point constants with 3+ significant digits are gated.
@@ -321,12 +347,12 @@ How it's wired: the [`web-to-semantic`](skills/research/web-to-semantic.md) and 
 
 ## A visible, enforced context budget
 
-Every agent here follows a per-model **token-budget protocol** (`agents/orchestrator.md` → `<token-budget>`): checkpoint at ~180K tokens (Opus 4.8 / Sonnet 4.6) or ~120K (Haiku 4.5), with a 200K session soft cap. Left to prose, that protocol is easy to ignore. This plugin ships it as a **status line you can see** and a **hook that enforces it**, both from the companion [**session-optimizer**](https://github.com/cdeust/session-optimizer) repo (MIT).
+Every agent here follows a per-model **token-budget protocol** (`agents/orchestrator.md` → `<token-budget>`): on Fable 5 a 160K session budget with a checkpoint at ~120K; on Opus and Sonnet a 200K budget with a checkpoint at ~180K. The authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard and the status line. Left to prose, that protocol is easy to ignore. This plugin ships it as a **status line you can see** and a **hook that enforces it**, both from the companion [**session-optimizer**](https://github.com/cdeust/session-optimizer) repo (MIT).
 
 - **`statusline-command.sh`**: a persistent two-line status bar. The context progress bar, percentage, and token count are colored **green → yellow → red** on the exact per-model threshold above, with a `⚠ save+recall` marker once you cross 200K. It also shows model, effort, git branch + dirty flag, worktree, PR badge, session cost, duration, and 5h/7d rate-limit usage, so the cost of *not* checkpointing is always on screen.
-- **`hooks/stop-context-guard.py`** ([included here](hooks/stop-context-guard.py), registered as a `Stop` hook), reads the live token usage from the transcript and acts when you cross the line: at the checkpoint threshold it captures mechanical state (branch, last commit, modified files) **for free**, with no model tokens spent; at the 200K soft cap it blocks the stop **exactly once** and injects the checkpoint procedure, so the agent persists a scoped `memory-tool.sh` checkpoint and tells you to `/clear` and resume via `cortex:recall`. Loop-safe and non-fatal by construction.
+- **`hooks/stop-context-guard.py`** ([included here](hooks/stop-context-guard.py) for reference; the `Stop` registration lives in the companion `context-guard` plugin, because registering it in both fired the checkpoint twice per crossing), reads the live token usage from the transcript and acts when you cross the line: at the checkpoint threshold it captures mechanical state (branch, last commit, modified files) **for free**, with no model tokens spent; at the 200K soft cap it blocks the stop **exactly once** and injects the checkpoint procedure, so the agent persists a scoped `memory-tool.sh` checkpoint and tells you to `/clear` and resume via `cortex:recall`. Loop-safe and non-fatal by construction.
 
-Together they close the four failure modes of a long session: **context poisoning** (stale accumulation stops growing), **session poisoning** (a clean reset boundary is forced), **quota poisoning** (the 5h/7d budget isn't burned on oversized turns), and **runaway cost** (the largest-context turns are the most expensive). Install both from [session-optimizer](https://github.com/cdeust/session-optimizer); the `Stop` hook is wired into this plugin's [`hooks/hooks.json`](hooks/hooks.json) out of the box.
+Together they close the four failure modes of a long session: **context poisoning** (stale accumulation stops growing), **session poisoning** (a clean reset boundary is forced), **quota poisoning** (the 5h/7d budget isn't burned on oversized turns), and **runaway cost** (the largest-context turns are the most expensive). Install both from [session-optimizer](https://github.com/cdeust/session-optimizer). This plugin's [`hooks/hooks.json`](hooks/hooks.json) deliberately does not register the guard a second time.
 
 ---
 
@@ -373,6 +399,8 @@ A team that never writes the file gets the strict defaults; a team that disagree
 - [`docs/MEMORY-MCP.md`](docs/MEMORY-MCP.md): memory tool architecture + MCP server
 - [`docs/AGENT-INTERNALS.md`](docs/AGENT-INTERNALS.md): agent file shape, frontmatter, routing
 - [`docs/COUNTING.md`](docs/COUNTING.md): how every number this project states about itself is defined and measured
+- [`docs/shared-host-gates.md`](docs/shared-host-gates.md): how one gate runtime serves Claude Code and Codex, and what it does not prove
+- [`plugins/zetetic-gates/docs/fail-before.md`](plugins/zetetic-gates/docs/fail-before.md): the fail-before gate, its verdicts and limits
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): what the project intends to do, and not do, over the next 12 months
 - [`GOVERNANCE.md`](GOVERNANCE.md): who decides, what a change needs to land, and what happens if the maintainer stops
 - [`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md): threat model, trust boundaries, and the security argument with its limits
