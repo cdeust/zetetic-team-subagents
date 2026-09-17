@@ -15,8 +15,10 @@ Find your row. The right tool is in the row, not the column.
 | *"I want a collaborator that proposes targeted edits to my files while I supervise."* | **[Aider](https://aider.chat/)** | Pair-programming via diff loops. Proposal → review → apply. |
 | *"I want suggestions appearing inline as I type, aware of my open files."* | **[Cursor](https://cursor.sh/)** agents | Editor-ambient, latency-sensitive completion. |
 | *"I want to ask questions about my codebase and get answers with file citations."* | **[Continue.dev](https://continue.dev/)** | Chat-driven retrieval over a local corpus. |
-| *"I want to give a goal and have the tool figure out and execute the steps."* | **[Cline](https://github.com/cline/cline)**, vanilla **[Claude Code](https://claude.ai/code)** | Autonomous goal decomposition + subprocess orchestration. |
+| *"I want to give a goal and have the tool figure out and execute the steps."* | **[Cline](https://github.com/cline/cline)**, vanilla **[Claude Code](https://claude.ai/code)**, **[Codex](https://developers.openai.com/codex)** | Autonomous goal decomposition + subprocess orchestration. Both hosts ship a native `/goal`; it holds a sentence, not a contract. |
 | *"I want claims traced to sources, refusal conditions documented, magic numbers blocked at commit-time."* | **zetetic-team-subagents** (this repo) | Epistemic enforcement + reasoning-procedure injection. |
+| *"I want a goal with executable acceptance criteria, a plan verified against them, and each iteration refined from real check output, on whichever host I use."* | **zetetic-loop** (portable package in this repo) | The goal file is the contract; the host's native `/goal` mirrors its end state. |
+| *"I use Codex or Gemini CLI and want the same source discipline without the Claude agent roster."* | **zetetic-reasoning**, **zetetic-design**, **zetetic-gates** (portable packages in this repo) | Skills as plain `SKILL.md` directories; the gates as one dispatcher both coding hosts run. |
 
 If your question matches more than one row, you probably want more than one tool. Most of these compose; they're not in zero-sum competition.
 
@@ -101,10 +103,12 @@ These tools are not mutually exclusive. The realistic stack often combines:
 |---|---|
 | Cursor + zetetic hooks | Inline completion in the editor; commits gated by zetetic-checker |
 | Aider + zetetic agents | Aider applies diffs; before commit, zetetic agents verify the change matches a refusal-condition policy |
-| Claude Code + zetetic | Vanilla Claude Code provides subagent orchestration; zetetic provides 118 agent definitions (in zetetic's "agent-as-reasoning-pattern" sense: see disambiguation card above) plus the commit-time gate layer |
+| Claude Code + zetetic | Vanilla Claude Code provides subagent orchestration; zetetic provides 120 agent definitions (in zetetic's "agent-as-reasoning-pattern" sense: see disambiguation card above) plus the commit-time gate layer |
+| Codex + zetetic | Codex provides the session and its native `/goal`; zetetic provides the portable skills (`$evidence-synthesis`, `$design`, `$goal`, `$plan`, `$verify-goal`, `$refine-goal`, `$advisor-model`) and the same gates, translated from `apply_patch` payloads, once the hooks are trusted through `/hooks` |
+| Gemini CLI + zetetic | Gemini CLI loads the portable skills as extensions; no gates run there |
 | Continue + zetetic | Continue does codebase Q&A; zetetic agents handle the reasoning when an answer requires multi-step methodology |
 
-Zetetic is built ON TOP OF Claude Code, not as an alternative. If you don't use Claude Code, zetetic doesn't run for you. The [`zetetic-checker`](../tools/zetetic-checker.sh) is one piece that runs anywhere as a standalone bash script, installable as a git pre-commit hook regardless of which AI assistant you use, but it only checks the source-citation rules (UNSOURCED keywords, MAGIC_NUMBER floats, TODO_NO_REF), not the agent reasoning layer.
+Zetetic is built ON TOP OF a coding host, not as an alternative to one. The full distribution (120 agents, lifecycle hooks, research and memory tooling) runs only in Claude Code. The portable packages run in Codex and Gemini CLI, and the gates run in Claude Code and Codex from one dispatcher ([`docs/shared-host-gates.md`](shared-host-gates.md)). The checkers themselves ([`zetetic-checker`](../tools/zetetic-checker.sh), [`craftsmanship-checker`](../tools/craftsmanship-checker.sh), [`fail-before-checker`](../plugins/zetetic-gates/tools/fail-before-checker.sh), [`redaction-checker`](../tools/redaction-checker.sh)) run anywhere as standalone bash scripts, installable as native git hooks regardless of which AI assistant you use; they check what they name (sourced constants, size limits, vacuous tests, prose patterns), not the agent reasoning layer.
 
 ---
 
@@ -112,9 +116,9 @@ Zetetic is built ON TOP OF Claude Code, not as an alternative. If you don't use 
 
 To prevent the inverse category errors:
 
-- **Not an autonomous agent framework.** Cline / AutoGPT / CrewAI are autonomous executors. Zetetic is a methodology + enforcement layer for HUMAN-supervised AI sessions.
-- **Not a chat UI.** Claude Code, Cursor, Continue and ChatGPT are interfaces. Zetetic is what runs THROUGH the interface when you use Claude Code.
-- **Not a model.** GPT-5, Claude and Llama are models. Zetetic provides reasoning-procedure prompts and hooks that work with any model that Claude Code supports (Opus, Sonnet, Haiku).
+- **Not an autonomous agent framework.** Cline / AutoGPT / CrewAI are autonomous executors. Zetetic is a methodology + enforcement layer for HUMAN-supervised AI sessions. Its goal loop and autonomous build loop draft and converge a candidate under external checks; a human or CI certifies it, and neither loop merges to `main` or grades its own output.
+- **Not a chat UI.** Claude Code, Codex, Cursor, Continue and ChatGPT are interfaces. Zetetic is what runs THROUGH the interface when you use Claude Code or Codex.
+- **Not a model.** GPT-5, Claude and Llama are models. Zetetic provides reasoning-procedure prompts and hooks that work with any model the host supports.
 - **Not a benchmark suite.** No metric here proves zetetic outperforms a baseline. The system's value is procedural and qualitative: sourced commits, documented refusals, structural-cause ADRs. You measure it by reading what it produces, not by a leaderboard.
 
 ---
@@ -125,7 +129,7 @@ Honest answer to the inverse question:
 
 - **Greenfield prototypes where speed > rigor.** The hooks add friction by design. If you're sprinting through a hackathon prototype, the friction is wrong-shaped.
 - **Personal scripts where source-citing every constant is overhead.** `permissive` profile exists for this case, but if every commit you make is a personal script, the system isn't earning its setup cost.
-- **Outside Claude Code.** The orchestration depends on Claude Code's hook system. The standalone pieces ([`zetetic-checker`](../tools/zetetic-checker.sh), the pre-commit hook, the agents as raw markdown) work elsewhere, but the integrated experience is Claude Code-specific.
+- **Outside Claude Code and Codex.** The agent orchestration depends on Claude Code's subagent and hook system; the gates depend on either host's hooks. Elsewhere you get the portable skills (Gemini CLI), the checkers as native git hooks, and the agents as raw markdown, but not the integrated experience.
 
 If your situation matches any of these, use the tool whose question matches your situation. We're not in your way.
 
@@ -135,4 +139,4 @@ If your situation matches any of these, use the tool whose question matches your
 
 **Read your row in the question table at the top.** Pick the tool that answers your actual question. If you also need claim-to-source traceability and commit-time epistemic enforcement, add zetetic to whatever else you use.
 
-The four pillars (logical / critical / rational / essential) are the **lens** zetetic adds within its specific game (epistemic enforcement on reasoning-procedure agents in Claude Code), not a competitor's product spec. You can apply them as a discipline to any AI workflow without zetetic: zetetic's distinction is that it ships them as a commit-time gate within its game, not that other tools fail to support them within theirs.
+The four pillars (logical / critical / rational / essential) are the **lens** zetetic adds within its specific game (epistemic enforcement on reasoning-procedure agents and on the commands a coding host issues), not a competitor's product spec. You can apply them as a discipline to any AI workflow without zetetic: zetetic's distinction is that it ships them as a commit-time gate within its game, not that other tools fail to support them within theirs.
