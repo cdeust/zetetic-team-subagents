@@ -34,6 +34,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   contract: end state, non-goals, criteria as commands with expected results,
   budget, iteration ledger. The native goal command receives a one-line mirror (#141).
 
+- Shared Claude Code and Codex gates in both plugin packages: host event
+  adaptation, source and craftsmanship validation, indexed-content checks,
+  blocking prose checks and common policy loading. Hook trust stays under
+  Codex control (#139).
+
 - **zetetic-gates 1.1.0: a fail-before gate (#140).** `rules/coding-standards.md` §12
   states that coverage proves code ran, not that a test would fail if the code
   were wrong; until now only a reviewer's diligence enforced it, and a reviewer
@@ -59,6 +64,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   before the next plan is refused (#141).
 - The agent-ID test cleanup skips empty target paths; an empty target made the
   trap sweep every real linked worktree of the repository (same fix as #139) (#141).
+- Shared gates preserve the declared source profile and Git verb, allow
+  repository selectors on non-commit/push commands, and tolerate malformed
+  shell quoting after tool execution. Tool matchers retain secret coverage;
+  unchanged Claude hooks retain their timeouts. Checker-error and prose
+  blocking policies are documented (#139).
 
 - Empty-file TAP wrappers are recognized using canonical absolute paths as well
   as relative paths. Node 20 otherwise reported an empty JavaScript file as a

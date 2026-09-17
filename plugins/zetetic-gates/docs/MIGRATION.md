@@ -1,6 +1,6 @@
 # Migration — adopting the gates in an existing (non-compliant) project
 
-The gates' defaults assume a greenfield project. For an existing codebase with historical magic constants, TODOs without trackers, and "always" / "never" comments, blocking on every commit would be painful. Use the transition profile.
+The shared host entry point defaults to `strict`; a repository `.zetetic.conf` can select a transition profile. For an existing codebase with historical magic constants, TODOs without trackers, and "always" / "never" comments, blocking on every commit would be painful. Use the transition profile.
 
 ## Step 1 — Scan once to measure the backlog
 
@@ -8,7 +8,7 @@ The gates' defaults assume a greenfield project. For an existing codebase with h
 bash tools/zetetic-checker.sh --full
 ```
 
-(Paths are relative to the installed plugin root; from a marketplace install that is `~/.claude/plugins/zetetic-gates/`.)
+Paths are relative to the installed plugin root. Locate that root in your host plugin manager; cache paths differ between Claude Code and Codex.
 
 Count the findings:
 
@@ -24,7 +24,7 @@ Count the findings:
 ZETETIC_PROFILE=permissive
 ```
 
-Permissive mode reports findings but never blocks. Commits go through. Keep the instrument visible while paying down the backlog.
+Permissive mode makes the sourcing checker advisory. Secret, deletion, craftsmanship and prose checks keep their own enforcement settings. Keep the source findings visible while paying down the backlog.
 
 ## Step 3 — Burn down existing violations
 

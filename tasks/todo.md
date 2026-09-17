@@ -42,3 +42,7 @@ Identity decision: Sol, Terra, and Luna are distinct model IDs/tiers inside the
 single GPT-5.6 family. Sol supplies the cross-family comparison; the requested
 Terra and Luna runs add within-family, cross-model robustness. All three must be
 reported, without miscounting them as three independent families.
+
+## Shared Claude Code / Codex gates
+
+See [implementation and validation](shared-host-gates.md). Native hook trust remains an owner action.

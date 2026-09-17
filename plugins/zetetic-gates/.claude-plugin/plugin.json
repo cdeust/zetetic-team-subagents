@@ -1,6 +1,6 @@
 {
   "name": "zetetic-gates",
-  "description": "Commits with unsourced constants get BLOCKED. Four mechanical gates, zero agents: a zetetic checker (absolute claims and 3+ decimal constants need a source: annotation), a craftsmanship checker (coding-standards size limits, tunable via .craftsmanship.conf), a fail-before checker (a new test must fail against the old code before it is pushed), and a secret-shield that stops credential-file reads. Installs in 30 seconds.",
+  "description": "Shared source, craftsmanship, secret, prose and fail-before checks for Claude Code and Codex.",
   "version": "1.1.0",
   "author": {
     "name": "Clement Deust",
@@ -19,40 +19,5 @@
     "claude-code",
     "test-adequacy"
   ],
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Read|Bash|Grep|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "when": "command contains 'git commit'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh\"",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "when": "command contains 'git push'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-fail-before.sh\"",
-            "timeout": 150
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": "./hooks/gates.json"
 }

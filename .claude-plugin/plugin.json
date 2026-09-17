@@ -50,27 +50,6 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash|Grep|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-secret-shield.py\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "when": "command contains 'git commit'",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "when": "command contains 'git push'",
         "hooks": [
@@ -93,34 +72,13 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-deletion-gate.py\"",
-            "timeout": 5
-          }
-        ]
+        ],
+        "matcher": "Bash|Read|Grep|Edit|Write|NotebookEdit|exec_command|shell_command|apply_patch|mcp__.*"
       }
     ],
     "PostToolUse": [
@@ -167,14 +125,13 @@
         ]
       },
       {
-        "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-deletion-gate.py\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
-        ]
+        ],
+        "matcher": "Bash|Edit|Write|exec_command|shell_command|apply_patch"
       }
     ],
     "PostToolUseFailure": [
@@ -204,6 +161,14 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
@@ -242,6 +207,24 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-memory-drain.sh\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/zetetic-gates.py\""
           }
         ]
       }
