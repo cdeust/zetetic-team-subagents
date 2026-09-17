@@ -109,15 +109,17 @@ These aren't prompts dressed up as commands. Each is a **multi-step pipeline** t
 
 ### Portable skills for Codex and Gemini CLI
 
-Individual skills can be packaged in isolation, without the agent roster,
-lifecycle hooks, or mechanical gates. Three packages ship this way today:
+Individual skills can be packaged in isolation, without the agent roster or
+lifecycle hooks. Three skill packages ship this way today:
 [`zetetic-reasoning`](plugins/zetetic-reasoning/README.md) (one
 evidence-synthesis skill and eight sourced reasoning references),
 [`zetetic-design`](plugins/zetetic-design/README.md) (one self-contained
 UX/UI design and WCAG 2.2 AA accessibility-audit skill) and
 [`zetetic-loop`](plugins/zetetic-loop/README.md) (five skills, goal, plan,
 verify-goal, refine-goal and advisor-model, that drive goal-driven iteration from a goal
-file both hosts read). All packages are
+file both hosts read). The mechanical gates ship separately as
+[`zetetic-gates`](plugins/zetetic-gates/README.md), installable on both hosts
+(see below). All skill packages are
 generated and drift-checked from the same mechanism
 (`tools/sync-portable-references.py`), driven by a `portable:` frontmatter
 block on each skill's canonical source.
@@ -128,6 +130,7 @@ codex plugin marketplace add cdeust/zetetic-team-subagents
 codex plugin add zetetic-reasoning@zetetic-marketplace
 codex plugin add zetetic-design@zetetic-marketplace
 codex plugin add zetetic-loop@zetetic-marketplace
+codex plugin add zetetic-gates@zetetic-marketplace
 
 # Gemini CLI
 gemini skills install https://github.com/cdeust/zetetic-team-subagents.git \
@@ -147,7 +150,7 @@ claude plugin install zetetic-team-subagents
 
 That's the whole install. The plugin's installer copies agents, skills, hooks, and tools into `~/.claude/` and keeps its own state (install manifest, version, model overrides, sweep audit log, dev-symlink map) under `~/.claude/zetetic/`; it prints that layout when it finishes. Manual install + advanced config: [`docs/INSTALL.md`](docs/INSTALL.md).
 
-**Just want the enforcement gates, no agents?** Install the micro-plugin instead: `claude plugin install zetetic-gates`, or `codex plugin add zetetic-gates@zetetic-marketplace`. One shared runtime ([`hooks/zetetic-gates.py`](hooks/zetetic-gates.py)) serves both hosts: Claude Edit/Write calls and Codex `apply_patch` payloads are normalised to the same events before the checks run. It carries the source and craftsmanship checkers at commit and push, the fail-before gate at push, the secret shield, the deletion gate and the prose gates. In Codex, review and trust the hooks through `/hooks` after installing; installation alone grants no execution. See [`plugins/zetetic-gates/`](plugins/zetetic-gates/README.md) and [`docs/shared-host-gates.md`](docs/shared-host-gates.md).
+**Just want the enforcement gates, no agents?** Install the micro-plugin instead: `claude plugin install zetetic-gates` on Claude Code, `codex plugin add zetetic-gates@zetetic-marketplace` on Codex. One dispatcher ([`hooks/zetetic-gates.py`](hooks/zetetic-gates.py)) serves both hosts: Claude Edit/Write calls and Codex `apply_patch` payloads are normalised to the same events before the checks run. It carries source discipline and craftsmanship on commit and push, the secret shield on reads, the deletion gate, prose checks on what the assistant returns, and the fail-before gate on push, which runs the tests a diff adds against the old code and names every one that still passes. In Codex, review and trust the hooks through `/hooks` after installing; installation alone grants no execution. See [`plugins/zetetic-gates/`](plugins/zetetic-gates/README.md), [`docs/shared-host-gates.md`](docs/shared-host-gates.md) and [`docs/fail-before.md`](plugins/zetetic-gates/docs/fail-before.md).
 
 The full plugin is also declared for Codex ([`.codex-plugin/plugin.json`](.codex-plugin/plugin.json)): the same shared gates plus the portable reasoning skills. It does not port the Claude agents or the research lifecycle hooks; those stay Claude-native.
 

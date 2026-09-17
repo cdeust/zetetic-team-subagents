@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.42.0]: one set of gates for Claude Code and Codex, a fail-before gate that proves a new test can fail, goal-driven iteration on both hosts
+
 ### Added
 
 - Portable `advisor-model` consultation and `/zetetic:advisor-loop`, composed with
