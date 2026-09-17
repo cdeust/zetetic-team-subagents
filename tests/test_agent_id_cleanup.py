@@ -1,4 +1,14 @@
-"""Regression for the 2026-09-17 EXIT cleanup deleting caller worktrees."""
+"""Regression for the 2026-09-17 EXIT cleanup deleting caller worktrees.
+
+Regression base: 77b4f78 (v2.41.0), whose EXIT trap iterated an empty
+TARGETS array and removed every linked worktree of the current repository.
+Measured with tools/fail-before-checker.sh --base 77b4f78 --files <this file>
+on 2026-09-17: both cases fail there. Against db5f697 (#141, the guarded loop)
+they pass, because that guard and the owned-directory trap of #140 are
+observably equivalent: TARGETS stays empty in the parent shell, so only
+rm -rf "$TMP" ever acts. A VACUOUS finding against a base at or after #141 is
+therefore expected, not a defect of this test.
+"""
 
 import os
 from pathlib import Path
