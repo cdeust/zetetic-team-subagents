@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan"
+  short_description: "Plan an active goal and verify the plan before coding"
+  default_prompt: "Use $plan to plan the active goal and verify the plan against its criteria."

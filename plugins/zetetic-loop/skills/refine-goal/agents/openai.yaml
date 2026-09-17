@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refine Goal"
+  short_description: "Turn a verification ledger into the next iteration"
+  default_prompt: "Use $refine-goal to build the next iteration from the last verification."
