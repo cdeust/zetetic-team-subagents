@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # pre-push-fail-before.sh (zetetic-gates) — run tools/fail-before-checker.sh
-# before a push issued through Claude Code. Rationale: docs/fail-before.md.
+# before a push the shared dispatcher resolved, on either host.
+# Rationale: plugins/zetetic-gates/docs/fail-before.md.
 set -euo pipefail
 
 # Command guard, identical to the sibling pre-commit hook: read the tool

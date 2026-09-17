@@ -35,10 +35,11 @@ def git(path, *args):
     return subprocess.run(['git', *args], cwd=path, check=True, capture_output=True)
 
 
-def invoke(package, consumer, kind, **fields):
+def invoke(package, consumer, kind, extra_env=None, **fields):
     event = dict(hook_event_name=kind, cwd=str(consumer), **fields)
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(('ZETETIC_', 'CLAUDE_', 'REDACTION_'))}
+    env.update(extra_env or {})
     return subprocess.run([sys.executable, str(package / 'hooks/zetetic-gates.py')],
                           input=json.dumps(event), text=True, capture_output=True,
                           cwd=consumer, env=env)
@@ -257,21 +258,16 @@ def pushing_repository(consumer, test_body):
     return {'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH']}
 
 
+@pytest.mark.parametrize('host, field', [('Bash', 'command'), ('exec_command', 'cmd')])
 @pytest.mark.parametrize('body, code, marker', [
     ('def test_truthy():\n    from src.thing import answer\n\n    assert answer()\n', 2, 'VACUOUS'),
     ('def test_is_42():\n    from src.thing import answer\n\n    assert answer() == 42\n', 0, ''),
 ])
-def test_push_runs_fail_before_gate(package, consumer, body, code, marker):
+def test_push_runs_fail_before_gate(package, consumer, host, field, body, code, marker):
     extra_env = pushing_repository(consumer, body)
-    event = dict(hook_event_name='PreToolUse', cwd=str(consumer), tool_name='Bash',
-                 tool_input={'command': 'git push'})
-    env = {k: v for k, v in os.environ.items()
-           if not k.startswith(('ZETETIC_', 'CLAUDE_', 'REDACTION_'))}
-    env.update(extra_env)
-    result = subprocess.run([sys.executable, str(package / 'hooks/zetetic-gates.py')],
-                            input=json.dumps(event), text=True, capture_output=True,
-                            cwd=consumer, env=env)
+    result = invoke(package, consumer, 'PreToolUse', extra_env, tool_name=host,
+                    tool_input={field: 'git push'})
     assert result.returncode == code, result.stdout + result.stderr
     # A test that fails on the old tree is the quiet path: nothing relayed.
-    assert marker in result.stderr, result.stdout + result.stderr
     assert ('VACUOUS' in result.stderr) == bool(marker), result.stderr
+    assert result.stderr.count('BLOCKED') == (1 if marker else 0), result.stderr

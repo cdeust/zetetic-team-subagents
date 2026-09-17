@@ -54,9 +54,10 @@ changed test files are copied over a throwaway checkout of the base and run
 there. A new pytest node that passes against the old code is reported
 `VACUOUS`, a warning under the standard profile and blocking under
 `ZETETIC_PROFILE=strict`. A run that reaches no verdict is `INCONCLUSIVE`,
-never a pass. `hooks/pre-push-fail-before.sh` runs it when Claude Code issues
-`git push`. Rationale and limits: [docs/fail-before.md](docs/fail-before.md).
+never a pass. The shared dispatcher runs `hooks/pre-push-fail-before.sh` on every
+`git push` issued through Claude Code or Codex. Rationale and limits:
+[docs/fail-before.md](docs/fail-before.md).
 
-Outside Claude Code the same gate runs from a plain git hook:
+Outside an assistant session, for human pushes, the same gate runs from a plain git hook:
 `printf 'exec plugins/zetetic-gates/tools/fail-before-checker.sh\n' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push`
 (adjust the path to where the plugin is checked out).

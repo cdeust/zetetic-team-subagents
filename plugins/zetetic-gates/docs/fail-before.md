@@ -63,7 +63,9 @@ ZETETIC_FAIL_BEFORE_TIMEOUT=120
 ```
 
 The default budget is an operational policy of 120 seconds per file run.
-The hook has a separate 150-second host limit in the plugin manifest. These
+The shared PreToolUse entry in `hooks/gates.json` carries a 150-second host
+limit, and a hook the host kills does not block, so a run past it is absent
+rather than failed. These
 limits do not establish a measured execution-time guarantee. The value must be a
 whole number of seconds; anything else is a usage error (exit 2). The budget
 is enforced through `timeout` or `gtimeout`; macOS ships neither, so without
