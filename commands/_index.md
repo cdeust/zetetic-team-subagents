@@ -1,6 +1,6 @@
 # Commands Index
 
-17 commands across 6 categories. Commands are operational shortcuts that invoke tools, skills, and agents.
+18 commands across 6 categories. Commands are operational shortcuts that invoke tools, skills, and agents.
 
 ## Quick Reference
 
@@ -8,6 +8,7 @@
 |---------|----------|-------------|
 | `/zetetic:engineering-loop` | zetetic | **Mandatory** loop for any code-touching request: recall → refine → implement → verify → benchmark → review → remember. Runs under `/loop`. |
 | `/zetetic:goal-loop` | zetetic | One tick of the goal cycle (goal → plan → step → verify-goal → refine-goal) driven by the native `/goal` or `/loop`; skills are portable to Codex and Gemini CLI. |
+| `/zetetic:advisor-loop` | zetetic | Consult the portable advisor-model skill at one selected plan, fork, or completion decision. |
 | `/agent-list` | agent | List agents by type, shape, or keyword |
 | `/agent-spawn` | agent | Spawn an agent in an isolated worktree |
 | `/agent-status` | agent | Check active agent worktrees |

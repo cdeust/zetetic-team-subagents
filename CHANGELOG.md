@@ -22,6 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Portable `advisor-model` consultation and `/zetetic:advisor-loop`, composed with
+  goal iteration while retaining executor ownership. Advisor records survive
+  resume and share the goal budget. Accepted criterion proposals verify the old
+  contract before refinement; a required declined advisor blocks execution (#142).
+
 - Goal-driven iteration as four portable skills (`goal`, `plan`, `verify-goal`,
   `refine-goal`) packaged in `plugins/zetetic-loop` for Codex and Gemini CLI, and
   the `/zetetic:goal-loop` command that runs one tick of the cycle under the

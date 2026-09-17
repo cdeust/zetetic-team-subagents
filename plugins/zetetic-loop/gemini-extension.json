@@ -1,5 +1,5 @@
 {
   "name": "zetetic-loop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Goal-driven iteration for any host: compile a goal contract with executable acceptance checks, plan against it, verify with real commands, and refine the next iteration from the evidence."
 }

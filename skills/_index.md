@@ -1,6 +1,6 @@
 # Skills Index
 
-This index covers 85 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 70 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
+This index covers 86 skills: 15 problem-shaped entry points (`<name>/SKILL.md`) plus 71 category skills. Every skill carries the zetetic standard: four pillar gates, sourced evidence, and explicit refusal conditions.
 
 ## Problem-shaped entry points (start here)
 
@@ -57,6 +57,7 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 | `/plan` | loop | architect, engineer | Plan an active goal and verify the plan against its criteria (portable) |
 | `/verify-goal` | loop | test-engineer | Run every acceptance check of a goal and ledger the evidence (portable) |
 | `/refine-goal` | loop | code-reviewer | Turn a verification ledger into the next iteration's backlog (portable) |
+| `/advisor-model` | loop | advisor | Consult a separate model at a selected plan, fork, or completion decision (portable) |
 | `/literature-review` | research | research-scientist | Systematic search: find papers, read them, assess applicability |
 | `/explain` | research | professor, feynman | Multi-level explanation with understanding-gap diagnostic |
 | `/write-paper` | research | paper-writer, latex-engineer | Paper draft with claim-evidence chains and difficulty-book limitations |
@@ -86,7 +87,7 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 
 ### Loop (goal-driven iteration)
 
-4 skills, packaged as `plugins/zetetic-loop` for Codex and Gemini CLI: goal, plan, verify-goal, refine-goal. Driven on Claude Code by `/zetetic:goal-loop` under the native `/goal` or `/loop`.
+5 skills, packaged as `plugins/zetetic-loop` for Codex and Gemini CLI: goal, plan, verify-goal, refine-goal, advisor-model. Driven on Claude Code by `/zetetic:goal-loop` under the native `/goal` or `/loop`.
 
 ### Design (UX/UI)
 1 skill — design (UX audit, WCAG 2.2 AA compliance, heuristic evaluation).
