@@ -1,6 +1,6 @@
 {
   "name": "zetetic-team-subagents",
-  "version": "2.41.0",
+  "version": "2.42.0",
   "description": "Shared source, craftsmanship, secret and prose checks for Claude Code and Codex.",
   "hooks": "./hooks/gates.json",
   "author": {
