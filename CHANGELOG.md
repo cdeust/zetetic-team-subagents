@@ -20,6 +20,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `.mcp.json` launched `tools/memory-mcp-server.py` with a path relative to the
+  session's cwd, so the memory MCP server failed to connect whenever the
+  session's working directory wasn't the plugin root. It now resolves via
+  `${CLAUDE_PLUGIN_ROOT}`, matching the convention every hook in this repo
+  already uses (fixes #149, #150).
+
 ## [2.42.0]: one set of gates for Claude Code and Codex, a fail-before gate that proves a new test can fail, goal-driven iteration on both hosts
 
 ### Added
