@@ -1,7 +1,7 @@
 {
   "name": "zetetic-gates",
   "description": "Shared source, craftsmanship, secret, prose and fail-before checks for Claude Code and Codex.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"

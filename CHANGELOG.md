@@ -18,6 +18,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 > the tree passes the new BOLD_LABEL detector (`skills/writing/redaction.md`
 > §15/§16). Wording, claims, counts, dates and references are unchanged.
 
+## [2.42.1] : binary asset changes in the deletion gate (#151)
+
+- The deletion gate now checks each path's supported language before reading its
+  contents as text. Adding, replacing, renaming or deleting PNG assets no longer
+  crashes the hook with `UnicodeDecodeError`. Source deletions and renames across
+  supported/unsupported extensions still receive the existing definition checks.
+- The standalone `zetetic-gates` package is synchronized and bumped to 1.1.1;
+  Claude, Codex and marketplace versions are updated together.
+
 ## [Unreleased]
 
 ### Fixed

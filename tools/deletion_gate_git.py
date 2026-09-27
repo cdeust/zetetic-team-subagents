@@ -145,8 +145,11 @@ def collect_definitions(repo: str, base: str, head: str, mode: str | None = None
         # side, which is already correct because pre_text is None for "A".
         lang_old = detect_lang(old_path)
         lang_new = detect_lang(new_path)
-        pre_text = show_file(repo, base, old_path) if status != "A" else None
-        post_text = None if status == "D" else post_content(repo, head, new_path, mode)
+        # The definition gate only parses LANG_REGISTRY languages. Dispatch before
+        # text I/O: PNG/font blobs are not UTF-8. Check each side independently so
+        # a source file renamed to an unsupported extension still removes its defs.
+        pre_text = show_file(repo, base, old_path) if status != "A" and lang_old else None
+        post_text = post_content(repo, head, new_path, mode) if status != "D" and lang_new else None
 
         pre_defs = extract_definitions(pre_text, lang_old) if pre_text and lang_old else {}
         post_defs = extract_definitions(post_text, lang_new) if post_text and lang_new else {}
