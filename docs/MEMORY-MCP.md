@@ -29,7 +29,7 @@ The repo's `.mcp.json` registers the server automatically:
   "mcpServers": {
     "memory": {
       "command": "python3",
-      "args": ["tools/memory-mcp-server.py"],
+      "args": ["${CLAUDE_PLUGIN_ROOT}/tools/memory-mcp-server.py"],
       "env": {
         "MEMORY_AGENT_ID": "${MEMORY_AGENT_ID:-unknown}"
       }
