@@ -86,7 +86,7 @@ jobs:
       # close, so installing the pinning tool that way would mint a second
       # alert in the commit that closes the first.
       - name: Install uv (pinned)
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       # requirements-dev.txt stopped being what gets installed the moment the
       # .lock did, so editing it alone would now change nothing and say
