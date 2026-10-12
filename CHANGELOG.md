@@ -29,6 +29,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A reflection step after every subagent, enforced by two hooks (#153).
+  `subagent-stop-reflection` (SubagentStop) records a pending reflection in
+  `<git-common-dir>/zetetic-gates/reflections.jsonl` and retains the run into
+  Hindsight when it is configured for the cwd, reporting on stderr and in the
+  ledger row when it is not or the server is down. `stop-reflection-gate`
+  (Stop) blocks the orchestrator while its session has a pending reflection and
+  names the procedure: one Cortex memory tagged `lesson-candidate` with
+  `agent_topic=<agent type>`, then `tools/reflection_ledger.py lift`, which
+  refuses without the Cortex memory id.
+
 ### Fixed
 
 - `.mcp.json` launched `tools/memory-mcp-server.py` with a path relative to the
