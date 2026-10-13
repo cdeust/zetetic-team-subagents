@@ -19,7 +19,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
-import reflection_ledger as ledger  # noqa: E402  (needs tools/ on sys.path, set on the line above)
+ledger = importlib.import_module("reflection_ledger")  # tools/ is on sys.path from the line above
 SESSION = "sess-A"
 
 
