@@ -16,6 +16,7 @@ from reflection_support import (
     stop_event,
     stop_hook,
 )
+import gates_jsonl
 import reflection_ledger as ledger
 
 pytestmark = pytest.mark.usefixtures("no_real_hindsight")
@@ -29,8 +30,8 @@ def _make_ledger_unreadable(reflection_repo: Path) -> None:
 def test_C_an_unreadable_ledger_is_a_ledger_error_naming_the_path(reflection_repo):
     _make_ledger_unreadable(reflection_repo)
     path = ledger.ledger_path(str(reflection_repo))
-    with pytest.raises(ledger.LedgerError, match="cannot read the ledger") as caught:
-        ledger.read_rows(path)
+    with pytest.raises(gates_jsonl.LedgerError, match="cannot read the ledger") as caught:
+        gates_jsonl.read_rows(path)
     assert path in str(caught.value)
 
 

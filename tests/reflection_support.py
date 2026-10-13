@@ -20,6 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 ledger = importlib.import_module("reflection_ledger")  # tools/ is on sys.path from the line above
+gates_jsonl = importlib.import_module("gates_jsonl")
 SESSION = "sess-A"
 
 
@@ -73,15 +74,17 @@ def run_hook(module, payload: dict, monkeypatch, capsys) -> tuple[int, str, str]
 
 
 def raw_rows(repo: Path) -> list[dict]:
-    return ledger.read_rows(ledger.ledger_path(str(repo)))
+    return gates_jsonl.read_rows(ledger.ledger_path(str(repo)))
 
 
 def rows(repo: Path) -> list[dict]:
     """The ledger as a reader sees it: outcome lines merged into their pending row."""
     raw = raw_rows(repo)
     outcomes = {r["hindsight_for"]: r["hindsight"] for r in raw if "hindsight_for" in r}
-    return [{**r, "hindsight": outcomes.get(r.get("agent_id"), r.get("hindsight"))} if "agent_id" in r else r
-            for r in raw if "hindsight_for" not in r]
+    excerpts = {r["excerpt_for"]: r["excerpt"] for r in raw if "excerpt_for" in r}
+    return [{**r, "hindsight": outcomes.get(r.get("agent_id"), r.get("hindsight")),
+             "excerpt": excerpts.get(r.get("agent_id"), r.get("excerpt"))} if "agent_id" in r else r
+            for r in raw if "hindsight_for" not in r and "excerpt_for" not in r]
 
 
 def write_hindsight_config(path: Path, repo: Path, api_url: str, opt_in: list[str] | None = None):

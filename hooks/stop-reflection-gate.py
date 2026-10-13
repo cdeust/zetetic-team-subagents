@@ -95,6 +95,7 @@ def _attribute(reflection_ledger, everything: list, session):
 
 def main() -> int:
     try:
+        import gates_jsonl
         import reflection_ledger
     except ImportError as exc:  # FAILS_ON: tools/ not shipped beside hooks/ (partial install)
         say(f"cannot load tools/reflection_ledger.py, reflections not enforced: {exc}")
@@ -112,11 +113,11 @@ def main() -> int:
     session = session or None
     try:
         path = reflection_ledger.ledger_path(cwd)
-    except reflection_ledger.LedgerError:
+    except gates_jsonl.LedgerError:
         return 0  # not a git repository: no ledger can exist here, nothing is owed
     try:
         everything = reflection_ledger.pending(path)
-    except reflection_ledger.LedgerError as exc:
+    except gates_jsonl.LedgerError as exc:
         say(f"ledger unreadable, reflections NOT enforced: {exc}")
         return 0
     mine, caveats, elsewhere = _attribute(reflection_ledger, everything, session)

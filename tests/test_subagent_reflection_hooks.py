@@ -112,6 +112,49 @@ def test_refiring_for_the_same_agent_does_not_duplicate(reflection_repo, tmp_pat
     assert "already in the ledger" in err
 
 
+def test_a_later_stop_with_a_newer_final_message_updates_the_excerpt(reflection_repo, tmp_path, monkeypatch, capsys):
+    """The cycle gate can block a subagent's first stop; its final stop carries
+    the report the reflection must quote, so the newer excerpt is recorded."""
+    transcript = make_transcript(tmp_path, handback="first report")
+    payload = event(reflection_repo, transcript, agent_id="a1b2c3", agent_type="t")
+    run_hook(start_hook, payload, monkeypatch, capsys)
+    with transcript.open("a", encoding="utf-8") as fh:
+        fh.write(_assistant("m3", {"type": "tool_use", "name": "SubagentHandback",
+                                   "input": {"message": "final report"}}) + "\n")
+    _, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
+    assert "newer final message recorded" in err
+    (row,) = ledger.pending(ledger.ledger_path(str(reflection_repo)))
+    assert row["excerpt"] == "final report"
+    run_hook(start_hook, payload, monkeypatch, capsys)  # same message again: nothing appended
+    assert len([r for r in raw_rows(reflection_repo) if "excerpt_for" in r]) == 1
+
+
+def test_a_tool_internal_run_without_transcript_or_meta_is_reported_not_scheduled(
+        reflection_repo, tmp_path, monkeypatch, capsys):
+    parent = tmp_path / "proj" / f"{SESSION}.jsonl"
+    parent.parent.mkdir(parents=True, exist_ok=True)
+    parent.write_text("", encoding="utf-8")
+    payload = event(reflection_repo, None, agent_id="af011bb9", transcript_path=str(parent),
+                    last_assistant_message="Fetching hooks documentation page")
+    code, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
+    assert code == 0 and "not a delegated agent" in err
+    assert rows(reflection_repo) == []
+
+
+def test_a_typed_subagent_whose_transcript_was_not_located_is_still_scheduled(
+        reflection_repo, tmp_path, monkeypatch, capsys):
+    parent = tmp_path / "proj" / f"{SESSION}.jsonl"
+    parent.parent.mkdir(parents=True, exist_ok=True)
+    parent.write_text("", encoding="utf-8")
+    payload = event(reflection_repo, None, agent_id="b2c3d4e5", agent_type="code-reviewer",
+                    transcript_path=str(parent), last_assistant_message="VERDICT: APPROVE")
+    code, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
+    assert code == 0 and "not a delegated agent" not in err
+    assert "subagent transcript not identified" in err
+    (row,) = rows(reflection_repo)
+    assert row["agent_id"] == "b2c3d4e5" and row["agent_type"] == "code-reviewer"
+
+
 def test_the_ledger_is_owner_only_because_rows_carry_transcript_excerpts(reflection_repo, tmp_path, monkeypatch, capsys):
     transcript = make_transcript(tmp_path)
     run_hook(start_hook, event(reflection_repo, transcript, agent_id="a1b2c3", agent_type="t"), monkeypatch, capsys)
