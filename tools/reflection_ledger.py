@@ -79,11 +79,12 @@ def ledger_path(cwd: str) -> str:
     return os.path.join(base, LEDGER_DIR, LEDGER_NAME)
 
 
-def _parse_row(line: str) -> Optional[Dict]:
-    """The JSON object on this line, or None for a torn or non-object line."""
+def _parse_row(line: bytes) -> Optional[Dict]:
+    """The JSON object on this line, or None for a torn, undecodable or
+    non-object line."""
     try:
-        row = json.loads(line)
-    except ValueError:
+        row = json.loads(line.decode("utf-8"))
+    except ValueError:  # includes UnicodeDecodeError
         return None  # a torn line is skipped, never allowed to hide the rest
     return row if isinstance(row, dict) else None
 
@@ -91,7 +92,7 @@ def _parse_row(line: str) -> Optional[Dict]:
 def read_rows(path: str) -> List[Dict]:
     """Every well-formed JSON object row; an absent file is an empty ledger."""
     try:
-        with open(path, encoding="utf-8") as fh:
+        with open(path, "rb") as fh:
             parsed = [_parse_row(line) for line in fh]
     except FileNotFoundError:
         return []

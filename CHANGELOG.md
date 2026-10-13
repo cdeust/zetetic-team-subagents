@@ -35,7 +35,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   `subagent-stop-reflection` (SubagentStop) records a pending reflection in
   `<git-common-dir>/zetetic-gates/reflections.jsonl` (written before any
   network call) and retains the run into Hindsight when it is configured for
-  the cwd, within a 4 s total deadline, over https or loopback http only,
+  the cwd, within a 4 s total deadline, over https or loopback http only (a redirect is refused, never followed),
   reporting on stderr and in a second ledger line keyed by agent id when it is
   not configured, refused or the server is down. `stop-reflection-gate`
   (Stop) blocks the orchestrator while its session has a pending reflection (a

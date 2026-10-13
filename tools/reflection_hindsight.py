@@ -152,19 +152,36 @@ def _post(url: str, token: str, body: Dict) -> Outcome:
     def work() -> None:
         try:
             box.append((True, _post_blocking(url, token, body)))
-        except BaseException as exc:  # re-raised below in the caller's thread
+        except Exception as exc:  # re-raised below in the caller's thread
             box.append((False, exc))
 
     worker = threading.Thread(target=work, daemon=True)
     worker.start()
     worker.join(HINDSIGHT_DEADLINE_S)
-    if not box:
+    alive = worker.is_alive()  # read before box: a dead worker's box is final
+    if not box and alive:
         return Outcome(ERROR, f"{url} gave no answer within {HINDSIGHT_DEADLINE_S} s "
                               "(the hook budget); the retain was abandoned")
+    if not box:  # a non-Exception (SystemExit, KeyboardInterrupt) ended the worker
+        return Outcome(ERROR, f"{url}: the retain worker died without an outcome")
     done, value = box[0]
     if not done:
         raise value
     return value
+
+
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect: urllib would forward the bearer token to the
+    target (and re-send a 301/302/303 POST as a GET), and the target is a host
+    check_api_url never saw. The redirect surfaces as an HTTPError naming it."""
+
+    def redirect_request(self, req, fp, code, *rest):
+        _msg, headers, newurl = rest  # urllib's fixed override signature
+        raise urllib.error.HTTPError(
+            req.full_url, code, f"redirect to {newurl} refused, nothing forwarded", headers, fp)
+
+
+_OPENER = urllib.request.build_opener(_RefuseRedirects)
 
 
 def _post_blocking(url: str, token: str, body: Dict) -> Outcome:
@@ -174,7 +191,7 @@ def _post_blocking(url: str, token: str, body: Dict) -> Outcome:
     request = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
                                      headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=HINDSIGHT_DEADLINE_S) as resp:
+        with _OPENER.open(request, timeout=HINDSIGHT_DEADLINE_S) as resp:
             return Outcome(RETAINED, f"HTTP {resp.status} from {url}")
     except urllib.error.HTTPError as exc:
         return Outcome(ERROR, f"HTTP {exc.code} from {url}: {exc.reason}")
