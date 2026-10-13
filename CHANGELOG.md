@@ -37,6 +37,18 @@ adheres to [Semantic Versioning](https://semver.org/).
   `${CLAUDE_PLUGIN_ROOT}`, matching the convention every hook in this repo
   already uses (fixes #149, #150).
 
+- The CI check that `requirements-dev.lock` matches `requirements-dev.txt`
+  compiled into an empty file, so it re-resolved every transitive dependency
+  to the newest release on PyPI and failed whenever one of pytest's
+  dependencies published, with no change in this repository: packaging (#96),
+  pygments (#117), and iniconfig 2.3.1, which turned main red at d42543a. The
+  regenerate command it printed could not clear the error, because uv keeps
+  the existing pins of the `-o` file it writes to. The check now copies the
+  committed lock to its output file before compiling, so it fails only when
+  `requirements-dev.txt` asks for something the lock does not hold, and the
+  printed command then fixes it. Transitive pins move only when someone adds
+  `--upgrade` to that command (#154).
+
 ## [2.42.0]: one set of gates for Claude Code and Codex, a fail-before gate that proves a new test can fail, goal-driven iteration on both hosts
 
 ### Added
