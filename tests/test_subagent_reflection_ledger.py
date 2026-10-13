@@ -19,7 +19,6 @@ import gates_jsonl
 import reflection_ledger as ledger
 
 
-
 def _make_ledger_unreadable(reflection_repo: Path) -> None:
     path = Path(ledger.ledger_path(str(reflection_repo)))
     path.mkdir(parents=True)  # a directory where the file should be: IsADirectoryError on open

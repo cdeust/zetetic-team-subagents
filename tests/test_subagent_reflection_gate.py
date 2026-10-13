@@ -18,7 +18,6 @@ from reflection_support import (
 import reflection_ledger as ledger
 
 
-
 def test_stop_blocks_while_pending_and_names_the_procedure(reflection_repo, monkeypatch, capsys, schedule):
     schedule()
     code, out, _ = run_hook(stop_hook, stop_event(reflection_repo), monkeypatch, capsys)

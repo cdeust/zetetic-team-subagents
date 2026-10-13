@@ -22,7 +22,6 @@ import reflection_ledger as ledger
 import reflection_subagent
 
 
-
 def test_payload_with_agent_type_records_pending_row(reflection_repo, tmp_path, monkeypatch, capsys):
     transcript = make_transcript(tmp_path, meta={"agentType": "from-meta", "description": "fix parser"})
     code, _, err = run_hook(start_hook, event(reflection_repo, transcript, agent_id="a1b2c3",
