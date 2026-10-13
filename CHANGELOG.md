@@ -50,6 +50,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   `meta.json`, such as the WebFetch summariser); it says so on stderr. A typed subagent
   whose transcript was not located is still scheduled. (#156)
 
+### Removed
+
+- `subagent-stop-reflection` no longer retains each subagent run into Hindsight:
+  Hindsight was uninstalled on 2026-10-13 because it duplicated Cortex. The hook
+  writes the pending row only, with no `hindsight` field and no second
+  `hindsight_for` line, and prints no Hindsight status. `tools/reflection_hindsight.py`
+  is gone. Ledgers written by 2.43.0 still read correctly: their `hindsight_for`
+  lines carry no `agent_id`, so they are never pending. (#157)
+
 ## [2.43.0]: a reflection after every subagent, the memory MCP server found from any cwd, a lock check upstream releases cannot fail
 
 ### Added

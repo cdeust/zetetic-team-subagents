@@ -12,21 +12,15 @@ On every SubagentStop it
       summariser) is reported on stderr and gets no reflection;
   (b) appends the pending row to the per-repo ledger
       ``<git-common-dir>/zetetic-gates/reflections.jsonl``
-      (tools/reflection_ledger.py) FIRST: it is the enforcement record and must
-      exist before any network call can eat the hook's time budget;
-  (c) retains the run into Hindsight when Hindsight is configured for the cwd
-      (tools/reflection_hindsight.py, bounded by HINDSIGHT_DEADLINE_S), tagged
-      agent_type:<type> and source:subagent, then appends the outcome as a
-      second ledger line keyed by agent_id (the reader merges it in).
+      (tools/reflection_ledger.py): it is the enforcement record.
 
-No silent fallback: every outcome, including "Hindsight not configured" and
-"Hindsight server down", is written to stderr AND into the ledger row. The hook
-always exits 0 (exit 2 would block the subagent from stopping); a failure is
-reported, never hidden and never fatal.
+No silent fallback: every outcome is written to stderr. The hook always exits 0
+(exit 2 would block the subagent from stopping); a failure is reported, never
+hidden and never fatal.
 
 Pre: stdin is the SubagentStop event JSON.
-Post: stderr names the outcome of each of (a), (b), (c); the ledger holds at
-most one pending row for the agent id, written before Hindsight is contacted.
+Post: stderr names the outcome of (a) and (b); the ledger holds at most one
+pending row for the agent id.
 A later stop of the same agent (the cycle gate blocked an earlier one) appends
 its newer final message as an excerpt row, which the reader takes.
 """
@@ -45,16 +39,13 @@ def say(message: str) -> None:
 
 
 def _record_pending(reflection_ledger, gates_jsonl, cwd: str, run):
-    """Append the pending row; the ledger path, or None after reporting why not."""
-    placeholder = {"status": "pending", "detail": "Hindsight retain not yet attempted "
-                   "(no outcome line follows if the hook was killed or the ledger was unwritable)",
-                   "bank": None, "document_id": None}
+    """Append the pending row, or report why it was not written."""
     try:
         path = reflection_ledger.ledger_path(cwd)
-        added = reflection_ledger.append_pending(path, {**run.as_row(), "hindsight": placeholder})
+        added = reflection_ledger.append_pending(path, run.as_row())
     except gates_jsonl.LedgerError as exc:
         say(f"ledger NOT written, the Stop gate cannot enforce this reflection: {exc}")
-        return None
+        return
     if added:
         verdict = "pending reflection recorded"
     elif reflection_ledger.refresh_excerpt(path, run.agent_id, run.excerpt):
@@ -62,12 +53,10 @@ def _record_pending(reflection_ledger, gates_jsonl, cwd: str, run):
     else:
         verdict = "already in the ledger, not duplicated"
     say(f"{verdict}: {run.agent_type} {run.agent_id} ({path})")
-    return path
 
 
 def main() -> int:
     try:
-        import reflection_hindsight
         import gates_jsonl
         import reflection_ledger
         import reflection_subagent
@@ -95,14 +84,7 @@ def main() -> int:
     for note in run.notes:
         say(f"note ({run.agent_id}): {note}")
     cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) else os.getcwd()
-    path = _record_pending(reflection_ledger, gates_jsonl, cwd, run)
-    hindsight = reflection_hindsight.retain(cwd, run.as_row())
-    say(f"hindsight {hindsight.status}: {hindsight.detail}")
-    if path is not None:
-        try:
-            reflection_ledger.record_hindsight(path, run.agent_id, hindsight.as_row())
-        except gates_jsonl.LedgerError as exc:
-            say(f"hindsight outcome NOT written to the ledger: {exc}")
+    _record_pending(reflection_ledger, gates_jsonl, cwd, run)
     return 0
 
 

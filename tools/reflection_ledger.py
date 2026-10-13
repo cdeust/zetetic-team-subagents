@@ -16,18 +16,17 @@ Ledger contract (``gates_jsonl.py``, same family as the gate failure ledger
     sibling of ``failures.jsonl``: a failure is lifted by a green proof, a
     reflection only by a stored lesson, so the two never share rows.
   * a pending row is {"agent_id", "agent_type", "description",
-    "transcript_path", "session_id", "excerpt", "hindsight", "notes", "time"}.
-  * a hindsight row is {"hindsight_for": <agent_id>, "hindsight": {...}, "time": ...}:
-    the outcome of the network retain, appended AFTER the pending row (the
-    pending row is the enforcement record and must not wait on the network).
-    The reader merges the latest one into the pending row's ``hindsight``.
+    "transcript_path", "session_id", "excerpt", "notes", "time"}.
   * an excerpt row is {"excerpt_for": <agent_id>, "excerpt": ..., "time": ...}:
     a later SubagentStop of the same agent (the cycle gate blocked an earlier
     one, so the agent worked on) carries a newer final message; the reader
     merges the latest one into the pending row's ``excerpt``.
   * a lift row is {"lift": <agent_id>, "memory_id": <int>, "time": ...}, the
     analogue of the waiver row ``{"waive": <gate>, ...}``.
-  * a row is pending when no lift row names its agent_id.
+  * a row is pending when no lift row names its agent_id. A row of any other
+    shape (no ``agent_id``) is never pending: the Hindsight outcome rows
+    {"hindsight_for": ...} that release 2.43.0 wrote stay in old ledgers and
+    are ignored with the rest.
 
 Pre: ``cwd`` is a directory inside a git work tree for any operation.
 Post: the file only ever grows by whole lines; no row is rewritten.
@@ -74,22 +73,13 @@ def append_pending(path: str, entry: Dict) -> bool:
     return True
 
 
-def record_hindsight(path: str, agent_id: str, outcome: Dict) -> None:
-    """Append the Hindsight outcome for an already-recorded pending row.
-
-    Pre: the pending row for ``agent_id`` was appended first. Post: one whole
-    line is added; the pending row is untouched, the reader merges this in.
-    """
-    append_row(path, {"hindsight_for": agent_id, "hindsight": outcome, "time": now_iso()})
-
-
 def _latest_excerpts(rows: List[Dict]) -> Dict[str, str]:
     """agent_id -> the excerpt of its latest row (pending or excerpt_for)."""
     out: Dict[str, str] = {}
     for r in rows:
         if isinstance(r.get("excerpt_for"), str):
             out[r["excerpt_for"]] = r.get("excerpt") or ""
-        elif isinstance(r.get("agent_id"), str) and "lift" not in r and "hindsight_for" not in r:
+        elif isinstance(r.get("agent_id"), str) and "lift" not in r:
             out.setdefault(r["agent_id"], r.get("excerpt") or "")
     return out
 
@@ -105,12 +95,6 @@ def refresh_excerpt(path: str, agent_id: str, excerpt: str) -> bool:
     return True
 
 
-def _hindsight_outcomes(rows: List[Dict]) -> Dict[str, Dict]:
-    """agent_id -> latest recorded outcome (a later line wins)."""
-    return {r["hindsight_for"]: r["hindsight"] for r in rows
-            if isinstance(r.get("hindsight_for"), str) and isinstance(r.get("hindsight"), dict)}
-
-
 def _lifted_ids(rows: List[Dict]) -> set:
     return {r["lift"] for r in rows if isinstance(r.get("lift"), str)}
 
@@ -118,11 +102,10 @@ def _lifted_ids(rows: List[Dict]) -> set:
 def pending(path: str, session_id: Optional[str] = None) -> List[Dict]:
     """Pending rows, oldest first; restricted to one session when given."""
     rows = read_rows(path)
-    lifted, outcomes, excerpts = _lifted_ids(rows), _hindsight_outcomes(rows), _latest_excerpts(rows)
-    return [{**r, "hindsight": outcomes.get(r["agent_id"], r.get("hindsight")),
-             "excerpt": excerpts.get(r["agent_id"], r.get("excerpt"))}
+    lifted, excerpts = _lifted_ids(rows), _latest_excerpts(rows)
+    return [{**r, "excerpt": excerpts.get(r["agent_id"], r.get("excerpt"))}
             for r in rows
-            if "lift" not in r and "hindsight_for" not in r
+            if "lift" not in r
             and isinstance(r.get("agent_id"), str) and r["agent_id"] not in lifted
             and (session_id is None or r.get("session_id") == session_id)]
 

@@ -31,8 +31,8 @@ from gates_jsonl import text as _text
 # long report plus its tool_use rows. source: hooks/stop-redaction-gate.py
 # TAIL_BYTES rationale (same transcript format, same read).
 TAIL_BYTES = 1024 * 1024
-# A ledger row is one atomic append and a Hindsight document is one retain:
-# a handback longer than this is cut, and the cut is marked in the text.
+# A ledger row is one atomic append: a handback longer than this is cut, and
+# the cut is marked in the text.
 # source: operational default, a typical handback report is 2-6 KB.
 MAX_EXCERPT_CHARS = 4000
 UNKNOWN_TYPE = "unknown"
