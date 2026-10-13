@@ -25,6 +25,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List
 
+from gates_jsonl import text as _text
+
 # The handback message sits at the very end of the transcript; 1 MiB covers a
 # long report plus its tool_use rows. source: hooks/stop-redaction-gate.py
 # TAIL_BYTES rationale (same transcript format, same read).
@@ -51,15 +53,20 @@ class Run:
     excerpt: str
     notes: List[str] = field(default_factory=list)
 
+    def tool_internal(self) -> bool:
+        """True for a run Claude Code spawned inside a tool (the WebFetch
+        summariser): no agent-<id>.jsonl transcript exists and no meta.json sits
+        beside it, so there is no delegated work to reflect on.
+        source: Cortex lesson memory 4386828 (agent af011bb92820136f0, session
+        65edc922, 2026-10-13: a WebFetch summariser scheduled as type "unknown")."""
+        has_transcript = bool(_agent_id_of(self.transcript_path)) and os.path.isfile(self.transcript_path)
+        return not has_transcript and not os.path.isfile(_meta_path(self.transcript_path))
+
     def as_row(self) -> Dict:
         return {"agent_id": self.agent_id, "agent_type": self.agent_type,
                 "description": self.description, "transcript_path": self.transcript_path,
                 "session_id": self.session_id, "excerpt": self.excerpt,
                 "notes": list(self.notes)}
-
-
-def _text(value: object) -> str:
-    return value.strip() if isinstance(value, str) else ""
 
 
 def _agent_id_of(path: str) -> str:
@@ -89,11 +96,15 @@ def _transcript_path(payload: Dict, agent_id: str, notes: List[str]) -> str:
     return parent
 
 
+def _meta_path(transcript: str) -> str:
+    return transcript[:-len(".jsonl")] + ".meta.json" if transcript.endswith(".jsonl") else ""
+
+
 def _read_meta(transcript: str, notes: List[str]) -> Dict:
     if not transcript.endswith(".jsonl"):
         notes.append("no transcript path, so no meta.json could be read")
         return {}
-    meta_path = transcript[:-len(".jsonl")] + ".meta.json"
+    meta_path = _meta_path(transcript)
     try:
         with open(meta_path, encoding="utf-8") as fh:
             data = json.load(fh)

@@ -66,10 +66,24 @@ def test_an_open_without_a_session_never_adopts_another_sessions_task(path, repo
 
 def test_a_new_task_starts_where_the_previous_task_of_the_same_transcript_closed(path, repo):
     first, _ = cl.open_task(path, opener(repo))
-    cl.close(path, first["open"], {"evidence": {}, "counts": {}}, 1234)
+    cl.close(path, first["open"], {"evidence": {}, "counts": {}}, (1234, "/t/main.jsonl"))
     second, created = cl.open_task(path, opener(repo))
     fresh, _ = cl.open_task(path, opener(repo, session_id="s2", transcript_path="/t/other.jsonl"))
     assert created and second["window_start"] == 1234 and fresh["window_start"] == 0
+
+
+def test_a_subagent_window_ignores_parent_closes_and_a_main_window_ignores_subagent_closes(path, repo):
+    """A subagent's PostToolUse carries the PARENT transcript_path, so windows
+    are keyed by agent_id for a subagent and by the scanned transcript for the
+    main agent; the larger subagent end must not leak into the main window."""
+    main, _ = cl.open_task(path, opener(repo))
+    cl.close(path, main["open"], {"evidence": {}, "counts": {}}, (1234, "/t/main.jsonl"))
+    sub, _ = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="engineer"))
+    assert sub["window_start"] == 0
+    cl.close(path, sub["open"], {"evidence": {}, "counts": {}}, (5000, "/t/main/subagents/agent-ag1.jsonl"))
+    resumed, _ = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="engineer"))
+    later_main, _ = cl.open_task(path, opener(repo))
+    assert (resumed["window_start"], later_main["window_start"]) == (5000, 1234)
 
 
 def test_declarations_are_checked_and_the_latest_wins(path, repo):
@@ -107,7 +121,7 @@ def test_unchecked_declarations_are_refused_and_change_nothing(path, repo, case)
 
 def test_a_closed_or_unknown_task_cannot_be_declared(path, repo):
     task, _ = cl.open_task(path, opener(repo))
-    cl.close(path, task["open"], {"evidence": {}, "counts": {}}, 0)
+    cl.close(path, task["open"], {"evidence": {}, "counts": {}}, (0, "/t/main.jsonl"))
     for tid in (task["open"], "nope"):
         with pytest.raises(cl.DeclareRefused, match="no open task"):
             cl.declare(str(repo), tid, "check", {"command": CHECK})
@@ -118,12 +132,15 @@ def test_metrics_give_the_promise_rate_reopens_and_bypasses_per_agent_type(path,
     eng, _ = cl.open_task(path, opener(repo, agent_id="a", agent_type="engineer"))
     evidence = {s: {"source": "transcript"} for s in ("recall", "verify", "review")}
     cl.close(path, main["open"], {"evidence": {**evidence, "refine": {"source": "declaration"}},
-                                  "counts": {"reopens": 2}}, 10)
-    cl.record_bypass(path, eng, ["review"])
+                                  "counts": {"reopens": 2}}, (10, "/t/main.jsonl"))
+    cl.close(path, eng["open"], {"evidence": evidence, "missing": ["review"], "counts": {"reopens": 1}},
+             (20, "/t/eng.jsonl"))
     out = cl.metrics(gates_jsonl.read_rows(path))
     assert out["main"] == {"tasks": 1, "declared": 1, "proven": 3, "reopens": 2, "bypasses": 0,
                            "promise_rate": 0.25}
-    assert out["engineer"]["bypasses"] == 1 and out["engineer"]["promise_rate"] is None
+    assert out["engineer"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0, "bypasses": 1,
+                               "promise_rate": None}  # a bypass proved nothing
+    assert cl.open_tasks(gates_jsonl.read_rows(path)) == []  # and it closed the task
 
 
 def test_cli_lists_declares_and_measures(path, repo, capsys):
@@ -146,3 +163,61 @@ def test_cli_refusals_exit_2_with_the_reason(repo, tmp_path, capsys):
     outside.mkdir()
     assert cl.main(["--cwd", str(outside), "list"]) == 2
     assert "not inside a git repository" in capsys.readouterr().err
+
+
+def test_task_repo_stops_at_the_root_when_no_ancestor_exists(monkeypatch):
+    monkeypatch.setattr(cl.os.path, "isdir", lambda _: False)
+    assert cl.task_repo("/no/such/dir/a.py") is None
+
+
+def test_a_check_ignore_failure_is_a_ledger_error_not_a_task_file(repo, monkeypatch):
+    real = cl.git
+
+    def broken(cwd, *args, **kw):
+        if args[0] == "check-ignore":
+            return subprocess.CompletedProcess(args, 128, "", "fatal: bad")
+        return real(cwd, *args, **kw)
+    monkeypatch.setattr(cl, "git", broken)
+    with pytest.raises(gates_jsonl.LedgerError, match="exit 128"):
+        cl.task_repo(str(repo / "a.py"))
+
+
+def test_task_repos_classifies_many_paths_with_one_check_ignore_per_work_tree(repo, tmp_path, monkeypatch):
+    other = git_repo(tmp_path / "other")
+    calls = []
+    real = cl.git
+    monkeypatch.setattr(cl, "git", lambda cwd, *a, **kw: calls.append(a[0]) or real(cwd, *a, **kw))
+    paths = [str(repo / "a.py"), str(repo / "b.py"), str(repo / "scratch" / "n.md"), str(other / "c.py"),
+             str(tmp_path / "plain.py")]
+    out = cl.task_repos(paths)
+    assert [out[p] for p in paths] == [str(repo.resolve())] * 2 + [None, str(other.resolve()), None]
+    assert calls.count("check-ignore") == 2 and calls.count("rev-parse") == 4  # 4 distinct directories
+
+
+def test_a_held_lock_makes_open_task_fail_loudly_instead_of_duplicating(path, repo, monkeypatch):
+    import fcntl
+    monkeypatch.setattr(gates_jsonl, "LOCK_TIMEOUT_S", 0.2)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".lock", "w") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        with pytest.raises(gates_jsonl.LedgerError, match="still held"):
+            cl.open_task(path, opener(repo))
+    assert gates_jsonl.read_rows(path) == []
+    assert cl.open_task(path, opener(repo))[1]  # released: the next open goes through
+
+
+def test_parallel_opens_of_one_agent_record_a_single_task(path, repo):
+    import threading
+    barrier = threading.Barrier(8)
+    results = []
+
+    def opener_thread():
+        barrier.wait()
+        results.append(cl.open_task(path, opener(repo)))
+    threads = [threading.Thread(target=opener_thread) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sum(created for _, created in results) == 1
+    assert len([r for r in gates_jsonl.read_rows(path) if "open" in r]) == 1

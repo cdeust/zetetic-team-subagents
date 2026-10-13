@@ -25,15 +25,21 @@ Rows (``gates_jsonl.py`` contract, file ``cycles.jsonl``):
            "window_start", "repo", "first_path", "time"}
   declare {"declare": id, "stage", "kind", "ref", "time"}       (a later one wins)
   close   {"close": id, "evidence": {stage: {"source", "detail"}},
-           "counts": {"edits", "reviews", "reopens"}, "window_end", "time"}
-  bypass  {"bypass": id, "session_id", "agent_type", "missing", "time"}
+           "counts": {"edits", "reviews", "reopens"}, "window_end",
+           "transcript_path" (the one scanned), "time"}
+           plus "bypass": true and "missing": [stage...] when the emergency
+           switch let an unproven task through: a bypass closes the task, so it
+           is logged once, not on every later stop.
 A task is open while no close row names it. ``agent_id`` is null for the main
-agent; one open task per (session, agent) at a time.
+agent; one open task per (session, agent) at a time, enforced by reading and
+appending under ``gates_jsonl.locked`` (parallel edits fire parallel hooks).
 
 Pre-registered metric (two weeks before vs after), computed by ``metrics``:
   promise rate(agent_type) = stages closed on a declaration
                              / stages closed (declaration + transcript)
   reopen count(agent_type) = sum of "reopens": reviews followed by another edit.
+A bypassed close counts only as a bypass: it proved nothing, so it enters
+neither the promise rate nor the task and reopen counts.
 """
 from __future__ import annotations
 
@@ -41,13 +47,11 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
-from gates_jsonl import (GIT_TIMEOUT_S, LedgerError, append_row, ledger_path as _ledger_path,
-                         now_iso, read_rows)
+from gates_jsonl import LedgerError, append_row, git, ledger_path as _ledger_path, locked, now_iso, read_rows
 
 LEDGER_NAME = "cycles.jsonl"
 # Stages a declaration may prove, with the reference kinds each accepts.
@@ -68,25 +72,48 @@ def ledger_path(cwd: str) -> str:
     return _ledger_path(cwd, LEDGER_NAME)
 
 
-def _git(cwd: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                          timeout=GIT_TIMEOUT_S, check=False, stdin=subprocess.DEVNULL)
+def _toplevel(directory: str) -> Optional[str]:
+    """Top level of the work tree holding ``directory`` (walking up to the
+    nearest existing ancestor: Write may target a directory not yet created),
+    else None."""
+    while not os.path.isdir(directory):
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            return None  # no ancestor exists at all
+        directory = parent
+    top = git(directory, "rev-parse", "--show-toplevel")
+    return top.stdout.strip() if top.returncode == 0 and top.stdout.strip() else None
+
+
+def task_repos(paths: Iterable[str]) -> Dict[str, Optional[str]]:
+    """path -> top level of its work tree when git does not ignore it, else
+    None (outside any repository, or ignored). One rev-parse per distinct
+    directory and one ``check-ignore --stdin`` per work tree. Raises LedgerError
+    when git cannot answer (check-ignore exits 0 when a path is ignored, 1 when
+    none is, anything else is an error: git-check-ignore(1) EXIT STATUS)."""
+    absolute = {p: os.path.abspath(p) for p in paths}
+    tops: Dict[str, Optional[str]] = {}
+    for full in absolute.values():
+        directory = os.path.dirname(full)
+        if directory not in tops:
+            tops[directory] = _toplevel(directory)
+    by_top: Dict[str, List[str]] = {}
+    for full in set(absolute.values()):
+        top = tops[os.path.dirname(full)]
+        if top is not None:
+            by_top.setdefault(top, []).append(full)
+    ignored = set()
+    for top, members in by_top.items():
+        proc = git(top, "check-ignore", "--stdin", "-z", stdin="".join(m + "\0" for m in members))
+        if proc.returncode not in (0, 1):
+            raise LedgerError(f"git check-ignore failed in {top} (exit {proc.returncode}): {proc.stderr.strip()}")
+        ignored.update(x for x in proc.stdout.split("\0") if x)
+    return {p: None if full in ignored else tops[os.path.dirname(full)] for p, full in absolute.items()}
 
 
 def task_repo(file_path: str) -> Optional[str]:
-    """Top level of the work tree holding ``file_path`` when git does not ignore
-    it, else None (outside any repository, or ignored)."""
-    directory = os.path.dirname(os.path.abspath(file_path))
-    while not os.path.isdir(directory):  # Write may target a directory not yet created
-        directory = os.path.dirname(directory)
-    try:
-        top = _git(directory, "rev-parse", "--show-toplevel")
-        if top.returncode != 0 or not top.stdout.strip():
-            return None
-        ignored = _git(directory, "check-ignore", "-q", os.path.abspath(file_path))
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise LedgerError(f"git could not classify {file_path!r}: {exc}") from exc
-    return None if ignored.returncode == 0 else top.stdout.strip()
+    """``task_repos`` for one path."""
+    return task_repos([file_path])[file_path]
 
 
 def _closed_ids(rows: List[Dict]) -> set:
@@ -102,25 +129,38 @@ def open_tasks(rows: List[Dict], key: Optional[tuple] = None) -> List[Dict]:
 
 
 def _window_start(rows: List[Dict], opener: Dict) -> int:
-    """Where the previous closed task of the same transcript stopped reading, so
-    a stage proven for it is not counted again; 0 for a fresh transcript."""
+    """Where the previous closed task of the same reader stopped reading, so a
+    stage proven for it is not counted again; 0 for a fresh one.
+
+    A subagent's tool events carry the PARENT transcript_path (only SubagentStop
+    names the subagent's own file), so a subagent task follows the closes of
+    its agent_id (one transcript per agent_id; a second task happens when the
+    subagent is resumed). A main-agent task follows the closes of main-agent
+    tasks on the transcript the gate actually scanned, recorded on the close."""
     by_id = {r["open"]: r for r in rows if isinstance(r.get("open"), str)}
-    ends = [r.get("window_end", 0) for r in rows if isinstance(r.get("close"), str)
-            and by_id.get(r["close"], {}).get("transcript_path") == opener["transcript_path"]]
-    return max(ends, default=0)
+    agent_id = opener.get("agent_id")
+
+    def same_reader(close_row: Dict) -> bool:
+        task = by_id.get(close_row["close"], {})
+        if agent_id:
+            return task.get("agent_id") == agent_id
+        return task.get("agent_id") is None and close_row.get("transcript_path") == opener["transcript_path"]
+    return max((r.get("window_end", 0) for r in rows if isinstance(r.get("close"), str) and same_reader(r)),
+               default=0)
 
 
 def open_task(path: str, opener: Dict) -> tuple:
     """(task row, created): the open task of the opener's (session, agent), or a
     new one. Pre: ``opener`` has session_id, agent_id, agent_type,
     transcript_path, repo, first_path."""
-    rows = read_rows(path)
-    current = open_tasks(rows, (opener["session_id"], opener["agent_id"]))
-    if current:
-        return current[0], False
-    row = {"open": uuid.uuid4().hex[:12], **opener,
-           "window_start": _window_start(rows, opener), "time": now_iso()}
-    append_row(path, row)
+    with locked(path):
+        rows = read_rows(path)
+        current = open_tasks(rows, (opener["session_id"], opener["agent_id"]))
+        if current:
+            return current[0], False
+        row = {"open": uuid.uuid4().hex[:12], **opener,
+               "window_start": _window_start(rows, opener), "time": now_iso()}
+        append_row(path, row)
     return row, True
 
 
@@ -137,7 +177,7 @@ def _kind_and_ref(cwd: str, stage: str, ref: Dict) -> tuple:
     kind, value = given[0]
     if kind not in DECLARABLE[stage]:
         raise DeclareRefused(f"stage {stage} accepts {', '.join(DECLARABLE[stage])}, not {kind}")
-    if kind == "sha" and not (_SHA.match(value) and _git(cwd, "cat-file", "-e", f"{value}^{{commit}}").returncode == 0):
+    if kind == "sha" and not (_SHA.match(value) and git(cwd, "cat-file", "-e", f"{value}^{{commit}}").returncode == 0):
         raise DeclareRefused(f"{value!r} is not a commit of the repository at {cwd}")
     if kind == "url" and not _URL.match(value):
         raise DeclareRefused(f"{value!r} is not a GitHub pull-request or issue URL")
@@ -162,35 +202,35 @@ def declare(cwd: str, task_id: str, stage: str, ref: Dict) -> Dict:
     return row
 
 
-def close(path: str, task_id: str, verdict: Dict, window_end: int) -> Dict:
-    """Append the close row. Pre: ``verdict`` holds "evidence" for every stage and "counts"."""
+def close(path: str, task_id: str, verdict: Dict, scanned: tuple) -> Dict:
+    """Append the close row. Pre: ``verdict`` holds "evidence", "missing" and
+    "counts"; ``scanned`` is (window_end, transcript_path), how far which
+    transcript was read. A verdict with missing stages closes only through the
+    emergency switch, so its row is marked as a bypass."""
+    window_end, transcript_path = scanned
     row = {"close": task_id, "evidence": verdict["evidence"], "counts": verdict["counts"],
-           "window_end": window_end, "time": now_iso()}
+           "window_end": window_end, "transcript_path": transcript_path, "time": now_iso()}
+    if verdict.get("missing"):
+        row.update(bypass=True, missing=verdict["missing"])
     append_row(path, row)
     return row
-
-
-def record_bypass(path: str, task: Dict, missing: List[str]) -> None:
-    append_row(path, {"bypass": task["open"], "session_id": task.get("session_id"),
-                      "agent_type": task.get("agent_type"), "missing": missing, "time": now_iso()})
 
 
 def metrics(rows: List[Dict]) -> Dict[str, Dict]:
     """agent_type -> {"tasks", "declared", "proven", "promise_rate", "reopens", "bypasses"}."""
     types = {r["open"]: r.get("agent_type") or MAIN_AGENT for r in rows if isinstance(r.get("open"), str)}
     out: Dict[str, Dict] = {}
-    for r in rows:
-        if isinstance(r.get("close"), str):
-            m = out.setdefault(types.get(r["close"], "?"), {"tasks": 0, "declared": 0, "proven": 0,
-                                                           "reopens": 0, "bypasses": 0})
-            sources = [e.get("source") for e in (r.get("evidence") or {}).values()]
-            m["tasks"] += 1
-            m["declared"] += sources.count("declaration")
-            m["proven"] += sources.count("transcript")
-            m["reopens"] += (r.get("counts") or {}).get("reopens", 0)
-        elif isinstance(r.get("bypass"), str):
-            out.setdefault(r.get("agent_type") or MAIN_AGENT, {"tasks": 0, "declared": 0, "proven": 0,
-                                                               "reopens": 0, "bypasses": 0})["bypasses"] += 1
+    for r in (r for r in rows if isinstance(r.get("close"), str)):
+        m = out.setdefault(types.get(r["close"], "?"), {"tasks": 0, "declared": 0, "proven": 0,
+                                                       "reopens": 0, "bypasses": 0})
+        if r.get("bypass"):
+            m["bypasses"] += 1
+            continue
+        sources = [e.get("source") for e in (r.get("evidence") or {}).values()]
+        m["tasks"] += 1
+        m["declared"] += sources.count("declaration")
+        m["proven"] += sources.count("transcript")
+        m["reopens"] += (r.get("counts") or {}).get("reopens", 0)
     for m in out.values():
         total = m["declared"] + m["proven"]
         m["promise_rate"] = round(m["declared"] / total, 4) if total else None

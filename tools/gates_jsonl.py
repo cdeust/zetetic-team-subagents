@@ -9,18 +9,28 @@ Extracted from ``reflection_ledger.py`` when the per-task cycle ledger
   * the file only ever grows by whole lines, written with one O_APPEND write so
     concurrent hook processes never interleave inside a line; no row is rewritten;
   * mode 0600: rows quote transcripts, which Claude Code writes owner-only;
-  * a torn or undecodable line is skipped and never hides the rows after it.
+  * a torn or undecodable line is skipped and never hides the rows after it;
+  * a writer that must read before it appends (one open task per agent) holds
+    ``locked(path)``, an exclusive OS lock on the sibling ``<file>.lock``.
 
 Pre: ``cwd`` is a directory inside a git work tree for ``ledger_path``.
 Post: see each function.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import os
 import subprocess
-from typing import Dict, List, Optional
+import time
+from typing import Dict, Iterator, List, Optional
+
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; hooks run natively there (README "Windows prerequisites")
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt
 
 LEDGER_DIR = "zetetic-gates"
 # Rows carry transcript excerpts, which Claude Code writes owner-only; the
@@ -30,6 +40,14 @@ LEDGER_FILE_MODE = 0o600
 # One git rev-parse is local and instant; the bound only stops a wedged git
 # from wedging the hook. source: stop-gate-ledger.py _GIT_TIMEOUT (8 s).
 GIT_TIMEOUT_S = 8
+# A lock holder does one ledger read and one append; the bound only stops a
+# wedged peer from wedging the hook, and equals the git bound for the same
+# reason. source: GIT_TIMEOUT_S above.
+LOCK_TIMEOUT_S = GIT_TIMEOUT_S
+# Poll period while another hook process holds the lock. source: chosen, not
+# measured: a free lock is taken on the first try, so the period only matters
+# under contention, where a holder's read and append take milliseconds.
+LOCK_POLL_S = 0.01
 
 
 class LedgerError(Exception):
@@ -40,17 +58,28 @@ def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
+def text(value: object) -> str:
+    """A payload field as stripped text; anything but a string is empty."""
+    return value.strip() if isinstance(value, str) else ""
+
+
+def git(cwd: str, *args: str, stdin: Optional[str] = None) -> subprocess.CompletedProcess:
+    """Run ``git <args>`` in ``cwd``, bounded by GIT_TIMEOUT_S; the caller reads
+    the return code. Raises LedgerError when git cannot be run at all."""
+    try:
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                              timeout=GIT_TIMEOUT_S, check=False, input=stdin,
+                              stdin=None if stdin is not None else subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise LedgerError(f"git could not be run in {cwd!r}: {exc}") from exc
+
+
 def git_common_dir(cwd: str) -> str:
     """Absolute git common dir of the repository containing ``cwd``.
 
     Post: returns the path, or raises LedgerError naming why not.
     """
-    try:
-        proc = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"], cwd=cwd, capture_output=True,
-            text=True, timeout=GIT_TIMEOUT_S, check=False, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise LedgerError(f"git could not be run in {cwd!r}: {exc}") from exc
+    proc = git(cwd, "rev-parse", "--git-common-dir")
     common = proc.stdout.strip()
     if proc.returncode != 0 or not common:
         raise LedgerError(f"{cwd!r} is not inside a git repository: {proc.stderr.strip()}")
@@ -94,3 +123,55 @@ def append_row(path: str, row: Dict) -> None:
             os.close(fd)
     except OSError as exc:
         raise LedgerError(f"cannot append to {path}: {exc}") from exc
+
+
+def _try_lock(fd: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    else:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+
+
+def _unlock(fd: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    else:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
+def _acquire(fd: int, lock_path: str) -> None:
+    """Take the lock on ``fd``, polling until LOCK_TIMEOUT_S; LedgerError after."""
+    deadline = time.monotonic() + LOCK_TIMEOUT_S
+    while True:
+        try:
+            _try_lock(fd)
+            return
+        except OSError as exc:  # held by another hook process
+            if time.monotonic() >= deadline:
+                raise LedgerError(f"{lock_path} still held after {LOCK_TIMEOUT_S} s: {exc}") from exc
+        time.sleep(LOCK_POLL_S)
+
+
+@contextlib.contextmanager
+def locked(path: str) -> Iterator[None]:
+    """Hold an exclusive lock on ``<path>.lock`` for a read-then-append.
+
+    The OS releases the lock when the process dies, so a killed hook leaves no
+    stale lock. Raises LedgerError when the lock cannot be taken within
+    LOCK_TIMEOUT_S or the lock file cannot be opened."""
+    lock_path = path + ".lock"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, LEDGER_FILE_MODE)
+    except OSError as exc:
+        raise LedgerError(f"cannot open the lock {lock_path}: {exc}") from exc
+    try:
+        _acquire(fd, lock_path)
+        try:
+            yield
+        finally:
+            _unlock(fd)
+    finally:
+        os.close(fd)

@@ -21,6 +21,10 @@ Ledger contract (``gates_jsonl.py``, same family as the gate failure ledger
     the outcome of the network retain, appended AFTER the pending row (the
     pending row is the enforcement record and must not wait on the network).
     The reader merges the latest one into the pending row's ``hindsight``.
+  * an excerpt row is {"excerpt_for": <agent_id>, "excerpt": ..., "time": ...}:
+    a later SubagentStop of the same agent (the cycle gate blocked an earlier
+    one, so the agent worked on) carries a newer final message; the reader
+    merges the latest one into the pending row's ``excerpt``.
   * a lift row is {"lift": <agent_id>, "memory_id": <int>, "time": ...}, the
     analogue of the waiver row ``{"waive": <gate>, ...}``.
   * a row is pending when no lift row names its agent_id.
@@ -79,6 +83,28 @@ def record_hindsight(path: str, agent_id: str, outcome: Dict) -> None:
     append_row(path, {"hindsight_for": agent_id, "hindsight": outcome, "time": now_iso()})
 
 
+def _latest_excerpts(rows: List[Dict]) -> Dict[str, str]:
+    """agent_id -> the excerpt of its latest row (pending or excerpt_for)."""
+    out: Dict[str, str] = {}
+    for r in rows:
+        if isinstance(r.get("excerpt_for"), str):
+            out[r["excerpt_for"]] = r.get("excerpt") or ""
+        elif isinstance(r.get("agent_id"), str) and "lift" not in r and "hindsight_for" not in r:
+            out.setdefault(r["agent_id"], r.get("excerpt") or "")
+    return out
+
+
+def refresh_excerpt(path: str, agent_id: str, excerpt: str) -> bool:
+    """Append an excerpt row when ``excerpt`` differs from the latest one
+    recorded for ``agent_id``; True when appended.
+
+    Pre: the pending row for ``agent_id`` exists. Post: rows are only appended."""
+    if not excerpt or _latest_excerpts(read_rows(path)).get(agent_id) == excerpt:
+        return False
+    append_row(path, {"excerpt_for": agent_id, "excerpt": excerpt, "time": now_iso()})
+    return True
+
+
 def _hindsight_outcomes(rows: List[Dict]) -> Dict[str, Dict]:
     """agent_id -> latest recorded outcome (a later line wins)."""
     return {r["hindsight_for"]: r["hindsight"] for r in rows
@@ -92,8 +118,9 @@ def _lifted_ids(rows: List[Dict]) -> set:
 def pending(path: str, session_id: Optional[str] = None) -> List[Dict]:
     """Pending rows, oldest first; restricted to one session when given."""
     rows = read_rows(path)
-    lifted, outcomes = _lifted_ids(rows), _hindsight_outcomes(rows)
-    return [{**r, "hindsight": outcomes.get(r["agent_id"], r.get("hindsight"))}
+    lifted, outcomes, excerpts = _lifted_ids(rows), _hindsight_outcomes(rows), _latest_excerpts(rows)
+    return [{**r, "hindsight": outcomes.get(r["agent_id"], r.get("hindsight")),
+             "excerpt": excerpts.get(r["agent_id"], r.get("excerpt"))}
             for r in rows
             if "lift" not in r and "hindsight_for" not in r
             and isinstance(r.get("agent_id"), str) and r["agent_id"] not in lifted

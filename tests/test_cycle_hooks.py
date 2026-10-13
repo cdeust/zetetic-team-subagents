@@ -100,12 +100,14 @@ def switch_off(monkeypatch):
 
 
 @pytest.mark.usefixtures("switch_off")
-def test_the_emergency_switch_lets_the_stop_through_and_logs_a_bypass(fire, repo, transcript):
+def test_the_emergency_switch_closes_the_task_as_bypassed_once(fire, repo, transcript):
     open_task(fire, repo, transcript)
     _, out, err = fire(gate_hook, stop_event(repo, transcript))
-    (bypass,) = [r for r in rows(repo) if "bypass" in r]
-    assert out == "" and "logged as a bypass row" in err
-    assert bypass["agent_type"] == "main" and "review" in bypass["missing"]
+    fire(gate_hook, stop_event(repo, transcript))
+    (bypass,) = [r for r in rows(repo) if r.get("bypass")]
+    assert out == "" and "closed as bypassed" in err
+    assert bypass["close"] == rows(repo)[0]["open"] and "review" in bypass["missing"]
+    assert len(rows(repo)) == 2  # the second stop found no open task: nothing appended
 
 
 def test_other_sessions_tasks_do_not_block_but_are_counted(fire, repo, transcript):
@@ -136,6 +138,22 @@ def test_a_subagent_task_is_judged_on_the_subagents_own_transcript(fire, repo, t
     declare_all(repo, rows(repo)[0]["open"])
     write_transcript(agent_t, full_cycle(repo), append=True)
     assert fire(gate_hook, sub_stop)[1] == ""
+    (sub_close,) = [r for r in rows(repo) if "close" in r]
+    assert sub_close["transcript_path"] == str(agent_t)
+    fire(open_hook, edit_event(repo, str(repo / "b.py"), transcript))
+    assert [r for r in rows(repo) if "open" in r][-1]["window_start"] == 0  # not the subagent's end
+
+
+def test_an_unattributed_task_is_judged_on_its_own_transcript_not_this_sessions(fire, repo, tmp_path, transcript):
+    orphan_t = tmp_path / "proj" / "lost.jsonl"
+    write_transcript(orphan_t, [call("Edit", file_path=str(repo / "a.py"))])
+    fire(open_hook, edit_event(repo, str(repo / "a.py"), orphan_t, session_id=""))
+    orphan_t.unlink()
+    write_transcript(transcript, full_cycle(repo))  # this session's proof is not the orphan's
+    declare_all(repo, rows(repo)[0]["open"])
+    _, out, _ = fire(gate_hook, stop_event(repo, transcript))
+    assert "unreadable" in json.loads(out)["reason"] and str(orphan_t) in json.loads(out)["reason"]
+    assert not [r for r in rows(repo) if "close" in r]
 
 
 def test_an_unreadable_transcript_proves_nothing_and_blocks(fire, repo, transcript):

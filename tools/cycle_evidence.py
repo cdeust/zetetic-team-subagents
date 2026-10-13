@@ -23,11 +23,14 @@ later position in the window than the last edit of a task file:
   investigate a Read, Grep or Glob call, or a Bash command that reads (cat, head,
               tail, sed -n, grep, rg, find, ls, wc, git show/diff/log/grep/blame)
   implement   an Edit/Write/MultiEdit/NotebookEdit of a task file
-  verify      a Bash call whose command contains the declared check, after the
-              last edit, whose result is not an error
+  verify      a foreground Bash call whose command IS the declared check
+              (optionally after one ``cd <dir> &&``), after the last edit,
+              whose result is not an error. Equality, not containment: a pipe
+              exits with its last command's status (``CHECK | tail``), and
+              ``CHECK || true`` or ``echo CHECK`` exit 0 whatever CHECK does
   benchmark   a declaration (a reference, or not applicable with the reason)
-  review      a Skill call naming "review" or an Agent call whose subagent_type
-              names "reviewer", after the last edit
+  review      a Skill call of a review skill or an Agent call of a code
+              reviewer (REVIEW_SKILLS, REVIEW_AGENT_SUFFIX), after the last edit
   remember    a Cortex remember call after the first edit
 
 Complexity: one pass, O(bytes in the window); a line is JSON-decoded only when
@@ -59,6 +62,19 @@ AGENT_TOOLS = frozenset({"Agent"})
 # session, e.g. mcp__plugin_hypermnesia-mcp_cortex__recall.
 _CORTEX_RECALL = re.compile(r"^mcp__.*cortex__(recall|unified_search|recall_hierarchical|navigate_memory)$")
 _CORTEX_REMEMBER = re.compile(r"^mcp__.*cortex__remember$")
+# Review skills, by exact name: a substring would also accept
+# superpowers:receiving-code-review (taking review comments, not reviewing).
+# source: the Skill listing of the owner's session 2026-10-13 ("code-review:
+# Review the current diff ...", "zetetic:review: Quick Review"); no Skill call
+# naming a review occurs in ~/.claude/projects/**/*.jsonl (scan, 2026-10-13).
+REVIEW_SKILLS = frozenset({"code-review", "zetetic:review"})
+# A code-reviewer agent of any plugin scope; reviewer-academic reviews papers.
+# source: the only reviewer Agent call in ~/.claude/projects/**/*.jsonl
+# (scan, 2026-10-13) has subagent_type "zetetic-team-subagents:code-reviewer".
+REVIEW_AGENT_SUFFIX = "code-reviewer"
+# One leading "cd <dir> &&" before the declared check. source: the Bash calls
+# of this session run from another cwd as "cd <worktree> && <command>".
+_CD_PREFIX = re.compile(r"""^cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*&&\s*""")
 _MARKERS = (b'"tool_use"', b'"tool_result"')
 Calls = List[Dict]
 Decls = Dict[str, Dict]
@@ -72,10 +88,12 @@ HOW = {
     "investigate": "read the code this task touches (Read, Grep, or cat/grep/sed -n in Bash) "
                    "before claiming anything about it",
     "implement": "no edit of a task file is in this transcript window",
-    "verify": "run the declared check after the last edit; it must exit 0",
+    "verify": "run the declared check after the last edit, as the whole command (no pipe, no || true, "
+              "not in the background); it must exit 0",
     "benchmark": "declare the measured delta: {tool} declare {task} --stage benchmark --sha <commit> | "
                  "--url <PR> | --memory-id <id>, or --not-applicable \"<why nothing is measurable>\"",
-    "review": "review the diff after the last edit: /code-review, or an Agent whose type is a reviewer",
+    "review": "review the diff after the last edit: the code-review or zetetic:review skill, "
+              "or an Agent of type code-reviewer",
     "remember": "call Cortex remember with what a future session needs (engineering-loop step 8)",
 }
 
@@ -119,13 +137,23 @@ def _investigation(call: Dict) -> bool:
 
 def _review(call: Dict) -> bool:
     if call["name"] == "Skill":
-        return "review" in str(call["input"].get("skill", ""))
-    return call["name"] in AGENT_TOOLS and "reviewer" in str(call["input"].get("subagent_type", ""))
+        return str(call["input"].get("skill", "")) in REVIEW_SKILLS
+    agent_type = str(call["input"].get("subagent_type", ""))
+    return call["name"] in AGENT_TOOLS and (agent_type == REVIEW_AGENT_SUFFIX
+                                            or agent_type.endswith(":" + REVIEW_AGENT_SUFFIX))
+
+
+def _edited_path(call: Dict) -> str:
+    return str(call["input"].get("file_path") or call["input"].get("notebook_path") or "")
+
+
+def edited_paths(calls: Calls) -> List[str]:
+    """The distinct non-empty paths the edit calls of ``calls`` touched."""
+    return sorted({_edited_path(c) for c in calls if c["name"] in EDIT_TOOLS} - {""})
 
 
 def _edits(calls: Calls, is_task_file: TaskFileTest) -> List[int]:
-    return [i for i, c in enumerate(calls) if c["name"] in EDIT_TOOLS
-            and is_task_file(str(c["input"].get("file_path") or c["input"].get("notebook_path") or ""))]
+    return [i for i, c in enumerate(calls) if c["name"] in EDIT_TOOLS and is_task_file(_edited_path(c))]
 
 
 def _first(calls: Calls, test: Callable[[Dict], bool], after: int = -1) -> Optional[str]:
@@ -133,9 +161,17 @@ def _first(calls: Calls, test: Callable[[Dict], bool], after: int = -1) -> Optio
     return next((c["name"] for c in calls[after + 1:] if test(c)), None)
 
 
+def runs_check(call: Dict, command: str) -> bool:
+    """True when ``call`` is a foreground Bash run of exactly ``command``."""
+    if call["name"] != "Bash" or call["input"].get("run_in_background"):
+        return False
+    ran = str(call["input"].get("command", "")).strip()
+    return command.strip() in (ran, _CD_PREFIX.sub("", ran, count=1))
+
+
 def _verified(calls: Calls, command: str, after: int) -> Optional[str]:
     for c in calls[after + 1:]:
-        if c["name"] == "Bash" and command in str(c["input"].get("command", "")) and c["is_error"] is False:
+        if runs_check(c, command) and c["is_error"] is False:
             return f"Bash ran `{command}` and it exited 0"
     return None
 

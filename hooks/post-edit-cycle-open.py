@@ -36,15 +36,11 @@ def say(message: str) -> None:
     print(f"[{_TOOL}] {message}", file=sys.stderr)
 
 
-def _text(value: object) -> str:
-    return value if isinstance(value, str) else ""
-
-
-def _opener(payload: dict, repo: str, file_path: str) -> dict:
-    agent_id = _text(payload.get("agent_id")) or None
-    return {"session_id": _text(payload.get("session_id")) or None, "agent_id": agent_id,
-            "agent_type": _text(payload.get("agent_type")) or ("unknown" if agent_id else "main"),
-            "transcript_path": _text(payload.get("agent_transcript_path")) or _text(payload.get("transcript_path")),
+def _opener(text, payload: dict, repo: str, file_path: str) -> dict:
+    agent_id = text(payload.get("agent_id")) or None
+    return {"session_id": text(payload.get("session_id")) or None, "agent_id": agent_id,
+            "agent_type": text(payload.get("agent_type")) or ("unknown" if agent_id else "main"),
+            "transcript_path": text(payload.get("agent_transcript_path")) or text(payload.get("transcript_path")),
             "repo": repo, "first_path": file_path}
 
 
@@ -73,13 +69,13 @@ def main() -> int:
     if not isinstance(payload, dict) or payload.get("tool_name") not in cycle_evidence.EDIT_TOOLS:
         return 0
     tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
-    file_path = _text(tool_input.get("file_path")) or _text(tool_input.get("notebook_path"))
-    cwd = _text(payload.get("cwd")) or os.getcwd()
+    file_path = gates_jsonl.text(tool_input.get("file_path")) or gates_jsonl.text(tool_input.get("notebook_path"))
+    cwd = gates_jsonl.text(payload.get("cwd")) or os.getcwd()
     try:
         repo = cycle_ledger.task_repo(os.path.join(cwd, file_path)) if file_path else None
         if repo is None:
             return 0  # not a file of a work tree: no task, by decision 3
-        opener = _opener(payload, repo, file_path)
+        opener = _opener(gates_jsonl.text, payload, repo, file_path)
         task, created = cycle_ledger.open_task(_ledger(cycle_ledger, gates_jsonl, cwd, repo), opener)
     except gates_jsonl.LedgerError as exc:
         say(f"cycle task NOT recorded, the Stop gate cannot enforce it: {exc}")

@@ -7,7 +7,9 @@ scheduling; ``stop-reflection-gate.py`` makes it binding.
 
 On every SubagentStop it
   (a) identifies the run (tools/reflection_subagent.py: payload fields first,
-      then the sibling meta.json, every fallback reported);
+      then the sibling meta.json, every fallback reported); a run Claude Code
+      spawned inside a tool (no agent-<id>.jsonl, no meta.json: the WebFetch
+      summariser) is reported on stderr and gets no reflection;
   (b) appends the pending row to the per-repo ledger
       ``<git-common-dir>/zetetic-gates/reflections.jsonl``
       (tools/reflection_ledger.py) FIRST: it is the enforcement record and must
@@ -25,6 +27,8 @@ reported, never hidden and never fatal.
 Pre: stdin is the SubagentStop event JSON.
 Post: stderr names the outcome of each of (a), (b), (c); the ledger holds at
 most one pending row for the agent id, written before Hindsight is contacted.
+A later stop of the same agent (the cycle gate blocked an earlier one) appends
+its newer final message as an excerpt row, which the reader takes.
 """
 from __future__ import annotations
 
@@ -51,7 +55,12 @@ def _record_pending(reflection_ledger, gates_jsonl, cwd: str, run):
     except gates_jsonl.LedgerError as exc:
         say(f"ledger NOT written, the Stop gate cannot enforce this reflection: {exc}")
         return None
-    verdict = "pending reflection recorded" if added else "already in the ledger, not duplicated"
+    if added:
+        verdict = "pending reflection recorded"
+    elif reflection_ledger.refresh_excerpt(path, run.agent_id, run.excerpt):
+        verdict = "already in the ledger, newer final message recorded"
+    else:
+        verdict = "already in the ledger, not duplicated"
     say(f"{verdict}: {run.agent_type} {run.agent_id} ({path})")
     return path
 
@@ -77,6 +86,11 @@ def main() -> int:
         run = reflection_subagent.resolve_run(payload)
     except reflection_subagent.RunUnidentified as exc:
         say(f"cannot identify the subagent, no reflection scheduled: {exc}")
+        return 0
+    if run.tool_internal():
+        say(f"{run.agent_id} has no agent-<id>.jsonl transcript and no meta.json: a run Claude Code "
+            "spawned inside a tool (e.g. the WebFetch summariser), not a delegated agent; "
+            "no reflection scheduled")
         return 0
     for note in run.notes:
         say(f"note ({run.agent_id}): {note}")

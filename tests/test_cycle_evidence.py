@@ -113,3 +113,35 @@ def test_scan_of_a_missing_transcript_raises_instead_of_proving_nothing(tmp_path
 def test_investigation_through_bash_counts_only_for_reading_commands(case):
     command, reads = case
     assert ev._investigation(call("Bash", command=command)) is reads
+
+
+@pytest.mark.parametrize("case", [
+    ({"command": CHECK}, True), ({"command": f"  {CHECK}  "}, True),
+    ({"command": f"cd /r/wt && {CHECK}"}, True), ({"command": f'cd "/r/my wt" && {CHECK}'}, True),
+    ({"command": f"{CHECK} | tail -3"}, False), ({"command": f"{CHECK} || true"}, False),
+    ({"command": f"echo {CHECK}"}, False), ({"command": f"{CHECK} -k one"}, False),
+    ({"command": CHECK, "run_in_background": True}, False),
+])
+def test_verify_accepts_only_the_declared_check_run_as_the_whole_foreground_command(case):
+    tool_input, proves = case
+    assert ev.runs_check(call("Bash", **tool_input), CHECK) is proves
+
+
+@pytest.mark.parametrize("case", [
+    (call("Skill", skill="code-review"), True), (call("Skill", skill="zetetic:review"), True),
+    (call("Agent", subagent_type="zetetic-team-subagents:code-reviewer"), True),
+    (call("Agent", subagent_type="code-reviewer"), True),
+    (call("Skill", skill="superpowers:receiving-code-review"), False),
+    (call("Skill", skill="superpowers:requesting-code-review"), False),
+    (call("Agent", subagent_type="zetetic-team-subagents:reviewer-academic"), False),
+    (call("Skill", skill="refine-gate:refine"), False),
+])
+def test_review_is_an_exact_review_skill_or_a_code_reviewer_agent(case):
+    review_call, counts = case
+    assert ev._review(review_call) is counts
+
+
+def test_edited_paths_lists_each_edited_file_once():
+    calls = [call("Edit", file_path="/repo/a.py"), call("Write", file_path="/repo/a.py"),
+             call("NotebookEdit", notebook_path="/repo/n.ipynb"), call("Read", file_path="/repo/r.py")]
+    assert ev.edited_paths(calls) == ["/repo/a.py", "/repo/n.ipynb"]
