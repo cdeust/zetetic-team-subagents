@@ -32,10 +32,10 @@ gate; the value in the last column was measured on 2026-09-08.
 | `problem_skills` | problem-shaped skills | `find skills -name 'SKILL.md' \| wc -l` | 15 |
 | `category_skills` | category skills | `skills_total - problem_skills` | 71 |
 | `skills_total` | skill documents | `find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' \| wc -l` | 86 |
-| `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 23 |
-| `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 24 |
+| `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 21 |
+| `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 30 |
 | `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 30 |
-| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 56 |
+| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 62 |
 | `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 41 |
 | `memory_suites` | memory tool suites | `ls scripts/test-memory-*.sh \| wc -l` | 6 |
 
@@ -66,7 +66,7 @@ template is a form to fill in. Neither is a skill a user can invoke.
 
 **Hooks are two different quantities and both are stated.** A *registration* is
 an entry in `hooks/hooks.json`, which is what the Claude Code lifecycle
-actually fires: 19. A *script* is a file in `hooks/`: 20. They differ because
+actually fires: 21. A *script* is a file in `hooks/`: 30. They differ because
 not every script on disk is registered. Conflating them is how README came to
 say `hooks-19_lifecycle` while `marketplace.json` said 20 hooks, with both
 being right about different things and neither saying which.
