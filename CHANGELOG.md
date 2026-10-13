@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.44.0]: a per-task engineering-cycle ledger enforced at the stop, Hindsight retention removed
+
 ### Added
 
 - A per-task engineering-cycle ledger, enforced by two hooks. `post-edit-cycle-open`
