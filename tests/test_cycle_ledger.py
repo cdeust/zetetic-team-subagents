@@ -194,16 +194,16 @@ def test_task_repos_classifies_many_paths_with_one_check_ignore_per_work_tree(re
     assert calls.count("check-ignore") == 2 and calls.count("rev-parse") == 4  # 4 distinct directories
 
 
-def test_a_held_lock_makes_open_task_fail_loudly_instead_of_duplicating(path, repo, monkeypatch):
+def test_a_lock_held_past_its_timeout_still_opens_the_task(path, repo, monkeypatch):
     import fcntl
     monkeypatch.setattr(gates_jsonl, "LOCK_TIMEOUT_S", 0.2)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path + ".lock", "w") as holder:
+    with open(path + ".lock", "w") as holder:  # another hook process holds the lock
         fcntl.flock(holder, fcntl.LOCK_EX)
-        with pytest.raises(gates_jsonl.LedgerError, match="still held"):
-            cl.open_task(path, opener(repo))
-    assert gates_jsonl.read_rows(path) == []
-    assert cl.open_task(path, opener(repo))[1]  # released: the next open goes through
+        task, created = cl.open_task(path, opener(repo))
+    assert created and "still held" in task["lock_timeout"]
+    assert cl.open_tasks(gates_jsonl.read_rows(path)) == [task]
+    assert not cl.open_task(path, opener(repo))[1]  # released: the next edit reuses it
 
 
 def test_parallel_opens_of_one_agent_record_a_single_task(path, repo):

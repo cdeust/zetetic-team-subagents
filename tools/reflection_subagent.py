@@ -55,12 +55,16 @@ class Run:
 
     def tool_internal(self) -> bool:
         """True for a run Claude Code spawned inside a tool (the WebFetch
-        summariser): no agent-<id>.jsonl transcript exists and no meta.json sits
-        beside it, so there is no delegated work to reflect on.
-        source: Cortex lesson memory 4386828 (agent af011bb92820136f0, session
-        65edc922, 2026-10-13: a WebFetch summariser scheduled as type "unknown")."""
+        summariser): no agent-<id>.jsonl transcript exists, no meta.json sits
+        beside it, and the event names no agent type, so there is no delegated
+        work to reflect on. A typed run whose transcript was not located is a
+        real subagent and stays scheduled.
+        source: Cortex lesson memories 4386828 (agent af011bb92820136f0, session
+        65edc922) and 4387190 (three runs of session 7313324d), 2026-10-13: each
+        tool-internal run was scheduled as type "unknown"."""
         has_transcript = bool(_agent_id_of(self.transcript_path)) and os.path.isfile(self.transcript_path)
-        return not has_transcript and not os.path.isfile(_meta_path(self.transcript_path))
+        return (self.agent_type == UNKNOWN_TYPE and not has_transcript
+                and not os.path.isfile(_meta_path(self.transcript_path)))
 
     def as_row(self) -> Dict:
         return {"agent_id": self.agent_id, "agent_type": self.agent_type,

@@ -156,6 +156,33 @@ def test_an_unattributed_task_is_judged_on_its_own_transcript_not_this_sessions(
     assert not [r for r in rows(repo) if "close" in r]
 
 
+def test_a_stop_without_session_judges_each_main_task_on_its_own_transcript(fire, repo, tmp_path, transcript):
+    other_t = tmp_path / "proj" / "other.jsonl"
+    write_transcript(other_t, [call("Edit", file_path=str(repo / "a.py"))])
+    fire(open_hook, edit_event(repo, str(repo / "a.py"), other_t, session_id="sess-other"))
+    other_t.unlink()
+    write_transcript(transcript, full_cycle(repo))  # the stopping agent's proof is not the other task's
+    declare_all(repo, rows(repo)[0]["open"])
+    _, out, _ = fire(gate_hook, stop_event(repo, transcript, session_id=None))
+    assert "unreadable" in json.loads(out)["reason"] and str(other_t) in json.loads(out)["reason"]
+    assert not [r for r in rows(repo) if "close" in r]
+
+
+def test_a_subagent_task_recorded_without_session_blocks_its_own_subagent_stop(fire, repo, tmp_path, transcript):
+    agent_t = tmp_path / "proj" / SESSION / "subagents" / "agent-ag8.jsonl"
+    write_transcript(agent_t, [call("Edit", file_path=str(repo / "a.py"))])
+    fire(open_hook, edit_event(repo, str(repo / "a.py"), transcript, session_id="", agent_id="ag8",
+                               agent_type="engineer"))
+    sub_stop = {**stop_event(repo, transcript), "hook_event_name": "SubagentStop", "agent_id": "ag8",
+                "agent_type": "engineer", "agent_transcript_path": str(agent_t)}
+    _, out, _ = fire(gate_hook, sub_stop)
+    assert "engineer" in json.loads(out)["reason"]
+    declare_all(repo, rows(repo)[0]["open"])
+    write_transcript(agent_t, full_cycle(repo), append=True)
+    assert fire(gate_hook, sub_stop)[1] == ""
+    assert [r for r in rows(repo) if "close" in r]
+
+
 def test_an_unreadable_transcript_proves_nothing_and_blocks(fire, repo, transcript):
     open_task(fire, repo, transcript)
     _, out, _ = fire(gate_hook, stop_event(repo, transcript.with_name("gone.jsonl")))

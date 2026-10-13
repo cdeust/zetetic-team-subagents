@@ -72,6 +72,10 @@ REVIEW_SKILLS = frozenset({"code-review", "zetetic:review"})
 # source: the only reviewer Agent call in ~/.claude/projects/**/*.jsonl
 # (scan, 2026-10-13) has subagent_type "zetetic-team-subagents:code-reviewer".
 REVIEW_AGENT_SUFFIX = "code-reviewer"
+# The refine skill, by exact name: a substring would accept any skill whose
+# name merely contains "refine". source: the Skill listing of the owner's
+# session 2026-10-13 ("refine-gate:refine"; "/refine" when invoked unscoped).
+REFINE_SKILLS = frozenset({"refine", "refine-gate:refine"})
 # One leading "cd <dir> &&" before the declared check. source: the Bash calls
 # of this session run from another cwd as "cd <worktree> && <command>".
 _CD_PREFIX = re.compile(r"""^cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*&&\s*""")
@@ -181,7 +185,7 @@ def _transcript_stages(calls: Calls, edits: List[int], decls: Decls) -> Dict[str
     check = decls.get("check", {}).get("ref")
     return {
         "recall": _first(calls, lambda c: bool(_CORTEX_RECALL.match(c["name"]))),
-        "refine": _first(calls, lambda c: c["name"] == "Skill" and "refine" in str(c["input"].get("skill", ""))),
+        "refine": _first(calls, lambda c: c["name"] == "Skill" and c["input"].get("skill") in REFINE_SKILLS),
         "investigate": _first(calls, _investigation),
         "implement": f"{len(edits)} edit(s) of task files",
         "verify": _verified(calls, check, last) if check else None,

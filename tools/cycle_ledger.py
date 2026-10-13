@@ -51,7 +51,7 @@ import sys
 import uuid
 from typing import Dict, Iterable, List, Optional
 
-from gates_jsonl import LedgerError, append_row, git, ledger_path as _ledger_path, locked, now_iso, read_rows
+from gates_jsonl import LedgerError, LockTimeout, append_row, git, ledger_path as _ledger_path, locked, now_iso, read_rows
 
 LEDGER_NAME = "cycles.jsonl"
 # Stages a declaration may prove, with the reference kinds each accepts.
@@ -152,15 +152,26 @@ def _window_start(rows: List[Dict], opener: Dict) -> int:
 def open_task(path: str, opener: Dict) -> tuple:
     """(task row, created): the open task of the opener's (session, agent), or a
     new one. Pre: ``opener`` has session_id, agent_id, agent_type,
-    transcript_path, repo, first_path."""
-    with locked(path):
-        rows = read_rows(path)
-        current = open_tasks(rows, (opener["session_id"], opener["agent_id"]))
-        if current:
-            return current[0], False
-        row = {"open": uuid.uuid4().hex[:12], **opener,
-               "window_start": _window_start(rows, opener), "time": now_iso()}
-        append_row(path, row)
+    transcript_path, repo, first_path.
+
+    When the lock stays held past its timeout the task is still opened, without
+    the lock, and the row records why: a duplicate open blocks the Stop as one
+    does, a dropped open would let the edit through unenforced."""
+    try:
+        with locked(path):
+            return _open_or_reuse(path, opener)
+    except LockTimeout as exc:
+        return _open_or_reuse(path, {**opener, "lock_timeout": str(exc)})
+
+
+def _open_or_reuse(path: str, opener: Dict) -> tuple:
+    rows = read_rows(path)
+    current = open_tasks(rows, (opener["session_id"], opener["agent_id"]))
+    if current:
+        return current[0], False
+    row = {"open": uuid.uuid4().hex[:12], **opener,
+           "window_start": _window_start(rows, opener), "time": now_iso()}
+    append_row(path, row)
     return row, True
 
 

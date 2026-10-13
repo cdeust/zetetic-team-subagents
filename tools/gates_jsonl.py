@@ -54,6 +54,10 @@ class LedgerError(Exception):
     """The ledger cannot be located, read or written; the caller must report it."""
 
 
+class LockTimeout(LedgerError):
+    """The ledger lock was still held after LOCK_TIMEOUT_S."""
+
+
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
@@ -142,7 +146,7 @@ def _unlock(fd: int) -> None:
 
 
 def _acquire(fd: int, lock_path: str) -> None:
-    """Take the lock on ``fd``, polling until LOCK_TIMEOUT_S; LedgerError after."""
+    """Take the lock on ``fd``, polling until LOCK_TIMEOUT_S; LockTimeout after."""
     deadline = time.monotonic() + LOCK_TIMEOUT_S
     while True:
         try:
@@ -150,7 +154,7 @@ def _acquire(fd: int, lock_path: str) -> None:
             return
         except OSError as exc:  # held by another hook process
             if time.monotonic() >= deadline:
-                raise LedgerError(f"{lock_path} still held after {LOCK_TIMEOUT_S} s: {exc}") from exc
+                raise LockTimeout(f"{lock_path} still held after {LOCK_TIMEOUT_S} s: {exc}") from exc
         time.sleep(LOCK_POLL_S)
 
 
@@ -159,8 +163,8 @@ def locked(path: str) -> Iterator[None]:
     """Hold an exclusive lock on ``<path>.lock`` for a read-then-append.
 
     The OS releases the lock when the process dies, so a killed hook leaves no
-    stale lock. Raises LedgerError when the lock cannot be taken within
-    LOCK_TIMEOUT_S or the lock file cannot be opened."""
+    stale lock. Raises LockTimeout when the lock cannot be taken within
+    LOCK_TIMEOUT_S, LedgerError when the lock file cannot be opened."""
     lock_path = path + ".lock"
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)

@@ -29,22 +29,26 @@ adheres to [Semantic Versioning](https://semver.org/).
   `/zetetic:engineering-loop`, and blocks until then, by default. The check is proven
   only by a foreground run of exactly the declared command (one `cd <dir> &&` allowed)
   that exits 0 after the last edit; a review is the `code-review` or `zetetic:review`
-  skill or a `code-reviewer` agent. A subagent's task is judged on its own transcript
-  and windowed by its agent id; a task recorded without a session id is judged on its
-  own recorded transcript. One task per agent is kept under an OS file lock.
+  skill or a `code-reviewer` agent, and the refine stage the `refine` skill by exact
+  name. A subagent's task is judged on its own transcript and windowed by its agent
+  id, even when its edits carried no session id; a main-agent task of another or no
+  session is judged on its own recorded transcript. One task per agent is kept under
+  an OS file lock; when the lock stays held past its timeout the task is still opened
+  and the row says why, since a duplicate blocks and a dropped task would not.
   `ZETETIC_CYCLE_GATE=off` lets a stop through and closes the task as bypassed, once.
   `tools/cycle_ledger.py` lists, declares and measures (`metrics`: promise rate and
-  reopens per agent type; a bypassed task counts only as a bypass).
+  reopens per agent type; a bypassed task counts only as a bypass). (#156)
 
 ### Changed
 
 - The append-only JSONL ledger contract moved from `tools/reflection_ledger.py` to
   `tools/gates_jsonl.py`, now shared by the reflection and cycle ledgers, with the
-  bounded git runner and the read-then-append lock both use.
+  bounded git runner and the read-then-append lock both use. (#156)
 - `subagent-stop-reflection` records the newer final message when the same subagent
   stops again (the cycle gate can block its first stop), and schedules nothing for a
-  run Claude Code spawns inside a tool (no `agent-<id>.jsonl`, no `meta.json`, such
-  as the WebFetch summariser); it says so on stderr.
+  run Claude Code spawns inside a tool (no agent type, no `agent-<id>.jsonl`, no
+  `meta.json`, such as the WebFetch summariser); it says so on stderr. A typed subagent
+  whose transcript was not located is still scheduled. (#156)
 
 ## [2.43.0]: a reflection after every subagent, the memory MCP server found from any cwd, a lock check upstream releases cannot fail
 

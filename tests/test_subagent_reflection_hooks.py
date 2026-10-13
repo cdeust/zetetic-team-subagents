@@ -141,6 +141,20 @@ def test_a_tool_internal_run_without_transcript_or_meta_is_reported_not_schedule
     assert rows(reflection_repo) == []
 
 
+def test_a_typed_subagent_whose_transcript_was_not_located_is_still_scheduled(
+        reflection_repo, tmp_path, monkeypatch, capsys):
+    parent = tmp_path / "proj" / f"{SESSION}.jsonl"
+    parent.parent.mkdir(parents=True, exist_ok=True)
+    parent.write_text("", encoding="utf-8")
+    payload = event(reflection_repo, None, agent_id="b2c3d4e5", agent_type="code-reviewer",
+                    transcript_path=str(parent), last_assistant_message="VERDICT: APPROVE")
+    code, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
+    assert code == 0 and "not a delegated agent" not in err
+    assert "subagent transcript not identified" in err
+    (row,) = rows(reflection_repo)
+    assert row["agent_id"] == "b2c3d4e5" and row["agent_type"] == "code-reviewer"
+
+
 def test_the_ledger_is_owner_only_because_rows_carry_transcript_excerpts(reflection_repo, tmp_path, monkeypatch, capsys):
     transcript = make_transcript(tmp_path)
     run_hook(start_hook, event(reflection_repo, transcript, agent_id="a1b2c3", agent_type="t"), monkeypatch, capsys)

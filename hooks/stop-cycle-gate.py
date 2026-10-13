@@ -65,15 +65,20 @@ def _stopping_agent(payload: dict, reflection_subagent, gates_jsonl) -> tuple:
 def _mine(cycle_ledger, rows: list, stopping: tuple) -> tuple:
     """([(task, transcript to judge it on)] that block this stop, caveats).
 
-    An unattributed (null session) task is judged on its own recorded
-    transcript: this session's transcript cannot prove another session's work."""
+    A main-agent task that is not this session's is judged on its own recorded
+    transcript: this session's transcript cannot prove another session's work.
+    A subagent's tasks are judged on the stopping subagent's transcript, the
+    only file that holds its work (its tool events carry the parent's path);
+    agent ids are unique, so a null-session task of this agent_id is its own."""
     session, agent_id, transcript = stopping
     every = cycle_ledger.open_tasks(rows)
     if session is None:
         mine = [t for t in every if t.get("agent_id") == agent_id]
-        return [(t, transcript) for t in mine], [
+        return [(t, transcript if agent_id else t.get("transcript_path") or "") for t in mine], [
             f"the payload carries no session_id: all {len(mine)} open task(s) of this agent block"] if mine else []
     mine = cycle_ledger.open_tasks(rows, (session, agent_id))
+    if agent_id:
+        mine += cycle_ledger.open_tasks(rows, (None, agent_id))
     orphans = [t for t in every if t.get("session_id") is None and agent_id is None and t.get("agent_id") is None]
     caveats = [f"{len(orphans)} task(s) were recorded without a session_id and are unattributed; they block "
                "until proven on their own transcript"] if orphans else []

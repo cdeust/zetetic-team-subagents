@@ -84,6 +84,8 @@ def main() -> int:
         if opener["session_id"] is None:
             say("payload carried no session_id: the task is unattributed and blocks every main-agent Stop")
         say(f"cycle task {task['open']} opened by {opener['agent_type']} at {file_path}")
+        if task.get("lock_timeout"):
+            say(f"opened without the ledger lock, a parallel edit may record a duplicate: {task['lock_timeout']}")
     return 0
 
 

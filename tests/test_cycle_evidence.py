@@ -65,6 +65,14 @@ def test_refine_is_proven_by_the_refine_skill_and_benchmark_only_by_a_declaratio
     assert result["missing"] == ["benchmark"]
 
 
+@pytest.mark.parametrize("skill, proven", [("refine-gate:refine", True), ("refine", True),
+                                          ("x:unrefined-foo", False), ("refine-gate:refinement", False)])
+def test_refine_is_the_refine_skill_by_exact_name(tmp_path, skill, proven):
+    calls = [call("Skill", skill=skill)] + full_cycle(Path("/repo"))
+    result = verdict(tmp_path, calls, {"check": DECLS["check"]})
+    assert ("refine" not in result["missing"]) is proven
+
+
 def test_an_edit_after_the_review_reopens_and_needs_a_new_review_and_run(tmp_path):
     repo = Path("/repo")
     calls = full_cycle(repo) + [call("Edit", file_path=str(repo / "b.py"))]
