@@ -227,6 +227,13 @@ def test_refiring_for_the_same_agent_does_not_duplicate(repo, tmp_path, monkeypa
     assert "already in the ledger" in err
 
 
+def test_the_ledger_is_owner_only_because_rows_carry_transcript_excerpts(repo, tmp_path, monkeypatch, capsys):
+    transcript = make_transcript(tmp_path)
+    run_hook(start_hook, event(repo, transcript, agent_id="a1b2c3", agent_type="t"), monkeypatch, capsys)
+    path = Path(ledger.ledger_path(str(repo)))
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
 def test_outside_a_git_repo_the_missing_ledger_is_reported(tmp_path, monkeypatch, capsys):
     plain = tmp_path / "plain"
     plain.mkdir()
