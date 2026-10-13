@@ -191,6 +191,14 @@ def resolve_run(payload: Dict) -> Run:
         agent_type = UNKNOWN_TYPE
         notes.append("agent_type absent from the payload and from meta.json")
     description = _text(meta.get("description")) or _text(payload.get("description"))
+    session_id = _text(payload.get("session_id"))
+    if not session_id:
+        # session_id is a common input field of every hook event (Claude Code
+        # hooks reference); its absence is an anomaly the Stop gate must not
+        # guess around. source: https://code.claude.com/docs/en/hooks
+        # "Common input fields" and context-guard 2.1.0 hooks/subagent-tracker.py.
+        notes.append("payload carried no session_id: this reflection cannot be attributed "
+                     "to a session, so the Stop gate reports it as unattributed")
     return Run(agent_id=agent_id, agent_type=agent_type, description=description,
-               transcript_path=transcript, session_id=_text(payload.get("session_id")),
+               transcript_path=transcript, session_id=session_id,
                excerpt=_excerpt(payload, transcript, notes), notes=notes)

@@ -17,6 +17,10 @@ written by ``scripts/gate.sh`` and read by the user-level stop-gate-ledger):
     reflection only by a stored lesson, so the two never share rows.
   * a pending row is {"agent_id", "agent_type", "description",
     "transcript_path", "session_id", "excerpt", "hindsight", "notes", "time"}.
+  * a hindsight row is {"hindsight_for": <agent_id>, "hindsight": {...}, "time": ...}:
+    the outcome of the network retain, appended AFTER the pending row (the
+    pending row is the enforcement record and must not wait on the network).
+    The reader merges the latest one into the pending row's ``hindsight``.
   * a lift row is {"lift": <agent_id>, "memory_id": <int>, "time": ...}, the
     analogue of the waiver row ``{"waive": <gate>, ...}``.
   * a row is pending when no lift row names its agent_id.
@@ -91,6 +95,8 @@ def read_rows(path: str) -> List[Dict]:
             parsed = [_parse_row(line) for line in fh]
     except FileNotFoundError:
         return []
+    except OSError as exc:  # FAILS_ON: ledger unreadable (permissions, a directory at the path)
+        raise LedgerError(f"cannot read the ledger {path}: {exc}") from exc
     return [row for row in parsed if row is not None]
 
 
@@ -125,6 +131,21 @@ def append_pending(path: str, entry: Dict) -> bool:
     return True
 
 
+def record_hindsight(path: str, agent_id: str, outcome: Dict) -> None:
+    """Append the Hindsight outcome for an already-recorded pending row.
+
+    Pre: the pending row for ``agent_id`` was appended first. Post: one whole
+    line is added; the pending row is untouched, the reader merges this in.
+    """
+    _append(path, {"hindsight_for": agent_id, "hindsight": outcome, "time": now_iso()})
+
+
+def _hindsight_outcomes(rows: List[Dict]) -> Dict[str, Dict]:
+    """agent_id -> latest recorded outcome (a later line wins)."""
+    return {r["hindsight_for"]: r["hindsight"] for r in rows
+            if isinstance(r.get("hindsight_for"), str) and isinstance(r.get("hindsight"), dict)}
+
+
 def _lifted_ids(rows: List[Dict]) -> set:
     return {r["lift"] for r in rows if isinstance(r.get("lift"), str)}
 
@@ -132,11 +153,22 @@ def _lifted_ids(rows: List[Dict]) -> set:
 def pending(path: str, session_id: Optional[str] = None) -> List[Dict]:
     """Pending rows, oldest first; restricted to one session when given."""
     rows = read_rows(path)
-    lifted = _lifted_ids(rows)
-    return [r for r in rows
-            if "lift" not in r and isinstance(r.get("agent_id"), str)
-            and r["agent_id"] not in lifted
+    lifted, outcomes = _lifted_ids(rows), _hindsight_outcomes(rows)
+    return [{**r, "hindsight": outcomes.get(r["agent_id"], r.get("hindsight"))}
+            for r in rows
+            if "lift" not in r and "hindsight_for" not in r
+            and isinstance(r.get("agent_id"), str) and r["agent_id"] not in lifted
             and (session_id is None or r.get("session_id") == session_id)]
+
+
+def split_by_session(rows: List[Dict], session_id: str):
+    """(mine, unattributed, elsewhere): rows of ``session_id``, rows recorded
+    without any session_id, and rows of other sessions. A row with no session
+    id is never assigned to a session it cannot be shown to belong to."""
+    mine = [r for r in rows if r.get("session_id") == session_id]
+    unattributed = [r for r in rows if not r.get("session_id")]
+    elsewhere = [r for r in rows if r.get("session_id") and r.get("session_id") != session_id]
+    return mine, unattributed, elsewhere
 
 
 def lift(path: str, agent_id: str, memory_id: object) -> Dict:

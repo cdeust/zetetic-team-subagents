@@ -33,10 +33,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - A reflection step after every subagent, enforced by two hooks (#153).
   `subagent-stop-reflection` (SubagentStop) records a pending reflection in
-  `<git-common-dir>/zetetic-gates/reflections.jsonl` and retains the run into
-  Hindsight when it is configured for the cwd, reporting on stderr and in the
-  ledger row when it is not or the server is down. `stop-reflection-gate`
-  (Stop) blocks the orchestrator while its session has a pending reflection and
+  `<git-common-dir>/zetetic-gates/reflections.jsonl` (written before any
+  network call) and retains the run into Hindsight when it is configured for
+  the cwd, within a 4 s total deadline, over https or loopback http only,
+  reporting on stderr and in a second ledger line keyed by agent id when it is
+  not configured, refused or the server is down. `stop-reflection-gate`
+  (Stop) blocks the orchestrator while its session has a pending reflection (a
+  row or a Stop event without a `session_id` is reported as unattributed and
+  still blocks, never assigned to a session) and
   names the procedure: one Cortex memory tagged `lesson-candidate` with
   `agent_topic=<agent type>`, then `tools/reflection_ledger.py lift`, which
   refuses without the Cortex memory id.

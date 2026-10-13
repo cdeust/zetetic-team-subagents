@@ -97,8 +97,16 @@ def run_hook(module, payload: dict, monkeypatch: pytest.MonkeyPatch, capsys) -> 
     return code, out.out, out.err
 
 
-def rows(repo: Path) -> list[dict]:
+def raw_rows(repo: Path) -> list[dict]:
     return ledger.read_rows(ledger.ledger_path(str(repo)))
+
+
+def rows(repo: Path) -> list[dict]:
+    """The ledger as a reader sees it: outcome lines merged into their pending row."""
+    raw = raw_rows(repo)
+    outcomes = {r["hindsight_for"]: r["hindsight"] for r in raw if "hindsight_for" in r}
+    return [{**r, "hindsight": outcomes.get(r.get("agent_id"), r.get("hindsight"))} if "agent_id" in r else r
+            for r in raw if "hindsight_for" not in r]
 
 
 def write_hindsight_config(path: Path, repo: Path, api_url: str, opt_in: list[str] | None = None):
@@ -479,3 +487,139 @@ def test_both_hooks_are_registered_for_their_events():
 
     assert "subagent-stop-reflection.py" in commands("SubagentStop")
     assert "stop-reflection-gate.py" in commands("Stop")
+
+
+# -- review findings on #153 (A: ordering and bound, B: session, C: read, D: URL) --
+
+import reflection_hindsight  # noqa: E402
+
+
+def test_A_the_pending_row_is_on_disk_before_hindsight_is_contacted(
+        repo, tmp_path, monkeypatch, capsys):
+    seen = []
+
+    def killed_during_retain(cwd, run):
+        seen.append(rows(repo))
+        raise SystemExit(137)  # the hook is killed mid-network, no outcome ever written
+
+    monkeypatch.setattr(reflection_hindsight, "retain", killed_during_retain)
+    payload = event(repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    with pytest.raises(SystemExit):
+        run_hook(start_hook, payload, monkeypatch, capsys)
+    assert [r["agent_id"] for r in seen[0]] == ["a1b2c3"]
+    (survivor,) = rows(repo)
+    assert survivor["hindsight"]["status"] == "pending"
+    assert [r["agent_id"] for r in ledger.pending(ledger.ledger_path(str(repo)), SESSION)] == ["a1b2c3"]
+
+
+def test_A_the_hindsight_outcome_is_a_second_line_the_reader_merges(
+        repo, fire, configure, hindsight_server):
+    configure(server_url(hindsight_server))
+    fire()
+    first, second = raw_rows(repo)
+    assert first["agent_id"] == "a1b2c3" and first["hindsight"]["status"] == "pending"
+    assert second["hindsight_for"] == "a1b2c3" and second["hindsight"]["status"] == "retained"
+    (merged,) = ledger.pending(ledger.ledger_path(str(repo)))
+    assert merged["hindsight"]["status"] == "retained"
+
+
+def test_A_the_hindsight_step_fits_the_hook_budget_and_a_hung_post_is_abandoned(
+        repo, fire, configure, monkeypatch):
+    hooks = json.loads((REPO_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
+    budget = hooks["SubagentStop"][-1]["hooks"][0]["timeout"]
+    assert reflection_hindsight.HINDSIGHT_DEADLINE_S + ledger.GIT_TIMEOUT_S < budget
+    never = threading.Event()  # a DNS lookup that never answers: only the deadline ends the wait
+    monkeypatch.setattr(reflection_hindsight, "_post_blocking", lambda *a: never.wait())
+    monkeypatch.setattr(reflection_hindsight, "HINDSIGHT_DEADLINE_S", 0.05)
+    configure("http://127.0.0.1:1")
+    err = fire()
+    never.set()
+    assert "hindsight error:" in err and "no answer within" in err
+    assert rows(repo)[0]["hindsight"]["status"] == "error"
+
+
+def test_B_a_subagent_event_without_session_id_is_noted_on_the_row(repo, tmp_path, monkeypatch, capsys):
+    payload = event(repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    del payload["session_id"]
+    _, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
+    (row,) = rows(repo)
+    assert row["session_id"] == ""
+    assert any("no session_id" in n for n in row["notes"])
+    assert "no session_id" in err
+
+
+def test_B_a_row_without_session_id_blocks_and_is_called_unattributed(
+        repo, tmp_path, monkeypatch, capsys):
+    payload = event(repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    del payload["session_id"]
+    run_hook(start_hook, payload, monkeypatch, capsys)
+    _, out, err = run_hook(stop_hook, stop_event(repo), monkeypatch, capsys)
+    decision = json.loads(out)
+    assert decision["decision"] == "block" and "a1b2c3" in decision["reason"]
+    assert "unattributed" in err and "unattributed" in decision["reason"]
+    assert "belong to other sessions" not in err
+
+
+def test_B_a_stop_event_without_session_id_blocks_on_all_rows_and_says_why(
+        repo, monkeypatch, capsys, schedule):
+    schedule(session="sess-B")
+    event_without_session = stop_event(repo)
+    del event_without_session["session_id"]
+    _, out, err = run_hook(stop_hook, event_without_session, monkeypatch, capsys)
+    decision = json.loads(out)
+    assert decision["decision"] == "block"
+    assert "Stop payload carries no session_id" in err
+    assert "no session_id" in decision["reason"]
+
+
+def _make_ledger_unreadable(repo: Path) -> None:
+    path = Path(ledger.ledger_path(str(repo)))
+    path.mkdir(parents=True)  # a directory where the file should be: IsADirectoryError on open
+
+
+def test_C_an_unreadable_ledger_is_a_ledger_error_naming_the_path(repo):
+    _make_ledger_unreadable(repo)
+    path = ledger.ledger_path(str(repo))
+    with pytest.raises(ledger.LedgerError, match="cannot read the ledger") as caught:
+        ledger.read_rows(path)
+    assert path in str(caught.value)
+
+
+def test_C_both_hooks_report_an_unreadable_ledger_and_exit_zero(repo, tmp_path, monkeypatch, capsys):
+    _make_ledger_unreadable(repo)
+    payload = event(repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    code, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
+    assert code == 0 and "ledger NOT written" in err and "cannot read the ledger" in err
+    code, out, err = run_hook(stop_hook, stop_event(repo), monkeypatch, capsys)
+    assert code == 0 and out == "" and "ledger unreadable" in err and "cannot read the ledger" in err
+
+
+@pytest.mark.parametrize("api_url", [
+    "http://example.com", "http://10.0.0.5:8888", "file:///etc/passwd", "ftp://127.0.0.1",
+    "127.0.0.1:8888", "https://", "http://localhost.evil.example"])
+def test_D_a_non_loopback_http_or_foreign_scheme_url_is_refused_and_nothing_is_sent(
+        repo, fire, configure, monkeypatch, api_url):
+    def sent(*args, **kwargs):
+        raise AssertionError("a request was sent")
+
+    monkeypatch.setattr(reflection_hindsight.urllib.request, "urlopen", sent)
+    monkeypatch.setenv("HINDSIGHT_API_TOKEN", "s3cret")
+    configure(api_url)
+    err = fire()
+    assert "hindsight error:" in err and "refused" in err and "no request was sent" in err
+    assert rows(repo)[0]["hindsight"]["status"] == "error"
+
+
+@pytest.mark.parametrize("api_url", [
+    "https://hindsight.example.com", "http://127.0.0.1:8888", "http://localhost:8888", "http://[::1]:8888"])
+def test_D_https_and_loopback_http_urls_are_accepted(api_url):
+    assert reflection_hindsight.check_api_url(api_url) is None
+
+
+def test_D_the_bank_is_quoted_as_one_path_segment(repo, fire, no_real_hindsight, hindsight_server):
+    no_real_hindsight.write_text(json.dumps({
+        "apiUrl": server_url(hindsight_server), "optInOnly": False,
+        "mapPathToBank": {str(repo): "a b/../c?d"}}), encoding="utf-8")
+    fire()
+    ((path, _),) = hindsight_server.received
+    assert path == "/v1/default/banks/a%20b%2F..%2Fc%3Fd/memories"

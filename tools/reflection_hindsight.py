@@ -27,7 +27,10 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import ipaddress
+import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -38,9 +41,15 @@ URL_ENV = "HINDSIGHT_API_URL"
 TOKEN_ENV = "HINDSIGHT_API_TOKEN"
 DEFAULT_CONFIG = os.path.join("~", ".hindsight", "coding-agent.json")
 RETAINED, NOT_CONFIGURED, ERROR = "retained", "not_configured", "error"
-# The hook has a 15 s budget in hooks.json; a retain is queued with async=true,
-# so the server only has to accept it. source: hooks/hooks.json SubagentStop timeout.
-HTTP_TIMEOUT_S = 8
+# Total wall time the whole Hindsight step may take, DNS and every socket
+# operation included. Budget: the SubagentStop hook timeout is 15 s
+# (hooks/hooks.json); the ledger append that precedes this step may spend up to
+# reflection_ledger.GIT_TIMEOUT_S = 8 s in git; 15 - 8 = 7 s remain, minus 3 s for
+# interpreter start and the outcome append = 4 s. A test asserts the sum stays
+# under the hooks.json timeout. A retain is queued with async=true, so the
+# server only has to accept it.
+HINDSIGHT_DEADLINE_S = 4
+LOOPBACK_NAMES = ("localhost",)
 # Namespace for the deterministic operation_id: re-firing the same SubagentStop
 # returns the original operation instead of queueing a duplicate (RetainRequest
 # schema). source: RFC 4122 section 4.3 name-based UUID; the namespace is this
@@ -111,14 +120,61 @@ def build_item(run: Dict) -> Dict:
                          "session_id": run.get("session_id") or ""}}
 
 
+def _is_loopback(host: str) -> bool:
+    if host in LOOPBACK_NAMES:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def check_api_url(api_url: str) -> Optional[str]:
+    """None when ``api_url`` may receive the bearer token, else why not.
+
+    Pre: none. Post: https anywhere, http only to a loopback host; every other
+    scheme (file://, ftp://, no scheme) and a host-less URL is refused.
+    """
+    parts = urllib.parse.urlsplit(api_url)
+    host = parts.hostname or ""
+    if parts.scheme == "https" and host:
+        return None
+    if parts.scheme == "http" and _is_loopback(host):
+        return None
+    return (f"apiUrl {api_url!r} refused: only https, or http to a loopback host, "
+            "may be sent the bearer token; no request was sent")
+
+
 def _post(url: str, token: str, body: Dict) -> Outcome:
+    """_post_blocking under one total deadline (DNS has no timeout of its own)."""
+    box: list = []
+
+    def work() -> None:
+        try:
+            box.append((True, _post_blocking(url, token, body)))
+        except BaseException as exc:  # re-raised below in the caller's thread
+            box.append((False, exc))
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    worker.join(HINDSIGHT_DEADLINE_S)
+    if not box:
+        return Outcome(ERROR, f"{url} gave no answer within {HINDSIGHT_DEADLINE_S} s "
+                              "(the hook budget); the retain was abandoned")
+    done, value = box[0]
+    if not done:
+        raise value
+    return value
+
+
+def _post_blocking(url: str, token: str, body: Dict) -> Outcome:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
                                      headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_S) as resp:
+        with urllib.request.urlopen(request, timeout=HINDSIGHT_DEADLINE_S) as resp:
             return Outcome(RETAINED, f"HTTP {resp.status} from {url}")
     except urllib.error.HTTPError as exc:
         return Outcome(ERROR, f"HTTP {exc.code} from {url}: {exc.reason}")
@@ -141,10 +197,13 @@ def retain(cwd: str, run: Dict, env: Optional[Dict[str, str]] = None) -> Outcome
     api_url = env.get(URL_ENV) or config.get("apiUrl")
     if not isinstance(api_url, str) or not api_url:
         return Outcome(NOT_CONFIGURED, "bank resolved but no apiUrl in the config", bank)
+    refusal = check_api_url(api_url)
+    if refusal:
+        return Outcome(ERROR, refusal, bank)
     item = build_item(run)
     body = {"items": [item], "async": True,
             "operation_id": str(uuid.uuid5(_OPERATION_NS, run["agent_id"]))}
-    url = f"{api_url.rstrip('/')}/v1/default/banks/{bank}/memories"
+    url = f"{api_url.rstrip('/')}/v1/default/banks/{urllib.parse.quote(bank, safe='')}/memories"
     outcome = _post(url, env.get(TOKEN_ENV) or str(config.get("apiToken") or ""), body)
     outcome.bank, outcome.document_id = bank, item["document_id"]
     return outcome

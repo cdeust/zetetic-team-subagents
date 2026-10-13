@@ -21,6 +21,14 @@ block with or without either, and is lifted by a stored lesson, not a proof.
 What IS reused is the ledger contract (append-only JSONL under
 ``zetetic-gates/``, a lifting row names the entry) and the loop rule below.
 
+Attribution. session_id is a common input field of every hook event (Claude
+Code hooks reference), so its absence is an anomaly, never a quiet default:
+  * a row recorded without a session_id belongs to no session we can name; it
+    blocks (fail closed: dropping it would lose the reflection) and the reason
+    says it is unattributed, never that it is this session's;
+  * a Stop payload without a session_id cannot tell which rows are its own; all
+    pending rows block, and the reason says the session could not be determined.
+
 Loop rule, as in the other Stop gates: a turn already in a forced continuation
 (``stop_hook_active``) is never blocked again; the still-pending rows are
 reported on stderr instead. Rows of other sessions never block this one (the
@@ -54,12 +62,12 @@ def _entry_text(row: dict, cwd: str, lift_tool: str) -> str:
             f"  lift: python3 {lift_tool} --cwd {cwd} lift {row['agent_id']} --memory-id <id>")
 
 
-def block_reason(rows: list, cwd: str) -> str:
+def block_reason(rows: list, cwd: str, caveats: tuple = ()) -> str:
     lift_tool = os.path.join(_ROOT, "tools", "reflection_ledger.py")
     shown = "\n".join(_entry_text(r, cwd, lift_tool) for r in rows[:MAX_LISTED])
     more = f"\n(+{len(rows) - MAX_LISTED} more: python3 {lift_tool} --cwd {cwd} list)" \
         if len(rows) > MAX_LISTED else ""
-    return (
+    return "".join(f"NOTE: {c}\n" for c in caveats) + (
         f"{len(rows)} subagent reflection(s) pending. After each action by an agent, a "
         "lesson is extracted so the agent does better next time. Do it yourself now, "
         "not through a subagent (a subagent would add a pending reflection of its own). "
@@ -71,6 +79,18 @@ def block_reason(rows: list, cwd: str) -> str:
         "each point; a lesson without a quoted line is an opinion.\n"
         "3. Run the lift command with the memory id `remember` returned. It refuses "
         "without one.\n" + shown + more)
+
+
+def _attribute(reflection_ledger, everything: list, session):
+    """(rows that block, caveats to report, count belonging to other sessions)."""
+    if session is None:
+        return everything, ([f"the Stop payload carries no session_id: cannot tell which of the "
+                             f"{len(everything)} pending reflection(s) are this session's, "
+                             "all of them block"] if everything else []), 0
+    mine, unattributed, elsewhere = reflection_ledger.split_by_session(everything, session)
+    caveats = [f"{len(unattributed)} pending reflection(s) were recorded without a session_id "
+               "and are unattributed; they block until lifted"] if unattributed else []
+    return mine + unattributed, caveats, len(elsewhere)
 
 
 def main() -> int:
@@ -88,14 +108,20 @@ def main() -> int:
         say("stdin is not a JSON object, reflections not enforced")
         return 0
     cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) else os.getcwd()
-    session = payload.get("session_id") if isinstance(payload.get("session_id"), str) else None
+    session = payload.get("session_id") if isinstance(payload.get("session_id"), str) else ""
+    session = session or None
     try:
         path = reflection_ledger.ledger_path(cwd)
     except reflection_ledger.LedgerError:
         return 0  # not a git repository: no ledger can exist here, nothing is owed
-    everything = reflection_ledger.pending(path)
-    mine = reflection_ledger.pending(path, session) if session else everything
-    elsewhere = len(everything) - len(mine)
+    try:
+        everything = reflection_ledger.pending(path)
+    except reflection_ledger.LedgerError as exc:
+        say(f"ledger unreadable, reflections NOT enforced: {exc}")
+        return 0
+    mine, caveats, elsewhere = _attribute(reflection_ledger, everything, session)
+    for caveat in caveats:
+        say(caveat)
     if elsewhere:
         say(f"{elsewhere} pending reflection(s) belong to other sessions: "
             f"python3 {os.path.join(_ROOT, 'tools', 'reflection_ledger.py')} --cwd {cwd} list")
@@ -105,7 +131,7 @@ def main() -> int:
         say(f"{len(mine)} reflection(s) still pending, stop allowed because this is a "
             "forced continuation: " + ", ".join(r["agent_id"] for r in mine))
         return 0
-    sys.stdout.write(json.dumps({"decision": "block", "reason": block_reason(mine, cwd)}))
+    sys.stdout.write(json.dumps({"decision": "block", "reason": block_reason(mine, cwd, tuple(caveats))}))
     return 0
 
 
