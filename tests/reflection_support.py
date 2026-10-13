@@ -20,6 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 ledger = importlib.import_module("reflection_ledger")  # tools/ is on sys.path from the line above
+gates_jsonl = importlib.import_module("gates_jsonl")
 SESSION = "sess-A"
 
 
@@ -73,7 +74,7 @@ def run_hook(module, payload: dict, monkeypatch, capsys) -> tuple[int, str, str]
 
 
 def raw_rows(repo: Path) -> list[dict]:
-    return ledger.read_rows(ledger.ledger_path(str(repo)))
+    return gates_jsonl.read_rows(ledger.ledger_path(str(repo)))
 
 
 def rows(repo: Path) -> list[dict]:

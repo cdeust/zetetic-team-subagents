@@ -9,8 +9,8 @@ let the orchestrator stop while a row is pending; the ``lift`` command below
 is the only way to clear a row, and it demands the Cortex memory id that holds
 the lesson as evidence.
 
-Ledger contract (same family as the gate failure ledger ``failures.jsonl``,
-written by ``scripts/gate.sh`` and read by the user-level stop-gate-ledger):
+Ledger contract (``gates_jsonl.py``, same family as the gate failure ledger
+``failures.jsonl`` written by ``scripts/gate.sh``):
   * append-only JSON lines, one file per repository, under
     ``<git-common-dir>/zetetic-gates/``. The file is ``reflections.jsonl``, a
     sibling of ``failures.jsonl``: a failure is lifted by a green proof, a
@@ -31,34 +31,19 @@ Post: the file only ever grows by whole lines; no row is rewritten.
 from __future__ import annotations
 
 import argparse
-import datetime as dt
-import json
 import os
-import subprocess
 import sys
 from typing import Dict, List, Optional
 
-LEDGER_DIR = "zetetic-gates"
+from gates_jsonl import LedgerError, now_iso, read_rows
+from gates_jsonl import append_row
+from gates_jsonl import ledger_path as _ledger_path
+
 LEDGER_NAME = "reflections.jsonl"
-# Rows carry an excerpt of the subagent transcript, which Claude Code writes
-# owner-only; the ledger must not be wider. source: ls -l ~/.claude/projects/*/*.jsonl
-# (-rw-------) and CodeQL py/overly-permissive-file alert #45 on PR #153.
-LEDGER_FILE_MODE = 0o600
-# One git rev-parse is local and instant; the bound only stops a wedged git
-# from wedging the hook. source: stop-gate-ledger.py _GIT_TIMEOUT (8 s).
-GIT_TIMEOUT_S = 8
-
-
-class LedgerError(Exception):
-    """The ledger cannot be located or written; the caller must report it."""
 
 
 class LiftRefused(Exception):
     """A lift request that does not meet the evidence contract."""
-
-
-def now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
 def ledger_path(cwd: str) -> str:
@@ -66,54 +51,7 @@ def ledger_path(cwd: str) -> str:
 
     Pre: none. Post: returns the path, or raises LedgerError naming why not.
     """
-    try:
-        proc = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"], cwd=cwd, capture_output=True,
-            text=True, timeout=GIT_TIMEOUT_S, check=False, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise LedgerError(f"git could not be run in {cwd!r}: {exc}") from exc
-    common = proc.stdout.strip()
-    if proc.returncode != 0 or not common:
-        raise LedgerError(f"{cwd!r} is not inside a git repository: {proc.stderr.strip()}")
-    base = os.path.normpath(os.path.join(cwd, common))
-    return os.path.join(base, LEDGER_DIR, LEDGER_NAME)
-
-
-def _parse_row(line: bytes) -> Optional[Dict]:
-    """The JSON object on this line, or None for a torn, undecodable or
-    non-object line."""
-    try:
-        row = json.loads(line.decode("utf-8"))
-    except ValueError:  # includes UnicodeDecodeError
-        return None  # a torn line is skipped, never allowed to hide the rest
-    return row if isinstance(row, dict) else None
-
-
-def read_rows(path: str) -> List[Dict]:
-    """Every well-formed JSON object row; an absent file is an empty ledger."""
-    try:
-        with open(path, "rb") as fh:
-            parsed = [_parse_row(line) for line in fh]
-    except FileNotFoundError:
-        return []
-    except OSError as exc:  # FAILS_ON: ledger unreadable (permissions, a directory at the path)
-        raise LedgerError(f"cannot read the ledger {path}: {exc}") from exc
-    return [row for row in parsed if row is not None]
-
-
-def _append(path: str, row: Dict) -> None:
-    """Append one whole line with a single write (O_APPEND keeps concurrent
-    hook processes from interleaving inside a line)."""
-    line = json.dumps(row, ensure_ascii=False) + "\n"
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, LEDGER_FILE_MODE)
-        try:
-            os.write(fd, line.encode("utf-8"))
-        finally:
-            os.close(fd)
-    except OSError as exc:
-        raise LedgerError(f"cannot append to {path}: {exc}") from exc
+    return _ledger_path(cwd, LEDGER_NAME)
 
 
 def append_pending(path: str, entry: Dict) -> bool:
@@ -128,7 +66,7 @@ def append_pending(path: str, entry: Dict) -> bool:
         raise LedgerError("a pending entry needs a non-empty agent_id")
     if any(r.get("agent_id") == agent_id for r in read_rows(path)):
         return False
-    _append(path, {**entry, "time": now_iso()})
+    append_row(path, {**entry, "time": now_iso()})
     return True
 
 
@@ -138,7 +76,7 @@ def record_hindsight(path: str, agent_id: str, outcome: Dict) -> None:
     Pre: the pending row for ``agent_id`` was appended first. Post: one whole
     line is added; the pending row is untouched, the reader merges this in.
     """
-    _append(path, {"hindsight_for": agent_id, "hindsight": outcome, "time": now_iso()})
+    append_row(path, {"hindsight_for": agent_id, "hindsight": outcome, "time": now_iso()})
 
 
 def _hindsight_outcomes(rows: List[Dict]) -> Dict[str, Dict]:
@@ -190,7 +128,7 @@ def lift(path: str, agent_id: str, memory_id: object) -> Dict:
     if not any(r.get("agent_id") == agent_id and "lift" not in r for r in rows):
         raise LiftRefused(f"no pending reflection for agent {agent_id} in {path}")
     row = {"lift": agent_id, "memory_id": memory_id, "time": now_iso()}
-    _append(path, row)
+    append_row(path, row)
     return row
 
 

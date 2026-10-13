@@ -40,7 +40,7 @@ def say(message: str) -> None:
     print(f"[{_TOOL}] {message}", file=sys.stderr)
 
 
-def _record_pending(reflection_ledger, cwd: str, run):
+def _record_pending(reflection_ledger, gates_jsonl, cwd: str, run):
     """Append the pending row; the ledger path, or None after reporting why not."""
     placeholder = {"status": "pending", "detail": "Hindsight retain not yet attempted "
                    "(no outcome line follows if the hook was killed or the ledger was unwritable)",
@@ -48,7 +48,7 @@ def _record_pending(reflection_ledger, cwd: str, run):
     try:
         path = reflection_ledger.ledger_path(cwd)
         added = reflection_ledger.append_pending(path, {**run.as_row(), "hindsight": placeholder})
-    except reflection_ledger.LedgerError as exc:
+    except gates_jsonl.LedgerError as exc:
         say(f"ledger NOT written, the Stop gate cannot enforce this reflection: {exc}")
         return None
     verdict = "pending reflection recorded" if added else "already in the ledger, not duplicated"
@@ -59,6 +59,7 @@ def _record_pending(reflection_ledger, cwd: str, run):
 def main() -> int:
     try:
         import reflection_hindsight
+        import gates_jsonl
         import reflection_ledger
         import reflection_subagent
     except ImportError as exc:  # FAILS_ON: tools/ not shipped beside hooks/ (partial install)
@@ -80,13 +81,13 @@ def main() -> int:
     for note in run.notes:
         say(f"note ({run.agent_id}): {note}")
     cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) else os.getcwd()
-    path = _record_pending(reflection_ledger, cwd, run)
+    path = _record_pending(reflection_ledger, gates_jsonl, cwd, run)
     hindsight = reflection_hindsight.retain(cwd, run.as_row())
     say(f"hindsight {hindsight.status}: {hindsight.detail}")
     if path is not None:
         try:
             reflection_ledger.record_hindsight(path, run.agent_id, hindsight.as_row())
-        except reflection_ledger.LedgerError as exc:
+        except gates_jsonl.LedgerError as exc:
             say(f"hindsight outcome NOT written to the ledger: {exc}")
     return 0
 

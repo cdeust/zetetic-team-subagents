@@ -20,6 +20,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A per-task engineering-cycle ledger, enforced by two hooks. `post-edit-cycle-open`
+  (PostToolUse) opens a task at the first edit of a file of a git work tree that git
+  does not ignore; `stop-cycle-gate` (Stop and SubagentStop) closes it when the
+  stopping agent's transcript and checked declarations prove every stage of
+  `/zetetic:engineering-loop`, and blocks until then, by default. `ZETETIC_CYCLE_GATE=off`
+  lets a stop through and logs a `bypass` row. `tools/cycle_ledger.py` lists, declares
+  and measures (`metrics`: promise rate and reopens per agent type).
+
+### Changed
+
+- The append-only JSONL ledger contract moved from `tools/reflection_ledger.py` to
+  `tools/gates_jsonl.py`, now shared by the reflection and cycle ledgers.
+
 ## [2.43.0]: a reflection after every subagent, the memory MCP server found from any cwd, a lock check upstream releases cannot fail
 
 ### Added

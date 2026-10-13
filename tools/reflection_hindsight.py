@@ -44,7 +44,7 @@ RETAINED, NOT_CONFIGURED, ERROR = "retained", "not_configured", "error"
 # Total wall time the whole Hindsight step may take, DNS and every socket
 # operation included. Budget: the SubagentStop hook timeout is 15 s
 # (hooks/hooks.json); the ledger append that precedes this step may spend up to
-# reflection_ledger.GIT_TIMEOUT_S = 8 s in git; 15 - 8 = 7 s remain, minus 3 s for
+# gates_jsonl.GIT_TIMEOUT_S = 8 s in git; 15 - 8 = 7 s remain, minus 3 s for
 # interpreter start and the outcome append = 4 s. A test asserts the sum stays
 # under the hooks.json timeout. A retain is queued with async=true, so the
 # server only has to accept it.

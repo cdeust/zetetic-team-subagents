@@ -13,6 +13,7 @@ from reflection_support import (
     rows,
     server_url,
 )
+import gates_jsonl
 import reflection_hindsight
 import reflection_ledger as ledger
 
@@ -112,7 +113,7 @@ def test_A_the_hindsight_step_fits_the_hook_budget_and_a_hung_post_is_abandoned(
         reflection_repo, fire, configure, monkeypatch):
     hooks = json.loads((REPO_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
     budget = hooks["SubagentStop"][-1]["hooks"][0]["timeout"]
-    assert reflection_hindsight.HINDSIGHT_DEADLINE_S + ledger.GIT_TIMEOUT_S < budget
+    assert reflection_hindsight.HINDSIGHT_DEADLINE_S + gates_jsonl.GIT_TIMEOUT_S < budget
     never = threading.Event()  # a DNS lookup that never answers: only the deadline ends the wait
     monkeypatch.setattr(reflection_hindsight, "_post_blocking", lambda *a: never.wait())
     monkeypatch.setattr(reflection_hindsight, "HINDSIGHT_DEADLINE_S", 0.05)
