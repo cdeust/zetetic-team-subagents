@@ -15,13 +15,11 @@ import io
 import json
 import socket
 import sys
-import threading
-import subprocess
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+import reflection_ledger as ledger  # noqa: E402  (needs tools/ on sys.path, set on the line above)
 SESSION = "sess-A"
 
 
@@ -35,30 +33,8 @@ def _load(name: str, relative: str):
 
 start_hook = _load("subagent_stop_reflection", "hooks/subagent-stop-reflection.py")
 stop_hook = _load("stop_reflection_gate", "hooks/stop-reflection-gate.py")
-import reflection_hindsight  # noqa: E402,F401  (tools/ is put on sys.path by the hooks above)
-import reflection_ledger as ledger  # noqa: E402,F401
-import reflection_subagent  # noqa: E402,F401
 
 
-# -- fixtures ---------------------------------------------------------------
-
-
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    path = tmp_path / "repo"
-    path.mkdir()
-    subprocess.run(["git", "init", "-q", str(path)], check=True)
-    return path
-
-
-@pytest.fixture(autouse=True)
-def no_real_hindsight(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Default: Hindsight config absent, so no test can reach a real server."""
-    config = tmp_path / "hindsight.json"
-    monkeypatch.setenv("HINDSIGHT_CONFIG", str(config))
-    monkeypatch.delenv("HINDSIGHT_API_URL", raising=False)
-    monkeypatch.delenv("HINDSIGHT_API_TOKEN", raising=False)
-    return config
 
 
 def _assistant(message_id: str, block: dict) -> str:
@@ -89,7 +65,7 @@ def event(repo: Path, transcript: Path | None, **extra) -> dict:
     return base
 
 
-def run_hook(module, payload: dict, monkeypatch: pytest.MonkeyPatch, capsys) -> tuple[int, str, str]:
+def run_hook(module, payload: dict, monkeypatch, capsys) -> tuple[int, str, str]:
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
     code = module.main()
     out = capsys.readouterr()
@@ -128,18 +104,6 @@ class _Recorder(http.server.BaseHTTPRequestHandler):
         pass
 
 
-@pytest.fixture
-def hindsight_server():
-    server = http.server.HTTPServer(("127.0.0.1", 0), _Recorder)
-    server.received, server.auth, server.status = [], [], 200
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield server
-    server.shutdown()
-    thread.join()
-    server.server_close()
-
-
 def closed_port_url() -> str:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -147,36 +111,9 @@ def closed_port_url() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-@pytest.fixture
-def fire(repo, tmp_path, monkeypatch, capsys):
-    """fire(cwd=None): run the SubagentStop hook for one run, return its stderr."""
-    def _fire(cwd=None):
-        payload = event(cwd or repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
-        return run_hook(start_hook, payload, monkeypatch, capsys)[2]
-    return _fire
-
-
-@pytest.fixture
-def configure(repo, no_real_hindsight):
-    """configure(api_url, opt_in=None): write the Hindsight config for `repo`."""
-    def _configure(api_url, opt_in=None):
-        write_hindsight_config(no_real_hindsight, repo, api_url, opt_in)
-    return _configure
-
-
 def server_url(server) -> str:
     host, port = server.server_address
     return f"http://{host}:{port}"
-
-
-@pytest.fixture
-def schedule(repo, tmp_path, monkeypatch, capsys):
-    """schedule(agent_id, session): run the SubagentStop hook for one engineer run."""
-    def _schedule(agent_id="a1b2c3", session=SESSION):
-        transcript = make_transcript(tmp_path, agent_id=agent_id)
-        run_hook(start_hook, event(repo, transcript, agent_id=agent_id, agent_type="engineer",
-                                   session_id=session), monkeypatch, capsys)
-    return _schedule
 
 
 def stop_event(repo: Path, **extra) -> dict:
