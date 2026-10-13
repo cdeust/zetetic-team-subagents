@@ -17,7 +17,6 @@ from reflection_support import (
 )
 import reflection_ledger as ledger
 
-pytestmark = pytest.mark.usefixtures("no_real_hindsight")
 
 
 def test_stop_blocks_while_pending_and_names_the_procedure(reflection_repo, monkeypatch, capsys, schedule):

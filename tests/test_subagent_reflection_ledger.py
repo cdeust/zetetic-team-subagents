@@ -1,4 +1,4 @@
-"""Subagent reflection ledger: unreadable and undecodable files, outcome-line merge edges (#153)."""
+"""Subagent reflection ledger: unreadable and undecodable files, rows of older releases (#153)."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from reflection_support import (
-    SESSION,
     event,
     make_transcript,
     rows,
@@ -19,7 +18,6 @@ from reflection_support import (
 import gates_jsonl
 import reflection_ledger as ledger
 
-pytestmark = pytest.mark.usefixtures("no_real_hindsight")
 
 
 def _make_ledger_unreadable(reflection_repo: Path) -> None:
@@ -70,34 +68,20 @@ def _pending_row(reflection_repo, schedule, agent_id="a1b2c3"):
     return ledger.ledger_path(str(reflection_repo))
 
 
-def test_merge_an_outcome_for_an_unknown_agent_is_ignored(reflection_repo, schedule):
+# A ledger written by release 2.43.0: its hook appended a Hindsight outcome
+# row {"hindsight_for": <agent_id>, ...} after each pending row, also after a lift.
+LEGACY_OUTCOME = {"status": "not_configured", "detail": "no Hindsight config", "bank": None,
+                  "document_id": None}
+
+
+def test_a_ledger_with_2_43_0_outcome_rows_reads_as_its_pending_rows(reflection_repo, schedule):
     path = _pending_row(reflection_repo, schedule)
-    ledger.record_hindsight(path, "ghost", {"status": "retained", "detail": "x"})
-    (row,) = ledger.pending(path)
-    assert row["agent_id"] == "a1b2c3" and row["hindsight"]["status"] == "not_configured"
-
-
-def test_merge_duplicate_outcomes_last_line_wins(reflection_repo, schedule):
-    path = _pending_row(reflection_repo, schedule)
-    ledger.record_hindsight(path, "a1b2c3", {"status": "retained", "detail": "first"})
-    ledger.record_hindsight(path, "a1b2c3", {"status": "error", "detail": "second"})
-    (row,) = ledger.pending(path)
-    assert row["hindsight"]["detail"] == "second"
-
-
-def test_merge_an_outcome_line_before_its_pending_row_still_attaches(reflection_repo):
-    path = ledger.ledger_path(str(reflection_repo))
-    ledger.record_hindsight(path, "a1b2c3", {"status": "retained", "detail": "early"})
-    assert ledger.append_pending(path, {"agent_id": "a1b2c3", "session_id": SESSION,
-                                        "hindsight": {"status": "pending", "detail": "placeholder"}})
-    (row,) = ledger.pending(path)
-    assert row["hindsight"]["detail"] == "early"
-
-
-def test_merge_an_outcome_for_a_lifted_row_does_not_resurrect_it(reflection_repo, schedule):
-    path = _pending_row(reflection_repo, schedule)
-    ledger.lift(path, "a1b2c3", 7)
-    ledger.record_hindsight(path, "a1b2c3", {"status": "retained", "detail": "late"})
-    assert ledger.pending(path) == []
-    with pytest.raises(ledger.LiftRefused, match="already lifted"):
-        ledger.lift(path, "a1b2c3", 8)
+    _pending_row(reflection_repo, schedule, agent_id="d4e5f6")
+    for agent_id in ("a1b2c3", "d4e5f6", "ghost"):
+        gates_jsonl.append_row(path, {"hindsight_for": agent_id, "hindsight": LEGACY_OUTCOME})
+    ledger.lift(path, "d4e5f6", 7)
+    gates_jsonl.append_row(path, {"hindsight_for": "d4e5f6", "hindsight": LEGACY_OUTCOME})
+    assert [r["agent_id"] for r in ledger.pending(path)] == ["a1b2c3"]
+    assert ledger.lift(path, "a1b2c3", 8)["memory_id"] == 8
+    with pytest.raises(ledger.LiftRefused, match="no pending reflection"):
+        ledger.lift(path, "ghost", 9)

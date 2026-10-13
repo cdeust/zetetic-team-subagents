@@ -1,19 +1,14 @@
 """Shared fixtures and helpers for the subagent-reflection tests (#153).
 
 The hook scripts are loaded by path (hyphenated names, hooks/ is not a package)
-and run in-process against a real throwaway git repository. Hindsight
-"configured" is a real http.server on an ephemeral port: the socket is bound and
-listening when the server object exists, so no readiness wait is needed.
-"Server down" is a port that was bound and then closed: connection refused is
-immediate, not a timer. Nothing here sleeps or retries.
+and run in-process against a real throwaway git repository. Nothing here
+sleeps or retries.
 """
 from __future__ import annotations
 
-import http.server
 import importlib.util
 import io
 import json
-import socket
 import sys
 from pathlib import Path
 
@@ -78,45 +73,11 @@ def raw_rows(repo: Path) -> list[dict]:
 
 
 def rows(repo: Path) -> list[dict]:
-    """The ledger as a reader sees it: outcome lines merged into their pending row."""
+    """The ledger as a reader sees it: excerpt lines merged into their pending row."""
     raw = raw_rows(repo)
-    outcomes = {r["hindsight_for"]: r["hindsight"] for r in raw if "hindsight_for" in r}
     excerpts = {r["excerpt_for"]: r["excerpt"] for r in raw if "excerpt_for" in r}
-    return [{**r, "hindsight": outcomes.get(r.get("agent_id"), r.get("hindsight")),
-             "excerpt": excerpts.get(r.get("agent_id"), r.get("excerpt"))} if "agent_id" in r else r
-            for r in raw if "hindsight_for" not in r and "excerpt_for" not in r]
-
-
-def write_hindsight_config(path: Path, repo: Path, api_url: str, opt_in: list[str] | None = None):
-    path.write_text(json.dumps({
-        "apiUrl": api_url, "optInOnly": True,
-        "optInPaths": [str(repo)] if opt_in is None else opt_in,
-        "mapPathToBank": {str(repo): "bank-x"}}), encoding="utf-8")
-
-
-class _Recorder(http.server.BaseHTTPRequestHandler):
-    def do_POST(self):  # noqa: N802  (http.server API)
-        length = int(self.headers.get("Content-Length", "0"))
-        self.server.received.append((self.path, json.loads(self.rfile.read(length))))
-        self.server.auth.append(self.headers.get("Authorization"))
-        self.send_response(self.server.status)
-        self.end_headers()
-        self.wfile.write(b"{}")
-
-    def log_message(self, *args):
-        pass
-
-
-def closed_port_url() -> str:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-    return f"http://127.0.0.1:{port}"
-
-
-def server_url(server) -> str:
-    host, port = server.server_address
-    return f"http://{host}:{port}"
+    return [{**r, "excerpt": excerpts.get(r.get("agent_id"), r.get("excerpt"))} if "agent_id" in r else r
+            for r in raw if "excerpt_for" not in r]
 
 
 def stop_event(repo: Path, **extra) -> dict:
