@@ -95,6 +95,9 @@ jobs:
       # the command that fixes it.
       - name: Check the lock matches requirements-dev.txt
         run: |
+          # Seeded with the lock: uv keeps its pins while they satisfy the .txt,
+          # so an upstream release cannot fail this (CHANGELOG, Unreleased).
+          cp requirements-dev.lock /tmp/requirements-dev.check
           uv pip compile requirements-dev.txt --generate-hashes --universal \
             --python-version 3.12 -o /tmp/requirements-dev.check >/dev/null 2>&1
           # Ignore only the header, which records the -o path and so always
