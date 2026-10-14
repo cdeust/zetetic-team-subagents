@@ -36,10 +36,14 @@ run_timeboxed() {
   else
     "$@" &
     local pid=$!
-    ( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) &
+    # The watchdog must not inherit the caller's stdout: a pipe reader
+    # (`| sed`, `$(...)`) would otherwise wait for its `sleep` to expire and
+    # every timeboxed stage would cost its full budget.
+    ( exec >/dev/null 2>&1; sleep "$secs" & wait $!; kill -9 "$pid" ) >/dev/null 2>&1 &
     local watchdog=$!
     wait "$pid" 2>/dev/null
     local rc=$?
+    pkill -P "$watchdog" 2>/dev/null
     kill "$watchdog" 2>/dev/null
     wait "$watchdog" 2>/dev/null
     return "$rc"
