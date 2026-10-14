@@ -36,10 +36,16 @@ run_timeboxed() {
   else
     "$@" &
     local pid=$!
-    ( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) &
+    # The watchdog must not inherit the caller's stdout: a pipe reader
+    # (`| sed`, `$(...)`) would otherwise wait for its `sleep` to expire and
+    # every timeboxed stage would cost its full budget.
+    # The kill runs only if the sleep expired: a reaped sleep exits 143 and a
+    # stale, possibly recycled pid is never signalled.
+    ( exec >/dev/null 2>&1; sleep "$secs" & wait $! && kill -9 "$pid" ) >/dev/null 2>&1 &
     local watchdog=$!
     wait "$pid" 2>/dev/null
     local rc=$?
+    pkill -P "$watchdog" 2>/dev/null
     kill "$watchdog" 2>/dev/null
     wait "$watchdog" 2>/dev/null
     return "$rc"
@@ -77,33 +83,40 @@ echo "  Uncommitted: $(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | wc -
 echo "  Last commit: $(git -C "$REPO_ROOT" log --oneline -1 2>/dev/null || echo 'none')"
 echo ""
 
-# --- Plugin currency (issue #52). Three values: what is installed, what the
-# marketplace PINS, what the repo has RELEASED. `installed < pin` is a user
-# update; `pin < released` means the release was never delivered and is fixed in
-# the marketplace-owning repo. Silent when current — this only speaks when
-# something is actually stale. Time-boxed and warn-only: a boot check that can
-# fail a session is a check that gets disabled. ---
-if [[ -x "$TOOLS/plugin-version-check.sh" ]]; then
-  version_report="$(run_timeboxed 8 "$TOOLS/plugin-version-check.sh" 2>/dev/null || true)"
-  if [[ -n "$version_report" ]]; then
+# --- Boot sections run in parallel, joined in the original order. Each
+# section writes to its own file; the slowest one, not the sum, sets the
+# startup time (measured 2026-10-14: 11.6 s sequential). worktree list and
+# sweep stay in one job because sweep removes worktrees that list reads. ---
+
+# Plugin currency (issue #52). Silent when current; time-boxed and warn-only:
+# a boot check that can fail a session is a check that gets disabled.
+section_currency() {
+  [[ -x "$TOOLS/plugin-version-check.sh" ]] || return 0
+  local report
+  report="$(run_timeboxed 8 "$TOOLS/plugin-version-check.sh" 2>/dev/null || true)"
+  if [[ -n "$report" ]]; then
     echo -e "${WHITE}${BOLD}  ◆ Plugin Currency${RESET}"
-    echo "$version_report" | sed 's/^/  /'
+    echo "$report" | sed 's/^/  /'
     echo ""
   fi
-fi
+}
 
-echo -e "${WHITE}${BOLD}  ◆ Difficulty Books${RESET}"
-"$TOOLS/difficulty-book-manager.sh" status 2>/dev/null || echo "  (none)"
-echo ""
+section_books() {
+  echo -e "${WHITE}${BOLD}  ◆ Difficulty Books${RESET}"
+  "$TOOLS/difficulty-book-manager.sh" status 2>/dev/null || echo "  (none)"
+  echo ""
+}
 
-# ── Memory directory: scopes listing only. No content injection (Taleb: avoid
+# Memory directory: scopes listing only. No content injection (Taleb: avoid
 # scope-wide auto-load; agents call `view` explicitly on names they need).
-if [[ -x "$TOOLS/memory-tool.sh" ]]; then
+section_memory() {
+  [[ -x "$TOOLS/memory-tool.sh" ]] || return 0
+  local sync_line
   echo -e "${WHITE}${BOLD}  ◆ Memory Scopes${RESET}"
   MEMORY_AGENT_ID="${MEMORY_AGENT_ID:-_user}" "$TOOLS/memory-tool.sh" scopes 2>/dev/null \
     | sed 's/^/  /' || echo "  (memory-tool unavailable)"
   # Show Cortex replica queue depth if non-empty — reminds agent to drain.
-  sync_line="$(MEMORY_AGENT_ID="${MEMORY_AGENT_ID:-_user}" "$TOOLS/memory-tool.sh" sync-status 2>/dev/null | head -1)"
+  sync_line="$(MEMORY_AGENT_ID="${MEMORY_AGENT_ID:-_user}" "$TOOLS/memory-tool.sh" sync-status 2>/dev/null | head -1 || true)"
   if [[ "$sync_line" == *"pending"* && "$sync_line" != "queue: 0 pending,"* && "$sync_line" != "queue: empty"* ]]; then
     echo ""
     echo -e "${SUBTLE}  Cortex replica ${sync_line} — run /session:memory-sync to drain.${RESET}"
@@ -111,42 +124,56 @@ if [[ -x "$TOOLS/memory-tool.sh" ]]; then
   echo ""
   echo -e "${SUBTLE}  Memory protocol: call \`view /memories/<scope>/<file>\` to read; never rely on prior context.${RESET}"
   echo ""
-fi
+}
 
-echo -e "${WHITE}${BOLD}  ◆ Agent Worktrees${RESET}"
-"$TOOLS/worktree-manager.sh" list 2>/dev/null || echo "  (none)"
-echo ""
+section_worktrees() {
+  echo -e "${WHITE}${BOLD}  ◆ Agent Worktrees${RESET}"
+  "$TOOLS/worktree-manager.sh" list 2>/dev/null || echo "  (none)"
+  echo ""
+  echo -e "${WHITE}${BOLD}  ◆ Worktree Sweep${RESET}"
+  if [[ -x "$TOOLS/worktree-manager.sh" ]]; then
+    # No --fetch at boot (no network). Scoped to REPO_ROOT only (issue #33):
+    # the no-args form sweeps every sibling repo. Warn-only, never blocks.
+    run_timeboxed 15 "$TOOLS/worktree-manager.sh" sweep "$REPO_ROOT" 2>/dev/null | sed 's/^/  /' || true
+  else
+    echo "  (worktree-manager unavailable)"
+  fi
+  echo ""
+}
 
-echo -e "${WHITE}${BOLD}  ◆ Worktree Sweep${RESET}"
-if [[ -x "$TOOLS/worktree-manager.sh" ]]; then
-  # No --fetch at boot (no network); merged-check relies on refs already
-  # fetched from a prior `git fetch`. Warn-only — never blocks startup.
-  #
-  # Scoped to REPO_ROOT only (issue #33 fix). The no-args form of `sweep`
-  # auto-discovers and sweeps EVERY sibling git repo under REPO_ROOT's
-  # parent directory — which meant any Claude Code session started in ANY
-  # sibling project on this machine would reach into and remove worktrees
-  # belonging to a completely unrelated repo (this one included), widening
-  # the removal race far beyond what a single repo's own boot should touch.
-  # Deliberate cross-repo hygiene sweeps remain available via the explicit
-  # multi-repo form: `tools/worktree-manager.sh sweep --fetch <repo...>`.
-  run_timeboxed 15 "$TOOLS/worktree-manager.sh" sweep "$REPO_ROOT" 2>/dev/null | sed 's/^/  /' || true
+section_symlinks() {
+  echo -e "${WHITE}${BOLD}  ◆ Dev Symlink Montage${RESET}"
+  if [[ -x "$TOOLS/dev-symlink-doctor.sh" ]]; then
+    run_timeboxed 10 "$TOOLS/dev-symlink-doctor.sh" 2>/dev/null | sed 's/^/  /' || true
+  else
+    echo "  (dev-symlink-doctor unavailable)"
+  fi
+  echo ""
+}
+
+section_cache() {
+  echo -e "${WHITE}${BOLD}  ◆ Session Cache${RESET}"
+  "$TOOLS/session-store.sh" load 2>/dev/null || echo "  (no cached session)"
+  echo ""
+}
+
+SECTION_ORDER=(currency books memory worktrees symlinks cache)
+if SECTIONS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/zetetic-start.XXXXXX" 2>/dev/null)"; then
+  trap 'rm -rf "$SECTIONS_DIR"' EXIT
+  for name in "${SECTION_ORDER[@]}"; do
+    "section_$name" >"$SECTIONS_DIR/$name" 2>/dev/null </dev/null &
+  done
+  wait
+  for name in "${SECTION_ORDER[@]}"; do
+    cat "$SECTIONS_DIR/$name"
+  done
 else
-  echo "  (worktree-manager unavailable)"
+  # No writable temp dir: say so and run the sections one after the other.
+  echo -e "${SUBTLE}  session-start: no writable TMPDIR, sections run sequentially.${RESET}"
+  for name in "${SECTION_ORDER[@]}"; do
+    "section_$name" 2>/dev/null </dev/null || true
+  done
 fi
-echo ""
-
-echo -e "${WHITE}${BOLD}  ◆ Dev Symlink Montage${RESET}"
-if [[ -x "$TOOLS/dev-symlink-doctor.sh" ]]; then
-  run_timeboxed 10 "$TOOLS/dev-symlink-doctor.sh" 2>/dev/null | sed 's/^/  /' || true
-else
-  echo "  (dev-symlink-doctor unavailable)"
-fi
-echo ""
-
-echo -e "${WHITE}${BOLD}  ◆ Session Cache${RESET}"
-"$TOOLS/session-store.sh" load 2>/dev/null || echo "  (no cached session)"
-echo ""
 
 echo -e "${LIGHT}  Reminder: call query_methodology for cognitive profile, recall for Cortex context.${RESET}"
 
