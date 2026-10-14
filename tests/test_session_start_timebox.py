@@ -47,3 +47,13 @@ def test_command_substitution_does_not_wait_for_the_watchdog():
 def test_hung_command_is_still_killed_at_the_budget():
     _, elapsed = _run("run_timeboxed 1 sleep 30 | cat")
     assert 0.9 < elapsed < 5
+
+
+def test_watchdog_never_signals_a_finished_command(tmp_path):
+    # source: review of #160, the kill raced the reaped sleep in 8 of 40 runs
+    log = tmp_path / "kills"
+    _run(
+        f'kill() {{ [[ "$1" == -9 ]] && echo "$*" >> {log}; builtin kill "$@"; }}\n'
+        "for i in $(seq 40); do run_timeboxed 5 true; done\n"
+    )
+    assert not log.exists()

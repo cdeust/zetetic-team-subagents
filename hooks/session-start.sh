@@ -39,7 +39,9 @@ run_timeboxed() {
     # The watchdog must not inherit the caller's stdout: a pipe reader
     # (`| sed`, `$(...)`) would otherwise wait for its `sleep` to expire and
     # every timeboxed stage would cost its full budget.
-    ( exec >/dev/null 2>&1; sleep "$secs" & wait $!; kill -9 "$pid" ) >/dev/null 2>&1 &
+    # The kill runs only if the sleep expired: a reaped sleep exits 143 and a
+    # stale, possibly recycled pid is never signalled.
+    ( exec >/dev/null 2>&1; sleep "$secs" & wait $! && kill -9 "$pid" ) >/dev/null 2>&1 &
     local watchdog=$!
     wait "$pid" 2>/dev/null
     local rc=$?
@@ -85,8 +87,6 @@ echo ""
 # section writes to its own file; the slowest one, not the sum, sets the
 # startup time (measured 2026-10-14: 11.6 s sequential). worktree list and
 # sweep stay in one job because sweep removes worktrees that list reads. ---
-SECTIONS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/zetetic-start.XXXXXX")"
-trap 'rm -rf "$SECTIONS_DIR"' EXIT
 
 # Plugin currency (issue #52). Silent when current; time-boxed and warn-only:
 # a boot check that can fail a session is a check that gets disabled.
@@ -116,7 +116,7 @@ section_memory() {
   MEMORY_AGENT_ID="${MEMORY_AGENT_ID:-_user}" "$TOOLS/memory-tool.sh" scopes 2>/dev/null \
     | sed 's/^/  /' || echo "  (memory-tool unavailable)"
   # Show Cortex replica queue depth if non-empty — reminds agent to drain.
-  sync_line="$(MEMORY_AGENT_ID="${MEMORY_AGENT_ID:-_user}" "$TOOLS/memory-tool.sh" sync-status 2>/dev/null | head -1)"
+  sync_line="$(MEMORY_AGENT_ID="${MEMORY_AGENT_ID:-_user}" "$TOOLS/memory-tool.sh" sync-status 2>/dev/null | head -1 || true)"
   if [[ "$sync_line" == *"pending"* && "$sync_line" != "queue: 0 pending,"* && "$sync_line" != "queue: empty"* ]]; then
     echo ""
     echo -e "${SUBTLE}  Cortex replica ${sync_line} — run /session:memory-sync to drain.${RESET}"
@@ -158,13 +158,22 @@ section_cache() {
 }
 
 SECTION_ORDER=(currency books memory worktrees symlinks cache)
-for name in "${SECTION_ORDER[@]}"; do
-  "section_$name" >"$SECTIONS_DIR/$name" 2>/dev/null </dev/null &
-done
-wait
-for name in "${SECTION_ORDER[@]}"; do
-  cat "$SECTIONS_DIR/$name"
-done
+if SECTIONS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/zetetic-start.XXXXXX" 2>/dev/null)"; then
+  trap 'rm -rf "$SECTIONS_DIR"' EXIT
+  for name in "${SECTION_ORDER[@]}"; do
+    "section_$name" >"$SECTIONS_DIR/$name" 2>/dev/null </dev/null &
+  done
+  wait
+  for name in "${SECTION_ORDER[@]}"; do
+    cat "$SECTIONS_DIR/$name"
+  done
+else
+  # No writable temp dir: say so and run the sections one after the other.
+  echo -e "${SUBTLE}  session-start: no writable TMPDIR, sections run sequentially.${RESET}"
+  for name in "${SECTION_ORDER[@]}"; do
+    "section_$name" 2>/dev/null </dev/null || true
+  done
+fi
 
 echo -e "${LIGHT}  Reminder: call query_methodology for cognitive profile, recall for Cortex context.${RESET}"
 
