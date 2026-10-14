@@ -20,6 +20,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The session-start hook paid every time-box in full on macOS. Without
+  coreutils `timeout`, the portable watchdog's `sleep` inherited the caller's
+  stdout, so `| sed` and `$(...)` waited for it: 38.6 s measured against a
+  5-10 s hook budget, while each tool runs in under 0.2 s. (#160)
+
+### Changed
+
+- The session-start sections (plugin currency, difficulty books, memory,
+  worktrees and sweep, dev symlinks, session cache) run in parallel and are
+  printed in their original order: 11.6 s sequential, 4.6-6.7 s parallel,
+  measured on macOS 2026-10-14. (#160)
+
 ## [2.44.0]: a per-task engineering-cycle ledger enforced at the stop, Hindsight retention removed
 
 ### Added
