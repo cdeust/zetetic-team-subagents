@@ -53,6 +53,12 @@ jobs:
   pytest:
     name: Python Suite + Coverage Gate (hard gate)
     runs-on: ubuntu-latest
+    # Infrastructure backstop, not a test verdict: the process-group tests wait
+    # on events (a fifo reaching EOF), so a regression there must fail on its
+    # own; this cap only bounds the runner if a wait is ever lost.
+    # source: measured 2026-10-14, runs 38644364917 / 38631103442 / 38630319250 /
+    # 38629143152 took 61 s / 59 s / 59 s / 57 s; 10 min is ~10x that.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
