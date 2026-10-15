@@ -42,7 +42,7 @@ if [[ "$1" == "-C" && "$3" == "worktree" && "$4" == "remove" && "$KILL_AT" == re
   esac
   kill -KILL "$PPID"; kill -KILL "$$"
 fi
-if [[ "$1" == "-C" && "$3" == "branch" && "$KILL_AT" == branch-delete ]]; then
+if [[ "$1" == "-C" && " $* " == *" branch -d "* && "$KILL_AT" == branch-delete ]]; then
   kill -KILL "$PPID"; kill -KILL "$$"
 fi
 exec "$REAL_GIT" "$@"

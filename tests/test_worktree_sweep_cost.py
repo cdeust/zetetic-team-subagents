@@ -4,12 +4,14 @@ Measured 2026-10-15: session-start's 8 s budget was spent by the `worktrees`
 section, whose MAIN process was still running (not a leftover descendant):
 for every branch not merged into origin/main, the squash-merge test forked
 `git diff` + `git patch-id` once per main commit since the merge-base, up to
-SQUASH_SCAN_LIMIT=500 (Cortex: 31 branches, 94 s). The cost must not scale with
-the length of main, so the patch-ids of main are computed once per repo.
+a 500-commit scan limit (Cortex: 31 branches, 94 s). The patch-id test is gone
+(it also deleted unpreserved work, see test_worktree_sweep_preserve.py); the
+changes-on-main proof is one `git merge-tree` per branch, so the cost cannot
+depend on the length of main and there is no scan limit.
 
 The test decides by counting git invocations (a wrapper on PATH), never by
 elapsed time: the count for a main of 3 commits and for a main of 30 must be
-equal. It is red when the squash scan forks per main commit.
+equal, one merge-tree per pushed unmerged branch, no log -p and no patch-id.
 """
 
 from pathlib import Path
@@ -39,6 +41,8 @@ def _repo(tmp_path, main_commits):
         _git(repo, "add", f"f{n}.txt")
         _git(repo, "commit", "-q", "-m", f"branch {n}")
         _git(repo, "checkout", "-q", "main")
+    for n in range(BRANCHES):  # pushed, so the changes-on-main proof runs for each
+        _git(repo, "update-ref", f"refs/remotes/origin/feat/{n}", f"refs/heads/feat/{n}")
     for n in range(main_commits):
         (repo / f"m{n}.txt").write_text(f"main {n}\n")
         _git(repo, "add", f"m{n}.txt")
@@ -59,10 +63,10 @@ def _git_invocations(tmp_path, repo):
            "WORKTREE_AUDIT_LOG": str(tmp_path / "audit.log")}
     done = subprocess.run(["bash", str(MANAGER), "sweep", str(repo)], env=env, capture_output=True, text=True)
     assert done.returncode == 0, done.stdout + done.stderr
-    assert "branches deleted: 0" in done.stdout  # the branches really were unmerged: the scan ran in full
+    assert "branches deleted: 0" in done.stdout  # the branches really were unmerged: each was proven in full
     calls = log.read_text().splitlines()
-    # the patch-ids of main are indexed ONCE per repo, not once per branch (a `$(...)` subshell loses a cache)
-    assert sum(" log -p " in f" {c} " for c in calls) == 1, calls
+    assert not any(" log -p " in f" {c} " or "patch-id" in c for c in calls), calls  # no patch-id scan of main
+    assert sum("merge-tree" in c for c in calls) == BRANCHES, calls  # one proof per branch, not per main commit
     return len(calls)
 
 
@@ -99,6 +103,7 @@ def test_change_that_predates_the_merge_base_is_not_a_squash_merge(tmp_path):
     _git(repo, "checkout", "-q", "main")
     _commit_file(repo, "later.txt", "later\n", "later")
     _git(repo, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    _git(repo, "update-ref", "refs/remotes/origin/feat/readd", "refs/heads/feat/readd")  # pushed: the tree check decides
     assert "branches deleted: 0" in _sweep(repo, tmp_path)
 
 
@@ -116,4 +121,5 @@ def test_squash_merged_branch_is_deleted(tmp_path):
     _commit_file(repo, "b.txt", "b\n", "squash of feat/done")
     _commit_file(repo, "after.txt", "x\n", "after")
     _git(repo, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    _git(repo, "update-ref", "refs/remotes/origin/feat/done", "refs/heads/feat/done")  # pushed, not yet pruned
     assert "branches deleted: 1" in _sweep(repo, tmp_path)

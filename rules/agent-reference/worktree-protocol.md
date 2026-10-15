@@ -11,8 +11,8 @@ When spawned in an isolated worktree, you are working on a dedicated branch.
 else.** That is the directory Claude Code's own worktree mechanism uses (`isolation: worktree` on
 the Agent tool, `EnterWorktree`, `claude --worktree <name>`), and the only one its cleanup sweep
 knows about; a worktree created anywhere else is invisible to that sweep and accumulates on disk.
-So: never `/tmp` or `/private/tmp` (issue #33: `hooks/session-start.sh` runs
-`tools/worktree-manager.sh sweep` there, and macOS reaps `/tmp` outside git's control, so an
+So: never `/tmp` or `/private/tmp` (issue #33: the sweep once ran from `hooks/session-start.sh`
+and removed worktrees there, and macOS reaps `/tmp` outside git's control, so an
 in-progress worktree can lose its directory mid-task and be deregistered from `git worktree list`
 with its uncommitted work); never a sibling directory beside the repo
 (`<repo>/../<repo-name>-<agent>-<timestamp>`, the former `scripts/spawn-agent.sh` default); never

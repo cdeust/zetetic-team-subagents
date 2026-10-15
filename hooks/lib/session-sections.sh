@@ -46,11 +46,13 @@ section_worktrees() {
   echo -e "${WHITE}${BOLD}  ◆ Agent Worktrees${RESET}"
   "$TOOLS/worktree-manager.sh" list 2>/dev/null || echo "  (none)"
   echo ""
-  echo -e "${WHITE}${BOLD}  ◆ Worktree Sweep${RESET}"
+  echo -e "${WHITE}${BOLD}  ◆ Stale Worktrees and Branches (report only)${RESET}"
   if [[ -x "$TOOLS/worktree-manager.sh" ]]; then
-    # No --fetch at boot (no network). Scoped to REPO_ROOT only (issue #33):
-    # the no-args form sweeps every sibling repo. Warn-only, never blocks.
-    "$TOOLS/worktree-manager.sh" sweep "$REPO_ROOT" 2>/dev/null | sed 's/^/  /' || true
+    # Reports, never deletes: the classification is a detached async task
+    # (tools/lib/worktree_report.py); this prints its last finished result or
+    # "classification running" and does not wait. Cleaning is the explicit
+    # sweep command each line names.
+    "$TOOLS/worktree-manager.sh" report "$REPO_ROOT" 2>/dev/null || echo "  (worktree report unavailable)"
   else
     echo "  (worktree-manager unavailable)"
   fi

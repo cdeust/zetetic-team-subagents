@@ -62,7 +62,7 @@ def test_sections_overlap_and_keep_their_order(tmp_path):
     assert hook.returncode == 0
     headings = [
         "Difficulty Books", "Memory Scopes", "Agent Worktrees",
-        "Worktree Sweep", "Dev Symlink Montage", "Session Cache",
+        "Stale Worktrees and Branches", "Dev Symlink Montage", "Session Cache",
     ]
     positions = [out.index(h) for h in headings]
     assert positions == sorted(positions)

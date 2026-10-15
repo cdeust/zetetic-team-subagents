@@ -5,9 +5,12 @@
 #   tools/worktree-manager.sh list                  # show active agent worktrees
 #   tools/worktree-manager.sh cleanup               # remove merged agent/* worktrees (this repo)
 #   tools/worktree-manager.sh status <agent-name>   # show last commit in worktree
-#   tools/worktree-manager.sh sweep [--fetch] [repo ...]
-#                                                    # remove merged tmp worktrees + stale
-#                                                    # branches across one or more repos
+#   tools/worktree-manager.sh sweep [--fetch] [--dry-run] [repo ...]
+#                                                    # remove preserved tmp worktrees + stale
+#                                                    # branches across one or more repos;
+#                                                    # --dry-run prints "would ..." and changes nothing
+#   tools/worktree-manager.sh report [repo]         # the boot report: only REPORTS what sweep
+#                                                    # would clean, deletes nothing (lib/worktree_report.py)
 #   tools/worktree-manager.sh inventory [repo ...]  # one line per worktree: merge state,
 #                                                    # dirty count, age, size — what sweep
 #                                                    # would remove and why the rest stays
@@ -15,28 +18,22 @@
 # sweep contract:
 #   - No repo args: discovers top-level git repos under the parent of this
 #     repo (skips linked worktrees, identified by a `.git` FILE, not a dir).
-#     `hooks/session-start.sh` never invokes this no-args form — it scopes
-#     its automatic sweep to its own repo only (see issue #33 fix note
-#     below); the multi-repo form is for deliberate, explicit hygiene runs.
+#     `hooks/session-start.sh` never runs sweep at all: it runs `report`, which
+#     deletes nothing. Sweep is a deliberate, explicit hygiene run.
 #   - --fetch: runs `git fetch origin --prune` first (never on by default —
 #     session-start calls sweep without it to avoid network at boot).
 #   - A worktree is removed only if: its path is under /tmp, /private/tmp or
 #     the repo's own `.claude/worktrees/` (never a deliberate ~/Developments
-#     worktree), its branch is not `live/*` (dev-symlink targets), its branch
-#     is merged into origin/main, its working tree is clean, AND it is older
-#     than WORKTREE_GRACE_SECONDS (see below). Removal never uses --force.
-#   - "Merged" means one of: the tip is an ancestor of origin/main, OR the
-#     branch was squash-merged, detected offline by comparing the patch-id of
-#     the branch's cumulative diff (merge-base..tip) with the patch-id of each
-#     commit main gained since that merge-base (bounded by SQUASH_SCAN_LIMIT).
-#     Measured 2026-09-10: every repo under anthropic-partnership squash-merges
-#     its PRs, so the ancestor test alone had swept nothing in two months
-#     (audit log: 2 lines) while 30 merged worktrees accumulated.
-#   - Branch deletion uses `-d` for ancestors and `-D` only for a branch the
-#     squash check proved merged; both are written to the audit log.
-#   - After worktree removal, local branches merged into origin/main with no
-#     worktree (excluding main/master/live/*/checked-out branches) are
-#     deleted the same way.
+#     worktree), its branch is not `live/*` (dev-symlink targets), its branch is
+#     PRESERVED (below), its working tree is clean, AND it is older than
+#     WORKTREE_GRACE_SECONDS (see below). Removal never uses --force.
+#   - A branch is PRESERVED, and so deletable, only when its changes are on
+#     origin/main (an ancestor, or a clean merge-tree no-op) and it is checked out
+#     nowhere; otherwise it is kept and the reason is printed, on the worktree
+#     path too. Deletion is `git branch -d`,
+#     never -D. The proof and why a patch-id is no proof: docs/worktree-sweep.md.
+#   - After worktree removal, preserved local branches with no worktree
+#     (excluding main/master/live/*/checked-out branches) are deleted likewise.
 #   - Every removal (and skip-by-grace-period) is appended to
 #     ~/.claude/zetetic/worktree-sweep-audit.log for post-hoc attribution
 #     (WORKTREE_AUDIT_LOG overrides the path; issue #136 moved it under zetetic/).
@@ -65,17 +62,16 @@ ACTION="${1:-}"; AGENT="${2:-}"
 # source: measured incident, issue #33 (loss observed ~15-20 min post-creation;
 # 3600s = 60 min gives >=3x safety margin). Override for tests only.
 WORKTREE_GRACE_SECONDS="${WORKTREE_GRACE_SECONDS:-3600}"
-# Upper bound on main commits scanned for a squash-merge match. source:
-# measured 2026-09-10, the widest merge-base..origin/main gap among the 30
-# stale worktrees was 23 commits (Cortex); 500 leaves a 20x margin while
-# keeping the boot-time sweep bounded.
-SQUASH_SCAN_LIMIT="${SQUASH_SCAN_LIMIT:-500}"
+# 1 for `sweep --dry-run`: every decision is printed as "would ...", nothing is
+# changed, no marker is dropped and nothing is logged.
+DRY_RUN=0
 AUDIT_LOG="${WORKTREE_AUDIT_LOG:-$HOME/.claude/zetetic/worktree-sweep-audit.log}"
 
 # Appends one audit line: ISO-timestamp, repo, path, branch, decision.
 # Never fails the sweep — a log write failure is swallowed (best-effort).
 audit_log() {
   local repo="$1" path="$2" branch="$3" decision="$4"
+  [[ "$DRY_RUN" == "1" ]] && return 0
   mkdir -p "$(dirname "$AUDIT_LOG")" 2>/dev/null || true
   printf '%s\trepo=%s\tpath=%s\tbranch=%s\t%s\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$repo" "$path" "$branch" "$decision" \
@@ -107,22 +103,12 @@ worktree_age_seconds() {
   echo $(( now - created ))
 }
 
-[[ -z "$ACTION" ]] && { echo "usage: $0 <list|cleanup|status|sweep|inventory> [args]" >&2; exit 2; }
+[[ -z "$ACTION" ]] && { echo "usage: $0 <list|cleanup|status|sweep|report|inventory> [args]" >&2; exit 2; }
 
 # --- sweep helpers --------------------------------------------------------
 
 # shellcheck source=lib/branch-merge.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/branch-merge.sh"
-
-# Deletes a merged branch: -d for an ancestor, -D only for a proven squash merge.
-delete_merged_branch() {
-  local repo="$1" branch="$2" kind="$3"
-  if [[ "$kind" == "squash" ]]; then
-    git -C "$repo" branch -D "$branch" >/dev/null 2>&1
-  else
-    git -C "$repo" branch -d "$branch" >/dev/null 2>&1
-  fi
-}
 
 # Marker a sweep drops in a worktree's admin directory (<common>/worktrees/<id>)
 # BEFORE deleting the checkout. A sweep SIGKILLed half way (the 8 s boot budget
@@ -192,12 +178,13 @@ report_for_human() {
   echo "  skip $path ($branch): $what. Nothing was deleted. After inspecting it, finish with: git -C $repo worktree remove --force $path (if the directory is already gone: git -C $repo worktree prune --expire now, which drops EVERY registered worktree whose directory is missing, so read git worktree list first)"
 }
 
-# Removes one worktree proven merged into origin/main and clean. Echoes one
-# line. Returns 0 removed, 1 kept (reason echoed), 2 removal failed.
+# Removes one worktree whose branch is preserved (branch_preserved set MERGE_KIND
+# and the proof objects) and clean. Echoes one line. Returns 0 removed (or, in
+# --dry-run, would be removed), 1 kept (reason echoed), 2 removal failed.
 # pre  = <path> is a sweepable, non-primary, aged worktree of <repo>.
-# post = 0: checkout, admin directory and branch are gone (the branch may linger
-#        if git refused; the stale-branch pass retries it). 1/2: nothing was
-#        deleted and `git worktree prune` never ran.
+# post = 0: checkout and admin directory are gone and the branch is deleted; if git
+#        refused the branch delete the line "keep branch: <b>: <reason>" says so.
+#        1/2: nothing was deleted and `git worktree prune` never ran.
 remove_merged_worktree() {
   local repo="$1" raw_path="$2" path="$3" branch="$4" kind="$5" age="$6" admin="" why="" dir_state link_state
   admin="$(worktree_admin_dir "$repo" "$raw_path" || true)"
@@ -226,11 +213,18 @@ remove_merged_worktree() {
     echo "  skip $path ($branch): cannot locate its admin directory under .git/worktrees"; return 1
   fi
 
-  echo "  remove $path ($branch): merged ($kind) + clean"
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo "  would remove $path ($branch): preserved ($kind, on origin/main) + clean"; return 0
+  fi
+  echo "  remove $path ($branch): preserved ($kind, on origin/main) + clean"
   : >"$admin/$REMOVING_MARKER"
   if git -C "$repo" worktree remove "$path" 2>/dev/null; then
-    delete_merged_branch "$repo" "$branch" "$kind" || true
-    audit_log "$repo" "$path" "$branch" "removed merge=${kind} age=${age}s"
+    if delete_preserved_branch "$repo" "$branch" "$kind" "$MERGE_TIP" "$MERGE_MAIN" "$MERGE_TREE"; then
+      audit_log "$repo" "$path" "$branch" "removed merge=${kind} main=${MERGE_MAIN} tip=${MERGE_TIP} age=${age}s"
+    else
+      echo "  keep branch: $branch: $DELETE_WHY"
+      audit_log "$repo" "$path" "$branch" "removed-worktree-kept-branch merge=${kind} tip=${MERGE_TIP} age=${age}s"
+    fi
     return 0
   fi
   # A clean failure leaves the checkout intact: the marker must not outlive it.
@@ -240,7 +234,7 @@ remove_merged_worktree() {
   return 2
 }
 
-# Removes merged, clean, tmp-path worktrees for one repo. Echoes one line per
+# Removes preserved, clean, tmp-path worktrees for one repo. Echoes one line per
 # decision. Returns 1 only on an unexpected command failure, not on skips.
 sweep_worktrees() {
   local repo="$1" primary="$2" primary_branch="$3"
@@ -278,23 +272,22 @@ sweep_worktrees() {
       audit_log "$repo" "$path" "$branch" "skip-grace-period age=${age}s"
       continue
     fi
-    local kind
-    if ! branch_merge_kind "$repo" "$branch"; then
-      echo "  skip $path ($branch): not merged into origin/main"; continue
+    if ! branch_preserved "$repo" "$branch"; then
+      echo "  skip $path ($branch): $PRESERVED_WHY"; continue
     fi
-    kind="$MERGE_KIND"
     local outcome=0
-    remove_merged_worktree "$repo" "$raw_path" "$path" "$branch" "$kind" "$age" || outcome=$?
+    remove_merged_worktree "$repo" "$raw_path" "$path" "$branch" "$MERGE_KIND" "$age" || outcome=$?
     case "$outcome" in
       0) removed=$((removed + 1)) ;;
       2) rc=1 ;;
     esac
   done < <(list_worktrees "$repo")
-  echo "  removed: $removed worktree(s)"
+  if [[ "$DRY_RUN" == "1" ]]; then echo "  worktrees that would be removed: $removed"
+  else echo "  removed: $removed worktree(s)"; fi
   return "$rc"
 }
 
-# Deletes local branches merged into origin/main with no attached worktree.
+# Deletes preserved local branches (see branch_preserved) with no attached worktree.
 sweep_stale_branches() {
   local repo="$1"; shift
   local kept=("$@") branch deleted=0
@@ -305,17 +298,23 @@ sweep_stale_branches() {
     local skip=0 k
     for k in "${kept[@]}"; do [[ "$branch" == "$k" ]] && { skip=1; break; }; done
     [[ "$skip" == "1" ]] && continue
-    local kind
-    if branch_merge_kind "$repo" "$branch"; then
-      kind="$MERGE_KIND"
-      if delete_merged_branch "$repo" "$branch" "$kind"; then
-        echo "  deleted branch: $branch (merged ($kind), no worktree)"
-        audit_log "$repo" "-" "$branch" "deleted-branch merge=${kind}"
-        deleted=$((deleted + 1))
-      fi
+    if ! branch_preserved "$repo" "$branch"; then
+      echo "  keep branch: $branch: $PRESERVED_WHY"; continue
+    fi
+    if [[ "$DRY_RUN" == "1" ]]; then
+      echo "  would delete branch: $branch (preserved ($MERGE_KIND, on origin/main), no worktree)"
+      deleted=$((deleted + 1)); continue
+    fi
+    if delete_preserved_branch "$repo" "$branch" "$MERGE_KIND" "$MERGE_TIP" "$MERGE_MAIN" "$MERGE_TREE"; then
+      echo "  deleted branch: $branch (preserved ($MERGE_KIND, on origin/main), no worktree)"
+      audit_log "$repo" "-" "$branch" "deleted-branch merge=${MERGE_KIND} main=${MERGE_MAIN} tip=${MERGE_TIP}"
+      deleted=$((deleted + 1))
+    else
+      echo "  keep branch: $branch: $DELETE_WHY"
     fi
   done < <(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads/)
-  echo "  branches deleted: $deleted"
+  if [[ "$DRY_RUN" == "1" ]]; then echo "  branches that would be deleted: $deleted"
+  else echo "  branches deleted: $deleted"; fi
 }
 
 sweep_repo() {
@@ -347,6 +346,7 @@ sweep_repo() {
     [[ -n "$branch" ]] && kept_branches+=("$branch")
   done < <(list_worktrees "$repo")
 
+  [[ "$DRY_RUN" == "1" ]] || purge_stale_proof_refs "$repo"
   local rc=0
   sweep_worktrees "$repo" "$repo" "$primary_branch" || rc=1
   sweep_stale_branches "$repo" "${kept_branches[@]}"
@@ -358,6 +358,7 @@ sweep_main() {
   for arg in "$@"; do
     case "$arg" in
       --fetch) do_fetch=1 ;;
+      --dry-run) DRY_RUN=1 ;;
       *) repos+=("$arg") ;;
     esac
   done
@@ -393,13 +394,13 @@ inventory_repo() {
     [[ -z "$path" ]] && continue
     path="$(cd "$path" 2>/dev/null && pwd -P || echo "$path")"
     [[ "$path" == "$primary" ]] && continue
-    if branch_merge_kind "$repo" "$branch" 2>/dev/null; then kind="$MERGE_KIND"; else kind="unmerged"; fi
+    if branch_preserved "$repo" "$branch" 2>/dev/null; then kind="$MERGE_KIND"; else kind="kept"; fi
     dirty="$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
     age=$(( $(worktree_age_seconds "$path") / 86400 ))
     size="$(du -sh "$path" 2>/dev/null | cut -f1)"
     verdict="keep"
     if ! sweepable_path "$path" "$primary"; then verdict="keep:deliberate-path"
-    elif [[ "$kind" == "unmerged" ]]; then verdict="keep:unmerged"
+    elif [[ "$kind" == "kept" ]]; then verdict="keep:not-preserved"
     elif [[ "$dirty" != "0" ]]; then verdict="keep:dirty"
     else verdict="sweep"; fi
     printf '  %-22s %-9s dirty=%-5s age=%3sd %6s  %s  %s\n' \
@@ -469,5 +470,10 @@ case "$ACTION" in
     inventory_main "$@"
     ;;
 
-  *) echo "usage: $0 <list|cleanup|status|sweep|inventory> [args]" >&2; exit 2 ;;
+  report)
+    shift
+    exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/worktree_report.py" "${1:-$REPO_ROOT}"
+    ;;
+
+  *) echo "usage: $0 <list|cleanup|status|sweep|report|inventory> [args]" >&2; exit 2 ;;
 esac
