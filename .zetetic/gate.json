@@ -12,14 +12,12 @@
     "files": ["tests/test_*.py"],
     "same_name": "tests/test_{stem}.py",
     "map": [
-      {"paths": ["hooks/lib/gate_*.py", "hooks/gate-*.py", "hooks/stop-gate-ledger.py", "tests/gate_support.py"],
-       "tests": ["tests/test_gate_*.py", "tests/test_stop_gate_ledger.py"]},
+      {"paths": ["hooks/lib/gate_*.py", "hooks/gate-*.py", "hooks/stop-gate-ledger.py", "tests/gate_support.py"], "tests": ["tests/test_gate_*.py", "tests/test_stop_gate_ledger.py"]},
       {"paths": ["tools/lib/task*.py", "tools/task.sh", "tests/task_support.py"], "tests": ["tests/test_task*.py"]},
-      {"paths": ["hooks/session-start*.sh", "hooks/lib/run_sections.py", "hooks/lib/session-sections.sh"],
-       "tests": ["tests/test_session_start_*.py"]},
-      {"paths": ["agents/**", "skills/**", "commands/**", ".claude-plugin/**", "hooks/hooks.json", "hooks/gates.json", "plugins/**"],
-       "tests": ["tests/test_manifest_gate.py", "tests/test_frontmatter_validator.py", "tests/test_shared_host_gates.py", "tests/test_portable_package.py"]},
-      {"paths": ["rules/**", "docs/**", "*.md"], "tests": ["tests/test_discoverability_baseline.py"]}
+      {"paths": ["hooks/session-start*.sh", "hooks/lib/run_sections.py", "hooks/lib/session-sections.sh"], "tests": ["tests/test_session_start_*.py"]},
+      {"paths": ["agents/**", "skills/**", "commands/**", ".claude-plugin/**", "hooks/hooks.json", "hooks/gates.json", "plugins/**"], "tests": ["tests/test_manifest_gate.py", "tests/test_frontmatter_validator.py", "tests/test_shared_host_gates.py", "tests/test_portable_package.py"]},
+      {"paths": ["rules/**", "docs/**", "*.md"], "tests": ["tests/test_discoverability_baseline.py"]},
+      {"paths": ["hooks/zetetic-gates.py", "hooks/gates.json", "hooks/gates-pre-commit.sh", "hooks/run-python.sh", "hooks/lib/host_events.py", "hooks/lib/staged_checks.py", "hooks/lib/gate_targets.py", "hooks/lib/git-command-cwd.py", "hooks/pre-tool-*", "hooks/post-tool-deletion-gate.py", "hooks/stop-redaction-gate.py", "hooks/pre-edit-layer-check.sh", "hooks/pre-push-fail-before.sh", "hooks/git-push-context.py", "tools/fail-before-*", "tools/zetetic-checker.sh", "tools/craftsmanship-checker.sh", "tools/lib/craftsmanship-detectors.sh", "tools/redaction*", "tools/deletion_gate*.py", "rules/coding-standards.md", "rules/gates-policy.md", "skills/writing/redaction.md"], "tests": ["tests/test_shared_host_gates.py", "tests/test_portable_package.py"]}
     ],
     "fast": ["tests/test_manifest_gate.py", "tests/test_shared_host_gates.py"]
   }
