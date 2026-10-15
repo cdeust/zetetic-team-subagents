@@ -188,6 +188,10 @@ never started; the message names the exact `status` line and says "started, run
 again after it finishes" when it has just started it. In flight means proceed
 with other work. No consumer waits for a task.
 
+Consumers in this repository: the session-start worktree classification (kind
+`wtclass`) and the commit and push gate (kind `gate`, key the git tree hash;
+`docs/gate.md`).
+
 ## Survival
 
 The worker is started with `start_new_session=True` (setsid): its own session
