@@ -61,6 +61,7 @@ else
   SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"url":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"url":\s*"//' | sed 's/"$//' || echo "")
   [[ -z "$SOURCE" ]] && SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"query":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"query":\s*"//' | sed 's/"$//' || echo "")
   [[ -z "$SOURCE" ]] && SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"q":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"q":\s*"//' | sed 's/"$//' || echo "")
+  [[ -z "$SOURCE" ]] && SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"urls":\s*\[[^]]*\]' 2>/dev/null | head -1 | grep -oE '"[^"]+"' | sed 1d | tr -d '"' | tr '\n' ' ' | sed 's/ $//' || echo "")
 fi
 [[ -z "$SOURCE" ]] && exit 0
 
