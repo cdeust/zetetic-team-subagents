@@ -47,3 +47,22 @@ def test_each_gate_module_selects_the_gate_tests(path):
 def test_a_change_to_the_config_runs_everything():
     steps = cfg.plan(cfg.load(str(ROOT)), str(ROOT), [".zetetic/gate.json"])
     assert [s.name for s in steps][-1] == "tests-full"
+
+
+def selected_checks(changed: str) -> list:
+    return [s.name for s in cfg.plan(cfg.load(str(ROOT)), str(ROOT), [changed])]
+
+
+@pytest.mark.parametrize("path", ["hooks/hooks.json", "hooks/gate-proof.py", "hooks/run-python.sh", ".claude-plugin/plugin.json",
+                                  ".claude-plugin/marketplace.json", "docs/gate.md", "README.md", "CONTRIBUTING.md",
+                                  "agents/engineer.md", "skills/_index.md", "commands/_index.md", "tools/doc-count-check.sh"])
+def test_a_change_that_can_move_a_documented_count_selects_doc_count_check(path):
+    """PR #169 round 1: README/CONTRIBUTING said 24 hook registrations, the tree had 27, and the affected-only
+    gate had selected neither doc-count-check nor the suite that runs it, so CI was the first to see it."""
+    assert "doc-count" in selected_checks(path)
+
+
+def test_the_documented_counts_match_the_tree():
+    import subprocess
+    out = subprocess.run(["bash", str(ROOT / "tools" / "doc-count-check.sh")], capture_output=True, text=True, cwd=ROOT)
+    assert out.returncode == 0, out.stdout + out.stderr

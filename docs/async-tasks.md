@@ -189,7 +189,7 @@ again after it finishes" when it has just started it. In flight means proceed
 with other work. No consumer waits for a task.
 
 Consumers in this repository: the session-start worktree classification (kind
-`wtclass`) and the commit and push gate (kind `gate`, key the git tree hash;
+`wtclass`) and the commit and push gate (kind `gate`, key = commit or push + the git tree hash + a digest of the rules;
 `docs/gate.md`).
 
 ## Survival

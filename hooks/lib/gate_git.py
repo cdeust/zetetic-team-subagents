@@ -22,7 +22,7 @@ import subprocess
 from typing import NamedTuple
 
 TREE_RE = re.compile(r"\A(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
-_ENV = {"GIT_NO_LAZY_FETCH": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
+ENV = {"GIT_NO_LAZY_FETCH": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
 
 
 class Unavailable(Exception):
@@ -34,10 +34,12 @@ class Repo(NamedTuple):
     common: str  # absolute git common dir
 
 
-def git(directory: str, *args: str) -> subprocess.CompletedProcess:
+def git(directory: str, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    """Run git in ``directory``. ``env`` replaces the inherited environment (the worker passes one without
+    GIT_*, so a stray GIT_DIR cannot redirect the plumbing); the bounds in ``ENV`` always apply."""
     try:
         return subprocess.run(["git", *args], cwd=directory, capture_output=True, text=True, check=False,
-                              stdin=subprocess.DEVNULL, env={**os.environ, **_ENV})
+                              stdin=subprocess.DEVNULL, env={**(os.environ if env is None else env), **ENV})
     except OSError as exc:  # FAILS_ON: git not installed / not executable / cwd vanished
         raise Unavailable(exc.__class__.__name__) from exc
 

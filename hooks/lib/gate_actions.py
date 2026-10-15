@@ -4,7 +4,8 @@ Pure parsing on top of gate_shell: no I/O, no git. ``actions(command, base_cwd)`
 
   {"kind": "commit", "dir", "why", "amend", "allow_empty"}   `git commit` (why: flags that make the
                                                               index at hook time unreliable)
-  {"kind": "push",   "dir", "why": []}                       `git push` that can publish a commit, `gh pr create`
+  {"kind": "push",   "dir", "why": [], "publish"}             `git push` that can publish a commit, `gh pr create`;
+                                                              ``publish`` says WHICH refs (gate_publish resolves them)
   {"kind": "stage",  "dir"}                                  `git add|rm|mv|...`: the index may have changed
 
 Mentions (in quotes, heredocs, comments, `git commit-tree`, `--dry-run`) are not invocations.
@@ -88,7 +89,8 @@ def commit_info(args: list[str]) -> dict:
 
 
 def _push_flags(args: list[str]) -> tuple[dict, list[str]]:
-    flags = {"tags": False, "delete": False, "dry": False}
+    flags = {"tags": False, "delete": False, "dry": False, "all": False, "mirror": False, "repo": False}
+    names = {"tags": "tags", "delete": "delete", "dry": "dry-run", "mirror": "mirror", "repo": "repo"}
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -99,8 +101,9 @@ def _push_flags(args: list[str]) -> tuple[dict, list[str]]:
             break
         if a.startswith("--"):
             name = a[2:].partition("=")[0]
-            for flag, long_name in (("tags", "tags"), ("delete", "delete"), ("dry", "dry-run")):
+            for flag, long_name in names.items():
                 flags[flag] |= name == long_name
+            flags["all"] |= name in ("all", "branches")
             i += name in _PUSH_LONG_ARG and "=" not in a
         elif a.startswith("-") and len(a) > 1:
             flags["delete"] |= "d" in a[1:]
@@ -111,12 +114,26 @@ def _push_flags(args: list[str]) -> tuple[dict, list[str]]:
     return flags, positional
 
 
+def push_publish(args: list[str]) -> dict:
+    """Which refs a `git push` publishes, as words (gate_publish.resolve turns them into trees).
+
+    all/mirror: every local branch; specs: the refspecs given (none: the current branch, or what the
+    configuration says); remote: the remote named on the command line (None: not named, or `--repo`).
+    """
+    flags, positional = _push_flags(args)
+    remote = None if flags["repo"] or not positional else positional[0]
+    specs = positional if flags["repo"] else positional[1:]
+    return {"all": flags["all"], "mirror": flags["mirror"], "remote": remote, "specs": specs, "gh_head": None, "gh": False}
+
+
 def push_only_tags_or_delete(args: list[str]) -> bool:
     """True when the push cannot publish a commit: tags only, deletion, or dry-run."""
     flags, positional = _push_flags(args)
     if flags["delete"] or flags["dry"]:
         return True
-    refspecs = positional[1:]  # positional[0] is the remote
+    if flags["all"] or flags["mirror"]:
+        return False
+    refspecs = positional if flags["repo"] else positional[1:]  # positional[0] is the remote (unless --repo names it)
     if refspecs and refspecs[0] == "tag":
         return True
     if refspecs:
@@ -153,6 +170,23 @@ def _gh_is_pr_create(words: list[str]) -> bool:
     return plain[:2] == ["pr", "create"] and not any(w in ("-h", "--help") for w in rest)
 
 
+def gh_head(words: list[str]) -> str | None:
+    """The `--head`/`-H` value of `gh pr create` (`owner:branch` stays as written), or None when absent."""
+    rest = words[1:]
+    for i, w in enumerate(rest):
+        if w in ("--head", "-H"):
+            return rest[i + 1] if i + 1 < len(rest) else ""
+        if w.startswith("--head="):
+            return w[len("--head="):]
+        if w.startswith("-H") and not w.startswith("--"):
+            return w[2:]
+    return None
+
+
+def _gh_publish(words: list[str]) -> dict:
+    return {"all": False, "mirror": False, "remote": None, "specs": [], "gh_head": gh_head(words), "gh": True}
+
+
 def _cd_target(words: list[str], cwd: str) -> str:
     target = next((w for w in words[1:] if w == "-" or not w.startswith("-")), None)
     if target and target != "-":
@@ -173,7 +207,7 @@ def _git_action(call: _Call, staged_before: bool) -> dict | None:
         return {"kind": "commit", "dir": call.dir, "why": why,
                 "amend": info["amend"], "allow_empty": info["allow_empty"]}
     if call.sub == "push" and not push_only_tags_or_delete(call.args):
-        return {"kind": "push", "dir": call.dir, "why": []}
+        return {"kind": "push", "dir": call.dir, "why": [], "publish": push_publish(call.args)}
     return None
 
 
@@ -199,5 +233,5 @@ def actions(command: str, base_cwd: str) -> list[dict]:
             if act:
                 acts.append(act)
         elif prog == "gh" and _gh_is_pr_create(words):
-            acts.append({"kind": "push", "dir": cwd, "why": []})
+            acts.append({"kind": "push", "dir": cwd, "why": [], "publish": _gh_publish(words)})
     return acts

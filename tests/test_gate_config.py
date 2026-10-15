@@ -189,3 +189,105 @@ def test_a_missing_literal_test_is_not_selected(tmp_path):
     only = cfg.validate({"version": 1, "tests": {"argv": ["pytest", "{tests}"], "fast": ["tests/test_smoke.py"],
                                                    "map": [{"paths": ["lib/**"], "tests": ["tests/test_gone.py"]}]}})
     assert cfg.plan(only, tmp_path, ["lib/x.py"]) == [cfg.Step("tests-full", ["pytest"])]  # nothing exists: whole suite
+
+
+# --------------------------------------------------- rules read from a tree object, not from the working copy
+
+
+def committed(tmp_path: Path, files: dict, mode: dict | None = None) -> tuple:
+    """(repo, tree id) of a repository whose single commit holds ``files``; ``mode`` maps a name to its chmod."""
+    from gate_support import git
+    repo = tmp_path / "repo"
+    repo.mkdir(parents=True)
+    git(repo, "init", "-q", "-b", "main")
+    for name, text in files.items():
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+        (repo / name).chmod((mode or {}).get(name, 0o644))
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "c", "--no-verify")
+    return repo, git(repo, "rev-parse", "HEAD^{tree}")
+
+
+def test_a_tree_source_answers_what_a_directory_does(tmp_path):
+    import gate_source as src
+    files = {".zetetic/gate.json": json.dumps({"version": 1, "checks": [LINT]}), "package.json": '{"scripts": {"test": "t"}}'}
+    repo, tree_id = committed(tmp_path, files)
+    for where in (str(repo), src.GitSource(str(repo), tree_id)):
+        assert cfg.declaration(where) == "config" and cfg.load(where)["checks"] == [LINT]
+        assert cfg.stack_config(where)["checks"][0]["argv"] == ["npm", "test", "--silent"]
+    git_src = src.GitSource(str(repo), tree_id)
+    assert git_src.isfile("package.json") and git_src.isdir(".zetetic") and not git_src.isfile(".zetetic")
+    assert git_src.read("absent") is None and git_src.names() == [".zetetic", "package.json"]
+
+
+def test_the_declaration_is_read_from_the_tree_not_the_working_copy(tmp_path):
+    import gate_source as src
+    repo, tree_id = committed(tmp_path, {".zetetic/gate.json": json.dumps({"version": 1, "checks": [LINT]})})
+    (repo / ".zetetic" / "gate.json").write_text(json.dumps({"version": 1, "off": True}))  # edited, not committed
+    assert cfg.declaration(str(repo)) is None  # the working copy says off ...
+    assert cfg.declaration(src.GitSource(str(repo), tree_id)) == "config"  # ... the committed tree does not
+
+
+def test_the_legacy_script_needs_the_executable_bit_in_the_tree(tmp_path):
+    import gate_source as src
+    repo, tree_id = committed(tmp_path, {"scripts/gate.sh": "#!/bin/sh\n"}, {"scripts/gate.sh": 0o755})
+    assert cfg.declaration(src.GitSource(str(repo), tree_id)) == "legacy"
+    plain, plain_tree = committed(tmp_path / "p", {"scripts/gate.sh": "#!/bin/sh\n"})
+    assert cfg.declaration(src.GitSource(str(plain), plain_tree)) is None
+
+
+def test_an_invalid_config_in_a_tree_is_a_config_error(tmp_path):
+    import gate_source as src
+    repo, tree_id = committed(tmp_path, {".zetetic/gate.json": "{torn"})
+    with pytest.raises(cfg.ConfigError):
+        cfg.declaration(src.GitSource(str(repo), tree_id))
+
+
+def test_force_full_runs_everything_even_for_no_change_and_no_covering_path(tmp_path):
+    root = tree(tmp_path, "a.py", "docs/x.md", "tests/test_a.py", "tests/test_docs.py")
+    config_ = config()
+    assert cfg.plan(config_, str(root), []) == []
+    assert names(cfg.plan(config_, str(root), [], force_full=True)) == ["lint", "tests-full"]
+    only_docs = cfg.plan(config_, str(root), ["docs/x.md"])
+    assert names(only_docs) == ["tests"]  # affected-only: the map selects the docs test
+    assert names(cfg.plan(config_, str(root), ["docs/x.md"], force_full=True)) == ["lint", "tests-full"]
+
+
+def test_the_probed_paths_of_a_tree_cost_one_git_call_not_one_per_path(tmp_path, monkeypatch):
+    import gate_git
+    import gate_source as src
+    repo, tree_id = committed(tmp_path, {".zetetic/gate.json": json.dumps({"version": 1, "checks": [LINT]}), "package.json": "{}"})
+    calls = []
+    real = gate_git.git
+    monkeypatch.setattr(gate_git, "git", lambda *a, **k: calls.append(a) or real(*a, **k))
+    source = src.GitSource(str(repo), tree_id, None, cfg.PROBE_PATHS)
+    assert cfg.declaration(source) == "config" and cfg.load(source)["checks"] == [LINT]
+    assert len(calls) == 1 and calls[0][1] == "ls-tree"  # every probed path answered by that one listing
+    assert source.entry("never-probed") is None and len(calls) == 2  # a path outside the probe costs its own call
+
+
+@pytest.mark.parametrize("bad", ["", "/abs/path", "../outside", "a/../b"])
+def test_link_entries_must_be_paths_inside_the_repository(bad):
+    with pytest.raises(cfg.ConfigError, match="link entries"):
+        cfg.validate({"version": 1, "checks": [LINT], "link": [bad]})
+
+
+def test_good_link_entries_and_env_are_accepted():
+    assert cfg.validate({"version": 1, "checks": [LINT], "link": ["node_modules", "a/b"], "env": {"K": "v"}})["link"] == ["node_modules", "a/b"]
+    with pytest.raises(cfg.ConfigError, match="env"):
+        cfg.validate({"version": 1, "checks": [LINT], "env": {"K": 1}})
+
+
+@pytest.mark.parametrize("text", ["{torn", "[1]", '"s"', "null"])
+def test_a_malformed_package_json_is_not_an_npm_stack(tmp_path, text):
+    (tmp_path / "package.json").write_text(text)
+    assert cfg.stack_config(str(tmp_path)) is None
+
+
+def test_a_blob_that_git_cannot_read_is_unavailable_not_a_crash(tmp_path):
+    import gate_git
+    import gate_source as src
+    repo, _ = committed(tmp_path, {"a": "1\n"})
+    with pytest.raises(gate_git.Unavailable, match="cannot read x"):
+        src._blob(str(repo), "f" * 40, "x", None)

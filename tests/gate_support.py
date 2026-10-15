@@ -4,6 +4,7 @@ running from a FIFO line it writes itself, and that a worker has finished from t
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import signal
@@ -16,6 +17,7 @@ from task_support import make_fifo, tasks, wait_exit
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks"
 sys.path.insert(0, str(HOOKS / "lib"))
+import gate_trust  # noqa: E402
 
 GIT_ENV = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "GIT_AUTHOR_NAME": "t",
            "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
@@ -55,19 +57,29 @@ class Gate:
     removes.
     """
 
-    def __init__(self, tmp: Path):
+    def __init__(self, tmp: Path, trusted: bool = True):
         self.tmp, self.repo, self.state = tmp, tmp / "repo", tmp / "state"
         self.repo.mkdir()
         (tmp / "tmp").mkdir()  # the worker's private checkouts land here, so a SIGKILLed one cannot litter /tmp
         self.hold, self.ready = make_fifo(tmp, "hold"), make_fifo(tmp, "ready")
         self.hold_fd, self.ready_fd = os.open(self.hold, os.O_RDWR), os.open(self.ready, os.O_RDWR)
         self.mark = tmp / "mark"
-        self.env = {tasks.store.ENV_DIR: str(self.state), "TMPDIR": str(tmp / "tmp")}
+        self.trusted_file = tmp / "trusted-repos"
+        self.env = {tasks.store.ENV_DIR: str(self.state), "TMPDIR": str(tmp / "tmp"),
+                    gate_trust.ENV_FILE: str(self.trusted_file)}
         git(self.repo, "init", "-q", "-b", "main")
         self.use_blocking_check()
         (self.repo / "a.txt").write_text("one\n")
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-q", "-m", "init", "--no-verify")
+        if trusted:
+            self.trust()
+
+    def trust(self) -> str:
+        """List this repository in the trusted-repos file (the test's own file, never the user's); return the line."""
+        line = os.path.realpath(self.repo)
+        self.trusted_file.write_text(line + "\n")
+        return line
 
     def use_blocking_check(self) -> None:
         # fd 3 is opened on HOLD BEFORE the check announces itself: once the test has seen READY, closing its own
@@ -94,9 +106,15 @@ class Gate:
     def head_start(self, command: str = "git add a.txt"):
         return self.hook("gate-start.py", command)
 
-    def record(self, tree: str) -> dict | None:
+    def record_id(self, tree: str, verb: str = "commit") -> str | None:
+        """The id of the task of ``tree`` for ``verb`` (`gate-<verb>-<tree>-<rules digest>`), or None."""
+        found = sorted(glob.glob(str(self.state / f"gate-{verb}-{tree}-*.json")))
+        return Path(found[0]).stem if found else None
+
+    def record(self, tree: str, verb: str = "commit") -> dict | None:
         """The task record of ``tree`` (the test sets ZETETIC_TASKS_DIR for itself and its subprocesses)."""
-        return tasks.status(f"gate-{tree}", str(self.repo))
+        tid = self.record_id(tree, verb)
+        return None if tid is None else tasks.status(tid, str(self.repo))
 
     def _read_ready_line(self) -> bytes:
         line = b""
@@ -104,18 +122,18 @@ class Gate:
             line += os.read(self.ready_fd, 1)  # blocks until the check writes; never EOF (we are a writer too)
         return line
 
-    def await_running(self, tree: str) -> dict:
+    def await_running(self, tree: str, verb: str = "commit") -> dict:
         """Block until the check of ``tree`` is executing (it said so on READY); return the record."""
         self._read_ready_line()
-        return self.record(tree)
+        return self.record(tree, verb)
 
-    def finish(self, tree: str) -> dict:
+    def finish(self, tree: str, verb: str = "commit") -> dict:
         """Release the held check and block until the worker exited; return the final record."""
-        rec = self.record(tree)
+        rec = self.record(tree, verb)
         os.close(self.hold_fd)  # EOF for the check's cat: it exits 0
         wait_exit(rec["pid"])
         self.hold_fd = os.open(self.hold, os.O_RDWR)  # armed again, only after the previous reader is gone
-        return self.record(tree)
+        return self.record(tree, verb)
 
     def _end_if_in_flight(self, path: Path) -> None:
         rec = tasks.store.read_record(str(path))

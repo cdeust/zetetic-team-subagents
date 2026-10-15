@@ -208,3 +208,53 @@ def test_lexer_one_character_arguments_after_escapes_quotes_and_redirections():
     assert words("cat <<-EOF\n\tx\n\tEOF\nnext") == ["cat", "next"]
     assert words("cmd >x arg") == ["cmd", "arg"]
     assert words("cmd >>x arg 2>&1") == ["cmd", "arg"]
+
+
+def publish(command: str) -> dict:
+    (act,) = [a for a in ga.actions(command, BASE) if a["kind"] == "push"]
+    return act["publish"]
+
+
+@pytest.mark.parametrize("command,specs,remote", [
+    ("git push", [], None),
+    ("git push origin", [], "origin"),
+    ("git push origin feat", ["feat"], "origin"),
+    ("git push -u origin feat:main", ["feat:main"], "origin"),
+    ("git push origin +feat:refs/heads/x HEAD", ["+feat:refs/heads/x", "HEAD"], "origin"),
+    ("git push --force-with-lease origin feat", ["feat"], "origin"),
+    ("git push -o ci.skip origin feat", ["feat"], "origin"),
+    ("git push --repo=origin feat", ["feat"], None),  # --repo names the remote: every positional is a refspec
+    ("git push --repo origin feat", ["feat"], None),
+    ("git push -- origin feat", ["feat"], "origin"),
+])
+def test_a_push_names_the_refs_it_publishes(command, specs, remote):
+    found = publish(command)
+    assert (found["specs"], found["remote"]) == (specs, remote)
+    assert (found["all"], found["mirror"], found["gh"]) == (False, False, False)
+
+
+@pytest.mark.parametrize("command,flag", [("git push --all origin", "all"), ("git push --branches origin", "all"),
+                                          ("git push --mirror origin", "mirror")])
+def test_all_and_mirror_publish_every_branch(command, flag):
+    assert publish(command)[flag] is True
+
+
+def test_all_with_tags_still_publishes_branches():
+    assert ga.push_only_tags_or_delete(["--all", "--tags", "origin"]) is False
+    assert ga.push_only_tags_or_delete(["--mirror", "origin"]) is False
+    assert ga.push_only_tags_or_delete(["--repo", "origin", "refs/tags/v1"]) is True  # --repo: no positional remote to skip
+
+
+@pytest.mark.parametrize("command,head", [
+    ("gh pr create", None), ("gh pr create --fill", None), ("gh pr create --head feat", "feat"),
+    ("gh pr create --head=feat", "feat"), ("gh pr create -H feat", "feat"), ("gh pr create -Hfeat", "feat"),
+    ("gh pr create -R o/r --head me:feat --title t", "me:feat"), ("gh pr create --head", ""),
+])
+def test_gh_pr_create_names_its_head_branch(command, head):
+    found = publish(command)
+    assert found["gh"] is True and found["gh_head"] == head and found["specs"] == []
+
+
+def test_the_gh_publish_record_is_exactly_a_head_branch_and_nothing_else():
+    assert publish("gh pr create --head x") == {"all": False, "mirror": False, "remote": None, "specs": [], "gh_head": "x", "gh": True}
+    assert publish("git push origin feat") == {"all": False, "mirror": False, "remote": "origin", "specs": ["feat"], "gh_head": None, "gh": False}
