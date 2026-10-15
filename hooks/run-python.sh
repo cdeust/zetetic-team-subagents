@@ -35,4 +35,13 @@ fi
 echo "[zetetic] run-python.sh: no working Python 3 interpreter found (tried python3, py -3, python)." >&2
 echo "[zetetic] On Windows, install Python from python.org and ensure 'py -3' works, or disable the" >&2
 echo "[zetetic] Microsoft Store python/python3 execution aliases. Hook skipped: $script" >&2
+#
+# A caller whose output is the point of the hook (session-start.sh) cannot
+# afford a stderr-only warning: stderr is not shown to the user. It sets
+# ZETETIC_PYTHON_MISSING_NOTICE to its own wording and gets that line, plus
+# what was tried, on stdout. Hooks that leave it unset keep their stdout
+# untouched (stdout is a protocol channel for several of them).
+if [[ -n "${ZETETIC_PYTHON_MISSING_NOTICE:-}" ]]; then
+  echo "${ZETETIC_PYTHON_MISSING_NOTICE} (Python 3 not found; tried python3, py -3, python)"
+fi
 exit 0

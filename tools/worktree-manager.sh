@@ -154,6 +154,44 @@ delete_merged_branch() {
   fi
 }
 
+# Marker a sweep drops in a worktree's admin directory (<common>/worktrees/<id>)
+# BEFORE deleting the checkout. A sweep SIGKILLed half way (the 8 s boot budget
+# of hooks/lib/run_sections.py) leaves it behind. It is EVIDENCE FOR A HUMAN
+# only: no sweep deletes on its strength, because the wreck cannot prove the
+# user added nothing since (a lock, status.showUntrackedFiles=no, empty
+# untracked directories and a stale marker each defeated a deleting resume).
+REMOVING_MARKER="zetetic-sweep-removing"
+
+# Admin directory of the registered worktree at <path>: the <common>/worktrees/<id>
+# whose `gitdir` file names <path>/.git. Echoes it; exit 1 when none matches.
+worktree_admin_dir() {
+  local repo="$1" path="$2" common f
+  common="$(cd "$repo" && cd "$(git rev-parse --git-common-dir)" && pwd -P)" || return 1
+  for f in "$common"/worktrees/*/gitdir; do
+    [[ -f "$f" ]] || continue
+    if [[ "$(<"$f")" == "$path/.git" ]]; then dirname "$f"; return 0; fi
+  done
+  return 1
+}
+
+# Why the live checkout at <path> holds what `git worktree remove` would delete.
+# Echoes the reason; exit 0 when there is one, 1 when provably clean.
+# pre  = <path> is a directory whose .git link works.
+# post = status is read with --untracked-files=all and --ignored on the command
+#        line, which beats `status.showUntrackedFiles=no` in any config; an empty
+#        directory (invisible to status) counts as the user's; a failing status
+#        counts as not clean: unprovable is dirty.
+checkout_holds_user_data() {
+  local path="$1" status empty
+  if ! status="$(git -C "$path" status --porcelain --untracked-files=all --ignored 2>/dev/null)"; then
+    echo "git status failed"; return 0
+  fi
+  if [[ -n "$status" ]]; then echo "dirty working tree"; return 0; fi
+  empty="$(find "$path" -name .git -prune -o -type d -empty -print -quit 2>/dev/null)"
+  if [[ -n "$empty" ]]; then echo "empty untracked directory ${empty#"$path"/}"; return 0; fi
+  return 1
+}
+
 # True for the only two places an agent worktree may live: the system tmp
 # roots and the repo's own `.claude/worktrees/` (the owner rule since
 # 2026-09-08, and the directory Claude Code's own sweep looks at).
@@ -177,6 +215,61 @@ list_worktrees() {
   '
 }
 
+# One report line for a registered worktree the sweep must not touch and a
+# human must resolve: <what> is wrong, the commands finish the job.
+report_for_human() {
+  local repo="$1" path="$2" branch="$3" what="$4"
+  echo "  skip $path ($branch): $what. Nothing was deleted. After inspecting it, finish with: git -C $repo worktree remove --force $path (if the directory is already gone: git -C $repo worktree prune --expire now, which drops EVERY registered worktree whose directory is missing, so read git worktree list first)"
+}
+
+# Removes one worktree proven merged into origin/main and clean. Echoes one
+# line. Returns 0 removed, 1 kept (reason echoed), 2 removal failed.
+# pre  = <path> is a sweepable, non-primary, aged worktree of <repo>.
+# post = 0: checkout, admin directory and branch are gone (the branch may linger
+#        if git refused; the stale-branch pass retries it). 1/2: nothing was
+#        deleted and `git worktree prune` never ran.
+remove_merged_worktree() {
+  local repo="$1" raw_path="$2" path="$3" branch="$4" kind="$5" age="$6" admin="" why="" dir_state link_state
+  admin="$(worktree_admin_dir "$repo" "$raw_path" || true)"
+  # The sweep's marker (an interrupted removal), a missing directory and a
+  # missing .git link are only REPORTED; the marker stays so the report repeats.
+  if [[ -n "$admin" && -e "$admin/$REMOVING_MARKER" ]]; then
+    dir_state=missing; [[ -d "$path" ]] && dir_state=present
+    link_state=missing; [[ -e "$path/.git" ]] && link_state=present
+    report_for_human "$repo" "$path" "$branch" "interrupted removal (sweep marker present; directory $dir_state, .git link $link_state)"
+    audit_log "$repo" "$path" "$branch" "skip-interrupted-removal age=${age}s"
+    return 1
+  fi
+  if [[ ! -d "$path" ]]; then
+    report_for_human "$repo" "$path" "$branch" "registered worktree whose directory is missing and no sweep marker"
+    return 1
+  fi
+  if [[ ! -e "$path/.git" ]]; then
+    # `git -C` here would read the PRIMARY repo and call the directory dirty.
+    report_for_human "$repo" "$path" "$branch" "registered worktree has no .git link and no sweep marker"
+    return 1
+  fi
+  if why="$(checkout_holds_user_data "$path")"; then
+    echo "  skip $path ($branch): $why"; return 1
+  fi
+  if [[ -z "$admin" ]]; then
+    echo "  skip $path ($branch): cannot locate its admin directory under .git/worktrees"; return 1
+  fi
+
+  echo "  remove $path ($branch): merged ($kind) + clean"
+  : >"$admin/$REMOVING_MARKER"
+  if git -C "$repo" worktree remove "$path" 2>/dev/null; then
+    delete_merged_branch "$repo" "$branch" "$kind" || true
+    audit_log "$repo" "$path" "$branch" "removed merge=${kind} age=${age}s"
+    return 0
+  fi
+  # A clean failure leaves the checkout intact: the marker must not outlive it.
+  rm -f "$admin/$REMOVING_MARKER"
+  echo "  error: worktree remove failed for $path"
+  audit_log "$repo" "$path" "$branch" "error-remove-failed age=${age}s"
+  return 2
+}
+
 # Removes merged, clean, tmp-path worktrees for one repo. Echoes one line per
 # decision. Returns 1 only on an unexpected command failure, not on skips.
 sweep_worktrees() {
@@ -185,8 +278,10 @@ sweep_worktrees() {
   # Physical paths on both sides: git reports worktrees resolved through
   # symlinks (macOS /var -> /private/var), the caller's repo path may not be.
   primary="$(cd "$primary" 2>/dev/null && pwd -P || echo "$primary")"
+  local raw_path
   while IFS=$'\t' read -r path branch; do
     [[ -z "$path" ]] && continue
+    raw_path="$path"
     path="$(cd "$path" 2>/dev/null && pwd -P || echo "$path")"
     [[ "$path" == "$primary" ]] && continue
 
@@ -217,20 +312,12 @@ sweep_worktrees() {
     if ! kind="$(branch_merge_kind "$repo" "$branch")"; then
       echo "  skip $path ($branch): not merged into origin/main"; continue
     fi
-    if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
-      echo "  skip $path ($branch): dirty working tree"; continue
-    fi
-
-    echo "  remove $path ($branch): merged ($kind) + clean"
-    if git -C "$repo" worktree remove "$path" 2>/dev/null; then
-      delete_merged_branch "$repo" "$branch" "$kind" || true
-      removed=$((removed + 1))
-      audit_log "$repo" "$path" "$branch" "removed merge=${kind} age=${age}s"
-    else
-      echo "  error: worktree remove failed for $path"
-      audit_log "$repo" "$path" "$branch" "error-remove-failed age=${age}s"
-      rc=1
-    fi
+    local outcome=0
+    remove_merged_worktree "$repo" "$raw_path" "$path" "$branch" "$kind" "$age" || outcome=$?
+    case "$outcome" in
+      0) removed=$((removed + 1)) ;;
+      2) rc=1 ;;
+    esac
   done < <(list_worktrees "$repo")
   echo "  removed: $removed worktree(s)"
   return "$rc"

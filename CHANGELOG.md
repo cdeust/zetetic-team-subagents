@@ -26,6 +26,35 @@ adheres to [Semantic Versioning](https://semver.org/).
   coreutils `timeout`, the portable watchdog's `sleep` inherited the caller's
   stdout, so `| sed` and `$(...)` waited for it: 38.6 s measured against a
   5-10 s hook budget, while each tool runs in under 0.2 s. (#160)
+- A hung session-start tool no longer survives its budget through its own
+  children. The shell watchdog of #160 killed only the direct child, so a
+  grandchild kept the `$(...)` / `| sed` pipe open and the hook never
+  returned; `hooks/lib/run_sections.py` now runs each boot section in its own
+  process group with an 8 s budget and kills the whole group. Output is
+  byte-identical on the normal path. A boot without a Python 3 now says so on
+  stdout instead of dropping the six sections silently; the runner reports its
+  own failure with the real exception and exits 0 itself (not through the
+  caller's `|| true`); a SIGTERM or SIGINT kills every live section group and
+  removes the runner's temp directory; a sweep SIGKILLed during
+  `git worktree remove` is no longer reported "dirty" without explanation: a
+  marker in the worktree's admin directory records the interrupted removal, and
+  the next sweep deletes nothing and never runs `git worktree prune` (it would
+  drop other sessions' admin entries whose directories are momentarily missing).
+  It prints one line per case (path, whether the directory and `.git` link are
+  present, and the exact `git worktree remove --force` / `git worktree prune
+  --expire now` commands for a human) and keeps the marker so the line repeats
+  until resolved; a registered checkout with a missing directory or `.git` link
+  is reported the same way. The ordinary dirty check now reads status with
+  `--untracked-files=all --ignored` (a `status.showUntrackedFiles=no` config no
+  longer hides user files from it) and holds back a checkout that contains an
+  empty directory. A failed removal clears its marker. After the first SIGTERM
+  or SIGINT the runner ignores further ones, so the cleanup cannot be re-entered. (#162)
+- `memory-tool.sh scopes` spawned two python interpreters and two `find`s per
+  scope: 4.4 s of the 8.3 s median of `session-start.sh` with 38 scopes. One
+  process (`tools/lib/memory_acl.py`) now answers for all scopes; the hook's
+  median is 0.8 to 1.3 s (limit 3 s). Latency of every hook:
+  `docs/verification/hook-latency-2026-10-14.md`, reproducible with
+  `scripts/measure-hook-latency.py`. (#162)
 
 ### Changed
 
@@ -33,6 +62,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   worktrees and sweep, dev symlinks, session cache) run in parallel and are
   printed in their original order: 11.6 s sequential, 4.6-6.7 s parallel,
   measured on macOS 2026-10-14. (#160)
+- `tools/memory-tool.sh` (1396 lines, five functions of 72 to 176 lines, which
+  the craftsmanship commit gate rejects for any edit) is split into seven
+  sourced modules under `tools/lib/` plus `memory_admin.py`, which now holds the
+  `audit` and `ttl-sweep` reporting that lived in shell heredocs. Behaviour is
+  unchanged: 118 commands across three agent identities give identical output
+  before and after, and the seven `scripts/test-memory-*.sh` suites pass.
+  `memory-tool.sh --help` prints the usage header instead of every comment of
+  the file. (#162)
 
 ## [2.44.0]: a per-task engineering-cycle ledger enforced at the stop, Hindsight retention removed
 
