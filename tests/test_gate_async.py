@@ -31,7 +31,8 @@ def test_staging_starts_one_task_and_dedups_by_tree(gate):
     tree = gate.stage("two\n")
     assert gate.head_start()[0] == 0
     running = gate.await_running(tree)
-    assert running["state"] == "running" and running["key"] == tree and running["kind"] == "gate"
+    assert running["state"] == "running" and running["kind"] == "gate"
+    assert running["key"].startswith(f"commit-{tree}-")  # the key is verb + tree + digest of the effective rules
     gate.head_start()  # a second add of the same tree, then the commit hook: neither starts another task
     assert gate.gate(COMMIT)[0] == 2
     assert gate.finish(tree)["state"] == "done"
@@ -45,7 +46,7 @@ def test_commit_with_a_running_task_is_blocked_at_once_with_the_message(gate):
     rc, _, err = gate.gate(COMMIT)  # the check is still blocked on HOLD: returning at all proves no wait
     assert rc == 2
     assert f"verification running for tree {tree}; retry the commit when it finishes" in err
-    assert f"tools/task.sh status gate-{tree}" in err
+    assert f"tools/task.sh status gate-commit-{tree}-" in err
     gate.finish(tree)
 
 
@@ -75,14 +76,15 @@ def test_a_changed_tree_is_a_new_task(gate):
     assert second != first
     rc, _, err = gate.gate(COMMIT)  # the proof of the old tree does not cover the new index
     assert rc == 2 and f"tree {second}" in err
-    assert gate.await_running(second)["id"] == f"gate-{second}"
+    assert gate.await_running(second)["id"].startswith(f"gate-commit-{second}-")
     gate.finish(second)
     assert gate.runs() == 2
 
 
 def test_failed_task_blocks_with_the_output_path_and_excerpt(gate):
     write_config(gate.repo, [{"name": "boom", "argv": ["sh", "-c", "echo the-assertion-text; exit 3"]}])
-    git(gate.repo, "add", ".zetetic/gate.json")  # the rules come from the staged tree
+    git(gate.repo, "add", ".zetetic/gate.json")
+    git(gate.repo, "commit", "-q", "-m", "rules", "--no-verify")  # the rules come from HEAD, the trusted tree
     tree = gate.stage("two\n")
     gate.head_start()
     wait_exit(gate.record(tree)["pid"])
@@ -94,15 +96,19 @@ def test_failed_task_blocks_with_the_output_path_and_excerpt(gate):
     assert Path(rec["output_path"]).read_text().count("[gate:boom] FAILED rc=3") == 1
 
 
-def test_push_reuses_the_commit_verification(gate):
+def test_a_push_is_judged_by_a_push_record_not_by_the_commits(gate):
     tree = gate.stage("two\n")
     gate.head_start()
     gate.await_running(tree)
     gate.finish(tree)
     assert gate.commit() == tree
+    rc, _, err = gate.gate("git push")  # the commit's green record does not stand in for a push's
+    assert rc == 2 and f"verification started for tree {tree}" in err and "retry the push" in err
+    assert gate.await_running(tree, "push")["state"] == "running"
+    gate.finish(tree, "push")
     for command in ("git push", "gh pr create --fill"):
-        assert gate.gate(command) == (0, "", ""), command
-    assert gate.runs() == 1
+        assert gate.gate(command) == (0, "", ""), command  # one push record serves every publishing command
+    assert gate.runs() == 2
 
 
 def test_push_of_an_unverified_head_starts_its_verification(gate):
@@ -111,8 +117,8 @@ def test_push_of_an_unverified_head_starts_its_verification(gate):
     tree = gate.commit()  # committed with --no-verify: never verified
     rc, _, err = gate.gate("git push")
     assert rc == 2 and f"verification started for tree {tree}" in err
-    gate.await_running(tree)
-    gate.finish(tree)
+    gate.await_running(tree, "push")
+    gate.finish(tree, "push")
     assert gate.gate("git push") == (0, "", "")
 
 
@@ -149,9 +155,12 @@ def test_undeclared_repo_is_not_gated_and_starts_nothing(tmp_path, monkeypatch):
     assert not list((tmp_path / "state").glob("gate-*.json"))
 
 
-def test_invalid_config_refuses_closed(gate):
+def test_an_invalid_staged_config_refuses_closed_and_an_unstaged_one_is_not_read(gate):
     (gate.repo / ".zetetic" / "gate.json").write_text('{"version": 2}')
-    gate.stage("two\n")
+    gate.stage("two\n")  # the invalid file is only in the working copy: the rules come from HEAD
+    rc, _, err = gate.gate(COMMIT)
+    assert rc == 2 and "verification started" in err
+    git(gate.repo, "add", ".zetetic/gate.json")  # now the staged tree carries it
     rc, _, err = gate.gate(COMMIT)
     assert rc == 2 and "gate config" in err and "invalid" in err
 
@@ -196,7 +205,8 @@ def test_the_hot_path_has_no_timer():
     """Regression for the 8 s git kill: no hook-path module may bound a call by time."""
     from gate_support import HOOKS
     for name in ("gate-proof.py", "gate-start.py", "stop-gate-ledger.py", "lib/gate_git.py", "lib/gate_state.py",
-                 "lib/gate_ledger.py", "lib/gate_actions.py", "lib/gate_config.py", "lib/gate_shell.py"):
+                 "lib/gate_ledger.py", "lib/gate_actions.py", "lib/gate_config.py", "lib/gate_shell.py",
+                 "lib/gate_source.py", "lib/gate_rules.py", "lib/gate_trust.py", "lib/gate_publish.py", "lib/gate_paths.py"):
         assert _time_bounds((HOOKS / name).read_text()) == [], name
 
 

@@ -3,18 +3,24 @@
 
 Rule (owner, 2026-09-30): only VALID, WORKING code is committed. Prose does not enforce that; this hook does.
 Repatriated from ~/.claude/hooks/gate-proof.py (issue: no-timeouts programme PR-1); what changed:
-the proof is the state of the async task `gate-<tree>` (tools/lib/tasks.py), not a file written by a
-synchronous `scripts/gate.sh`, and there is no git timer (hooks/lib/gate_git.py).
+the proof is the state of an async task (tools/lib/tasks.py) keyed by verb + tree + rules digest
+(hooks/lib/gate_state.py), not a file written by a synchronous `scripts/gate.sh`, and there is no git timer.
 
-  commit  tree = `git write-tree` (the index NOW);  push / gh pr create  tree = HEAD^{tree}.
-  The task for that tree is started if absent (dedup by tree), then READ:
-      done and green  -> allow          failed -> deny, naming the output file
-      running         -> deny: "verification running for tree X; retry ... (status: ...)"
-  This hook never waits and never decides on elapsed time. A green record for the tree is the cached
-  proof, so a push of a committed tree reuses the commit's verification.
+  commit  tree = `git write-tree` (the index NOW).   The task for it is started if absent (dedup by key),
+  push    the tip tree of EVERY ref the command      then READ:
+          publishes (hooks/lib/gate_publish.py):         done and green -> allow   failed -> deny, naming
+          `push origin feat`, `feat:main`, `--all`,      the output file   running -> deny: "verification
+          `gh pr create --head feat`, the current        running for tree X; retry ..." A push needs a
+          branch when none is named. A ref that does     push-kind green record: a commit's never stands in.
+          not resolve to a commit is denied with the reason.
+  This hook never waits and never decides on elapsed time.
 
-Which repos are gated and which checks run: hooks/lib/gate_config.py, docs/gate.md. Closed by default:
-an unreadable payload, an unreadable repository or an invalid gate config in a gated repo exits 2.
+Which repos are gated and which checks run: the rules of a TRUSTED tree (HEAD's; hooks/lib/gate_rules.py),
+never the working copy and never the staged change alone, so a change cannot approve itself. A repository that
+declares a gate but is not in ~/.claude/zetetic/gate-trusted-repos is denied, with the line to add, and nothing
+runs (hooks/lib/gate_trust.py). Closed by default: an unreadable payload, an unreadable repository or an
+invalid gate config in a gated repo exits 2. Registered with onFailure "block" (hooks/hooks.json), so a hook
+that cannot finish refuses the call instead of letting it through (docs/gate.md, "A hook that is killed").
 
 Commit: a call that stages in the same breath (`git add ... && git commit`) or commits with
 -a/--all/-i/-o/-p/explicit paths makes the index at hook time differ from the index that will be
@@ -30,6 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib
 import gate_actions as actions  # noqa: E402
 import gate_config as config  # noqa: E402
 import gate_git as gitq  # noqa: E402
+import gate_publish as publish  # noqa: E402
 import gate_state as state  # noqa: E402
 
 _STAGE_SEPARATELY = (
@@ -57,11 +64,18 @@ def _locate(directory: str) -> gitq.Repo | None:
     return repo
 
 
-def _declared(top: str) -> bool:
+def _verdicts(repo: gitq.Repo, act: dict) -> list:
+    """[(label, Verdict)] for what ``act`` would commit or publish; [] when there is nothing to judge."""
+    if act["kind"] == "commit":
+        if act["why"]:
+            raise _Deny(_STAGE_SEPARATELY.format(why="; ".join(act["why"]), top=repo.top))
+        trees = state.commit_trees(repo.top, act["amend"], act["allow_empty"])
+        return [] if trees is None else [("", state.check(repo.top, "commit", trees[0], trees[1]))]
     try:
-        return config.declaration(top) is not None
-    except config.ConfigError as exc:
-        raise _Deny(f"GATE-PROOF: the gate config of {top} is invalid ({exc}): refused (closed).") from exc
+        tips = publish.resolve(repo.top, act["publish"])
+    except publish.Unresolvable as exc:
+        raise _Deny(f"GATE-PROOF: cannot tell which commits this publishes ({exc}): refused (closed).") from exc
+    return [(f"[{tip.name}] ", state.check(repo.top, "push", tip.tree, tip.base)) for tip in tips]
 
 
 def _check(act: dict) -> None:
@@ -69,22 +83,14 @@ def _check(act: dict) -> None:
     if not os.path.isdir(act["dir"]):
         return  # the command itself will fail; nothing to judge
     repo = _locate(act["dir"])
-    if repo is None or not _declared(repo.top):
+    if repo is None:
         return
     try:
-        if act["kind"] == "commit":
-            if act["why"]:
-                raise _Deny(_STAGE_SEPARATELY.format(why="; ".join(act["why"]), top=repo.top))
-            trees = state.commit_trees(repo.top, act["amend"], act["allow_empty"])
-        else:
-            trees = state.push_trees(repo.top)
-        if trees is None:
-            return
-        verdict = state.check(repo.top, act["kind"], trees[0], trees[1])
+        denied = [label + v.message for label, v in _verdicts(repo, act) if not v.allow]
     except gitq.Unavailable as exc:
         raise _Deny(f"GATE-PROOF: cannot judge the tree ({exc}) in {repo.top}: refused (closed).") from exc
-    if not verdict.allow:
-        raise _Deny(verdict.message)
+    if denied:
+        raise _Deny(chr(10).join(denied))
 
 
 def _run(event: object) -> None:

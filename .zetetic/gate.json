@@ -5,7 +5,9 @@
     {"name": "py-compile", "paths": ["**/*.py"], "argv": ["{python}", "-m", "py_compile", "{files}"]},
     {"name": "sh-syntax", "paths": ["**/*.sh"], "argv": ["bash", "-c", "for f in \"$@\"; do bash -n \"$f\" || exit 1; done", "gate", "{files}"]},
     {"name": "json", "paths": [".zetetic/*.json", ".claude-plugin/**/*.json", "hooks/*.json", "schemas/**/*.json"], "argv": ["{python}", "-c", "import json, sys\nfor f in sys.argv[1:]:\n    json.load(open(f))", "{files}"]},
-    {"name": "craftsmanship", "paths": ["**/*.py", "**/*.sh"], "argv": ["bash", "tools/craftsmanship-checker.sh", "--files", "{files}"]}
+    {"name": "craftsmanship", "paths": ["**/*.py", "**/*.sh"], "argv": ["bash", "tools/craftsmanship-checker.sh", "--files", "{files}"]},
+    {"name": "doc-count", "paths": ["hooks/**", ".claude-plugin/**", "docs/**", "*.md", "agents/**", "skills/**", "commands/**", "tools/*.sh", "tools/*.py", "scripts/test-memory-*.sh", "tests/run-all.sh"], "argv": ["bash", "tools/doc-count-check.sh"]},
+    {"name": "doc-commands", "paths": ["*.md", "docs/**", "tools/**", "scripts/**", "hooks/**"], "argv": ["bash", "tools/doc-command-check.sh"]}
   ],
   "tests": {
     "argv": ["{python}", "-m", "pytest", "-q", "{tests}"],

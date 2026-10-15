@@ -28,7 +28,10 @@ def _requeue(top: str, verb: str) -> dict:
     else:
         trees = state.push_trees(top)
     tree, base = trees
-    started = state.tasks.requeue(state.KIND, tree, state.job_argv(top, verb, tree, base), top)
+    plan = state.prepare(top, verb, tree, base)
+    if isinstance(plan, state.Verdict):
+        return {"error": plan.message or "this tree is not gated: there is nothing to requeue"}
+    started = state.tasks.requeue(state.KIND, plan.key, plan.argv, top)
     return {"id": started.record["id"], "disposition": started.disposition,
             "attempt": started.record["attempt"], "state": started.record["state"]}
 

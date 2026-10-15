@@ -1,9 +1,10 @@
 """The gate's per-repo configuration and the rule that turns a change into the checks to run.
 
-``.zetetic/gate.json`` (docs/gate.md) declares the checks. This module is pure: it reads the config
-file and the file tree it is given, and returns data. It runs nothing, writes nothing, takes no git.
+``.zetetic/gate.json`` (docs/gate.md) declares the checks. This module reads the files of the SOURCE it
+is given (a directory, or a tree object: gate_source) and returns data. It runs nothing and writes nothing.
+The rules that judge a change are read from a trusted tree, never from the change (gate_rules).
 
-Declaration, in order (``declaration(top)``):
+Declaration, in order (``declaration(where)``):
   1. ``.zetetic/gate.json`` with ``"off": true``, or the legacy ``.zetetic-gate.json`` with
      ``"off": true``                                     -> not gated
   2. ``.zetetic/gate.json``                              -> "config"
@@ -19,12 +20,16 @@ import os
 import re
 from typing import NamedTuple
 
+import gate_source as source
+
 CONFIG_REL = os.path.join(".zetetic", "gate.json")
 LEGACY_OFF = ".zetetic-gate.json"
 LEGACY_SCRIPT = os.path.join("scripts", "gate.sh")
 PY = "{python}"  # whole-argv-element placeholder: the interpreter the gate resolved
 FILES = "{files}"  # whole-argv-element placeholder: the changed files this check applies to
 TESTS = "{tests}"  # whole-argv-element placeholder: the selected test paths
+PROBE_PATHS = (CONFIG_REL.replace(os.sep, "/"), LEGACY_OFF, LEGACY_SCRIPT.replace(os.sep, "/"), "package.json",
+               "Cargo.toml", "go.mod", "pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini", "tests")  # what `declaration` asks a tree about (not `scripts`: git lists a directory pathspec only when no deeper one is given)
 DEFAULT_FULL_ON = [".zetetic/gate.json"]  # source: a change to the rules runs every check the new rules declare (always in full_on)
 _TOP_KEYS = {"version", "off", "full_on", "checks", "tests", "env", "link"}
 _CHECK_KEYS = {"name", "paths", "argv"}
@@ -38,6 +43,8 @@ class ConfigError(ValueError):
 class Step(NamedTuple):
     name: str
     argv: list
+    cwd: str | None = None  # None: the private checkout of the tree
+    env: dict | None = None  # additions to the check's environment; belong to the rules that declared the step
 
 
 # ------------------------------------------------------------------------ glob
@@ -134,34 +141,30 @@ def validate(cfg: object) -> dict:
     return cfg
 
 
-def _read_json(path: str) -> object:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except FileNotFoundError:
+def _read_json(where: object, rel: str) -> object:
+    text = source.as_source(where).read(rel)
+    if text is None:
         return None
-    except (OSError, ValueError) as exc:
-        raise ConfigError(f"{path} is unreadable or not JSON: {exc}") from exc
+    try:
+        return json.loads(text)
+    except ValueError as exc:
+        raise ConfigError(f"{rel} is not JSON: {exc}") from exc
 
 
-def load(root: str) -> dict | None:
-    """The validated ``.zetetic/gate.json`` under ``root``, or None when absent."""
-    raw = _read_json(os.path.join(root, CONFIG_REL))
+def load(where: object) -> dict | None:
+    """The validated ``.zetetic/gate.json`` of ``where`` (a directory or a source), or None when absent."""
+    raw = _read_json(where, CONFIG_REL.replace(os.sep, "/"))
     return None if raw is None else validate(raw)
 
 
 # --------------------------------------------------------------- declaration
 
 
-def _is_exec(path: str) -> bool:
-    return os.path.isfile(path) and os.access(path, os.X_OK)
-
-
-def _npm(top: str) -> list:
+def _npm(src: object) -> list:
+    text = source.as_source(src).read("package.json")
     try:
-        with open(os.path.join(top, "package.json"), encoding="utf-8") as fh:
-            scripts = json.load(fh).get("scripts") or {}
-    except (OSError, ValueError, AttributeError):
+        scripts = (json.loads(text) if text else {}).get("scripts") or {}
+    except (ValueError, AttributeError):
         return []
     out = []
     if isinstance(scripts.get("lint"), str):
@@ -172,30 +175,31 @@ def _npm(top: str) -> list:
     return out
 
 
-def _python(top: str) -> list:
+def _python(src: object) -> list:
+    src = source.as_source(src)
     marks = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
-    has_project = any(os.path.isfile(os.path.join(top, m)) for m in marks)
-    has_tests = os.path.isdir(os.path.join(top, "tests")) or any(
-        n.startswith("test_") and n.endswith(".py") for n in os.listdir(top))
+    has_project = any(src.isfile(m) for m in marks)
+    has_tests = src.isdir("tests") or any(n.startswith("test_") and n.endswith(".py") for n in src.names())
     return [{"name": "test", "argv": [PY, "-m", "pytest", "-q"]}] if has_project and has_tests else []
 
 
-def stack_config(top: str) -> dict | None:
-    """The documented default (rule 4): the whole suite of the stack found in ``top``, as a config.
+def stack_config(where: object) -> dict | None:
+    """The documented default (rule 4): the whole suite of the stack found in ``where``, as a config.
 
     Dependencies live outside the tree (node_modules, a cargo target dir), so the config links the first
     from the main checkout and points the second at a directory shared by every verification.
     """
+    src = source.as_source(where)
     checks: list = []
     env: dict = {}
-    if os.path.isfile(os.path.join(top, "Cargo.toml")):
+    if src.isfile("Cargo.toml"):
         checks += [{"name": "fmt", "argv": ["cargo", "fmt", "--all", "--check"]},
                    {"name": "clippy", "argv": ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]},
                    {"name": "test", "argv": ["cargo", "test", "--workspace"]}]
         env["CARGO_TARGET_DIR"] = "{common}/zetetic-gate-target"
-    npm = _npm(top)
-    checks += npm + _python(top)
-    if os.path.isfile(os.path.join(top, "go.mod")):
+    npm = _npm(src)
+    checks += npm + _python(src)
+    if src.isfile("go.mod"):
         checks += [{"name": "vet", "argv": ["go", "vet", "./..."]}, {"name": "test", "argv": ["go", "test", "./..."]}]
     if not checks:
         return None
@@ -208,17 +212,18 @@ def setup_for(cfg: dict, top: str, common: str) -> tuple[dict, list]:
     return env, list(cfg.get("link", []))
 
 
-def declaration(top: str) -> str | None:
+def declaration(where: object) -> str | None:
     """"config" | "legacy" | "stack" | None (not gated). Raises ConfigError for an invalid config file."""
-    for off_file in (CONFIG_REL, LEGACY_OFF):
-        raw = _read_json(os.path.join(top, off_file))
+    src = source.as_source(where)
+    for off_file in (CONFIG_REL.replace(os.sep, "/"), LEGACY_OFF):
+        raw = _read_json(src, off_file)
         if isinstance(raw, dict) and raw.get("off") is True:
             return None
-    if load(top) is not None:
+    if load(src) is not None:
         return "config"
-    if _is_exec(os.path.join(top, LEGACY_SCRIPT)):
+    if src.isexec(LEGACY_SCRIPT.replace(os.sep, "/")):
         return "legacy"
-    return "stack" if stack_config(top) else None
+    return "stack" if stack_config(src) else None
 
 
 def declared_above(start: str) -> bool:
@@ -293,7 +298,7 @@ def _select_tests(tests: dict, root: str, changed: list) -> list:
 
 def _test_step(cfg: dict, root: str, changed: list, full: bool) -> list:
     tests = cfg.get("tests")
-    if not tests or not changed:
+    if not tests or not (changed or full):
         return []
     chosen = [] if full else _select_tests(tests, root, changed)
     if not full and not chosen:
@@ -303,7 +308,7 @@ def _test_step(cfg: dict, root: str, changed: list, full: bool) -> list:
     return [Step("tests-full", _expand_argv(tests["argv"], TESTS, []))]
 
 
-def plan(cfg: dict, root: str, changed: list) -> list:
+def plan(cfg: dict, root: str, changed: list, force_full: bool = False) -> list:
     """The steps to run for ``changed`` (repo-relative paths, deletions included) in the tree ``root``.
 
     Rules (docs/gate.md): a change to any ``full_on`` path runs every check over every file and the whole
@@ -311,9 +316,11 @@ def plan(cfg: dict, root: str, changed: list) -> list:
     ``paths``: always), with {files} the matching ones; tests are the union of ``tests.map`` entries
     whose paths match a changed path, the ``same_name`` test of each changed file ({stem}: its name without extension, '-' as '_'), and changed test files
     themselves; none selected -> ``tests.fast``; still none -> the whole suite. No change -> no steps.
+    ``force_full`` (the base tree has no green verification of this kind, gate_run): the full_on case for
+    every change, and even for none, because nothing earlier vouches for what is not in ``changed``.
     """
-    if not changed:
+    if not changed and not force_full:
         return []
     full_on = DEFAULT_FULL_ON + cfg.get("full_on", [])
-    full = any(matches(full_on, p) for p in changed)
+    full = force_full or any(matches(full_on, p) for p in changed)
     return _file_steps(cfg, root, changed, full) + _test_step(cfg, root, changed, full)

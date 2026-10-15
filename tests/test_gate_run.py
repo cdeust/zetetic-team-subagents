@@ -16,7 +16,10 @@ import pytest
 from gate_support import git, write_config
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks" / "lib"))
+import gate_rules  # noqa: E402
 import gate_run  # noqa: E402
+import gate_state  # noqa: E402
+import gate_trust  # noqa: E402
 
 
 @pytest.fixture
@@ -30,12 +33,29 @@ def repo(tmp_path, monkeypatch):
     (path / "a.txt").write_text("one\n")
     git(path, "add", "a.txt")
     git(path, "commit", "-q", "-m", "init")
+    listed = tmp_path / "trusted-repos"
+    listed.write_text(os.path.realpath(path) + "\n")  # the test's own trusted-repos file, never the user's
+    monkeypatch.setenv(gate_trust.ENV_FILE, str(listed))
+    monkeypatch.setenv("ZETETIC_TASKS_DIR", str(tmp_path / "state"))
     return path
 
 
 def verify(repo: Path, base: str = "-", kind: str = "commit") -> int:
+    """What the hook asks the worker for: the staged tree, under the rules of HEAD plus the staged tree."""
     tree = git(repo, "write-tree")
-    return gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", base, "--kind", kind])
+    rules = gate_rules.effective(str(repo), tree)
+    return gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", base, "--kind", kind,
+                          "--trusted", rules.trusted, "--rules", rules.digest])
+
+
+def mark_green(repo: Path, tree: str, kind: str = "commit") -> None:
+    """A green task record for ``tree`` under the rules a verification of the current index would use: the
+    state the gate reaches after a verified commit (written directly; the record is the whole contract)."""
+    rules = gate_rules.effective(str(repo), tree)
+    tid = gate_state.Plan(str(repo), kind, tree, None, rules).id
+    directory = gate_state.task_store.tasks_dir(str(repo))
+    gate_state.task_store.atomic_write(gate_state.task_store.record_path(directory, tid),
+                                       {"id": tid, "state": "done", "rc": 0})
 
 
 def stage_config(repo: Path, checks: list, **extra) -> None:
@@ -110,18 +130,39 @@ def test_a_link_never_replaces_a_tracked_path(repo):
     assert verify(repo) == 0
 
 
-def test_no_change_runs_nothing_and_passes(repo, capsys):
+def test_no_change_runs_nothing_when_the_base_is_verified(repo, capsys):
     stage_config(repo, [sh("exit 9")])
     git(repo, "commit", "-q", "-m", "cfg")
-    assert verify(repo, git(repo, "rev-parse", "HEAD^{tree}")) == 0
+    head = git(repo, "rev-parse", "HEAD^{tree}")
+    mark_green(repo, head)  # the base has a green record of this kind under these rules
+    assert verify(repo, head) == 0
     assert "no check applies" in capsys.readouterr().out
+
+
+def test_no_change_still_runs_the_full_gate_when_nothing_vouches_for_the_base(repo, capsys):
+    stage_config(repo, [sh("exit 9")])
+    git(repo, "commit", "-q", "-m", "cfg")
+    head = git(repo, "rev-parse", "HEAD^{tree}")
+    assert verify(repo, head) == 9  # no green record for the base: affected-only selection is not valid
+    assert "no green commit record for base" in capsys.readouterr().out
+
+
+def test_a_green_record_of_another_kind_does_not_vouch_for_the_base(repo, capsys):
+    stage_config(repo, [sh("exit 9")])
+    git(repo, "commit", "-q", "-m", "cfg")
+    head = git(repo, "rev-parse", "HEAD^{tree}")
+    mark_green(repo, head, kind="commit")
+    assert verify(repo, head, kind="push") == 9  # the base was verified as a commit, not as a push
 
 
 def test_invalid_config_in_the_tree_fails_the_task(repo, capsys):
     (repo / ".zetetic").mkdir()
     (repo / ".zetetic" / "gate.json").write_text('{"version": 9}')
     git(repo, "add", ".zetetic/gate.json")
-    assert verify(repo) == 1
+    tree, head = git(repo, "write-tree"), git(repo, "rev-parse", "HEAD^{tree}")
+    # the hook refuses an invalid config before any task exists; a worker started by hand still fails closed
+    assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit",
+                          "--trusted", head, "--rules", "0" * 12]) == 1
     assert "version" in capsys.readouterr().out
 
 
@@ -149,7 +190,17 @@ def test_legacy_script_judges_the_real_checkout(repo, tmp_path, capsys):
     stage_legacy(repo, f"pwd > {tmp_path / 'legacy-cwd'}\necho \"kind=$1\"\n" + LEGACY_PROOF)
     assert verify(repo, kind="push") == 0  # the script left push-<this tree>.json
     assert (tmp_path / "legacy-cwd").read_text().strip() == str(repo.resolve())
-    assert "[gate:legacy-gate] sh scripts/gate.sh push" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "[gate:legacy-gate] sh " in out and "scripts/gate.sh push" in out
+
+
+def test_a_staged_change_to_the_legacy_script_does_not_replace_the_trusted_one(repo, tmp_path):
+    stage_legacy(repo, f"echo trusted-copy-ran > {tmp_path / 'which'}\nexit 1\n")  # HEAD's script fails
+    git(repo, "commit", "-q", "-m", "legacy gate")
+    (repo / "scripts" / "gate.sh").write_text("#!/bin/sh\n" + LEGACY_PROOF)  # the change makes itself pass
+    git(repo, "add", "scripts/gate.sh")
+    assert verify(repo) == 1  # HEAD's copy judges the change, and it fails
+    assert (tmp_path / "which").read_text().strip() == "trusted-copy-ran"
 
 
 def test_a_legacy_script_that_proved_another_tree_does_not_turn_this_one_green(repo, capsys):
@@ -203,16 +254,19 @@ def test_python_placeholder_resolves_to_the_checkouts_venv_then_ours(repo, tmp_p
 
 def test_bad_arguments_are_a_usage_error(repo):
     with pytest.raises(SystemExit):
-        gate_run.main(["run", "--repo", str(repo), "--tree", "nothex", "--base", "-", "--kind", "commit"])
+        gate_run.main(["run", "--repo", str(repo), "--tree", "nothex", "--base", "-", "--kind", "commit",
+                       "--trusted", "b" * 40, "--rules", "0" * 12])
 
 
 def test_the_callers_git_environment_reaches_neither_the_checkout_nor_the_checks(repo, monkeypatch):
     stage_config(repo, [sh('test -z "$GIT_NAMESPACE" && test -z "$GIT_INDEX_FILE"')])
     tree = git(repo, "write-tree")
+    rules = gate_rules.effective(str(repo), tree)
     monkeypatch.setenv("GIT_NAMESPACE", "leaked")
     monkeypatch.setenv("GIT_INDEX_FILE", "/nonexistent/index")  # would break read-tree if it reached the private index
     monkeypatch.setenv("GIT_OBJECT_DIRECTORY", "/nonexistent/objects")  # would hide every object from the plumbing
-    assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit"]) == 0
+    assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit",
+                          "--trusted", rules.trusted, "--rules", rules.digest]) == 0
 
 
 def test_a_tree_that_declares_no_gate_has_nothing_to_verify(repo, capsys):
@@ -238,7 +292,8 @@ def test_a_non_executable_venv_python_is_not_used(repo):
 
 
 def test_a_directory_that_is_not_a_repository_is_a_failure(tmp_path, capsys):
-    assert gate_run.main(["run", "--repo", str(tmp_path), "--tree", "a" * 40, "--base", "-", "--kind", "commit"]) == 1
+    assert gate_run.main(["run", "--repo", str(tmp_path), "--tree", "a" * 40, "--base", "-", "--kind", "commit",
+                          "--trusted", "b" * 40, "--rules", "0" * 12]) == 1
     assert "not a git repository" in capsys.readouterr().out
 
 
@@ -276,3 +331,63 @@ def test_the_worker_lowers_its_priority(monkeypatch):
     monkeypatch.setattr(os, "nice", lambda n: seen.append(n))
     gate_run._lower_priority()
     assert seen == [10]
+
+
+def test_a_worker_started_by_hand_for_an_unlisted_repository_runs_nothing(repo, tmp_path, monkeypatch, capsys):
+    stage_config(repo, [sh(f"echo ran > {tmp_path / 'ran'}")])
+    monkeypatch.setenv(gate_trust.ENV_FILE, str(tmp_path / "nobody"))  # a trusted-repos file that lists nothing
+    assert verify(repo) == 1
+    assert "not in your trusted list" in capsys.readouterr().out and not (tmp_path / "ran").exists()
+
+
+def test_a_worker_asked_for_other_rules_than_the_ones_in_force_refuses(repo, tmp_path, capsys):
+    stage_config(repo, [sh(f"echo ran > {tmp_path / 'ran'}")])
+    tree = git(repo, "write-tree")
+    trusted = gate_rules.effective(str(repo), tree).trusted
+    assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit",
+                          "--trusted", trusted, "--rules", "f" * 12]) == 1
+    out = capsys.readouterr().out
+    assert "effective rules changed" in out and "f" * 12 in out and not (tmp_path / "ran").exists()
+
+
+@pytest.mark.parametrize("missing", ["--repo", "--tree", "--base", "--kind", "--trusted", "--rules"])
+def test_every_argument_of_the_worker_is_required(repo, missing):
+    tree = git(repo, "write-tree")
+    given = {"--repo": str(repo), "--tree": tree, "--base": "-", "--kind": "commit", "--trusted": tree, "--rules": "0" * 12}
+    argv = ["run"] + [x for k, v in given.items() if k != missing for x in (k, v)]
+    with pytest.raises(SystemExit):
+        gate_run.main(argv)
+
+
+def test_an_archive_member_cannot_leave_the_directory_it_is_extracted_into(tmp_path):
+    import io
+    import tarfile
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as tar:
+        info = tarfile.TarInfo("../escape.sh")
+        info.size = 0
+        tar.addfile(info, io.BytesIO(b""))
+    buffer.seek(0)
+    root = tmp_path / "scripts"
+    root.mkdir()
+    with tarfile.open(fileobj=buffer) as tar:
+        with pytest.raises(RuntimeError, match="escapes"):
+            gate_run._unpack(tar, tar.getmembers()[0], str(root))
+    assert not (tmp_path / "escape.sh").exists()
+
+
+def test_the_legacy_scripts_are_exported_with_their_modes_and_without_symlinks(repo, tmp_path):
+    scripts = repo / "scripts"
+    (scripts / "gate.d").mkdir(parents=True)
+    (scripts / "gate.sh").write_text("#!/bin/sh\n. \"$(dirname \"$0\")/gate.d/common.sh\"\n")
+    (scripts / "gate.sh").chmod(0o755)
+    (scripts / "gate.d" / "common.sh").write_text("echo common\n")
+    (scripts / "link").symlink_to("/etc/passwd")
+    git(repo, "add", "scripts")
+    oid = git(repo, "write-tree")
+    oid = git(repo, "rev-parse", f"{oid}:scripts")
+    out = gate_run.export_scripts(str(repo), oid, str(tmp_path / "exp"))
+    base = Path(out).parent
+    assert out == str(tmp_path / "exp" / "scripts" / "gate.sh") and os.access(out, os.X_OK)
+    assert (base / "gate.d" / "common.sh").read_text() == "echo common\n" and not (base / "gate.d" / "common.sh").stat().st_mode & 0o111
+    assert not (base / "link").exists() and not (base / "link").is_symlink()

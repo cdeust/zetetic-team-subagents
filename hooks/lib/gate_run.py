@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The gate task's command: verify ONE tree, exactly as committed, and exit 0 only if every check passed.
 
-    gate_run.py run --repo TOP --tree TREE --base BASE|- --kind commit|push
+    gate_run.py run --repo TOP --tree TREE --base BASE|- --kind commit|push --trusted TREE --rules DIGEST
 
 Started detached by tools/lib/tasks.py as task `gate-<TREE>` (hooks/lib/gate_state.py); its stdout/stderr
 are the task's output file. Contract:
@@ -13,23 +13,36 @@ are the task's output file. Contract:
         function of TREE alone: editing the working tree while this runs cannot change it.
         The checkout is removed on every exit path.
 
-Which checks run is hooks/lib/gate_config.plan(): the repo's `.zetetic/gate.json` read FROM TREE,
-else the legacy `scripts/gate.sh`, else the stack's whole suite.
+Which checks run: the EFFECTIVE rules (gate_rules): those of the trusted tree (--trusted, HEAD's at the
+time the hook judged) plus those of TREE when they differ, each planned and run on its own, with its own
+environment. A change cannot choose its own rules. The selection of a rule set is gate_config.plan(): the
+checks that cover the diff, valid only when BASE has a green record of the same kind under the same rules
+(gate_state.base_is_green); otherwise the full configured gate. Legacy `scripts/gate.sh` is run from the
+trusted tree's copy of `scripts/`. The worker runs only for a repository the user listed (gate_trust).
+
+On every exit the verdict is appended to the ledger (gate_ledger): the Stop hook reads it.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+from typing import NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_config as config  # noqa: E402
 import gate_git as gitq  # noqa: E402
+import gate_ledger as ledger  # noqa: E402
+import gate_rules as rules_mod  # noqa: E402
+import gate_state as state  # noqa: E402
+import gate_trust as trust  # noqa: E402
 
 LEGACY = "legacy-gate"
 _PY_NAMES = (os.path.join("bin", "python"), os.path.join("Scripts", "python.exe"))
@@ -102,12 +115,12 @@ def _check_env(extra: dict) -> dict:
 
 def execute(steps: list, cwd: str, python: str, extra_env: dict | None = None) -> int:
     """Run each step in ``cwd``; stop at the first failure. 0 only if all passed."""
-    env = _check_env(extra_env or {})
     for step in steps:
+        env = _check_env({**(extra_env or {}), **(step.env or {})})
         argv = _substitute(step.argv, python)
         _say(f"[gate:{step.name}] {' '.join(argv)}")
         try:
-            rc = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, check=False).returncode
+            rc = subprocess.run(argv, cwd=step.cwd or cwd, env=env, stdin=subprocess.DEVNULL, check=False).returncode
         except OSError as exc:  # FAILS_ON: the check's command is missing or not executable
             _say(f"[gate:{step.name}] cannot start: {exc!r}")
             rc = 127
@@ -117,21 +130,69 @@ def execute(steps: list, cwd: str, python: str, extra_env: dict | None = None) -
     return 0
 
 
-def _plan_for(snap: str, top: str, args: argparse.Namespace) -> tuple[dict, list, str]:
-    """(config, steps, cwd) for the tree checked out in ``snap``; config {} when nothing is declared."""
-    kind = config.declaration(snap)
-    if kind == "legacy":  # the repo's own script judges the real checkout (it needs .git); see docs/gate.md
-        return {}, [config.Step(LEGACY, ["sh", config.LEGACY_SCRIPT, args.kind])], top
-    if kind is None:
+def _unpack(tar: tarfile.TarFile, member: tarfile.TarInfo, root: str) -> None:
+    """Extract one directory or regular file of the archive under ``root``; anything else is not extracted."""
+    target = os.path.normpath(os.path.join(root, member.name))
+    if target != root and not target.startswith(root + os.sep):
+        raise RuntimeError(f"scripts entry {member.name!r} escapes its directory")
+    if member.isdir():
+        os.makedirs(target, exist_ok=True)
+    elif member.isreg():
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as out:
+            out.write(tar.extractfile(member).read())
+        os.chmod(target, member.mode & 0o777)
+
+
+def export_scripts(top: str, oid: str, dest: str) -> str:
+    """Write the `scripts` tree ``oid`` (an object of the repository, so a trusted tree's copy) under
+    ``dest``/scripts; return the path of its gate.sh. Regular files only: a symlink is not extracted."""
+    raw = _git(top, ["archive", "--format=tar", oid])
+    root = os.path.join(dest, "scripts")
+    os.makedirs(root)
+    with tarfile.open(fileobj=io.BytesIO(raw)) as tar:
+        for member in tar.getmembers():
+            _unpack(tar, member, root)
+    return os.path.join(root, os.path.basename(config.LEGACY_SCRIPT))
+
+
+class Job(NamedTuple):
+    """What a verification runs against: the repository, the private checkout of the tree, the arguments."""
+    top: str
+    snap: str
+    common: str
+    args: argparse.Namespace
+
+
+def _steps_of(rule_set: rules_mod.RuleSet, job: Job, changed: list, full: bool) -> tuple[list, list]:
+    """(steps, links) of ONE rule set. Each step carries the environment of the rules that declared it."""
+    if rule_set.kind == "legacy":  # the trusted tree's script judges the real checkout (it needs .git)
+        script = export_scripts(job.top, rule_set.scripts, os.path.join(job.snap + ".legacy", rule_set.scripts[:12]))
+        return [config.Step(LEGACY, ["sh", script, job.args.kind], job.top)], []
+    env, links = config.setup_for(rule_set.cfg, job.top, job.common)
+    return [step._replace(env=env) for step in config.plan(rule_set.cfg, job.snap, changed, full)], links
+
+
+def _plan_for(job: Job, rules: rules_mod.Rules) -> tuple[list, list]:
+    """(steps, links) for the tree checked out in ``job.snap``: every effective rule set planned on its own."""
+    args = job.args
+    if not rules.sets:
         _say("[gate] no gate is declared for this tree: nothing to verify")
-        return {}, [], snap
-    cfg = config.load(snap) or config.stack_config(snap)
-    changed = changed_files(top, args.base, args.tree)
+        return [], []
+    full = not state.base_is_green(job.top, args.kind, None if args.base == "-" else args.base, rules.digest)
+    if full:
+        _say(f"[gate] no green {args.kind} record for base {args.base[:12]} under these rules: the full configured gate runs")
+    changed = changed_files(job.top, args.base, args.tree)
     _say(f"[gate] {len(changed)} changed path(s) against {args.base[:12]}: {' '.join(changed[:20])}")
-    steps = config.plan(cfg, snap, changed)
+    steps: list = []
+    links: list = []
+    for rule_set in rules.sets:
+        more, link = _steps_of(rule_set, job, changed, full)
+        steps += [step for step in more if step not in steps]
+        links += [rel for rel in link if rel not in links]
     if not steps:
         _say("[gate] no check applies to this change")
-    return cfg, steps, snap
+    return steps, links
 
 
 def legacy_proof_names(common: str, kind: str, tree: str) -> bool:
@@ -169,6 +230,16 @@ def _snapshot_dir(tree: str, common: str) -> str:
     return path
 
 
+def _refuse(top: str, common: str, rules: rules_mod.Rules, args: argparse.Namespace) -> str | None:
+    """Why this verification must not run, or None. The worker is startable without the hooks (tools/task.sh),
+    so the trust check and the rules check are made here too."""
+    if not trust.is_trusted(top, common):
+        return trust.refusal(top, common)
+    if rules.digest != args.rules:
+        return f"the effective rules changed since this verification was requested ({args.rules} -> {rules.digest}); request it again"
+    return None
+
+
 def run(args: argparse.Namespace) -> int:
     top = args.repo
     common = locate(top)
@@ -177,20 +248,26 @@ def run(args: argparse.Namespace) -> int:
         return 1
     snap = _snapshot_dir(args.tree, common)
     try:
+        rules = rules_mod.effective(top, args.tree, args.trusted, _clean_env())
+        why = _refuse(top, common, rules, args)
+        if why:
+            _say(f"[gate] {why}")
+            return 1
+        shutil.rmtree(snap + ".legacy", ignore_errors=True)  # a leftover of a SIGKILLed attempt has no owner (see _snapshot_dir)
         materialize(top, args.tree, snap)
-        cfg, steps, cwd = _plan_for(snap, top, args)
-        env, links = config.setup_for(cfg, top, common)
+        steps, links = _plan_for(Job(top, snap, common, args), rules)
         _link(top, snap, links)
-        rc = execute(steps, cwd, resolve_python(top, common), env)
+        rc = execute(steps, snap, resolve_python(top, common))
         if rc == 0 and any(step.name == LEGACY for step in steps) and not legacy_proof_names(common, args.kind, args.tree):
             _say(f"[gate:{LEGACY}] exited 0 but left no green proof for tree {args.tree}: it proved a different tree")
             return 1
         return rc
-    except (config.ConfigError, RuntimeError) as exc:  # FAILS_ON: invalid gate config in the tree, or git could not read it
+    except (config.ConfigError, RuntimeError, gitq.Unavailable) as exc:  # FAILS_ON: invalid gate config, or a tree could not be read
         _say(f"[gate] {exc}")
         return 1
     finally:
         shutil.rmtree(snap, ignore_errors=True)
+        shutil.rmtree(snap + ".legacy", ignore_errors=True)
 
 
 def main(argv: list) -> int:
@@ -201,10 +278,14 @@ def main(argv: list) -> int:
     runner.add_argument("--tree", required=True)
     runner.add_argument("--base", required=True)
     runner.add_argument("--kind", choices=("commit", "push"), required=True)
+    runner.add_argument("--trusted", required=True)
+    runner.add_argument("--rules", required=True)
     args = parser.parse_args(argv)
-    if not gitq.TREE_RE.match(args.tree) or (args.base != "-" and not gitq.TREE_RE.match(args.base)):
-        parser.error("--tree and --base must be tree hashes")
-    return run(args)
+    if not all(gitq.TREE_RE.match(t) for t in (args.tree, args.trusted)) or (args.base != "-" and not gitq.TREE_RE.match(args.base)):
+        parser.error("--tree, --trusted and --base must be tree hashes")
+    rc = run(args)
+    ledger.record(args.repo, ledger.Result(args.kind, args.tree, state.task_key(args.kind, args.tree, args.rules), rc))
+    return rc
 
 
 def _lower_priority() -> None:
