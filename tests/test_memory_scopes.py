@@ -10,8 +10,14 @@ import os
 import subprocess
 import sys
 
+import pytest
+from leak_support import stop_pii_daemon
+
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "tools" / "memory-tool.sh"
+
+
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
 
 
 def _memory(tmp_path):
@@ -116,7 +122,18 @@ def test_scopes_with_acl_disabled_are_open_to_everyone(tmp_path):
     assert [line.split()[-1] for line in out.stdout.splitlines()[1:]] == ["rw", "rw", "rw"]
 
 
-def test_acl_check_gates_writes_through_the_tool(tmp_path):
+@pytest.fixture
+def pii_daemon_stopped(tmp_path):
+    """The first write through the tool starts a PII daemon for the root; stop it afterwards.
+
+    It is long-lived by design (one per MEMORY_ROOT, idle exit after 30 s), so the test that
+    drove the tool stops it through the documented path: SIGTERM to its pid sidecar.
+    """
+    yield
+    stop_pii_daemon(tmp_path / "memories")
+
+
+def test_acl_check_gates_writes_through_the_tool(tmp_path, pii_daemon_stopped):
     root, registry = _memory(tmp_path)
     env = {**os.environ, "MEMORY_ROOT": str(root), "MEMORY_REGISTRY": str(registry)}
     body = '---\ndescription: "t"\n---\nx'

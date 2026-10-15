@@ -26,6 +26,9 @@ import worktree_report  # noqa: E402  (tools/lib is on sys.path through task_sup
 SECTIONS = ROOT / "hooks" / "lib" / "session-sections.sh"
 
 
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
+
+
 @pytest.fixture
 def state(tmp_path, monkeypatch):
     directory = tmp_path / "tasks"

@@ -49,6 +49,9 @@ exec "$REAL_GIT" "$@"
 """
 
 
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
+
+
 def _git(repo, *args):
     return subprocess.run([REAL_GIT, "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
 

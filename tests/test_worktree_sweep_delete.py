@@ -29,6 +29,9 @@ exec "$REAL_GIT" "$@"
 """
 
 
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
+
+
 def tracked_via_checkout(repo):
     """`git checkout -b feat/up origin/main` + one commit; main checked out again."""
     git(repo, "checkout", "-q", "-b", BRANCH, "origin/main")

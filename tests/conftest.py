@@ -73,15 +73,28 @@ def schedule(reflection_repo, tmp_path, monkeypatch, capsys):
 
 
 # -- leak guard ----------------------------------------------------------------
+# Scanning every process after every test costs ~35-40 ms on macOS (about 75 s over the whole
+# suite), so the guard runs only for tests that can start processes: those marked `spawns`
+# (module `pytestmark` in the task, worker, memory-daemon and sweep modules) and those using
+# the `spawning` fixture (the task `state` fixtures request it). CI honours the same selection.
+@pytest.fixture
+def spawning():
+    """Marker fixture: a test using it (directly or through another fixture) can start processes."""
+
+
+def _can_spawn(request) -> bool:
+    return request.node.get_closest_marker("spawns") is not None or "spawning" in request.fixturenames
+
+
 @pytest.fixture(autouse=True)
 def no_leaked_processes(request):
-    """Fail a test that leaves a process alive whose argv names its tmp_path.
+    """Fail a test that can spawn and leaves a process alive whose argv names its tmp_path.
 
     Autouse and requested before every other fixture, so it is torn down last: it
     sees the world after the test's own teardown. The survivors are killed (a leak
     must not outlive the run that found it) and the test errors with their pids.
     """
-    watched = request.getfixturevalue("tmp_path") if "tmp_path" in request.fixturenames else None
+    watched = request.getfixturevalue("tmp_path") if _can_spawn(request) else None
     yield
     if watched is None:
         return

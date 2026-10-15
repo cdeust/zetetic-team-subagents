@@ -32,6 +32,9 @@ API_HOOK = (
 CLI_HOOK = '"$1" start surv "$2" --cwd "$4" -- sh -c "$3" || exit 1; cat'  # a failed start ends the hook: the test reads EOF, never blocks
 
 
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
+
+
 def hook_command(via: str, key: str, command: str, cwd: str) -> list[str]:
     if via == "api":
         return [sys.executable, "-c", API_HOOK, LIB, key, command, cwd]

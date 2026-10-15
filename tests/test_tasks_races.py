@@ -20,7 +20,7 @@ RACERS = 4  # source: any n >= 2 races; 4 keeps the file fast
 
 
 @pytest.fixture
-def state(tmp_path, monkeypatch):
+def state(tmp_path, monkeypatch, spawning):
     monkeypatch.setenv(store.ENV_DIR, str(tmp_path / "state"))
     return tmp_path
 

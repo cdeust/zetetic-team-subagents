@@ -19,7 +19,7 @@ from task_support import blocked_task, fire, make_fifo, task_store as store, tas
 
 
 @pytest.fixture
-def state(tmp_path, monkeypatch):
+def state(tmp_path, monkeypatch, spawning):
     monkeypatch.setenv(store.ENV_DIR, str(tmp_path / "state"))
     return tmp_path
 

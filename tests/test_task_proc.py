@@ -14,6 +14,9 @@ import pytest
 from task_support import fire, make_fifo, read_line, task_proc as proc, task_store as store, wait_exit
 
 
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
+
+
 def stat_line(comm: str, state: str = "S", pgrp: int = 77, starttime: int = 9999) -> str:
     """A /proc/<pid>/stat line (proc(5)): fields 4..21 are filler, field 22 is starttime."""
     filler = ["1", str(pgrp), str(pgrp), "0", "-1", "4194560"] + ["0"] * 12  # fields 4..21
