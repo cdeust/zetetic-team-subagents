@@ -241,11 +241,18 @@ def _refuse(top: str, common: str, rules: rules_mod.Rules, args: argparse.Namesp
 
 
 def run(args: argparse.Namespace) -> int:
-    top = args.repo
-    common = locate(top)
+    """Verify the tree and append the verdict to the ledger. No repository: nothing to verify, nothing to record
+    (its task directory would otherwise be created under the user's home)."""
+    common = locate(args.repo)
     if common is None:
-        _say(f"[gate] {top} is not a git repository")
+        _say(f"[gate] {args.repo} is not a git repository")
         return 1
+    rc = _verify(args, args.repo, common)
+    ledger.record(args.repo, ledger.Result(args.kind, args.tree, state.task_key(args.kind, args.tree, args.rules), rc))
+    return rc
+
+
+def _verify(args: argparse.Namespace, top: str, common: str) -> int:
     snap = _snapshot_dir(args.tree, common)
     try:
         rules = rules_mod.effective(top, args.tree, args.trusted, _clean_env())
@@ -283,9 +290,7 @@ def main(argv: list) -> int:
     args = parser.parse_args(argv)
     if not all(gitq.TREE_RE.match(t) for t in (args.tree, args.trusted)) or (args.base != "-" and not gitq.TREE_RE.match(args.base)):
         parser.error("--tree, --trusted and --base must be tree hashes")
-    rc = run(args)
-    ledger.record(args.repo, ledger.Result(args.kind, args.tree, state.task_key(args.kind, args.tree, args.rules), rc))
-    return rc
+    return run(args)
 
 
 def _lower_priority() -> None:

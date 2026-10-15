@@ -456,3 +456,30 @@ def test_every_failing_tip_is_named_on_its_own_line(gate):
     git(gate.repo, "checkout", "-q", "main")
     rc, _, err = gate.gate("git push --all origin")
     assert rc == 2 and "[feat] GATE-PROOF" in err and "\n[other] GATE-PROOF" in err and "[main]" not in err
+
+
+def test_a_repository_cannot_list_itself_through_the_override(tmp_path, monkeypatch, spawning):
+    """A project's settings can set the override variable; a list that lives inside the repository is ignored."""
+    sys.path.insert(0, str(HOOKS / "lib"))
+    import gate_git  # noqa: E402
+    import gate_trust  # noqa: E402
+    g = untrusted(tmp_path, monkeypatch, spawning)
+    try:
+        own = g.repo / ".zetetic" / "trusted"
+        own.write_text(os.path.realpath(g.repo) + "\n")
+        common = gate_git.locate(str(g.repo)).common
+        monkeypatch.setenv(gate_trust.ENV_FILE, str(own))
+        assert not gate_trust.is_trusted(os.path.realpath(g.repo), common)  # inside the working tree
+        in_git_dir = Path(common) / "trusted"
+        in_git_dir.write_text(os.path.realpath(g.repo) + "\n")
+        monkeypatch.setenv(gate_trust.ENV_FILE, str(in_git_dir))
+        assert not gate_trust.is_trusted(os.path.realpath(g.repo), common)  # inside the git directory
+        g.stage("two\n")
+        rc, _, err = run_hook("gate-proof.py", payload(COMMIT, g.repo), g.repo, {**g.env, gate_trust.ENV_FILE: str(own)})
+        assert rc == 2 and "not in your trusted list" in err and g.started() == []
+        outside = tmp_path / "outside-trusted"
+        outside.write_text(os.path.realpath(g.repo) + "\n")
+        monkeypatch.setenv(gate_trust.ENV_FILE, str(outside))
+        assert gate_trust.is_trusted(os.path.realpath(g.repo), common)  # a list outside the repository still works
+    finally:
+        g.close()

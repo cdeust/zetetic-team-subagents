@@ -12,7 +12,10 @@ no silent pass and nothing is run. This module never writes the file: the user's
 A path matches by its real path (symlinks resolved). A linked worktree matches through the repository it
 belongs to (the parent of the git common dir), so listing the main checkout trusts its worktrees; a listed
 worktree trusts that worktree only. ``ZETETIC_GATE_TRUSTED_REPOS`` replaces the file path (tests, and
-non-default layouts); it is read from the environment of the user's session, never from a repository.
+non-default layouts). A repository's project settings can set session environment variables, so an override
+that points INSIDE the repository being judged (its working tree or its git directory) is ignored: a
+repository cannot list itself. What remains reachable from a repository is a path to some other file that
+already lists that repository's exact real path.
 """
 from __future__ import annotations
 
@@ -42,7 +45,14 @@ def repo_root(top: str, common: str) -> str:
     return os.path.dirname(common) if os.path.basename(common) == ".git" else top
 
 
+def _inside(path: str, directory: str) -> bool:
+    inner, outer = os.path.realpath(path), os.path.realpath(directory)
+    return inner == outer or inner.startswith(outer + os.sep)
+
+
 def is_trusted(top: str, common: str) -> bool:
+    if _inside(trusted_file(), top) or _inside(trusted_file(), common):
+        return False  # a list that lives in the repository is the repository's own claim, not the user's
     names = listed()
     return os.path.realpath(top) in names or os.path.realpath(repo_root(top, common)) in names
 
