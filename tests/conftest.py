@@ -10,13 +10,16 @@ SAME code: the real repo, and mutmut's `mutants/` sandbox — mutmut copies
 source_paths + also_copy preserving that sibling layout, so the path computed
 from __file__ points at the MUTATED tools/acceptance_gate.py.
 """
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+from leak_support import live_processes_naming
 from reflection_support import (
     SESSION,
     event,
@@ -67,3 +70,26 @@ def schedule(reflection_repo, tmp_path, monkeypatch, capsys):
         run_hook(start_hook, event(reflection_repo, transcript, agent_id=agent_id, agent_type="engineer",
                                    session_id=session), monkeypatch, capsys)
     return _schedule
+
+
+# -- leak guard ----------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def no_leaked_processes(request):
+    """Fail a test that leaves a process alive whose argv names its tmp_path.
+
+    Autouse and requested before every other fixture, so it is torn down last: it
+    sees the world after the test's own teardown. The survivors are killed (a leak
+    must not outlive the run that found it) and the test errors with their pids.
+    """
+    watched = request.getfixturevalue("tmp_path") if "tmp_path" in request.fixturenames else None
+    yield
+    if watched is None:
+        return
+    leaked = live_processes_naming(watched)
+    for pid, _argv in leaked:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # it exited between the scan and the kill: not a leak any more
+    assert not leaked, "test left processes running (killed by the guard): " + "; ".join(
+        f"{pid} {argv}" for pid, argv in leaked)

@@ -32,6 +32,14 @@ def kill_worker(started) -> None:
 
 def test_concurrent_reapers_write_one_terminal_record(state, monkeypatch):
     started, hold, command = blocked_task(state, "reapers")
+    try:
+        race_reapers(state, monkeypatch, started)
+    finally:
+        fire(hold)  # release the orphaned command we started, on every path
+        wait_exit(command)
+
+
+def race_reapers(state, monkeypatch, started) -> None:
     kill_worker(started)
     directory = store.tasks_dir(str(state))
     path = store.record_path(directory, "unit-reapers")
@@ -72,8 +80,6 @@ def test_concurrent_reapers_write_one_terminal_record(state, monkeypatch):
     results.append(outcomes.get())
     for thread in threads:
         thread.join()
-    fire(hold)
-    wait_exit(command)
     assert len([r for r in results if r is not None]) == 1
     assert terminal_writes == [1]
 

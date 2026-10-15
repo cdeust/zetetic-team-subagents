@@ -58,7 +58,11 @@ def read_line(fifo: str) -> str:
 
 
 def blocked_task(state: Path, key: str):
-    """Start a task whose command announces itself, then blocks. Returns (started, hold, command_pid)."""
+    """Start a task whose command announces itself, then blocks. Returns (started, hold, command_pid).
+
+    The shell ``exec``s into ``cat``: the announced pid is the one process blocked on the fifo, so
+    waiting for that pid to exit waits for the blocker itself and no child of it can outlive it.
+    """
     hold, ready = make_fifo(state, f"{key}.hold"), make_fifo(state, f"{key}.ready")
-    started = tasks.start("unit", key, ["sh", "-c", f"echo $$ > {ready}; cat {hold} >/dev/null"], str(state))
+    started = tasks.start("unit", key, ["sh", "-c", f"echo $$ > {ready}; exec cat {hold} >/dev/null"], str(state))
     return started, hold, int(read_line(ready))  # the line proves: running record written, command alive
