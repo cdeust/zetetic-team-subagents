@@ -20,6 +20,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A shared async-task module, `tools/lib/tasks.py` (shell front door `tools/task.sh`,
+  contract in `docs/async-tasks.md`), so slow work stops being run under a time
+  budget. `start` returns at once and launches a detached worker (its own session,
+  so killing the caller's process group does not reach it); the worker writes a JSON
+  record `queued|running|done|failed` keyed by `<kind>-<content hash>`, with the full
+  output kept in a file; creating the record is the dedup and a green record is the
+  cached proof; a worker that dies without a terminal state is found by pid liveness,
+  not by a clock, and retried only by an explicit, counted `requeue`; failures go to
+  an inbox that is drained once. There is no `wait()`. Nothing uses it yet: gates,
+  hooks and the session start move onto it in later changes. The tests use no sleep
+  or timeout (process exit, FIFO EOF and thread events only) and prove on macOS that
+  a task keeps running and writes its terminal state after the process group that
+  started it is SIGKILLed. (#163)
+
 ### Fixed
 
 - The session-start hook paid every time-box in full on macOS. Without
