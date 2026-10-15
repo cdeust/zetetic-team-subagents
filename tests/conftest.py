@@ -10,13 +10,16 @@ SAME code: the real repo, and mutmut's `mutants/` sandbox — mutmut copies
 source_paths + also_copy preserving that sibling layout, so the path computed
 from __file__ points at the MUTATED tools/acceptance_gate.py.
 """
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+from leak_support import live_processes_naming
 from reflection_support import (
     SESSION,
     event,
@@ -67,3 +70,39 @@ def schedule(reflection_repo, tmp_path, monkeypatch, capsys):
         run_hook(start_hook, event(reflection_repo, transcript, agent_id=agent_id, agent_type="engineer",
                                    session_id=session), monkeypatch, capsys)
     return _schedule
+
+
+# -- leak guard ----------------------------------------------------------------
+# Scanning every process after every test costs ~35-40 ms on macOS (about 75 s over the whole
+# suite), so the guard runs only for tests that can start processes: those marked `spawns`
+# (module `pytestmark` in the task, worker, memory-daemon and sweep modules) and those using
+# the `spawning` fixture (the task `state` fixtures request it). CI honours the same selection.
+@pytest.fixture
+def spawning():
+    """Marker fixture: a test using it (directly or through another fixture) can start processes."""
+
+
+def _can_spawn(request) -> bool:
+    return request.node.get_closest_marker("spawns") is not None or "spawning" in request.fixturenames
+
+
+@pytest.fixture(autouse=True)
+def no_leaked_processes(request):
+    """Fail a test that can spawn and leaves a process alive whose argv names its tmp_path.
+
+    Autouse and requested before every other fixture, so it is torn down last: it
+    sees the world after the test's own teardown. The survivors are killed (a leak
+    must not outlive the run that found it) and the test errors with their pids.
+    """
+    watched = request.getfixturevalue("tmp_path") if _can_spawn(request) else None
+    yield
+    if watched is None:
+        return
+    leaked = live_processes_naming(watched)
+    for pid, _argv in leaked:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # it exited between the scan and the kill: not a leak any more
+    assert not leaked, "test left processes running (killed by the guard): " + "; ".join(
+        f"{pid} {argv}" for pid, argv in leaked)

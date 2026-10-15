@@ -19,7 +19,7 @@ from task_support import blocked_task, fire, make_fifo, task_store as store, tas
 
 
 @pytest.fixture
-def state(tmp_path, monkeypatch):
+def state(tmp_path, monkeypatch, spawning):
     monkeypatch.setenv(store.ENV_DIR, str(tmp_path / "state"))
     return tmp_path
 
@@ -114,20 +114,22 @@ def test_failed_record_is_not_silently_retried(state):
 
 def test_worker_sigkill_is_detected_by_dead_pid_and_reported(state):
     started, hold, command = blocked_task(state, "crash")
-    worker = started.record["pid"]
-    rec = tasks.status("unit-crash", str(state))
-    assert (rec["state"], rec["alive"]) == ("running", True)
-    os.kill(worker, signal.SIGKILL)
-    wait_exit(worker)
-    rec = tasks.status("unit-crash", str(state))
-    assert (rec["state"], rec["alive"]) == ("running", False)  # the lie is visible, and it is a pid fact
-    assert tasks.disposition(rec) == "stale"
-    entries = tasks.drain_inbox(str(state))  # reaps first
-    assert [e["id"] for e in entries] == ["unit-crash"] and "worker died" in entries[0]["reason"]
-    assert tasks.status("unit-crash", str(state))["state"] == "failed"
-    assert tasks.drain_inbox(str(state)) == []  # drained once, not again
-    fire(hold)  # release the orphaned command we started
-    wait_exit(command)
+    try:
+        worker = started.record["pid"]
+        rec = tasks.status("unit-crash", str(state))
+        assert (rec["state"], rec["alive"]) == ("running", True)
+        os.kill(worker, signal.SIGKILL)
+        wait_exit(worker)
+        rec = tasks.status("unit-crash", str(state))
+        assert (rec["state"], rec["alive"]) == ("running", False)  # the lie is visible, and it is a pid fact
+        assert tasks.disposition(rec) == "stale"
+        entries = tasks.drain_inbox(str(state))  # reaps first
+        assert [e["id"] for e in entries] == ["unit-crash"] and "worker died" in entries[0]["reason"]
+        assert tasks.status("unit-crash", str(state))["state"] == "failed"
+        assert tasks.drain_inbox(str(state)) == []  # drained once, not again
+    finally:
+        fire(hold)  # release the orphaned command we started, on every path
+        wait_exit(command)
 
 
 def test_worker_sigterm_writes_terminal_state_and_stops_the_command(state):

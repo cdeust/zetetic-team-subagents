@@ -17,11 +17,15 @@ equal, one merge-tree per pushed unmerged branch, no log -p and no patch-id.
 from pathlib import Path
 import os
 import subprocess
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MANAGER = ROOT / "tools" / "worktree-manager.sh"
 BRANCHES = 4  # source: any number > 1 shows a per-branch scan repeated; kept small for speed
 SHORT_MAIN, LONG_MAIN = 3, 30  # source: two lengths that differ by an order of magnitude
+
+
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
 
 
 def _git(repo, *args, env=None):

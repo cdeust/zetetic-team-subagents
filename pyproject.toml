@@ -7,6 +7,9 @@
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "spawns: the test can start processes; the leak guard (tests/conftest.py) checks it after teardown",
+]
 
 # ── Coverage gate (issue #71) ────────────────────────────────────────────────
 # The source set is declared here rather than passed on a command line, so the

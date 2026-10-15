@@ -23,6 +23,9 @@ from sweep_support import (branch_from_base, git, git_calls, heads, make_repo, m
 NOT_ON_MAIN = ("not all on origin/main", "not a clean no-op")
 
 
+pytestmark = pytest.mark.spawns  # leak guard applies (tests/conftest.py)
+
+
 def whitespace(repo):
     """(a): the branch's diff and main's later commit differ only in whitespace: same patch-id."""
     base = git(repo, "rev-parse", "main")
