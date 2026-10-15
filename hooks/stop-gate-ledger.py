@@ -24,8 +24,6 @@ import gate_git as gitq  # noqa: E402
 import gate_ledger as ledger  # noqa: E402
 import gate_state as state  # noqa: E402
 
-_MAX_LISTED = 5
-
 
 def _line(top: str, rec: dict) -> str:
     return (f"- tree {rec['key']} (rc={rec.get('rc')}): see {rec.get('output_path')}; fix and restage, or "
@@ -43,11 +41,10 @@ def decide(payload: dict) -> dict | None:
     failures = ledger.open_failures(repo.top)
     if not failures:
         return None
-    lines = [_line(repo.top, rec) for rec in failures[:_MAX_LISTED]]
-    more = f"\n(+{len(failures) - _MAX_LISTED} more)" if len(failures) > _MAX_LISTED else ""
+    lines = [_line(repo.top, rec) for rec in failures]  # at most two: the staged tree and HEAD's tree
     reason = ("Your todo is not empty: a tree you would commit or have not pushed failed its gate "
               "verification. Fix it (a green verification of a new tree replaces the failure) or waive it "
-              "auditably.\n" + "\n".join(lines) + more)
+              "auditably.\n" + "\n".join(lines))
     return {"decision": "block", "reason": reason}
 
 

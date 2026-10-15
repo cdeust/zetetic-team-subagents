@@ -159,3 +159,27 @@ def test_waivers_survive_a_torn_line_and_foreign_rows(tmp_path, monkeypatch):
         fh.write("{torn\n[1, 2]\n" + json.dumps({"tree": 5}) + "\n" + json.dumps({"no_tree": 1}) + "\n")
     ledger.waive("/anywhere", "c" * 40, "also")
     assert ledger.waived_trees("/anywhere") == {TREE, "c" * 40}
+
+
+def test_head_ahead_of_upstream_is_true_only_when_they_differ(repo, tmp_path, monkeypatch):
+    for key, value in {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                       "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": "/dev/null"}.items():
+        monkeypatch.setenv(key, value)
+    commit(repo, "1\n")
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", str(remote))
+    git(repo, "remote", "add", "origin", str(remote))
+    git(repo, "push", "-q", "-u", "origin", "main")
+    assert gitq.head_ahead_of_upstream(str(repo)) is False
+    commit(repo, "2\n")
+    assert gitq.head_ahead_of_upstream(str(repo)) is True
+
+
+def test_a_failing_write_tree_is_unavailable_and_a_missing_revision_is_none(repo):
+    (repo / "a").write_text("x\n")
+    git(repo, "add", "a")
+    assert gitq.tree_of(str(repo), "HEAD") is None  # unborn
+    assert gitq.tree_of(str(repo), "nonsense") is None
+    (repo / ".git" / "index").write_bytes(b"garbage")  # an unreadable index
+    with pytest.raises(gitq.Unavailable):
+        gitq.staged_tree(str(repo))

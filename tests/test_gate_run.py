@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -100,7 +101,12 @@ def test_untracked_dependencies_are_linked_and_env_is_resolved(repo, tmp_path):
 
 
 def test_a_missing_link_source_is_skipped_not_invented(repo):
-    stage_config(repo, [sh("test ! -e nothing")], link=["nothing"])
+    stage_config(repo, [sh("test ! -L nothing && test ! -e nothing")], link=["nothing"])  # no dangling symlink either
+    assert verify(repo) == 0
+
+
+def test_a_link_never_replaces_a_tracked_path(repo):
+    stage_config(repo, [sh("test ! -L a.txt && grep -qx one a.txt")], link=["a.txt"])
     assert verify(repo) == 0
 
 
@@ -125,15 +131,52 @@ def test_the_rules_come_from_the_staged_tree_not_the_working_copy(repo):
     assert verify(repo) == 5
 
 
-def test_legacy_script_judges_the_real_checkout(repo, tmp_path, capsys):
+LEGACY_PROOF = (
+    "T=$(git write-tree); D=\"$(git rev-parse --git-common-dir)/zetetic-gates\"; mkdir -p \"$D\"\n"
+    "printf '{\"tree\": \"%s\", \"rc\": 0}' \"$T\" > \"$D/$1-$T.json\"\n"
+)
+
+
+def stage_legacy(repo: Path, body: str) -> None:
     script = repo / "scripts" / "gate.sh"
     script.parent.mkdir()
-    script.write_text(f"#!/bin/sh\npwd > {tmp_path / 'legacy-cwd'}\necho \"kind=$1\"\nexit 0\n")
+    script.write_text("#!/bin/sh\n" + body)
     script.chmod(0o755)
     git(repo, "add", "scripts/gate.sh")
-    assert verify(repo, kind="push") == 0
+
+
+def test_legacy_script_judges_the_real_checkout(repo, tmp_path, capsys):
+    stage_legacy(repo, f"pwd > {tmp_path / 'legacy-cwd'}\necho \"kind=$1\"\n" + LEGACY_PROOF)
+    assert verify(repo, kind="push") == 0  # the script left push-<this tree>.json
     assert (tmp_path / "legacy-cwd").read_text().strip() == str(repo.resolve())
     assert "[gate:legacy-gate] sh scripts/gate.sh push" in capsys.readouterr().out
+
+
+def test_a_legacy_script_that_proved_another_tree_does_not_turn_this_one_green(repo, capsys):
+    stage_legacy(repo, "T=$(git write-tree); mkdir -p .git/zetetic-gates\n"
+                       "printf '{\"tree\": \"%s\", \"rc\": 0}' \"$T\" > \".git/zetetic-gates/$1-0000000000000000000000000000000000000000.json\"\n")
+    assert verify(repo) == 1
+    assert "proved a different tree" in capsys.readouterr().out
+
+
+def test_a_legacy_script_that_exits_zero_without_a_proof_is_not_green(repo, capsys):
+    stage_legacy(repo, "exit 0\n")
+    assert verify(repo) == 1
+    assert "left no green proof" in capsys.readouterr().out
+
+
+def test_a_legacy_proof_must_be_green_and_name_the_tree(repo):
+    common = str(repo / ".git")
+    proofs = repo / ".git" / "zetetic-gates"
+    proofs.mkdir()
+    tree = "a" * 40
+    for body in ('{"tree": "%s", "rc": 1}' % tree, '{"tree": "%s", "rc": true}' % tree, '{"tree": "%s"}' % ("b" * 40),
+                 "{torn", "[1]"):
+        (proofs / f"commit-{tree}.json").write_text(body)
+        assert gate_run.legacy_proof_names(common, "commit", tree) is False, body
+    (proofs / f"commit-{tree}.json").write_text('{"tree": "%s", "rc": 0}' % tree)
+    assert gate_run.legacy_proof_names(common, "commit", tree) is True
+    assert gate_run.legacy_proof_names(common, "push", tree) is False  # no push proof
 
 
 def test_stack_default_runs_the_whole_suite_when_something_changed(repo, tmp_path, capsys, monkeypatch):
@@ -161,3 +204,75 @@ def test_python_placeholder_resolves_to_the_checkouts_venv_then_ours(repo, tmp_p
 def test_bad_arguments_are_a_usage_error(repo):
     with pytest.raises(SystemExit):
         gate_run.main(["run", "--repo", str(repo), "--tree", "nothex", "--base", "-", "--kind", "commit"])
+
+
+def test_the_callers_git_environment_reaches_neither_the_checkout_nor_the_checks(repo, monkeypatch):
+    stage_config(repo, [sh('test -z "$GIT_NAMESPACE" && test -z "$GIT_INDEX_FILE"')])
+    tree = git(repo, "write-tree")
+    monkeypatch.setenv("GIT_NAMESPACE", "leaked")
+    monkeypatch.setenv("GIT_INDEX_FILE", "/nonexistent/index")  # would break read-tree if it reached the private index
+    monkeypatch.setenv("GIT_OBJECT_DIRECTORY", "/nonexistent/objects")  # would hide every object from the plumbing
+    assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit"]) == 0
+
+
+def test_a_tree_that_declares_no_gate_has_nothing_to_verify(repo, capsys):
+    (repo / ".zetetic").mkdir()
+    (repo / ".zetetic" / "gate.json").write_text('{"version": 1, "off": true}')
+    git(repo, "add", ".zetetic/gate.json")
+    assert verify(repo) == 0
+    assert "no gate is declared" in capsys.readouterr().out
+
+
+def test_a_check_killed_by_a_signal_fails_the_task(repo, capsys):
+    stage_config(repo, [sh("kill -9 $$")])
+    assert verify(repo) == 1
+    assert "FAILED rc=-9" in capsys.readouterr().out
+
+
+def test_a_non_executable_venv_python_is_not_used(repo):
+    venv = repo / ".venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "python").write_text("#!/bin/sh\n")
+    (venv / "python").chmod(0o644)
+    assert gate_run.resolve_python(str(repo), str(repo / ".git")) == sys.executable
+
+
+def test_a_directory_that_is_not_a_repository_is_a_failure(tmp_path, capsys):
+    assert gate_run.main(["run", "--repo", str(tmp_path), "--tree", "a" * 40, "--base", "-", "--kind", "commit"]) == 1
+    assert "not a git repository" in capsys.readouterr().out
+
+
+def test_the_private_checkout_is_named_by_tree_and_repository_and_replaces_a_leftover(tmp_path, monkeypatch):
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    first = gate_run._snapshot_dir("a" * 40, "/one/.git")
+    (Path(first) / "leftover").write_text("from a SIGKILLed attempt")
+    again = gate_run._snapshot_dir("a" * 40, "/one/.git")
+    assert again == first and os.listdir(again) == []  # replaced, empty
+    assert gate_run._snapshot_dir("a" * 40, "/two/.git") != first  # another repository: another directory
+    assert gate_run._snapshot_dir("b" * 40, "/one/.git") != first  # another tree: another directory
+
+
+def test_nothing_is_left_behind_in_the_temp_directory(repo, tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    stage_config(repo, [sh("exit 0")])
+    assert verify(repo) == 0
+    assert os.listdir(scratch) == []  # neither the checkout nor its private index
+
+
+@pytest.mark.parametrize("missing", ["--repo", "--tree", "--base", "--kind"])
+def test_every_option_is_required(repo, missing):
+    args = {"--repo": str(repo), "--tree": "a" * 40, "--base": "-", "--kind": "commit"}
+    del args[missing]
+    with pytest.raises(SystemExit):
+        gate_run.main(["run", *[x for kv in args.items() for x in kv]])
+    with pytest.raises(SystemExit):
+        gate_run.main([])  # the verb is required too
+
+
+def test_the_worker_lowers_its_priority(monkeypatch):
+    seen = []
+    monkeypatch.setattr(os, "nice", lambda n: seen.append(n))
+    gate_run._lower_priority()
+    assert seen == [10]

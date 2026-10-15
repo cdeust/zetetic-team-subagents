@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -30,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_config as config  # noqa: E402
 import gate_git as gitq  # noqa: E402
 
+LEGACY = "legacy-gate"
 _PY_NAMES = (os.path.join("bin", "python"), os.path.join("Scripts", "python.exe"))
 
 
@@ -37,16 +39,32 @@ def _say(text: str) -> None:
     print(text, flush=True)
 
 
+def _clean_env() -> dict:
+    """The caller's environment without GIT_*: a variable such as GIT_DIR or GIT_OBJECT_DIRECTORY must not
+    redirect the plumbing or the checks away from the tree being verified."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def _git(top: str, args: list, env: dict | None = None) -> bytes:
-    out = subprocess.run(["git", "-C", top, *args], env=env, stdin=subprocess.DEVNULL, capture_output=True, check=False)
+    out = subprocess.run(["git", "-C", top, *args], env=env or _clean_env(), stdin=subprocess.DEVNULL,
+                         capture_output=True, check=False)
     if out.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {out.stderr.decode(errors='replace').strip()}")
     return out.stdout
 
 
+def locate(top: str) -> str | None:
+    """The absolute git common dir of the repository at ``top`` (clean environment), or None."""
+    try:
+        common = _git(top, ["rev-parse", "--git-common-dir"]).decode().strip()
+    except RuntimeError:
+        return None
+    return common if os.path.isabs(common) else os.path.normpath(os.path.join(top, common))
+
+
 def changed_files(top: str, base: str, tree: str) -> list:
     """Paths that differ between the two trees (additions, modifications, deletions), repo-relative."""
-    base = gitq.empty_tree(top) if base == "-" else base
+    base = _git(top, ["hash-object", "-t", "tree", "--stdin"]).decode().strip() if base == "-" else base
     raw = _git(top, ["diff-tree", "-r", "--name-only", "--no-renames", "-z", base, tree])
     return [os.fsdecode(p) for p in raw.split(b"\0") if p]
 
@@ -54,8 +72,7 @@ def changed_files(top: str, base: str, tree: str) -> list:
 def materialize(top: str, tree: str, dest: str) -> None:
     """Check ``tree`` out into the empty directory ``dest`` through a private index (the real index is untouched)."""
     index = dest + ".index"
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env["GIT_INDEX_FILE"] = index
+    env = {**_clean_env(), "GIT_INDEX_FILE": index}
     try:
         _git(top, ["read-tree", tree], env)
         _git(top, ["checkout-index", "--all", "--force", f"--prefix={dest}/"], env)
@@ -80,9 +97,7 @@ def _substitute(argv: list, python: str) -> list:
 
 
 def _check_env(extra: dict) -> dict:
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    return {**env, **extra}
+    return {**_clean_env(), "PYTHONDONTWRITEBYTECODE": "1", **extra}
 
 
 def execute(steps: list, cwd: str, python: str, extra_env: dict | None = None) -> int:
@@ -106,7 +121,7 @@ def _plan_for(snap: str, top: str, args: argparse.Namespace) -> tuple[dict, list
     """(config, steps, cwd) for the tree checked out in ``snap``; config {} when nothing is declared."""
     kind = config.declaration(snap)
     if kind == "legacy":  # the repo's own script judges the real checkout (it needs .git); see docs/gate.md
-        return {}, [config.Step("legacy-gate", ["sh", config.LEGACY_SCRIPT, args.kind])], top
+        return {}, [config.Step(LEGACY, ["sh", config.LEGACY_SCRIPT, args.kind])], top
     if kind is None:
         _say("[gate] no gate is declared for this tree: nothing to verify")
         return {}, [], snap
@@ -117,6 +132,21 @@ def _plan_for(snap: str, top: str, args: argparse.Namespace) -> tuple[dict, list
     if not steps:
         _say("[gate] no check applies to this change")
     return cfg, steps, snap
+
+
+def legacy_proof_names(common: str, kind: str, tree: str) -> bool:
+    """True when the legacy script left a green proof for exactly ``tree`` (the old hook's own check).
+
+    The script computes its own tree at run time (`write-tree` of the index NOW). If the index moved after
+    this task started, it proved another tree and exits 0; the task for ``tree`` must not turn green on that.
+    """
+    path = os.path.join(common, "zetetic-gates", f"{kind}-{tree}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            proof = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    return isinstance(proof, dict) and proof.get("tree") == tree and proof.get("rc") == 0 and not isinstance(proof.get("rc"), bool)
 
 
 def _link(top: str, snap: str, paths: list) -> None:
@@ -141,17 +171,21 @@ def _snapshot_dir(tree: str, common: str) -> str:
 
 def run(args: argparse.Namespace) -> int:
     top = args.repo
-    repo = gitq.locate(top)
-    if repo is None:
+    common = locate(top)
+    if common is None:
         _say(f"[gate] {top} is not a git repository")
         return 1
-    snap = _snapshot_dir(args.tree, repo.common)
+    snap = _snapshot_dir(args.tree, common)
     try:
         materialize(top, args.tree, snap)
         cfg, steps, cwd = _plan_for(snap, top, args)
-        env, links = config.setup_for(cfg, top, repo.common)
+        env, links = config.setup_for(cfg, top, common)
         _link(top, snap, links)
-        return execute(steps, cwd, resolve_python(top, repo.common), env)
+        rc = execute(steps, cwd, resolve_python(top, common), env)
+        if rc == 0 and any(step.name == LEGACY for step in steps) and not legacy_proof_names(common, args.kind, args.tree):
+            _say(f"[gate:{LEGACY}] exited 0 but left no green proof for tree {args.tree}: it proved a different tree")
+            return 1
+        return rc
     except (config.ConfigError, RuntimeError) as exc:  # FAILS_ON: invalid gate config in the tree, or git could not read it
         _say(f"[gate] {exc}")
         return 1
