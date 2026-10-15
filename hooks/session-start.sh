@@ -61,7 +61,8 @@ echo ""
 # The slowest section, not the sum, sets the startup time (measured 2026-10-14:
 # 11.6 s sequential). A section still running at the budget is killed with its
 # whole process group, so a hung tool cannot hold session start. worktree list
-# and sweep stay in one section because sweep removes worktrees that list reads.
+# and the stale-branch report stay in one section; the report only reads, the
+# classification it prints runs as a detached async task (docs/worktree-sweep.md).
 # source: 8 s = the 10 s hook timeout of hooks.json minus ~2 s for the banner,
 # git status and the runner's own start. ---
 SECTION_BUDGET_S=8

@@ -10,8 +10,10 @@ SAME code: the real repo, and mutmut's `mutants/` sandbox — mutmut copies
 source_paths + also_copy preserving that sibling layout, so the path computed
 from __file__ points at the MUTATED tools/acceptance_gate.py.
 """
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,26 @@ from reflection_support import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
+
+
+# -- worktree sweep fixtures -------------------------------------------------
+SWEPT_ROOTS = ("/tmp/", "/private/tmp/")  # source: tools/worktree-manager.sh sweepable_path()
+
+
+@pytest.fixture
+def unswept_dir():
+    """A directory the sweep never treats as agent scratch, on Linux and macOS alike.
+
+    pytest's tmp_path is /tmp/... on Linux (a swept root) but /private/var/... on macOS, so a
+    "deliberate worktree" placed under tmp_path is only deliberate on macOS. /var/tmp is outside
+    both swept roots on both platforms; the assert makes a wrong platform layout fail loudly.
+    """
+    path = tempfile.mkdtemp(prefix="sweep-deliberate-", dir="/var/tmp")
+    assert not (path + "/").startswith(SWEPT_ROOTS), path
+    try:
+        yield Path(path)
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 # -- subagent-reflection fixtures (#153) -------------------------------------
