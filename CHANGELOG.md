@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.45.0]: session start stops paying its time-boxes and runs its sections in parallel, a process-group runner, a shared async-task module
+
 ### Added
 
 - A shared async-task module, `tools/lib/tasks.py` (shell front door `tools/task.sh`,
