@@ -316,3 +316,16 @@ def test_cli_start_status_latest_inbox_roundtrip(state):
     wait_exit(again["record"]["pid"])
     assert cli("status", "unit-cli")["state"] == "done"
     assert subprocess.run([tool, "bogus"], capture_output=True, env=env, cwd=state, check=False).returncode == 2
+
+
+# -- CLI contract: every verb prints JSON and exits 0 -------------------------------
+
+def test_cli_reports_unknown_liveness_as_json_and_exit_0(state, monkeypatch, capsys):
+    def cannot_say(*_a, **_k):
+        raise tasks.proc.LivenessUnknown("cannot tell whether a process is alive on platform 'plan9'")
+
+    monkeypatch.setattr(tasks, "_dispatch", cannot_say)
+    assert tasks.main(["inbox", "--repo", str(state)]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["disposition"] == "unknown"
+    assert "plan9" in doc["error"]

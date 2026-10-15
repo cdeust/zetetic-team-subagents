@@ -130,6 +130,21 @@ worker) is refused with disposition `orphaned`: a retry would run the command
 twice. Retry once that group has ended. Zombies and the worker itself do not count. `start` on a `failed` task does not retry; it returns the
 failure (`disposition: failed`).
 
+**Getting out of `orphaned`.** The record stores the group id (`pgid`). The group
+can be live for the right reason (the command is still running) or the wrong one
+(the OS reused that pgid for an unrelated process after the command ended).
+Decide by looking, never by waiting:
+
+1. Read `pgid` from `tools/task.sh status ID`.
+2. Inspect the group: `ps -o pid,pgid,command -g <pgid>` (on Linux also
+   `cat /proc/<pid>/cmdline` for a member).
+3. If the members are the task's command, stop it with `kill -- -<pgid>`, then
+   `start ... --requeue` once the group has ended.
+4. If they are unrelated (a reused pgid), do not kill them. The record stays
+   `orphaned` for as long as that group lives: delete the record file
+   `<id>.json` in the task state directory (`task_store.tasks_dir`, under
+   `--repo`) and run `start` again, which begins at attempt 1.
+
 ## API
 
 | Call | Returns |
@@ -160,7 +175,11 @@ tools/task.sh inbox [--repo D]
 `--cwd` is where the command runs (default: `--repo`). Options go before `--`;
 everything after it is the command, verbatim. Each verb prints one JSON document
 and exits 0. The verdict is in the document, not in the exit code or in how long
-the call took. Exit 2 is a usage error.
+the call took. Exit 2 is a usage error. When the platform cannot tell whether a
+process is alive (no `/proc/<pid>/stat` on Linux, no `ps -o lstart,stat` on
+macOS, or a process whose start time is unreadable), the document is
+`{"disposition": "unknown", "error": "<platform and cause>"}`: nothing was
+changed, and the caller must not read the answer as alive or as dead.
 
 ## How a consumer decides
 

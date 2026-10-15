@@ -15,7 +15,9 @@ callers read the record at their next event and never decide on elapsed time.
 CLI:  tasks.py start KIND KEY [--repo D] [--cwd D] [--requeue] -- ARGV...
       tasks.py status ID [--repo D] | latest KIND [KEY] [--repo D] | inbox [--repo D]
 Every verb prints one JSON document on stdout and exits 0; the verdict is in
-the document, never in the exit code or in how long the call took.
+the document, never in the exit code or in how long the call took. When the
+platform cannot say whether a process is alive the document is
+{"disposition": "unknown", "error": "<platform/cause>"}. Exit 2 is a usage error.
 """
 from __future__ import annotations
 
@@ -287,6 +289,8 @@ def main(argv: list[str]) -> int:
     except (ValueError, IndexError) as exc:
         sys.stderr.write(f"tasks.py: {exc}\n")
         return 2
+    except proc.LivenessUnknown as exc:  # a verdict about the platform, not a crash: JSON, exit 0
+        print(json.dumps({"disposition": "unknown", "error": str(exc)}))
     return 0
 
 
