@@ -11,11 +11,15 @@ pipe, so a descendant that escaped the group still cannot hold this process up.
 
 The outputs are written to stdout in the order of the names, whatever the order
 in which the sections finish. A section that is killed contributes what it
-wrote before the kill. Exit status is 0 whatever happens, in this runner itself
+wrote before the kill, then a line saying it was killed. Exit status is 0 whatever happens, in this runner itself
 (not through a caller's `|| true`): a boot report must never fail the session.
 A failure of the runner (bad arguments, no bash, fork or temp-dir error) and a
 SIGTERM or SIGINT are reported on stdout with their real cause, after every
 live section group has been killed and the scratch directory removed.
+
+A section is complete when its own main process exits with its output written;
+the runner never waits for descendants of a finished section (they hold only the
+output file, not this process).
 
 Contract:
   pre : <sections.sh> defines section_<name> for every name; budget > 0.
@@ -90,11 +94,26 @@ def _start(sections_file, name, sink):
 
 
 def _wait_or_kill(proc, deadline):
-    """Wait for the section until `deadline`; kill its group if it is still running."""
+    """Wait for the section's MAIN process until `deadline`; kill its group if it is still running.
+
+    A section is complete when its main process exits: descendants it left
+    behind are never waited for (background work belongs in a detached task,
+    tools/lib/tasks.py). The kill is the host-imposed safety net for a main
+    process that is still running at the budget, not a completion path.
+    post: returns True iff the section had to be killed.
+    """
     try:
         proc.wait(timeout=max(0.0, deadline - time.monotonic()))
     except subprocess.TimeoutExpired:
         _kill_group(proc)
+        return True
+    return False
+
+
+def _report_killed(scratch, name, budget_s):
+    """Make a safety-net kill visible in the section's own output, where the user reads it."""
+    with open(os.path.join(scratch, name), "ab") as sink:
+        sink.write(f"  session-start: section {name} was still running at the {budget_s:g} s budget and was killed\n".encode())
 
 
 def _reap_live(procs):
@@ -110,6 +129,13 @@ def _start_all(sections_file, names, scratch, procs):
     for name in names:
         with open(os.path.join(scratch, name), "wb") as sink:  # the child holds its own descriptor
             procs.append(_start(sections_file, name, sink))
+
+
+def _wait_all(sections, scratch, started, budget_s):
+    """Wait for every (name, proc) section's main process; say so in its output when one had to be killed."""
+    for name, proc in sections:
+        if _wait_or_kill(proc, started + budget_s):
+            _report_killed(scratch, name, budget_s)
 
 
 def _write_in_order(scratch, names, out):
@@ -130,8 +156,7 @@ def run_sections(sections_file, names, budget_s, out):
         try:
             started = time.monotonic()
             _start_all(sections_file, names, scratch, procs)
-            for proc in procs:
-                _wait_or_kill(proc, started + budget_s)
+            _wait_all(list(zip(names, procs)), scratch, started, budget_s)
             _write_in_order(scratch, names, out)
         finally:
             _reap_live(procs)

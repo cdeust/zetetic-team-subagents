@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Session start no longer spends its whole 8 s budget in the `worktrees` section (#165). The cause was not a descendant that kept the group alive: the section's own main process, `worktree-manager.sh sweep`, was still running. For every branch not merged into origin/main its squash-merge test forked `git diff` and `git patch-id` once per main commit (up to 500), and it did so again for every branch because the cache lived in a `$(...)` subshell: 31 branches took 94 s on Cortex. The patch-ids of main are now indexed once per repo by one `git log -p | git patch-id` pipeline, and `branch_merge_kind` reports through `MERGE_KIND` instead of stdout. The runner (`hooks/lib/run_sections.py`) now says in the report when it kills a section that was still running at the budget, and a test pins that it never waits for, nor kills, the descendants of a section that has finished.
+
 ## [2.45.0]: session start stops paying its time-boxes and runs its sections in parallel, a process-group runner, a shared async-task module
 
 ### Added

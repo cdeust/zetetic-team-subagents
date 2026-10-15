@@ -111,38 +111,8 @@ worktree_age_seconds() {
 
 # --- sweep helpers --------------------------------------------------------
 
-# patch-id of one diff read on stdin; empty when the diff is empty.
-_patch_id() { git patch-id --stable | awk '{print $1}'; }
-
-# True when <branch> was squash-merged into origin/main: the patch-id of its
-# cumulative diff equals the patch-id of one commit main gained since their
-# merge-base. Conservative by construction: a branch rebased across an
-# overlapping hunk yields a different patch-id and is kept.
-branch_squash_merged() {
-  local repo="$1" branch="$2" base tip branch_id commit_id commit
-  base="$(git -C "$repo" merge-base "$branch" origin/main 2>/dev/null)" || return 1
-  tip="$(git -C "$repo" rev-parse "$branch" 2>/dev/null)" || return 1
-  [[ "$base" == "$tip" ]] && return 1
-  branch_id="$(git -C "$repo" diff "$base" "$tip" 2>/dev/null | _patch_id)"
-  [[ -n "$branch_id" ]] || return 1
-  while IFS= read -r commit; do
-    commit_id="$(git -C "$repo" diff "${commit}^" "$commit" 2>/dev/null | _patch_id)"
-    [[ "$commit_id" == "$branch_id" ]] && return 0
-  done < <(git -C "$repo" rev-list --max-count="$SQUASH_SCAN_LIMIT" "$base..origin/main" 2>/dev/null)
-  return 1
-}
-
-# Echoes "ancestor", "squash" or nothing; exit 0 only when merged.
-branch_merge_kind() {
-  local repo="$1" branch="$2"
-  if git -C "$repo" merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
-    echo ancestor; return 0
-  fi
-  if branch_squash_merged "$repo" "$branch"; then
-    echo squash; return 0
-  fi
-  return 1
-}
+# shellcheck source=lib/branch-merge.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/branch-merge.sh"
 
 # Deletes a merged branch: -d for an ancestor, -D only for a proven squash merge.
 delete_merged_branch() {
@@ -309,9 +279,10 @@ sweep_worktrees() {
       continue
     fi
     local kind
-    if ! kind="$(branch_merge_kind "$repo" "$branch")"; then
+    if ! branch_merge_kind "$repo" "$branch"; then
       echo "  skip $path ($branch): not merged into origin/main"; continue
     fi
+    kind="$MERGE_KIND"
     local outcome=0
     remove_merged_worktree "$repo" "$raw_path" "$path" "$branch" "$kind" "$age" || outcome=$?
     case "$outcome" in
@@ -335,7 +306,8 @@ sweep_stale_branches() {
     for k in "${kept[@]}"; do [[ "$branch" == "$k" ]] && { skip=1; break; }; done
     [[ "$skip" == "1" ]] && continue
     local kind
-    if kind="$(branch_merge_kind "$repo" "$branch")"; then
+    if branch_merge_kind "$repo" "$branch"; then
+      kind="$MERGE_KIND"
       if delete_merged_branch "$repo" "$branch" "$kind"; then
         echo "  deleted branch: $branch (merged ($kind), no worktree)"
         audit_log "$repo" "-" "$branch" "deleted-branch merge=${kind}"
@@ -421,7 +393,7 @@ inventory_repo() {
     [[ -z "$path" ]] && continue
     path="$(cd "$path" 2>/dev/null && pwd -P || echo "$path")"
     [[ "$path" == "$primary" ]] && continue
-    kind="$(branch_merge_kind "$repo" "$branch" 2>/dev/null || echo unmerged)"
+    if branch_merge_kind "$repo" "$branch" 2>/dev/null; then kind="$MERGE_KIND"; else kind="unmerged"; fi
     dirty="$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
     age=$(( $(worktree_age_seconds "$path") / 86400 ))
     size="$(du -sh "$path" 2>/dev/null | cut -f1)"

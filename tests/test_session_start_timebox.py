@@ -50,6 +50,11 @@ section_hang() {
   wait
 }
 section_after() { echo after; }
+section_leaves_child() {      # exits at once; the child keeps this section's stdout and group open
+  exec 3>"$GROUP_FIFO"
+  ( exec 4<>"$NEVER_FIFO"; echo up >&3; read -r -u 4; echo alive >&3 ) &
+  echo main-done
+}
 section_fail() { echo before-fail; exit 3; }
 section_slow_first() { echo first; }
 """
@@ -115,7 +120,8 @@ def test_hung_section_with_a_grandchild_is_killed_as_a_group(tmp_path, monkeypat
             _assert_session_leader(pid)
             runner.join()  # the runner returned: it killed what it was going to kill
             assert _survivors(fifos, group) == b"", "a process of the killed group outlived the runner"
-        assert out.getvalue() == b"partial-output\nafter\n"
+        assert out.getvalue() == (b"partial-output\n  session-start: section hang was still running at the 1 s budget and was killed\n"
+                                  b"after\n")
     finally:
         if pid is not None:
             _kill_own_child(pid)
@@ -158,7 +164,8 @@ def test_runner_exits_zero_when_a_section_fails_or_hangs(tmp_path):
             out = proc.stdout.read()  # EOF on the hook's own pipe: the runner exited
             assert proc.wait() == 0
             assert _survivors(fifos, group) == b"", "a process of the killed group outlived the runner"
-        assert out == b"before-fail\npartial-output\nafter\n"
+        assert out == (b"before-fail\npartial-output\n"
+                       b"  session-start: section hang was still running at the 1 s budget and was killed\nafter\n")
     finally:
         if pid is not None:
             _kill_own_child(pid)
@@ -436,3 +443,33 @@ def test_hook_without_python_says_so_on_stdout(tmp_path):
     assert len(notice) == 1, done.stdout
     assert "Python 3 not found" in notice[0] and "python3" in notice[0]
     assert "Reminder:" in done.stdout  # the rest of the hook still ran
+
+
+def test_runner_does_not_wait_for_descendants_of_a_finished_section(tmp_path):
+    """The boot report is complete when the section's MAIN process exits (2026-10-15 investigation).
+
+    The child of `leaves_child` is alive and holds the section's stdout when the
+    section's main process exits. The runner must return on the main process's
+    exit, neither waiting for the child nor killing it (background work belongs
+    to a detached task). Decided on events: the child says `up` while it is
+    alive, the runner's pipe reaches EOF, and only then is the child released;
+    a runner that waited for the child would never reach EOF (the CI job
+    timeout bounds that as infrastructure), one that killed it would leave no
+    `alive`.
+    """
+    lib = tmp_path / "sections.sh"
+    lib.write_text(HANG_SECTIONS)
+    fifos = Fifos(tmp_path)
+    proc = _popen_runner([str(lib), str(LONG_BUDGET_S), "leaves_child", "after"], fifos.env)
+    try:
+        with open(fifos.group, "rb") as group:
+            assert group.readline() == b"up\n"
+            out = proc.stdout.read()
+            assert proc.wait() == 0
+            assert _survivors(fifos, group) == b"alive\n", "the runner killed the descendant of a finished section"
+        assert out == b"main-done\nafter\n"
+    finally:
+        fifos.release_token()
+        proc.stdout.close()
+        proc.wait()
+        fifos.close()
