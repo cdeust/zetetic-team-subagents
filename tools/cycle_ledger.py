@@ -30,6 +30,10 @@ Rows (``gates_jsonl.py`` contract, file ``cycles.jsonl``):
            plus "bypass": true and "missing": [stage...] when the emergency
            switch let an unproven task through: a bypass closes the task, so it
            is logged once, not on every later stop.
+           A task whose worktree was disposed after its push closes instead
+           with "disposed": {"url", "sha"} (``close_disposed``): its stages
+           cannot be re-proven once the files are gone, so the pushed commit
+           and its pull request are the evidence.
 A task is open while no close row names it. ``agent_id`` is null for the main
 agent; one open task per (session, agent) at a time, enforced by reading and
 appending under ``gates_jsonl.locked`` (parallel edits fire parallel hooks).
@@ -39,7 +43,8 @@ Pre-registered metric (two weeks before vs after), computed by ``metrics``:
                              / stages closed (declaration + transcript)
   reopen count(agent_type) = sum of "reopens": reviews followed by another edit.
 A bypassed close counts only as a bypass: it proved nothing, so it enters
-neither the promise rate nor the task and reopen counts.
+neither the promise rate nor the task and reopen counts. A disposed close
+counts only as disposed, for the same reason.
 """
 from __future__ import annotations
 
@@ -227,13 +232,44 @@ def close(path: str, task_id: str, verdict: Dict, scanned: tuple) -> Dict:
     return row
 
 
+def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
+    """Close an open task whose worktree no longer exists, on a pull-request
+    URL and a commit that a remote-tracking branch contains. Refuses
+    (DeclareRefused) when the task is not open, its worktree still exists, the
+    URL is not a pull request, or the commit was not pushed."""
+    path = ledger_path(cwd)
+    with locked(path):
+        task = next((r for r in open_tasks(read_rows(path)) if r["open"] == task_id), None)
+        if task is None:
+            raise DeclareRefused(f"no open task {task_id} in {path}")
+        first = task.get("first_path") or ""
+        if os.path.isdir(task.get("repo") or "") or (os.path.isabs(first) and os.path.exists(first)):
+            raise DeclareRefused(f"the worktree of {task_id} still exists ({task.get('repo')}); "
+                                 "prove its stages instead")
+        if not (_URL.match(url or "") and "/pull/" in url):
+            raise DeclareRefused(f"{url!r} is not a GitHub pull-request URL")
+        if not (_SHA.match(sha or "") and git(cwd, "cat-file", "-e", f"{sha}^{{commit}}").returncode == 0):
+            raise DeclareRefused(f"{sha!r} is not a commit of the repository at {cwd}")
+        pushed = git(cwd, "branch", "-r", "--contains", sha)
+        if pushed.returncode != 0 or not pushed.stdout.strip():
+            raise DeclareRefused(f"no remote-tracking branch contains {sha}; push it first")
+        row = {"close": task_id, "disposed": {"url": url.strip(), "sha": sha},
+               "evidence": {}, "counts": {"edits": 0, "reviews": 0, "reopens": 0},
+               "window_end": 0, "transcript_path": task.get("transcript_path"), "time": now_iso()}
+        append_row(path, row)
+    return row
+
+
 def metrics(rows: List[Dict]) -> Dict[str, Dict]:
-    """agent_type -> {"tasks", "declared", "proven", "promise_rate", "reopens", "bypasses"}."""
+    """agent_type -> {"tasks", "declared", "proven", "promise_rate", "reopens", "bypasses", "disposed"}."""
     types = {r["open"]: r.get("agent_type") or MAIN_AGENT for r in rows if isinstance(r.get("open"), str)}
     out: Dict[str, Dict] = {}
     for r in (r for r in rows if isinstance(r.get("close"), str)):
         m = out.setdefault(types.get(r["close"], "?"), {"tasks": 0, "declared": 0, "proven": 0,
-                                                       "reopens": 0, "bypasses": 0})
+                                                       "reopens": 0, "bypasses": 0, "disposed": 0})
+        if r.get("disposed"):
+            m["disposed"] += 1
+            continue
         if r.get("bypass"):
             m["bypasses"] += 1
             continue
@@ -263,6 +299,11 @@ def _build_parser() -> argparse.ArgumentParser:
     dec.add_argument("--url", help="a GitHub pull-request or issue URL")
     dec.add_argument("--memory-id", type=int, help="the id Cortex `remember` returned")
     dec.add_argument("--not-applicable", dest="na", help="stage benchmark: why nothing is measurable")
+    dis = sub.add_parser("close-disposed",
+                         help="close a task whose worktree was removed after its push, on its PR and pushed commit")
+    dis.add_argument("task_id")
+    dis.add_argument("--url", required=True, help="the GitHub pull request that carries the task's work")
+    dis.add_argument("--sha", required=True, help="a pushed commit of that work")
     return parser
 
 
@@ -277,6 +318,9 @@ def _run(args) -> str:
         return "\n".join(_listing(r) for r in open_tasks(rows))
     if args.command == "metrics":
         return json.dumps(metrics(rows), indent=2, sort_keys=True)
+    if args.command == "close-disposed":
+        row = close_disposed(args.cwd, args.task_id, args.url, args.sha)
+        return f"closed {row['close']} as disposed: {args.url} {args.sha}"
     ref = {"command": args.ref_command, "sha": args.sha, "url": args.url,
            "memory": args.memory_id, "n/a": args.na}
     row = declare(args.cwd, args.task_id, args.stage, ref)

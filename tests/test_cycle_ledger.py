@@ -13,9 +13,9 @@ import cycle_ledger as cl
 import gates_jsonl
 
 
-def opener(repo, **fields):
+def opener(root, **fields):
     base = {"session_id": SESSION, "agent_id": None, "agent_type": "main",
-            "transcript_path": "/t/main.jsonl", "repo": str(repo), "first_path": "a.py"}
+            "transcript_path": "/t/main.jsonl", "repo": str(root), "first_path": "a.py"}
     return {**base, **fields}
 
 
@@ -137,9 +137,9 @@ def test_metrics_give_the_promise_rate_reopens_and_bypasses_per_agent_type(path,
              (20, "/t/eng.jsonl"))
     out = cl.metrics(gates_jsonl.read_rows(path))
     assert out["main"] == {"tasks": 1, "declared": 1, "proven": 3, "reopens": 2, "bypasses": 0,
-                           "promise_rate": 0.25}
+                           "disposed": 0, "promise_rate": 0.25}
     assert out["engineer"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0, "bypasses": 1,
-                               "promise_rate": None}  # a bypass proved nothing
+                               "disposed": 0, "promise_rate": None}  # a bypass proved nothing
     assert cl.open_tasks(gates_jsonl.read_rows(path)) == []  # and it closed the task
 
 
@@ -221,3 +221,39 @@ def test_parallel_opens_of_one_agent_record_a_single_task(path, repo):
         t.join()
     assert sum(created for _, created in results) == 1
     assert len([r for r in gates_jsonl.read_rows(path) if "open" in r]) == 1
+
+
+PR = "https://github.com/o/r/pull/7"
+
+
+def pushed_commit(repo) -> str:
+    """A commit that the remote-tracking branch origin/main contains."""
+    sha = commit(repo)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", sha], check=True)
+    return sha
+
+
+def test_a_task_whose_worktree_is_gone_closes_on_its_pr_and_pushed_commit(path, repo, tmp_path, capsys):
+    sha = pushed_commit(repo)
+    gone = tmp_path / "worktrees" / "gone"
+    task, _ = cl.open_task(path, opener(gone, first_path=str(gone / "a.py")))
+    assert cl.main(["--cwd", str(repo), "close-disposed", task["open"], "--url", PR, "--sha", sha]) == 0
+    assert f"closed {task['open']} as disposed" in capsys.readouterr().out
+    rows = gates_jsonl.read_rows(path)
+    assert cl.open_tasks(rows) == []
+    assert rows[-1]["disposed"] == {"url": PR, "sha": sha}
+    assert cl.metrics(rows)["main"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0,
+                                        "bypasses": 0, "disposed": 1, "promise_rate": None}
+
+
+@pytest.mark.parametrize("case", ["worktree-exists", "not-a-pr", "unpushed", "unknown-task"])
+def test_close_disposed_refuses_without_proof_and_changes_nothing(path, repo, tmp_path, case):
+    sha = commit(repo) if case == "unpushed" else pushed_commit(repo)
+    where = repo if case == "worktree-exists" else tmp_path / "gone"
+    task, _ = cl.open_task(path, opener(where))
+    tid = "nope" if case == "unknown-task" else task["open"]
+    url = "https://github.com/o/r/issues/7" if case == "not-a-pr" else PR
+    before = gates_jsonl.read_rows(path)
+    with pytest.raises(cl.DeclareRefused):
+        cl.close_disposed(str(repo), tid, url, sha)
+    assert gates_jsonl.read_rows(path) == before
