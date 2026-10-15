@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # post-research-provenance.sh — Append URL/query to active provenance file after research tool calls
-# Fires after WebFetch/WebSearch. Lightweight (< 1s). Silent no-op if no active provenance.
+# Fires after WebFetch/WebSearch and the crawl4ai MCP research tools (q, url, urls). Lightweight (< 1s). Silent no-op if no active provenance.
 #
 # claude.ai Science binding slot: claude.ai Science is a beta desktop app not yet
 # exposed as a named MCP tool (rules/agent-reference/research-resources.md). When it
@@ -55,11 +55,12 @@ fi
 # Extract URL or query from hook stdin context
 if command -v jq &>/dev/null; then
   TOOL_NAME=$(echo "$HOOK_INPUT" | jq -r '.tool_name // "unknown"' 2>/dev/null || echo "unknown")
-  SOURCE=$(echo "$HOOK_INPUT" | jq -r '.tool_input.url // .tool_input.query // empty' 2>/dev/null || echo "")
+  SOURCE=$(echo "$HOOK_INPUT" | jq -r '.tool_input.url // .tool_input.query // .tool_input.q // (.tool_input.urls // empty | join(" "))' 2>/dev/null || echo "")
 else
   TOOL_NAME=$(echo "$HOOK_INPUT" | grep -oE '"tool_name":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"tool_name":\s*"//' | sed 's/"$//' || echo "unknown")
   SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"url":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"url":\s*"//' | sed 's/"$//' || echo "")
   [[ -z "$SOURCE" ]] && SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"query":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"query":\s*"//' | sed 's/"$//' || echo "")
+  [[ -z "$SOURCE" ]] && SOURCE=$(echo "$HOOK_INPUT" | grep -oE '"q":\s*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*"q":\s*"//' | sed 's/"$//' || echo "")
 fi
 [[ -z "$SOURCE" ]] && exit 0
 

@@ -68,7 +68,7 @@
         ]
       },
       {
-        "matcher": "WebFetch|WebSearch",
+        "matcher": "WebFetch|WebSearch|mcp__crawl4ai__(search|scrape|extract|answer|batch|serp)",
         "hooks": [
           {
             "type": "command",
