@@ -113,7 +113,10 @@ def _task_text(cycle_evidence, task: dict, verdict: dict, cwd: str) -> str:
     lines = [f"- task {task['open']} ({task.get('agent_type')}; opened at {task.get('first_path')})"]
     if verdict.get("error"):
         lines.append(f"  {verdict['error']}")
-    lines += [f"  {stage}: " + cycle_evidence.HOW[stage].format(tool=tool, task=task["open"])
+    if task.get("repo") and not os.path.isdir(task["repo"]):
+        lines.append(f"  its worktree {task['repo']} is gone; if its work was pushed: {tool} close-disposed "
+                     f"{task['open']} --url <pull request> --sha <pushed commit>")
+    lines +=[f"  {stage}: " + cycle_evidence.HOW[stage].format(tool=tool, task=task["open"])
               for stage in verdict["missing"]]
     return "\n".join(lines)
 

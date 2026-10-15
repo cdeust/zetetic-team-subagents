@@ -66,6 +66,17 @@ def test_stop_blocks_with_every_missing_stage_and_how_to_prove_it(fire, repo, tr
                    "review:", "remember:", "cycle_ledger.py --cwd", rows(repo)[0]["open"]):
         assert needle in reason
     assert "  implement:" not in reason
+    assert "close-disposed" not in reason  # the worktree still exists
+
+
+def test_a_task_whose_worktree_is_gone_is_told_how_to_close_it_as_disposed(fire, repo, transcript):
+    open_task(fire, repo, transcript)
+    path = cl.ledger_path(str(repo))
+    (task,) = gates_jsonl.read_rows(path)
+    gates_jsonl.append_row(path, {"close": task["open"], "evidence": {}, "counts": {}})
+    gates_jsonl.append_row(path, {**task, "open": "gone0000task", "repo": str(repo.parent / "removed")})
+    _, out, _ = fire(gate_hook, stop_event(repo, transcript))
+    assert "close-disposed gone0000task --url <pull request>" in json.loads(out)["reason"]
 
 
 def test_a_proven_task_closes_once_and_the_stop_is_allowed(fire, repo, transcript):
