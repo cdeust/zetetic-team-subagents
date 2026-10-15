@@ -391,3 +391,31 @@ def test_the_legacy_scripts_are_exported_with_their_modes_and_without_symlinks(r
     assert out == str(tmp_path / "exp" / "scripts" / "gate.sh") and os.access(out, os.X_OK)
     assert (base / "gate.d" / "common.sh").read_text() == "echo common\n" and not (base / "gate.d" / "common.sh").stat().st_mode & 0o111
     assert not (base / "link").exists() and not (base / "link").is_symlink()
+
+
+def ledger_rows(repo: Path) -> list:
+    import gate_ledger
+    path = Path(gate_ledger._results_path(str(repo)))
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def test_a_verification_appends_its_verdict_to_the_ledger(repo):
+    stage_config(repo, [sh("exit 0")])
+    tree = git(repo, "write-tree")
+    assert verify(repo) == 0
+    rules = gate_rules.effective(str(repo), tree)
+    (row,) = ledger_rows(repo)
+    assert (row["verb"], row["tree"], row["rc"]) == ("commit", tree, 0) and row["key"] == f"commit-{tree}-{rules.digest}"
+    write_config(repo, [sh("exit 6")])
+    git(repo, "add", ".zetetic/gate.json")
+    assert verify(repo, kind="push") == 6
+    assert [(r["verb"], r["rc"]) for r in ledger_rows(repo)] == [("commit", 0), ("push", 6)]
+
+
+def test_a_directory_that_is_not_a_repository_records_nothing_and_creates_no_state(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("ZETETIC_TASKS_DIR", raising=False)
+    assert gate_run.main(["run", "--repo", str(tmp_path), "--tree", "a" * 40, "--base", "-", "--kind", "commit",
+                          "--trusted", "b" * 40, "--rules", "0" * 12]) == 1
+    assert not home.exists()  # the fallback state directory under ~/.claude/fleet/tasks was not created

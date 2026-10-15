@@ -42,8 +42,10 @@ Paths are compared by real path. Listing a checkout trusts the linked worktrees 
 of the git common dir); listing a worktree trusts that worktree only. A repository that declares a gate and is
 not listed is DENIED at `git commit` and `git push`/`gh pr create`, with the exact line to add; `git add` starts
 nothing in it, and the worker refuses to run if it is started by hand (`tools/task.sh`). No silent pass, nothing
-is run. The hooks never write this file. `ZETETIC_GATE_TRUSTED_REPOS` replaces the path (tests); it is read from
-your session's environment, never from a repository.
+is run. The hooks never write this file. `ZETETIC_GATE_TRUSTED_REPOS` replaces the path (tests). A repository's
+project settings can set session environment variables, so an override that points inside the repository being
+judged (its working tree or its git directory) is ignored: a repository cannot list itself. A path to some other
+file that already lists the repository's exact real path would still be honoured.
 
 Example: the repositories of the fleet (adjust the prefix to where you keep them):
 
@@ -127,7 +129,11 @@ permission request, a prompt) is blocked. Ignored for async hooks and on Stop, S
 TeammateIdle."* So a gate-proof that is killed, crashes before `main`, or exceeds its timeout would let the
 commit through. `hooks/hooks.json` and `.claude-plugin/plugin.json` register `gate-proof.py` with
 `"onFailure": "block"`; that, not a timeout, is what makes it fail closed. (The existing `timeout` is not
-raised and is not the guarantee.) `hooks/run-python.sh` fails closed for `gate-proof.py` only when no Python 3
+raised and is not the guarantee.) Measured on Claude Code 2.1.301 with a throwaway session and a marker file
+written by the guarded Bash call: a PreToolUse hook that exits 1, is killed by SIGKILL, exceeds its timeout, or
+names a script that does not exist lets the call run when `onFailure` is absent, and does not let it run with
+`"onFailure": "block"`; the result is the same whether the hook comes from a settings file, from a plugin's
+`hooks/hooks.json` or from the `hooks` of `.claude-plugin/plugin.json`. `hooks/run-python.sh` fails closed for `gate-proof.py` only when no Python 3
 is found: it refuses a call whose payload mentions `git` or `gh`, and lets any other call through so a host
 without Python can still install one. Every other hook keeps failing open there.
 
