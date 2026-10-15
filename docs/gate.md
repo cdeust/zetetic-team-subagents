@@ -58,8 +58,11 @@ A repository declares its gate with this file (version 1). Without it the declar
 2. `.zetetic/gate.json`: its checks.
 3. An executable `scripts/gate.sh` (legacy): the task runs `sh scripts/gate.sh commit|push` in the real
    checkout, so the repository's own script keeps judging. It refuses when tracked files are modified but
-   unstaged, which makes a verification started by `git add` fail if the author edits again before it ends;
-   migrate to `.zetetic/gate.json`.
+   unstaged, which makes a verification started by `git add` fail if the author edits again before it ends.
+   The script judges the index as it is when it runs, so the task is green only if the script also left
+   its proof file for exactly the tree being verified (`<git-common-dir>/zetetic-gates/<kind>-<tree>.json`,
+   green, naming that tree); a script that proved another tree because the index moved fails the task.
+   Migrate to `.zetetic/gate.json`.
 4. A recognised stack: `Cargo.toml` (fmt, clippy, test), `package.json` with a `lint` or a real `test` script,
    a pytest project (a `pyproject.toml`, `pytest.ini`, `setup.cfg` or `tox.ini` plus a `tests/` directory or a
    `test_*.py` at the root), `go.mod` (vet, test). The whole suite, whenever the tree differs from its base.

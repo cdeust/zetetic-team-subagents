@@ -198,3 +198,55 @@ def test_the_hot_path_has_no_timer():
     for name in ("gate-proof.py", "gate-start.py", "stop-gate-ledger.py", "lib/gate_git.py", "lib/gate_state.py",
                  "lib/gate_ledger.py", "lib/gate_actions.py", "lib/gate_config.py", "lib/gate_shell.py"):
         assert _time_bounds((HOOKS / name).read_text()) == [], name
+
+
+def test_a_payload_that_is_not_json_is_ignored_where_nothing_is_gated(tmp_path):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert run_hook("gate-proof.py", "{not json", plain) == (0, "", "")
+    assert run_hook("gate-start.py", "{not json", plain)[0] == 0
+
+
+def test_a_crash_of_the_hook_refuses_closed_only_where_a_gate_is_declared(gate, tmp_path):
+    crashing = {"cwd": str(gate.repo), "tool_name": "Bash", "tool_input": ["not", "an", "object"]}
+    rc, _, err = run_hook("gate-proof.py", crashing, tmp_path, gate.env)  # the process cwd is NOT the repository
+    assert rc == 2 and "crashed" in err
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert run_hook("gate-proof.py", {**crashing, "cwd": str(plain)}, plain, gate.env) == (0, "", "")
+
+
+def test_the_hook_judges_the_repository_named_in_the_payload_not_the_process_directory(gate, tmp_path):
+    gate.stage("two\n")
+    rc, _, err = run_hook("gate-proof.py", payload(COMMIT, gate.repo), tmp_path, gate.env)
+    assert rc == 2 and "verification" in err
+
+
+def test_non_bash_tools_and_commands_without_git_are_ignored(gate):
+    gate.stage("two\n")
+    assert run_hook("gate-proof.py", payload(COMMIT, gate.repo, tool="Write"), gate.repo, gate.env) == (0, "", "")
+    assert gate.gate("ls -la") == (0, "", "")
+    assert gate.gate("echo hello") == (0, "", "")
+    assert gate.started() == []
+
+
+def test_the_head_start_ignores_other_tools_and_commands_without_git_and_never_fails_loudly(gate, tmp_path):
+    gate.stage("two\n")
+    assert run_hook("gate-start.py", payload("git add a.txt", gate.repo, tool="Write"), gate.repo, gate.env) == (0, "", "")
+    assert gate.head_start("ls") == (0, "", "")
+    assert gate.head_start("git status") == (0, "", "")  # not an index change
+    assert gate.started() == []
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert run_hook("gate-start.py", payload("git add x", plain), plain, gate.env) == (0, "", "")  # not a repository
+    rc, _, err = run_hook("gate-start.py", "{not json", gate.repo, gate.env)
+    assert rc == 0 and "no head start" in err
+
+
+def test_the_head_start_starts_nothing_when_nothing_is_staged(gate):
+    assert gate.head_start() == (0, "", "")  # the index equals HEAD: there is no tree to verify
+    assert gate.started() == []
+    gate.stage("two\n")
+    git(gate.repo, "restore", "--staged", "a.txt")  # staged and then unstaged again
+    assert gate.head_start("git restore --staged a.txt") == (0, "", "")
+    assert gate.started() == []
