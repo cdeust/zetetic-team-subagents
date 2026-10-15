@@ -48,7 +48,9 @@ Dedup is atomic creation of `<id>.json`. The module writes the complete record
 to a private temp file and hard-links it into place: link(2) fails with EEXIST
 if the id exists, and the name never exists with partial content. Of N
 concurrent starters exactly one creates the record and launches the worker; the
-rest read the existing record.
+rest read the existing record. The state directory must be on a filesystem that
+supports hard links; on one that does not, `os.link` raises `OSError` and `start`
+fails loudly rather than creating the record without the atomic guarantee.
 
 A finished green record (`state: done`, `rc: 0`) for an id is the cached proof
 for that input. `start` returns it with disposition `cached` and runs nothing.
@@ -77,7 +79,7 @@ interrupted (`signal` set), the command not startable (`rc` 127), or a worker
 that died without writing a terminal state (`rc` null). `reason` says which.
 `result_excerpt` is a convenience tail; the full output is always at
 `output_path`. `created`, `started` and `finished` describe the run to a human and
-are never read by any decision. `pid_token` is the process start time from `ps`,
+are never read by any decision. `pid_token` is the process start time (`/proc` starttime on Linux, `ps` lstart on macOS),
 used to tell the worker from a later process that reused its pid.
 
 ## Who writes what
@@ -102,8 +104,14 @@ reader sees the old record or the new one and never a prefix.
 
 A `queued` or `running` record is in flight while its responsible process is
 alive: the worker if its pid is recorded, else the starter. Alive means
-`kill(pid, 0)` succeeds, `ps` shows the same start-time token, and the process
-is not a zombie. This is an OS fact, never a clock.
+`kill(pid, 0)` succeeds, the process shows the same start-time token, and it is
+not a zombie. This is an OS fact, never a clock. A process is alive, dead or
+unknown, and unknown is never read as dead: where the platform cannot answer,
+the call raises `LivenessUnknown` naming the platform (reading it as dead would
+reap a live worker and run the command twice). The probe is `/proc/<pid>/stat`
+on Linux (state is field 3, start time in clock ticks since boot is field 22,
+parsed after the last `)`; no `ps` needed, so slim and busybox images work) and
+`ps -o lstart,stat` on macOS only (`task_proc.py`).
 
 `status(id)` adds `alive` to in-flight records. A dead one is `stale`.
 `reap_stale` (called by `drain_inbox`) turns each stale record into `failed`
@@ -113,15 +121,20 @@ claimer, so a crash cannot wedge a transition.
 
 Retry is explicit and counted: `requeue` (CLI: `start ... --requeue`) moves a
 `failed` or stale task to attempt N+1 and launches it. Concurrent requeuers: one
-wins the claim, the others get its record. A green or genuinely in-flight task
-is returned untouched. `start` on a `failed` task does not retry; it returns the
+wins the claim and, after winning, re-reads the record: it launches only if the
+record is still attempt N and `failed`, so a requeuer that read `failed` before
+the first winner finished cannot launch attempt N+1 a second time. A green or
+genuinely in-flight task is returned untouched. A failed task whose recorded
+process group still holds a live process (the command outlived a SIGKILLed
+worker) is refused with disposition `orphaned`: a retry would run the command
+twice. Retry once that group has ended. Zombies and the worker itself do not count. `start` on a `failed` task does not retry; it returns the
 failure (`disposition: failed`).
 
 ## API
 
 | Call | Returns |
 |---|---|
-| `start(kind, key, argv, cwd)` | `Started(record, disposition)` at once; disposition is `started`, `cached`, `in-flight`, `stale` or `failed` |
+| `start(kind, key, argv, cwd)` | `Started(record, disposition)` at once; disposition is `started`, `cached`, `in-flight`, `stale`, `failed` or `orphaned` (requeue only) |
 | `requeue(kind, key, argv, cwd)` | same, for an explicit retry |
 | `status(id, cwd)` | the record (plus `alive` if in flight), or None |
 | `latest(kind, key, cwd)` | the record of `<kind>-<key>`, or with key None the last task of that kind started |

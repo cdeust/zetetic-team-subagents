@@ -27,6 +27,7 @@ import sys
 from typing import NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import task_proc as proc  # noqa: E402
 import task_store as store  # noqa: E402
 
 WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "task_worker.py")
@@ -34,7 +35,7 @@ WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "task_worker.p
 
 class Started(NamedTuple):
     record: dict
-    disposition: str  # started | cached | in-flight | stale | failed
+    disposition: str  # started | cached | in-flight | stale | failed | orphaned
 
 
 class Job(NamedTuple):
@@ -63,7 +64,7 @@ def _new_record(job: Job) -> dict:
             "state": "queued", "rc": None, "signal": None, "reason": None, "attempt": 1,
             "result_excerpt": "", "output_path": None, "output_bytes": 0,
             "pid": None, "pid_token": None, "pgid": None,
-            "starter_pid": os.getpid(), "starter_token": store.proc_token(os.getpid()),
+            "starter_pid": os.getpid(), "starter_token": proc.proc_token(os.getpid()),
             "started_by": os.environ.get("ZETETIC_TASK_STARTED_BY") or f"pid:{os.getpid()}",
             "host": socket.gethostname(), "created": store.utc_now(), "started": None, "finished": None,
             "input": {"argv": list(argv), "cwd": os.path.abspath(cwd)}}
@@ -89,7 +90,7 @@ def _launch(directory: str, rec: dict) -> dict:
         return _fail_unlaunched(path, rec, exc)
     os.close(gate_r)
     try:
-        rec = {**rec, "pid": worker.pid, "pid_token": store.proc_token(worker.pid),
+        rec = {**rec, "pid": worker.pid, "pid_token": proc.proc_token(worker.pid),
                "output_path": store.output_path(directory, rec["id"], rec["attempt"])}
         store.atomic_write(path, rec)
     finally:
@@ -164,8 +165,11 @@ def _reap(directory: str, rec: dict) -> dict | None:
 def requeue(kind: str, key: str, argv: list[str], cwd: str) -> Started:
     """Explicit retry: attempt+1 of a ``failed`` (or dead in-flight) task.
 
-    A green or genuinely in-flight task is returned untouched. Concurrent
-    requeuers: one wins the claim for attempt N+1, the rest get its record.
+    A green or genuinely in-flight task is returned untouched, and so is a
+    failed one whose process group still holds a live process (disposition
+    ``orphaned``: the command outlived its killed worker; a retry would run it
+    twice). Concurrent requeuers: one wins the claim for attempt N+1, the rest
+    get its record.
     """
     return _requeue(store.tasks_dir(cwd), Job(kind, key, argv, cwd))
 
@@ -179,10 +183,31 @@ def _requeue(directory: str, job: Job) -> Started:
     if disposition(current) == "stale":
         _reap(directory, current)
         current = store.read_record(path)
-    if current["state"] != "failed" or not store.claim(directory, f"{tid}.a{current['attempt'] + 1}.requeue"):
+    if current["state"] != "failed":
+        return Started(current, disposition(current))
+    if proc.group_alive(current.get("pgid"), current.get("pid")):
+        return Started(current, "orphaned")
+    return _requeue_failed(directory, job, current)
+
+
+def _requeue_failed(directory: str, job: Job, seen: dict) -> Started:
+    """Pre: ``seen`` is the record as read, state ``failed`` at attempt N.
+
+    Post: attempt N+1 is launched at most once, by the claim winner, and only
+    if the record is STILL attempt N and ``failed`` after the claim is won. A
+    claim whose owner has exited is retired by the next claimer, so a requeuer
+    that read ``failed`` before the first winner finished can win the same
+    claim again; the re-read is what stops it from launching N+1 a second time.
+    """
+    tid, attempt = seen["id"], seen["attempt"]
+    path = store.record_path(directory, tid)
+    if not store.claim(directory, f"{tid}.a{attempt + 1}.requeue"):
+        return Started(seen, disposition(seen))
+    current = store.read_record(path)
+    if current["attempt"] != attempt or current["state"] != "failed":
         return Started(current, disposition(current))
     again = _new_record(job)
-    again["attempt"] = current["attempt"] + 1
+    again["attempt"] = attempt + 1
     store.atomic_write(path, again)
     return Started(_launch(directory, again), "started")
 

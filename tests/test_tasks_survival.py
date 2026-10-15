@@ -29,7 +29,7 @@ API_HOOK = (
     "s = tasks.start('surv', sys.argv[2], ['sh', '-c', sys.argv[3]], sys.argv[4]); "
     "print(json.dumps(s.record), flush=True); sys.stdin.read()"
 )
-CLI_HOOK = '"$1" start surv "$2" --cwd "$4" -- sh -c "$3"; cat'
+CLI_HOOK = '"$1" start surv "$2" --cwd "$4" -- sh -c "$3" || exit 1; cat'  # a failed start ends the hook: the test reads EOF, never blocks
 
 
 def hook_command(via: str, key: str, command: str, cwd: str) -> list[str]:

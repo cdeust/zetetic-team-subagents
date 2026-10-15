@@ -22,6 +22,7 @@ import signal
 import subprocess
 import sys
 
+import task_proc as proc
 import task_store as store
 
 CAUGHT = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT, signal.SIGQUIT)  # source: every catchable termination request; SIGKILL/SIGSTOP cannot be caught (signal(7))
@@ -98,7 +99,7 @@ def work(directory: str, tid: str, attempt: int) -> int:
     rec = store.read_record(path)
     if rec is None or rec["attempt"] != attempt or rec["state"] != "queued":
         return 3  # FAILS_ON: superseded before start; nothing of ours to finish
-    rec.update(state="running", pid=os.getpid(), pid_token=store.proc_token(os.getpid()),
+    rec.update(state="running", pid=os.getpid(), pid_token=proc.proc_token(os.getpid()),
                pgid=os.getpgid(0), started=store.utc_now())
     store.atomic_write(path, rec)
     outcome = {"state": "failed", "rc": None, "reason": "worker exited without an outcome"}

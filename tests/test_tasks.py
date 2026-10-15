@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from task_support import fire, make_fifo, read_line, task_store as store, tasks, wait_exit
+from task_support import blocked_task, fire, make_fifo, task_store as store, tasks, wait_exit
 
 
 @pytest.fixture
@@ -111,13 +111,6 @@ def test_failed_record_is_not_silently_retried(state):
 
 
 # -- crash and stale detection ---------------------------------------------------
-
-def blocked_task(state, key):
-    """Start a task whose command announces itself, then blocks. Returns (started, hold, command_pid)."""
-    hold, ready = make_fifo(state, f"{key}.hold"), make_fifo(state, f"{key}.ready")
-    started = tasks.start("unit", key, ["sh", "-c", f"echo $$ > {ready}; cat {hold} >/dev/null"], str(state))
-    return started, hold, int(read_line(ready))  # the line proves: running record written, command alive
-
 
 def test_worker_sigkill_is_detected_by_dead_pid_and_reported(state):
     started, hold, command = blocked_task(state, "crash")

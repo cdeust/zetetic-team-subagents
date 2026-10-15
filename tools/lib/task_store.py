@@ -3,7 +3,7 @@
 The task record is the only contract between a producer (the detached worker)
 and its consumers (hooks, gates, CLIs). This module owns the bytes: where the
 records live, how they are written (never partially visible), how a process is
-proven alive (an OS event, never a clock), and the failure inbox.
+proven alive (an OS event, never a clock; task_proc.py), and the failure inbox.
 
 Nothing here waits, sleeps, polls or compares elapsed time. Timestamps in a
 record (``created``, ``started``, ``finished``) are descriptions for humans and
@@ -18,8 +18,12 @@ import json
 import os
 import re
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import task_proc as proc  # noqa: E402
 
 SCHEMA = 1
 ENV_DIR = "ZETETIC_TASKS_DIR"  # source: override of the state dir, used by tests and by non-default layouts
@@ -155,49 +159,14 @@ def read_excerpt(path: str) -> tuple[str, int]:
         return "", 0
 
 
-# -- liveness: an OS fact, never a clock -----------------------------------------
-
-def proc_info(pid: int) -> tuple[str, str] | None:
-    """(start-time token, ps state) of ``pid``, or None if no such process.
-
-    The token ('lstart' of ps) identifies the process incarnation, so a reused
-    pid is not mistaken for the worker. Used for identity only.
-    """
-    probe = subprocess.run(["ps", "-o", "lstart=,stat=", "-p", str(pid)], capture_output=True,
-                           text=True, check=False, env={**os.environ, "LC_ALL": "C"})
-    parts = probe.stdout.split()
-    if probe.returncode != 0 or len(parts) < 2:
-        return None
-    return " ".join(parts[:-1]), parts[-1]
-
-
-def proc_token(pid: int) -> str | None:
-    info = proc_info(pid)
-    return info[0] if info else None
-
-
-def is_alive(pid: int | None, token: str | None) -> bool:
-    """True iff ``pid`` is a running (not zombie) process of the recorded incarnation."""
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        pass  # exists, owned by someone else: the ps check decides
-    info = proc_info(pid)
-    if info is None or info[1].startswith("Z"):
-        return False
-    return token is None or info[0] == token
-
+# -- liveness: an OS fact, never a clock (task_proc.py) --------------------------
 
 def record_alive(rec: dict) -> bool:
     """Liveness of whoever is responsible for a queued/running record: the
     worker once its pid is recorded, else the starter that created it."""
     if rec.get("pid") is not None:
-        return is_alive(rec["pid"], rec.get("pid_token"))
-    return is_alive(rec.get("starter_pid"), rec.get("starter_token"))
+        return proc.is_alive(rec["pid"], rec.get("pid_token"))
+    return proc.is_alive(rec.get("starter_pid"), rec.get("starter_token"))
 
 
 # -- single-winner claims (no locks, no clocks) ----------------------------------
@@ -210,12 +179,12 @@ def claim(directory: str, name: str) -> bool:
     competes again, so a crash cannot wedge a transition forever.
     """
     path = os.path.join(directory, name)
-    me = {"pid": os.getpid(), "token": proc_token(os.getpid())}
+    me = {"pid": os.getpid(), "token": proc.proc_token(os.getpid())}
     while True:
         if create_exclusive(path, me):
             return True
         owner = read_record(path)
-        if owner is None or is_alive(owner.get("pid"), owner.get("token")):
+        if owner is None or proc.is_alive(owner.get("pid"), owner.get("token")):
             return False
         try:
             os.rename(path, f"{path}.dead.{uuid.uuid4().hex}")

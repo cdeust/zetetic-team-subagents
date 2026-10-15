@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "lib"))
 
+import task_proc  # noqa: E402,F401
 import task_store  # noqa: E402,F401
 import tasks  # noqa: E402,F401
 
@@ -29,7 +30,10 @@ def wait_exit(pid: int) -> None:
         finally:
             queue.close()
         return
-    fd = os.pidfd_open(pid)
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        return  # already gone (and reaped): that is the event we wanted
     try:
         select.select([fd], [], [])
     finally:
@@ -51,3 +55,10 @@ def read_line(fifo: str) -> str:
     """Block until a writer sends one line on ``fifo``."""
     with open(fifo, encoding="utf-8") as handle:
         return handle.readline().strip()
+
+
+def blocked_task(state: Path, key: str):
+    """Start a task whose command announces itself, then blocks. Returns (started, hold, command_pid)."""
+    hold, ready = make_fifo(state, f"{key}.hold"), make_fifo(state, f"{key}.ready")
+    started = tasks.start("unit", key, ["sh", "-c", f"echo $$ > {ready}; cat {hold} >/dev/null"], str(state))
+    return started, hold, int(read_line(ready))  # the line proves: running record written, command alive

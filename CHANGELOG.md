@@ -34,7 +34,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   hooks and the session start move onto it in later changes. The tests use no sleep
   or timeout (process exit, FIFO EOF and thread events only) and prove on macOS that
   a task keeps running and writes its terminal state after the process group that
-  started it is SIGKILLed. (#163)
+  started it is SIGKILLed. Liveness reads `/proc/<pid>/stat` on Linux (python:slim has no
+  `ps`, busybox `ps` has no `lstart`) and `ps` only on macOS; a platform that can do
+  neither raises an error naming it, and "unknown" is never read as "dead". `requeue`
+  re-reads the record after winning its claim, so a stale requeuer cannot launch an
+  attempt twice, and refuses (`orphaned`) while a process of the failed attempt's group
+  is still alive. (#163)
 
 ### Fixed
 
