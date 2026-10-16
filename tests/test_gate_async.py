@@ -206,7 +206,8 @@ def test_the_hot_path_has_no_timer():
     from gate_support import HOOKS
     for name in ("gate-proof.py", "gate-start.py", "stop-gate-ledger.py", "lib/gate_git.py", "lib/gate_state.py",
                  "lib/gate_ledger.py", "lib/gate_actions.py", "lib/gate_config.py", "lib/gate_shell.py",
-                 "lib/gate_source.py", "lib/gate_rules.py", "lib/gate_trust.py", "lib/gate_publish.py", "lib/gate_paths.py"):
+                 "lib/gate_source.py", "lib/gate_rules.py", "lib/gate_trust.py", "lib/gate_publish.py", "lib/gate_paths.py",
+                 "lib/gate_superset.py", "lib/gate_ack.py", "lib/gate_userfile.py", "lib/gate_pushargs.py"):
         assert _time_bounds((HOOKS / name).read_text()) == [], name
 
 

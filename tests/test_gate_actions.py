@@ -11,6 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks" / "lib"))
 import gate_actions as ga  # noqa: E402
+import gate_pushargs as pushargs  # noqa: E402
 import gate_shell as sh  # noqa: E402
 
 BASE = "/repo"
@@ -27,9 +28,9 @@ def kinds(command: str, base: str = BASE) -> list:
     "cat <<EOF\ngit commit -m x\ngit push origin main\ngh pr create\nEOF",
     "cat <<'EOF' > notes.txt\nfirst\ngit commit -a\nEOF", "cat <<-EOF\n\tgh pr create\n\tEOF",
     'echo "run: git commit" && ls', "ls git-commit-helper", "gh pr view 12", "gh pr list --search 'pr create'",
-    "git commit --dry-run", "git push --tags", "git push origin --tags", "git push --delete origin feat",
-    "git push -d origin feat", "git push origin :feat", "git push origin refs/tags/v1",
-    "git push origin tag v1", "git push -n origin main", "gh pr create --help", "gh pr create -h",
+    "git commit --dry-run", "git push --delete origin feat",
+    "git push -d origin feat", "git push origin :feat", "git push origin :refs/tags/v1",
+    "git push -n origin main", "gh pr create --help", "gh pr create -h",
 ])
 def test_mentions_and_non_publishing_calls_are_not_gated(command):
     assert [k for k, _ in kinds(command) if k != "stage"] == []
@@ -223,8 +224,11 @@ def publish(command: str) -> dict:
     ("git push origin +feat:refs/heads/x HEAD", ["+feat:refs/heads/x", "HEAD"], "origin"),
     ("git push --force-with-lease origin feat", ["feat"], "origin"),
     ("git push -o ci.skip origin feat", ["feat"], "origin"),
-    ("git push --repo=origin feat", ["feat"], None),  # --repo names the remote: every positional is a refspec
-    ("git push --repo origin feat", ["feat"], None),
+    ("git push --repo=origin feat", ["feat"], "origin"),  # --repo names the remote: every positional is a refspec
+    ("git push --repo origin feat", ["feat"], "origin"),
+    ("git push --recurse-submodules check origin feat", ["feat"], "origin"),
+    ("git push -odebug origin feat", ["feat"], "origin"),
+    ("git push -vo debug origin feat", ["feat"], "origin"),
     ("git push -- origin feat", ["feat"], "origin"),
 ])
 def test_a_push_names_the_refs_it_publishes(command, specs, remote):
@@ -239,10 +243,19 @@ def test_all_and_mirror_publish_every_branch(command, flag):
     assert publish(command)[flag] is True
 
 
-def test_all_with_tags_still_publishes_branches():
-    assert ga.push_only_tags_or_delete(["--all", "--tags", "origin"]) is False
-    assert ga.push_only_tags_or_delete(["--mirror", "origin"]) is False
-    assert ga.push_only_tags_or_delete(["--repo", "origin", "refs/tags/v1"]) is True  # --repo: no positional remote to skip
+@pytest.mark.parametrize("args,expected", [
+    (["--all", "--tags", "origin"], False), (["--mirror", "origin"], False),
+    (["--repo", "origin", "refs/tags/v1"], False),  # a tag publishes the commit behind it (gate_publish judges it)
+    (["--repo", "origin", ":refs/tags/v1"], True),  # --repo: no positional remote to skip; a deletion publishes nothing
+    (["origin", "--tags"], False), (["--follow-tags", "origin", "main"], False), (["origin", "tag", "v1"], False),
+    (["origin", ":feat", "main"], False), (["origin", ":feat", ":other"], True), (["--delete", "origin", "feat"], True),
+    (["-d", "origin", "feat"], True), (["-n", "origin", "feat"], True), (["-on", "origin", "feat"], False),
+    (["-odebug", "origin", "feat"], False), (["-vod", "origin", "feat"], False), (["-o", "d", "origin", "feat"], False),
+    (["-o", "d", "-n", "origin", "feat"], True), (["--dry", "origin", "feat"], True), (["--del", "origin", "feat"], True),
+    (["--dele", "--no-delete", "origin", "feat"], False),
+])
+def test_what_publishes_no_commit(args, expected):
+    assert pushargs.publishes_no_commit(args) is expected
 
 
 @pytest.mark.parametrize("command,head", [
@@ -256,5 +269,20 @@ def test_gh_pr_create_names_its_head_branch(command, head):
 
 
 def test_the_gh_publish_record_is_exactly_a_head_branch_and_nothing_else():
-    assert publish("gh pr create --head x") == {"all": False, "mirror": False, "remote": None, "specs": [], "gh_head": "x", "gh": True}
-    assert publish("git push origin feat") == {"all": False, "mirror": False, "remote": "origin", "specs": ["feat"], "gh_head": None, "gh": False}
+    assert publish("gh pr create --head x") == {"all": False, "mirror": False, "tags": False, "follow_tags": None,
+                                                "remote": None, "specs": [], "gh_head": "x", "gh": True}
+    assert publish("git push origin feat") == {"all": False, "mirror": False, "tags": False, "follow_tags": None,
+                                               "remote": "origin", "specs": ["feat"], "gh_head": None, "gh": False}
+
+
+@pytest.mark.parametrize("command", ["git push --tags", "git push origin --tags", "git push origin refs/tags/v1",
+                                     "git push origin tag v1", "git push --follow-tags", "git push origin refs/tags/t:refs/heads/main"])
+def test_a_push_that_can_publish_a_tagged_commit_is_a_push_to_judge(command):
+    assert [k for k, _ in kinds(command) if k != "stage"] == ["push"]
+
+
+def test_tags_and_follow_tags_are_named_in_the_publish_record():
+    assert (publish("git push --tags")["tags"], publish("git push --tags")["follow_tags"]) == (True, None)
+    assert (publish("git push --follow-tags origin")["tags"], publish("git push --follow-tags origin")["follow_tags"]) == (False, True)
+    assert publish("git push --no-tags origin feat")["tags"] is False
+    assert publish("git push --no-follow-tags origin feat")["follow_tags"] is False
