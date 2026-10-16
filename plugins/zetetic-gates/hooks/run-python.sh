@@ -38,19 +38,30 @@ echo "[zetetic] Microsoft Store python/python3 execution aliases. Hook skipped: 
 #
 # gate-proof.py is the exception and FAILS CLOSED: a gate that opens when it cannot run is not a gate.
 # Without Python it cannot parse the command, so it refuses what can publish a commit by name: a payload
-# in which `git` or `gh` stands as a COMMAND WORD (preceded by the start of the command, a space, a command
-# separator, a path slash or a JSON \n / \t escape, and followed by a space or such an escape). "highlights",
-# "ghost", a working directory under "github" or ending in "/git" do not match. Any other tool call passes,
-# so a host without Python can still install one. The payload is read once here because nothing else will,
-# and only shell builtins are used (read, case, printf): the refusal does not depend on any tool on the PATH.
-# The payload is matched as Claude Code serialises it; a JSON \uXXXX escape is not decoded.
+# in which `git` or `gh` stands as a COMMAND WORD. The payload is first DEQUOTED (dequote below): the JSON
+# escapes \n, \r and \t become spaces, then every backslash, double quote and single quote is removed, so
+# `"git" push`, `'git' commit`, `\git push`, `git"" push` and `/usr/bin/"git" push` all read `git push`, as the
+# Python hook reads them. A command word is then `git` or `gh` preceded by the start of the command (the JSON
+# key's colon), a space, a command separator or a path slash (the basename of `/usr/bin/git`), and followed by
+# a space. "highlights", "ghost", "github", a working directory under "github" or ending in "/git" do not match.
+# Any other tool call passes, so a host without Python can still install one. The payload is read once here
+# because nothing else will, and only shell builtins are used (read, case, parameter expansion): the refusal
+# does not depend on any tool on the PATH. A JSON \uXXXX escape is not decoded.
+dequote() {
+  local text=$1 bs='\' dq='"' sq="'"
+  text=${text//"$bs"n/ }
+  text=${text//"$bs"r/ }
+  text=${text//"$bs"t/ }
+  text=${text//"$bs"/}
+  text=${text//"$dq"/}
+  text=${text//"$sq"/}
+  dequoted=$text
+}
 mentions_git_or_gh() {
-  local before word after
-  for before in '"' ' ' ';' '&' '|' '(' '`' '{' '/' '\n' '\t'; do
+  local before word
+  for before in ':' ' ' ';' '&' '|' '(' '`' '{' '/'; do
     for word in git gh; do
-      for after in ' ' '\n' '\t'; do
-        case "$1" in *"$before$word$after"*) return 0 ;; esac
-      done
+      case "$1" in *"$before$word "*) return 0 ;; esac
     done
   done
   return 1
@@ -58,7 +69,8 @@ mentions_git_or_gh() {
 case "$script" in
   gate-proof.py | */gate-proof.py)
     IFS= read -r -d '' payload || true
-    if [[ -z "$payload" ]] || mentions_git_or_gh "$payload"; then
+    dequote "$payload"
+    if [[ -z "$payload" ]] || mentions_git_or_gh "$dequoted"; then
       echo "GATE-PROOF: no working Python 3, so this call cannot be checked against the commit gate: refused (closed)." >&2
       echo "GATE-PROOF: install Python 3 (python3, py -3 or python) and retry; calls that do not run git or gh are not affected." >&2
       exit 2

@@ -279,13 +279,17 @@ names a script that does not exist lets the call run when `onFailure` is absent,
 `"onFailure": "block"`; the result is the same whether the hook comes from a settings file, from a plugin's
 `hooks/hooks.json` or from the `hooks` of `.claude-plugin/plugin.json`. `hooks/run-python.sh` fails closed for `gate-proof.py` only when no Python 3
 is found: it refuses a call whose payload has `git` or `gh` as a **command word**, and lets any other call through so a
-host without Python can still install one. A command word is `git`/`gh` preceded by the start of the command, a
-space, one of `; & | ( {`, a backtick, `/` (a path slash) or a JSON `\n`/`\t` escape, and followed by a space or such an escape:
-`echo highlights`, `ghost`, and a working directory under `github` or ending in `/git` are not refused, while
+host without Python can still install one. The payload is first dequoted: the JSON escapes `\n`, `\r` and `\t`
+become spaces, then every backslash, double quote and single quote is removed, so `"git" push`, `'git' commit`,
+`\git push`, `git"" push` and `/usr/bin/"git" push` all read `git push`, as the Python hook reads them (it also
+refuses `git\ push`, which the Python hook does not read as git: closed, not open). A command word is then
+`git`/`gh` preceded by the start of the command (the colon of the JSON key), a space, one of `; & | ( {`, a
+backtick or `/` (a path slash: the basename of `/usr/bin/git`), and followed by a space: `echo highlights`,
+`ghost`, `github`, and a working directory under `github` or ending in `/git` are not refused, while
 `/usr/bin/git push`, `a && git commit`, `(gh pr create)` and a command after a newline are. The test is a shell
-`case` on the payload read with the `read` builtin: it needs no `grep` and no other tool on the `PATH`. The
-payload is matched as Claude Code serialises it; a JSON `\uXXXX` escape is not decoded. Every other hook keeps
-failing open there.
+`case` on the payload read with the `read` builtin and dequoted by parameter expansion: it needs no `grep`, no
+`sed` and no other tool on the `PATH`. A JSON `\uXXXX` escape is not decoded. Every other hook keeps failing open
+there.
 
 ## The verdict is a function of the tree
 
