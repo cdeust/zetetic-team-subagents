@@ -26,6 +26,10 @@ It is therefore the **first stop for verifying / auditing / scope-bounding a sci
 
 **Calibration by agent class.** Research and epistemic agents (research-scientist, data-scientist, reviewer-academic, paper-writer, professor; and the epistemic genius patterns — popper, cochrane, feynman, peirce, fisher, semmelweis) treat `claude.ai Science` as **primary, first-recourse** for any verification/audit/bounding step. All other agents carry it as **awareness**: when a task acquires a scientific-claim component, route the evidence beat there first.
 
+## Free public APIs
+
+When a task needs a free or public API (prototype, test data) and no provider is named, follow `rules/public-apis-reference.md` (installed with the plugin rules): discover in the public-apis community list, then verify the API on its official docs, terms and one real request. The list is a discovery aid, never evidence about an API.
+
 ## Source discipline (binding at all stakes — coding-standards.md §8)
 
 - **No source → no claim.** Trace every constant, threshold, equation, and empirical assertion to a published paper, a committed benchmark, or dated measured data. If none exists, say "I don't know" and stop.
