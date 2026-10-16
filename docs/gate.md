@@ -315,15 +315,15 @@ the mappings that once missed a dependency (the files copied into `plugins/zetet
 The gate parses the Bash command it is shown and the git state of the repository the command runs in. It does
 not see:
 
-- **A wrapped or disguised command**: `bash -c '...'`, `sh -c`, `eval`, quoted words such as `g''it`, a variable
+- A wrapped or disguised command: `bash -c '...'`, `sh -c`, `eval`, quoted words such as `g''it`, a variable
   holding the program (`G=git; $G push`), an alias, an unquoted `$(...)` in a refspec.
-- **Another index or repository**: `GIT_INDEX_FILE=`, `--git-dir`, `--work-tree`.
-- **Commits that no `git commit` makes**: `git merge`, `git cherry-pick`, `git rebase`.
-- **What a check runs**: a rule is the declared command (`argv`, `paths`, the test map); the content of a script a
+- Another index or repository: `GIT_INDEX_FILE=`, `--git-dir`, `--work-tree`.
+- Commits that no `git commit` makes: `git merge`, `git cherry-pick`, `git rebase`.
+- What a check runs: a rule is the declared command (`argv`, `paths`, the test map); the content of a script a
   check calls is not compared by the rule floor (Rule changes).
-- **The rule floor on a push**: only commits are floored; a push is judged by the union of HEAD's rules and the
+- The rule floor on a push: only commits are floored; a push is judged by the union of HEAD's rules and the
   tip's.
-- **A legacy script's siblings**: only `scripts/gate.sh` itself is compared.
+- A legacy script's siblings: only `scripts/gate.sh` itself is compared.
 
 These are limits of reading a command line and of comparing declared rules, not of the verification; CI is the
 check that sees every tree that reaches the remote.
