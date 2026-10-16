@@ -432,3 +432,71 @@ def test_targets_are_a_superset_of_the_flat_reading(tmp_path):
         assert result == 'refused' or set(flat) <= set(result), command
         checked += 1
     assert checked >= 90  # source: 98 commands of this module lex flat on 2026-10-16
+
+
+# PR #174 review, round 5. ZSH_SPLITS: zsh runs git where the rewrite read
+# bash's grammar (an unquoted ${x:-{} that zsh ends at a later brace; zsh's
+# case WORD { ... }). STILL_OPEN: forms the rewrite does not resolve, which
+# origin/main also misses. WRAPPERS add a harmless apostrophe that
+# origin/main's shlex cannot lex: there origin/main refused, so the rewrite
+# alone decides, and it must gate or refuse.
+ZSH_SPLITS = [
+    'echo ${x:-{} <<EOF }\ngit commit -m x\nEOF',                               # Z1
+    'echo ${x:-{} <<EOF }\ngit push\nEOF',                                      # Z2
+    'y=${x#{} <<EOF }\ngit commit -m x\nEOF',                                   # Z3
+    'echo "$(case x { x) echo ;; })"; git commit -m x; echo ";esac)"',          # Z7
+]
+STILL_OPEN = [
+    'echo `git commit -m x`', 'if true; then git commit -m x; fi', 'nohup git push',
+    'echo "$(git commit -m x)"', 'time -p git commit -m x', 'coproc git commit -m x',
+]
+WRAPPERS = {
+    'pre': lambda command: ": <<'Q'\nit's\nQ\n" + command,
+    'suf': lambda command: command + "\n: <<'Q'\nit's\nQ",
+    'ansi': lambda command: "echo $'\\''\n" + command,
+}
+
+
+def gated_or_refused(result):
+    return result == 'refused' or bool({verb for _d, verb in result} & {'commit', 'push'})
+
+
+@pytest.mark.parametrize('command', ZSH_SPLITS)
+def test_bash_and_zsh_disagreements_are_gated_or_refused(tmp_path, command):
+    assert gated_or_refused(outcome(command, str(tmp_path)))
+
+
+@pytest.mark.parametrize('wrap', sorted(WRAPPERS))
+@pytest.mark.parametrize('command', ROUND4 + ZSH_SPLITS + STILL_OPEN)
+def test_where_origin_main_refused_the_rewrite_gates_or_refuses(tmp_path, wrap, command):
+    assert gated_or_refused(outcome(WRAPPERS[wrap](command), str(tmp_path)))
+
+
+@pytest.mark.parametrize('command', ROUND4 + ZSH_SPLITS)
+def test_the_rewrite_alone_gates_or_refuses(tmp_path, monkeypatch, command):
+    monkeypatch.setattr(module, '_flat_targets', lambda _command, _base: [])
+    assert gated_or_refused(outcome(command, str(tmp_path)))
+
+
+@pytest.mark.parametrize('command', [
+    "cat > f <<'EOF'\nthe git hook won't run\nEOF",
+    "cat > hook.sh <<EOF\n#!/bin/sh\n# don't git commit from here\necho $(date)\nEOF",
+    'echo "${JSON:-{}}" && echo done',
+])
+def test_a_flat_refusal_is_not_kept_without_a_commit_in_the_rewrite(tmp_path, command):
+    assert outcome(command, str(tmp_path)) == []
+
+
+@pytest.mark.parametrize('command', [
+    ' '.join(['a['] * 4000) + '\ngit commit -m x',
+    ' '.join(['(('] * 3000) + '; git commit -m x',
+    'echo ' + '${x:-{} ' * 4000 + '; git commit -m x',
+    'git commit -m x; ' + ' ; '.join(['esac'] * 20000),
+    'git commit -m "' + 'x' * 140000 + '"',  # source: above MAX_COMMAND, 131072
+])
+def test_large_inputs_are_gated_or_refused(tmp_path, command):
+    assert gated_or_refused(outcome(command, str(tmp_path)))
+
+
+def test_large_input_without_git_is_not_refused(tmp_path):
+    assert outcome('echo "' + 'x' * 140000 + '"', str(tmp_path)) == []
