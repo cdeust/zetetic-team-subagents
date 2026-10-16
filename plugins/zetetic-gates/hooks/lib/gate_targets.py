@@ -1,7 +1,11 @@
 """Resolve simple git command targets without executing the supplied command.
 
 Source: POSIX shell command lists; hooks/lib/git-command-cwd.py supplies the
-existing git flag and cd resolution helpers.
+existing git flag and cd resolution helpers. hooks/lib/shell_text.py first
+removes here-document data and comments and turns newlines into separators
+(POSIX Shell Command Language §2.7.4 Here-Document, §2.3, §2.9.3). A command
+that still cannot be lexed is refused only when its text may hold a git
+commit or push: anything else cannot reach the commit and push gates.
 """
 import importlib.util
 import os
@@ -9,28 +13,42 @@ import re
 from pathlib import Path
 import shlex
 
-spec = importlib.util.spec_from_file_location(
-    'git_command_cwd', Path(__file__).with_name('git-command-cwd.py'))
-git_cwd = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(git_cwd)
+
+def _load(module, filename):
+    spec = importlib.util.spec_from_file_location(module, Path(__file__).with_name(filename))
+    loaded = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded)
+    return loaded
+
+
+git_cwd = _load('git_command_cwd', 'git-command-cwd.py')
+shell_text = _load('shell_text', 'shell_text.py')
+_COMMIT_OR_PUSH = re.compile(r'\bgit\s.*\b(?:commit|push)\b', re.S)
 
 
 def _mentions_command(command, words):
     # Conservative candidate filter only; shlex below decides real tokens.
-    # Removing quote characters also catches shell concatenation: g'it'.
-    candidate = command.replace("'", '').replace('"', '').replace('\\', '')
-    return re.search(r'\b(?:' + words + r')\s', candidate)
+    return re.search(r'\b(?:' + words + r')\s', shell_text.unquoted(command))
+
+
+def _tokens(command):
+    """Lex text from shell_text.shell_lines, which already removed comments."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
+    lexer.whitespace_split = True
+    lexer.commenters = ''
+    return list(lexer)
 
 
 def git_commands(command, base):
+    command = shell_text.shell_lines(command)
     if not _mentions_command(command, 'git'):
         return []
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
-    lexer.whitespace_split = True
     try:
-        tokens = list(lexer)
+        tokens = _tokens(command)
     except ValueError as error:
-        raise ValueError('Cannot inspect shell quoting before git validation') from error
+        if _COMMIT_OR_PUSH.search(shell_text.unquoted(command)):
+            raise ValueError('Cannot inspect shell quoting before git validation') from error
+        return []
     current, segment, targets = os.path.abspath(base), [], []
     for token in [*tokens, ';']:
         if token not in git_cwd.SEPARATORS:
@@ -93,12 +111,11 @@ def _git_command(tokens, base, *, validate=True):
 
 
 def _shell_directories(command, base):
+    command = shell_text.shell_lines(command)
     if not _mentions_command(command, 'git|cd'):
         return []
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
-    lexer.whitespace_split = True
     try:
-        tokens = list(lexer)
+        tokens = _tokens(command)
     except ValueError:
         # Post-tool inspection retains the known event directory. An invalid
         # shell command supplies no reliable additional directory targets.
