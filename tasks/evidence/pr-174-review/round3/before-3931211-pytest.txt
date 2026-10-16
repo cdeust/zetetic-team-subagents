@@ -12,6 +12,9 @@ FAILED tests/test_gate_targets.py::test_units_keep_their_extent_so_no_git_line_i
 FAILED tests/test_gate_targets.py::test_units_keep_their_extent_so_no_git_line_is_hidden[echo $'x\\'y' ; git commit -m x ; echo \\']
 FAILED tests/test_gate_targets.py::test_units_keep_their_extent_so_no_git_line_is_hidden[echo `echo a #` ; git commit -m x]
 FAILED tests/test_gate_targets.py::test_units_keep_their_extent_so_no_git_line_is_hidden[echo $(echo case)#x; git commit -m y]
+FAILED tests/test_gate_targets.py::test_case_counts_only_in_command_position[echo $(echo then case)#x; git commit -m y]
+FAILED tests/test_gate_targets.py::test_case_counts_only_in_command_position[echo $(echo >&2 case)#x; git commit -m y]
+FAILED tests/test_gate_targets.py::test_case_counts_only_in_command_position[echo $(echo >|/dev/null case)#x; git commit -m y]
 FAILED tests/test_gate_targets.py::test_quoted_units_do_not_refuse_a_plain_commit[n="$(grep -c "<<EOF" /dev/null)"\ngit commit -m x]
 FAILED tests/test_gate_targets.py::test_quoted_units_do_not_refuse_a_plain_commit[git commit -m "$(cat <<'EOF'\nfix: say "hi\nEOF\n)"]
 FAILED tests/test_gate_targets.py::test_quoted_units_do_not_refuse_a_plain_commit[$'git' commit -m x]
@@ -19,4 +22,4 @@ FAILED tests/test_gate_heredoc_hook.py::test_subscript_heredoc_is_refused_before
 FAILED tests/test_gate_heredoc_hook.py::test_subscript_heredoc_is_refused_before_a_commit[full-a[1<<2]=x &&\ngit commit -m x\n2]=x]
 FAILED tests/test_gate_heredoc_hook.py::test_subscript_heredoc_is_refused_before_a_commit[standalone-a[1<<2]=x &&\ngit commit -m x]
 FAILED tests/test_gate_heredoc_hook.py::test_subscript_heredoc_is_refused_before_a_commit[standalone-a[1<<2]=x &&\ngit commit -m x\n2]=x]
-21 failed, 131 passed in 10.83s
+24 failed, 137 passed in 24.44s

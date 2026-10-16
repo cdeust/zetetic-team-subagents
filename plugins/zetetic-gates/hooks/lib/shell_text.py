@@ -15,9 +15,12 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   only when the ) matching the inner ( is directly followed by ); otherwise
   they open nested subshells, which are commands.
 - §2.9.4.3 case: a pattern's ) inside $(...) does not end the substitution.
-  case counts only in command position (§2.4): after an operator or after
-  then, do, else, elif, if, while, until, !, { or time. An argument case
-  counted as one would keep the $(...) open and hide what follows.
+  case counts only in command position (§2.4, §2.9.1): as the first word of
+  a command after any assignments, an operator, then, do, else, elif, if,
+  while, until, !, {, coproc, or time and its options; a redirection and its
+  target leave it as it was (§2.7). Counting an argument
+  case keeps the $(...) open, and missing a reserved one closes it early:
+  either hides what follows.
 - §2.6.3: a $(...) holds a whole script, so it reads its own here-documents;
   a body still pending at its ) is dropped and the next lines are read as
   commands (zsh; bash reads them as the body), so neither shell hides a
@@ -337,7 +340,13 @@ def _is_word(text, index, word):
 
 
 # Reserved words after which the next word is again in command position.
-OPENERS = {'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', 'time'}
+OPENERS = {'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', 'coproc'}
+WORD = re.compile(r'[^ \t\n;&|()<>]*')
+ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+?=')
+# Operator pieces after which a new command starts.
+RESETS = {';', '&', '|', '(', ')'}
+# Pieces after which the next word is a redirection target (§2.7).
+REDIRECTS = {'<', '>', '<<<'}
 
 
 def _reserved(text, index, word):
@@ -348,6 +357,28 @@ def _reserved(text, index, word):
     if before[-1:] in ('', ';', '&', '|', '(', '\n'):
         return True
     return re.split(r'[ \t\n;&|()<>]', before)[-1] in OPENERS
+
+
+def _redirection_word(text, index, word, redirect):
+    """True when word at index is a redirection's target or IO number (§2.7):
+    it leaves the command position as it was."""
+    return redirect or (word.isdigit() and text[index + len(word):index + len(word) + 1] in ('<', '>'))
+
+
+def _word_state(state, word):
+    """(in command position, next state) for a word read in state (§2.4,
+    §2.9.1): 'command' expects a command name, which assignments, the
+    reserved words in OPENERS and time (with its -p options) leave expected;
+    'args' reads the arguments of a command."""
+    if state == 'time' and word.startswith('-'):
+        return False, 'time'
+    if state == 'args':
+        return False, 'args'
+    if word == 'time':
+        return True, 'time'
+    if word in OPENERS or ASSIGNMENT.match(word):
+        return True, 'command'
+    return True, 'args'
 
 
 def _subscript_heredoc(text, index):
@@ -365,21 +396,34 @@ def _subscript_heredoc(text, index):
 def _command(text, index, closer=None):
     """Rewrite commands from index up to an unmatched closer, ) or `:
     (index of the closer or len(text), text)."""
-    out, pending, depth, cases, word_start = [], [], 0, 0, True
+    out, pending, depth, cases, word_start, state = [], [], 0, 0, True, 'command'
+    redirect, last = False, ''
     while index < len(text):
         char = text[index]
         if char == '\n':
             index, word_start = _heredocs(text, index + 1, pending, out), True
+            state = 'command'
             continue
         if char == closer and depth == 0 and not (cases and closer == ')'):
             break
         if word_start and _subscript_heredoc(text, index):
             raise ValueError('<< inside a subscript: bash and zsh read different commands')
-        if word_start and _reserved(text, index, 'case'):
+        command_word = False
+        if word_start and char not in WORD_END:
+            word = WORD.match(text, index).group()
+            if not _redirection_word(text, index, word, redirect):
+                command_word, state = _word_state(state, word)
+            redirect = False
+        if command_word and _is_word(text, index, 'case'):
             cases += 1
         elif cases and _reserved(text, index, 'esac'):
             cases -= 1
         index, piece = _next_piece(text, index, pending, word_start)
+        # The & of >& and the | of >| belong to the redirection operator.
+        if piece in RESETS and not (last in ('<', '>') and piece in ('&', '|')):
+            state = 'command'
+        redirect = redirect or piece in REDIRECTS
+        last = piece or last
         if piece:
             # The )) of an arithmetic command ends a word; that of $((...)) does not.
             word_start = piece in SEPARATING or piece.startswith('((')
