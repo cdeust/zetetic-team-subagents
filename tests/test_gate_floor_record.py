@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -56,22 +58,29 @@ def repo(tmp_path, monkeypatch):
     return str(path), str(path / ".git")
 
 
+def rows(top: str, common: str) -> list:
+    path = Path(floor.path_of(top, common))
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
 def test_raise_accumulates_and_set_replaces(repo):
     top, common = repo
     assert floor.read(top, common) == []
-    assert floor.record(top, common, [A], lowered=False)
-    assert floor.record(top, common, [B], lowered=False)
-    assert hashes(floor.read(top, common)) == hashes([A, B])
-    assert not floor.record(top, common, [A], lowered=False)  # covered: nothing appended
-    assert floor.record(top, common, [AB], lowered=False)
-    assert hashes(floor.read(top, common)) == hashes([AB])
-    assert floor.record(top, common, [A], lowered=True)
-    assert hashes(floor.read(top, common)) == hashes([A])
-    assert floor.record(top, common, [None], lowered=True)
-    assert floor.read(top, common) == []
-    rows = [json.loads(line) for line in Path(floor.path_of(top, common)).read_text().splitlines()]
-    assert [r["op"] for r in rows] == ["raise", "raise", "raise", "set", "set"]
-    assert {r["repo"] for r in rows} == {os.path.realpath(top)}
+    steps = [([A], False, [A]), ([B], False, [A, B]), ([A], False, [A, B]), ([AB], False, [AB]),
+             ([AB], True, [AB]), ([A], True, [A]), ([None], True, [])]
+    for in_force, lowered, expected in steps:
+        floor.record(top, common, in_force, lowered)
+        assert hashes(floor.read(top, common)) == hashes(expected), (in_force, lowered)
+    # a step that changes nothing appends nothing: ([A], raise) over {A, B} and ([AB], set) over {AB}
+    assert [r["op"] for r in rows(top, common)] == ["raise", "raise", "raise", "set", "set"]
+    assert {r["repo"] for r in rows(top, common)} == {os.path.realpath(top)}
+
+
+def test_the_floor_directory_and_file_are_private_to_the_user(repo):
+    top, common = repo
+    floor.record(top, common, [A], lowered=False)
+    path = Path(floor.path_of(top, common))
+    assert (stat.S_IMODE(path.parent.stat().st_mode), stat.S_IMODE(path.stat().st_mode)) == (0o700, 0o600)
 
 
 def test_every_state_kind_survives_the_file(repo):
@@ -85,7 +94,9 @@ def test_every_state_kind_survives_the_file(repo):
     {"kind": "config", "cfg": {"version": 1, "checks": "x"}, "scripts": None, "script": None},
     {"kind": "config", "cfg": {"version": 1, "checks": [{"name": "a", "argv": ["x"]}]}, "scripts": "1" * 40, "script": None},
     {"kind": "legacy", "cfg": {}, "scripts": None, "script": None},
-    {"kind": "legacy", "cfg": None, "scripts": "not an id", "script": None},
+    {"kind": "legacy", "cfg": None, "scripts": "not an id", "script": "2" * 40},
+    {"kind": "legacy", "cfg": None, "scripts": None, "script": "2" * 40},
+    {"kind": "legacy", "cfg": None, "scripts": "1" * 40, "script": None},
     {"kind": "other", "cfg": None, "scripts": None, "script": None},
     {"kind": "config", "cfg": None, "scripts": None},
 ])
@@ -95,6 +106,23 @@ def test_a_malformed_state_makes_the_floor_unreadable(repo, state):
     os.makedirs(os.path.dirname(path))
     Path(path).write_text(json.dumps({"repo": os.path.realpath(top), "op": "raise", "states": [state]}) + "\n")
     with pytest.raises(floor.Unreadable, match="line 1"):
+        floor.read(top, common)
+
+
+def test_a_repository_at_home_keeps_its_floor_in_the_default_place(tmp_path, monkeypatch):
+    """A dotfiles repository at HOME contains ~/.claude/zetetic: the default floor directory is the user's while HOME
+    is the account's home, and the repository's own claim when HOME was redirected (gate_userfile.usable)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    git(home, "init", "-q", "-b", "main")
+    monkeypatch.delenv(FLOOR_ENV, raising=False)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr("pwd.getpwuid", lambda uid: types.SimpleNamespace(pw_dir=str(home)))
+    top, common = str(home), str(home / ".git")
+    floor.record(top, common, [A], lowered=False)
+    assert hashes(floor.read(top, common)) == hashes([A])
+    monkeypatch.setattr("pwd.getpwuid", lambda uid: types.SimpleNamespace(pw_dir=str(tmp_path / "real-home")))
+    with pytest.raises(floor.Unreadable, match="inside the repository"):
         floor.read(top, common)
 
 
@@ -143,6 +171,14 @@ def test_a_refspec_less_push_also_names_the_upstream(pushed):
     git(pushed, "branch", "-q", "--set-upstream-to", "origin/other")
     assert set(dests(pushed, "git push origin")["feat"]) == {"refs/remotes/origin/feat", "refs/remotes/origin/other"}
     assert dests(pushed, "git push origin feat")["feat"] == ("refs/remotes/origin/feat",)  # a refspec: no upstream
+
+
+def test_an_upstream_on_another_remote_is_not_a_destination(pushed):
+    git(pushed, "remote", "add", "up", "/nowhere-else.git")
+    git(pushed, "update-ref", "refs/remotes/up/other", "HEAD")
+    git(pushed, "checkout", "-q", "feat")
+    git(pushed, "branch", "-q", "--set-upstream-to", "up/other")
+    assert dests(pushed, "git push origin")["feat"] == ("refs/remotes/origin/feat",)
 
 
 def test_all_and_glob_pushes_name_each_branch(pushed):

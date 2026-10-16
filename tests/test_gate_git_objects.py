@@ -136,6 +136,17 @@ def test_a_graft_file_named_in_the_environment_does_not_choose_the_base(gate, tm
     assert push_base(gate, {"GIT_GRAFT_FILE": str(grafts)}) == real and real != fake
 
 
+def test_the_hot_path_runs_git_bounded_and_on_the_same_objects(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(gitq.subprocess, "run", lambda argv, **kw: seen.append((argv, kw["env"])) or None)
+    gitq.git(str(tmp_path), "rev-parse", "HEAD")
+    gitq.run(str(tmp_path), ["cat-file", "blob", "x"], {}, text=False, bounded=False)
+    (hot_argv, hot), (_, worker) = seen
+    assert hot_argv == ["git", "rev-parse", "HEAD"]
+    assert hot["GIT_NO_LAZY_FETCH"] == "1" and hot["GIT_NO_REPLACE_OBJECTS"] == "1"
+    assert "GIT_NO_LAZY_FETCH" not in worker and worker["GIT_NO_REPLACE_OBJECTS"] == "1"
+
+
 def test_the_runner_environment_neutralises_every_substitution(monkeypatch):
     monkeypatch.setenv("GIT_REPLACE_REF_BASE", "refs/elsewhere/")
     monkeypatch.setenv("GIT_GRAFT_FILE", "/somewhere/grafts")
