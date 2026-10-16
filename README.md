@@ -409,6 +409,7 @@ A team that never writes the file gets the strict defaults; a team that disagree
 - [`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md): threat model, trust boundaries, and the security argument with its limits
 - [`agents/genius/INDEX.md`](agents/genius/INDEX.md): 400+ problem shapes → agent routing table
 - [`rules/coding-standards.md`](rules/coding-standards.md): the engineering standard agents enforce
+- [`rules/public-apis-reference.md`](rules/public-apis-reference.md): how to find, verify and safely use a free public API from the community list
 
 ---
 
