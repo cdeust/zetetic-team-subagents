@@ -80,8 +80,9 @@ def _decode(raw: object) -> rules_mod.RuleSet:
     if not isinstance(raw, dict) or set(raw) != _KEYS or raw["kind"] not in ("config", "stack", "legacy"):
         raise ValueError("a rule state is an object with kind, cfg, scripts and script")
     if raw["kind"] == "legacy":
-        if raw["cfg"] is not None or not all(v is None or (isinstance(v, str) and _OID.match(v)) for v in (raw["scripts"], raw["script"])):
-            raise ValueError("a legacy state has no cfg and object ids (or null) for scripts and script")
+        # a legacy state always has both ids: it is declared by an executable scripts/gate.sh (gate_config.declaration)
+        if raw["cfg"] is not None or not all(isinstance(v, str) and _OID.match(v) for v in (raw["scripts"], raw["script"])):
+            raise ValueError("a legacy state has no cfg and the object ids of scripts and of scripts/gate.sh")
         return rules_mod.RuleSet("legacy", None, raw["scripts"], raw["script"])
     if raw["scripts"] is not None or raw["script"] is not None:
         raise ValueError(f"a {raw['kind']} state has no scripts and no script")
@@ -148,14 +149,14 @@ def _same(a: list, b: list) -> bool:
     return sorted(map(rules_mod.state_hash, a)) == sorted(map(rules_mod.state_hash, b))
 
 
-def record(top: str, common: str, in_force: list, lowered: bool) -> bool:
+def record(top: str, common: str, in_force: list, lowered: bool) -> None:
     """Append the change ``in_force`` makes to the floor: `set` when ``lowered`` (the owner acknowledged a weaker
-    state), else `raise`. Nothing is written when the floor would not change. True when a line was appended.
+    state), else `raise`. Nothing is written when the floor would not change.
     Raises Unreadable when the floor cannot be read, OSError when it cannot be written."""
     current = read(top, common)
     states = maximal(in_force)
     if _same(current, states if lowered else maximal(current + states)):
-        return False
+        return
     where = path_of(top, common)
     os.makedirs(os.path.dirname(where), mode=0o700, exist_ok=True)
     line = json.dumps({"repo": identity(top, common), "op": "set" if lowered else "raise",
@@ -167,7 +168,6 @@ def record(top: str, common: str, in_force: list, lowered: bool) -> bool:
             raise OSError(f"short write to {where}")
     finally:
         os.close(fd)
-    return True
 
 
 def kept_for(directory: str) -> bool:

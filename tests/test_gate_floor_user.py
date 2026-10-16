@@ -163,6 +163,56 @@ def test_a_denied_commit_records_the_rules_of_head(gate):
     weakens(gate.gate(COMMIT), "the floor recorded for this repository")
 
 
+def test_a_denied_call_never_lowers_the_floor(gate):
+    """An acknowledged weakening whose verification is still running is denied: the floor keeps what it had."""
+    seeded(gate)
+    git(gate.repo, "checkout", "-q", "-b", "exp")
+    write_config(gate.repo, [NO_BAD, OTHER])
+    git(gate.repo, "add", ".zetetic/gate.json")
+    allowed_commit(gate, "three\n")  # the floor is now no-bad + other, more than main's HEAD has
+    git(gate.repo, "checkout", "-q", "main")
+    gate.stage("four\n")
+    acknowledge(gate, gate.gate(COMMIT))
+    rc, _, err = gate.gate(COMMIT)  # acknowledged, then denied: its verification starts
+    assert rc == 2 and "verification started" in err, err
+    settle(gate)
+    assert [row["op"] for row in floor_rows(gate)] == ["raise", "raise"]  # no `set` from a denied call
+
+
+def test_the_acknowledged_drop_of_every_rule_is_allowed_and_empties_the_floor(gate):
+    seeded(gate)
+    orphan_without_rules(gate)
+    acknowledge(gate, gate.gate(COMMIT))
+    rc, _, err = gate.gate(COMMIT)
+    assert rc == 0, err  # no rules left: nothing to verify, the owner's line lets it through
+    assert floor_rows(gate)[-1]["op"] == "set" and floor_rows(gate)[-1]["states"] == []
+
+
+def test_a_floor_that_cannot_be_written_refuses_what_it_would_have_to_record(gate):
+    """An allowed call that cannot record what it leaves in force is refused; a denied one says it could not."""
+    seeded(gate)
+    directory = gate.tmp / "floor"
+    write_config(gate.repo, [NO_BAD, OTHER])  # a growth: allowing it must append a line
+    git(gate.repo, "add", ".zetetic/gate.json")
+    gate.stage("three\n")
+    assert gate.gate(COMMIT)[0] == 2
+    settle(gate)
+    floor_files(gate)[0].chmod(stat.S_IRUSR)
+    directory.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        rc, _, err = gate.gate(COMMIT)
+        assert rc == 2 and "rule floor" in err and "cannot be recorded" in err, err
+        git(gate.repo, "checkout", "-q", "-b", "other-head")
+        git(gate.repo, "commit", "-q", "-m", "x", "--no-verify")  # HEAD now holds rules the floor lacks
+        gate.stage("four\n")
+        rc, _, err = gate.gate(COMMIT)  # denied (verification starts); observing HEAD cannot be recorded
+        assert rc == 2 and "could not be recorded in the floor" in err, err
+        settle(gate)
+    finally:
+        directory.chmod(stat.S_IRWXU)
+        floor_files(gate)[0].chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
 def test_a_growth_on_one_branch_is_the_floor_of_every_branch(gate):
     """The floor is the repository's, not a branch's: a check added on one branch is kept on the others."""
     seeded(gate)
@@ -264,6 +314,10 @@ def test_a_hook_that_cannot_judge_refuses_where_only_the_floor_holds(gate, tmp_p
     assert rc == 2 and "crashed" in err, err
     rc, _, err = run_hook("gate-proof.py", "{not json", gate.repo, gate.env)
     assert rc == 2 and "unreadable" in err, err
+    inside = {**gate.env, FLOOR_ENV: str(gate.repo / ".floor")}  # a floor the repository controls is not known empty
+    (gate.tmp / "floor").rename(gate.tmp / "floor-away")
+    rc, _, err = run_hook("gate-proof.py", crashing, tmp_path, inside)
+    assert rc == 2 and "crashed" in err, err
 
 
 def test_an_override_cannot_hide_the_floor_kept_in_the_default_place(gate, monkeypatch, tmp_path):
@@ -304,7 +358,7 @@ def test_control_the_head_start_never_writes_the_floor(gate):
     assert floor_files(gate) == []
 
 
-def test_control_an_unchanged_floor_appends_nothing(gate):
+def test_an_unchanged_floor_appends_nothing(gate):
     seeded(gate)
     allowed_commit(gate, "three\n")
     assert len(floor_rows(gate)) == 1
