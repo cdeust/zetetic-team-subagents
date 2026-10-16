@@ -38,9 +38,12 @@ def acknowledged(top: str, common: str, state: str) -> bool:
         (os.path.realpath(where), state) in _entries() for where in (top, userfile.repo_root(top, common)))
 
 
-def refusal(top: str, common: str, state: str, weakened: list) -> str:
+def refusal(repo: tuple, state: str, weakened: list, verb: str) -> str:
+    """The denial of a ``verb`` (commit or push) whose end state ``state`` weakens the rules: each weakened rule,
+    and the line that acknowledges that state. ``repo`` is (top, git common dir), as gate_git.Repo."""
+    top, common = repo
     named = "\n".join(f"  - {w}" for w in weakened)
-    return (f"GATE-PROOF: this commit weakens the gate rules of {top}; rules may only grow without you. Nothing was run.\n"
+    return (f"GATE-PROOF: this {verb} weakens the gate rules of {top}; rules may only grow without you. Nothing was run.\n"
             f"{named}\n"
             f"If you intend this, add this line to {ack_file()} (create the file if it is absent):\n"
             f"{os.path.realpath(userfile.repo_root(top, common))} {state}\n"

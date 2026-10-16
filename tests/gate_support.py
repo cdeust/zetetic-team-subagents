@@ -20,6 +20,7 @@ sys.path.insert(0, str(HOOKS / "lib"))
 import gate_trust  # noqa: E402
 
 ACK_ENV = "ZETETIC_GATE_RULE_CHANGES"  # source: the override variable of the acknowledgement file (hooks/lib/gate_userfile.py)
+FLOOR_ENV = "ZETETIC_GATE_RULE_FLOOR"  # source: the override variable of the floor directory (hooks/lib/gate_floor.py)
 GIT_ENV = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "GIT_AUTHOR_NAME": "t",
            "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 
@@ -68,7 +69,8 @@ class Gate:
         self.trusted_file = tmp / "trusted-repos"
         self.ack_file = tmp / "rule-changes"  # the user's acknowledgement file, the test's own; the hooks never write it
         self.env = {tasks.store.ENV_DIR: str(self.state), "TMPDIR": str(tmp / "tmp"),
-                    gate_trust.ENV_FILE: str(self.trusted_file), ACK_ENV: str(self.ack_file)}
+                    gate_trust.ENV_FILE: str(self.trusted_file), ACK_ENV: str(self.ack_file),
+                    FLOOR_ENV: str(tmp / "floor")}  # the floor the hooks keep for the user: the test's own
         git(self.repo, "init", "-q", "-b", "main")
         self.use_blocking_check()
         (self.repo / "a.txt").write_text("one\n")

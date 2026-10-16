@@ -24,6 +24,12 @@ Resolution, from the words of the command (gate_pushargs.publish):
 Anything that does not resolve to a commit raises ``Unresolvable`` with the reason: the hook denies
 (closed by default) instead of judging a tree it was not asked about. No call here touches the network
 or the working tree (gate_git).
+
+Each tip also names its DESTINATIONS (``Tip.dests``): the remote-tracking refs of the branches the push updates,
+`refs/remotes/<remote>/<branch>` for a `dst` that is a branch (`main`, `refs/heads/main`, `HEAD` for the current
+branch), plus the current branch's upstream when no refspec is written. Their rules are an anchor of the rule
+floor (gate_state, docs/gate.md "Rule changes"): a push may not replace a branch by a tip with weaker rules. A
+destination the remote has but that was never fetched has no remote-tracking ref and adds no anchor.
 """
 from __future__ import annotations
 
@@ -43,6 +49,7 @@ class Tip(NamedTuple):
     commit: str
     tree: str
     base: str | None  # the tree of the tip's first parent, the tree the change is measured from
+    dests: tuple = ()  # the remote-tracking refs of the branches it updates, as of the last fetch
 
 
 def _lines(top: str, *args: str) -> list:
@@ -96,19 +103,54 @@ def _remote_of(top: str, publish: dict) -> str:
 class _Ref(NamedTuple):
     name: str  # a ref or a revision, as git would resolve it
     tag: str | None  # "tag v1" when it is published as a tag (the remote may have the commit already), else None
+    dests: tuple = ()  # Tip.dests
+
+
+def _tracking(top: str, remote: str, dst: str) -> tuple:
+    """The remote-tracking ref of the branch ``dst`` of ``remote`` when it exists locally; () otherwise (a tag,
+    another namespace, a URL as the remote, a branch never fetched)."""
+    if dst.startswith("refs/") and not dst.startswith("refs/heads/"):
+        return ()
+    branch = dst.removeprefix("refs/heads/")
+    if branch == "HEAD":
+        out = gitq.git(top, "symbolic-ref", "--quiet", "--short", "HEAD")
+        branch = out.stdout.strip() if out.returncode == 0 else ""
+    ref = f"refs/remotes/{remote}/{branch}"
+    return (ref,) if branch and _commit_of(top, ref) else ()
+
+
+def _upstream(top: str, branch: str, remote: str) -> tuple:
+    """The upstream of the local ``branch`` when it is a remote-tracking ref of ``remote``: a refspec-less push may update it."""
+    short = branch.removeprefix("refs/heads/")  # `<branch>@{upstream}` takes the short name only (git 2.50.1)
+    out = gitq.git(top, "rev-parse", "--verify", "--quiet", "--symbolic-full-name", f"{short}@{{upstream}}")
+    ref = out.stdout.strip()
+    return (ref,) if out.returncode == 0 and ref.startswith(f"refs/remotes/{remote}/") else ()
 
 
 def _tag_label(name: str) -> str:
     return "tag " + name.removeprefix("refs/tags/")
 
 
-def _expand(top: str, spec: pushargs.Refspec) -> list:
+def _expand(top: str, spec: pushargs.Refspec, remote: str) -> list:
     """The local sides a refspec names: a glob expands over all refs, anything else stands for itself."""
     if spec.deletes:
         return []
     if any(c in spec.src for c in "*?["):
-        return [_Ref(r, _tag_label(r) if spec.to_tag else None) for r in _refs(top) if fnmatch.fnmatchcase(r, spec.src)]
-    return [_Ref(spec.src, _tag_label(spec.dst) if spec.to_tag else None)]
+        return [_globbed(top, spec, remote, r) for r in _refs(top) if fnmatch.fnmatchcase(r, spec.src)]
+    return [_Ref(spec.src, _tag_label(spec.dst) if spec.to_tag else None, _tracking(top, remote, spec.dst))]
+
+
+def _globbed(top: str, spec: pushargs.Refspec, remote: str, ref: str) -> _Ref:
+    """The local ref ``ref`` matched by the glob of ``spec``, with the destination its `*` maps it to."""
+    head, star, tail = spec.dst.partition("*")
+    dests = _tracking(top, remote, head + _glob_part(spec.src, ref) + tail) if star else ()
+    return _Ref(ref, _tag_label(ref) if spec.to_tag else None, dests)
+
+
+def _glob_part(pattern: str, ref: str) -> str:
+    """What the `*` of a refspec pattern stands for in ``ref`` (git allows one `*` per side)."""
+    head, _, tail = pattern.partition("*")
+    return ref[len(head):len(ref) - len(tail)] if ref.startswith(head) and ref.endswith(tail) else ""
 
 
 def _default_specs(top: str, publish: dict) -> list:
@@ -125,13 +167,14 @@ def _branch_names(top: str, publish: dict) -> list:
     if publish["gh"]:
         head = publish["gh_head"]
         return [_Ref(f"refs/heads/{head.rpartition(':')[2]}" if head else _current_branch(top), None)]
+    remote = _remote_name(top, publish)
     if publish["all"] or publish["mirror"]:
-        return [_Ref(r, None) for r in _refs(top, "refs/heads") + (_refs(top, "refs/remotes") if publish["mirror"] else [])]
+        return [_Ref(r, None, _tracking(top, remote, r)) for r in _refs(top, "refs/heads")] + (
+            [_Ref(r, None) for r in _refs(top, "refs/remotes")] if publish["mirror"] else [])
+    default = not publish["specs"] and not publish["tags"]
     words = publish["specs"] or ([] if publish["tags"] else _default_specs(top, publish))
-    names: list = []
-    for spec in pushargs.refspecs(words):
-        names += _expand(top, spec)
-    return names
+    names = [ref for spec in pushargs.refspecs(words) for ref in _expand(top, spec, remote)]
+    return [ref._replace(dests=ref.dests + _upstream(top, ref.name, remote)) for ref in names] if default else names
 
 
 def _remote_name(top: str, publish: dict) -> str:
@@ -189,6 +232,7 @@ def _merge(top: str, refs: list, remote: str, into: dict) -> None:
         found = into.setdefault(tip.commit, [[], tip])
         if label not in found[0]:
             found[0].append(label)
+        found[1] = found[1]._replace(dests=tuple(dict.fromkeys(found[1].dests + ref.dests)))
 
 
 def resolve(top: str, publish: dict) -> list:

@@ -100,7 +100,7 @@ def test_the_acknowledgement_file_is_parsed_strictly(tmp_path, monkeypatch):
 
 def test_the_refusal_names_every_weakened_rule_and_the_exact_line(tmp_path, monkeypatch):
     monkeypatch.setenv(gate_ack.ENV_FILE, str(tmp_path / "acks"))
-    text = gate_ack.refusal("/w/repo", "/w/repo/.git", "f" * 32, ["check \"a\" was removed", "env changed"])
+    text = gate_ack.refusal(("/w/repo", "/w/repo/.git"), "f" * 32, ["check \"a\" was removed", "env changed"], "commit")
     assert "  - check \"a\" was removed\n  - env changed\n" in text and f"\n{os.path.realpath('/w/repo')} {'f' * 32}\n" in text
     assert str(tmp_path / "acks") in text and "Nothing was run" in text
     assert not (tmp_path / "acks").exists()  # building the refusal writes nothing
