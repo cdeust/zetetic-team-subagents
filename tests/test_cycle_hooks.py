@@ -74,9 +74,16 @@ def test_a_task_whose_worktree_is_gone_is_told_how_to_close_it_as_disposed(fire,
     path = cl.ledger_path(str(repo))
     (task,) = gates_jsonl.read_rows(path)
     gates_jsonl.append_row(path, {"close": task["open"], "evidence": {}, "counts": {}})
-    gates_jsonl.append_row(path, {**task, "open": "gone0000task", "repo": str(repo.parent / "removed")})
+    removed = repo.parent / "removed"
+    gates_jsonl.append_row(path, {**task, "open": "gone0000task", "repo": str(removed),
+                                  "first_path": str(removed / "a.py")})
+    (repo / "kept.py").write_text("")
+    gates_jsonl.append_row(path, {**task, "open": "live0000task", "repo": str(removed),
+                                  "first_path": str(repo / "kept.py")})
     _, out, _ = fire(gate_hook, stop_event(repo, transcript))
-    assert "close-disposed gone0000task --url <pull request>" in json.loads(out)["reason"]
+    reason = json.loads(out)["reason"]
+    assert "close-disposed gone0000task --url <pull request>" in reason
+    assert "close-disposed live0000task" not in reason  # its first edited path still exists
 
 
 def test_a_proven_task_closes_once_and_the_stop_is_allowed(fire, repo, transcript):

@@ -232,6 +232,12 @@ def close(path: str, task_id: str, verdict: Dict, scanned: tuple) -> Dict:
     return row
 
 
+def worktree_gone(task: Dict) -> bool:
+    """True when neither the task's repository nor its first edited path exists."""
+    first = task.get("first_path") or ""
+    return not (os.path.isdir(task.get("repo") or "") or (os.path.isabs(first) and os.path.exists(first)))
+
+
 def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
     """Close an open task whose worktree no longer exists, on a pull-request
     URL and a commit that a remote-tracking branch contains. Refuses
@@ -242,8 +248,7 @@ def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
         task = next((r for r in open_tasks(read_rows(path)) if r["open"] == task_id), None)
         if task is None:
             raise DeclareRefused(f"no open task {task_id} in {path}")
-        first = task.get("first_path") or ""
-        if os.path.isdir(task.get("repo") or "") or (os.path.isabs(first) and os.path.exists(first)):
+        if not worktree_gone(task):
             raise DeclareRefused(f"the worktree of {task_id} still exists ({task.get('repo')}); "
                                  "prove its stages instead")
         if not (_URL.match(url or "") and "/pull/" in url):
