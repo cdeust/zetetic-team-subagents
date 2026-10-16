@@ -172,14 +172,30 @@ about. Each tip with no green push record starts its verification; the denial li
 
 ## What the hooks do, and what bounds them
 
-The hooks make a handful of git calls and read a few small objects. `git rev-parse --show-toplevel
---git-common-dir` reads refs and config, `git write-tree` reads the index file and writes tree objects, `git
-ls-tree` / `git cat-file blob` read the rules out of one tree, `git rev-parse --verify <ref>^{commit}` reads one
-ref and one commit. No call touches the network (`GIT_NO_LAZY_FETCH=1` forbids a partial clone from fetching) or
+A commit costs a fixed number of git calls; a push costs a fixed number per published tip, and a push that
+publishes tags costs a number of calls proportional to the tags. `--tags` lists every local tag in one call, then
+makes up to five calls per tag (its commit, whether the remote has it, and for a tag the remote lacks, its tree
+and its parent's tree); `--follow-tags` makes, for each annotated tag, one call for its commit and one ancestry
+check per pushed tip, then the same up to five calls for each tag it follows. There is no timer and no cap on that number: a repository with ten thousand tags pays ten
+thousand times the cost of one, and the push is judged on all of them. Each call reads refs and a few small
+objects: `git rev-parse --show-toplevel --git-common-dir` reads refs and config, `git write-tree` reads the index
+file and writes tree objects, `git ls-tree` / `git cat-file blob` read the rules out of one tree, `git rev-parse
+--verify <ref>^{commit}` reads one ref and one commit. No call touches the network (`GIT_NO_LAZY_FETCH=1` forbids a partial clone from fetching) or
 stats the working tree, and none carries a timer: a test (`tests/test_gate_async.py`) fails if any hook module
 bounds a call by time. The changed-file list, the checkout of the tree and the checks run in the task, never in
 a hook. The Stop hook is the one exception to "never stats the working tree": the baseline's question "are
 tracked changes still uncommitted" needs `git diff --quiet HEAD`, which stats tracked files only.
+
+**Every git call reads the objects that are really there.** git substitutes objects when told to: a replace ref
+(`git replace <object> <substitute>`, kept in `refs/replace/` or in any namespace `GIT_REPLACE_REF_BASE` names)
+makes one object read as another, and a graft (`.git/info/grafts`, or the file `GIT_GRAFT_FILE` names) gives a
+commit other parents. One ungated `git replace` of the blob of HEAD's `.zetetic/gate.json` by `{"off": true}`
+made the rules read as off; a replace of a checked file's blob made the worker check the substitute; a graft
+moves the base a change is measured from. So the gate starts every git process through one runner
+(`hooks/lib/gate_git.run`, the worker's calls included) that sets `GIT_NO_REPLACE_OBJECTS=1` and
+`GIT_GRAFT_FILE` to the null device and removes `GIT_REPLACE_REF_BASE` from the environment (measured on git
+2.50.1: `GIT_NO_REPLACE_OBJECTS=1` disables replace refs in every namespace and leaves grafts in force; the null
+graft file removes them). Tests: `tests/test_gate_git_objects.py`.
 
 ## A hook that is killed or cannot finish
 

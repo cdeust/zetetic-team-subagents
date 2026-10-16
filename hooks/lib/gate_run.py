@@ -59,8 +59,7 @@ def _clean_env() -> dict:
 
 
 def _git(top: str, args: list, env: dict | None = None) -> bytes:
-    out = subprocess.run(["git", "-C", top, *args], env=env or _clean_env(), stdin=subprocess.DEVNULL,
-                         capture_output=True, check=False)
+    out = gitq.run(top, args, env or _clean_env(), text=False, bounded=False)
     if out.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {out.stderr.decode(errors='replace').strip()}")
     return out.stdout
@@ -92,7 +91,7 @@ def materialize(top: str, tree: str, dest: str) -> None:
     finally:
         if os.path.exists(index):
             os.unlink(index)
-    subprocess.run(["git", "-C", dest, "init", "-q"], check=False, capture_output=True)  # tools that expect a repo
+    gitq.run(dest, ["init", "-q"], _clean_env(), text=False, bounded=False)  # tools that expect a repo; result unused
 
 
 def resolve_python(top: str, common: str) -> str:
