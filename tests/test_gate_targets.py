@@ -324,6 +324,25 @@ def test_units_keep_their_extent_so_no_git_line_is_hidden(tmp_path, command):
     assert result == 'refused' or {verb for _d, verb in result} & {'commit', 'push'}
 
 
+# case is reserved only as the first word of a command (§2.4, §2.9.1). Missed
+# there, its pattern's ) closes the $(...) early; counted as an argument, the
+# $(...) stays open. Both hid the git command; bash runs it in each.
+@pytest.mark.parametrize('command', [
+    'cat <<EOF\n$(time -p case x in a) echo;; esac; git commit -m x)\nEOF',
+    'cat <<EOF\n$(coproc case x in a) echo;; esac; git commit -m x)\nEOF',
+    'cat <<EOF\n$(f() { case x in a) echo;; esac; }; git commit -m x)\nEOF',
+    'cat <<EOF\n$(>/dev/null case x in a) echo;; esac; git commit -m x)\nEOF',
+    'cat <<EOF\n$(2>/dev/null case x in a) echo;; esac; git commit -m x)\nEOF',
+    'x=$(time -p case x in a) echo;; esac)#y; git commit -m x',
+    'echo $(echo then case)#x; git commit -m y',
+    'echo $(echo >&2 case)#x; git commit -m y',
+    'echo $(echo >|/dev/null case)#x; git commit -m y',
+])
+def test_case_counts_only_in_command_position(tmp_path, command):
+    result = outcome(command, str(tmp_path))
+    assert result == 'refused' or {verb for _d, verb in result} & {'commit', 'push'}
+
+
 @pytest.mark.parametrize('command', [
     'n="$(grep -c "<<EOF" /dev/null)"\ngit commit -m x',                  # U8
     'git commit -m "$(cat <<\'EOF\'\nfix: say "hi\nEOF\n)"',
