@@ -15,23 +15,33 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   only when the ) matching the inner ( is directly followed by ); otherwise
   they open nested subshells, which are commands.
 - §2.9.4.3 case: a pattern's ) inside $(...) does not end the substitution.
-  A word case anywhere a word starts is counted as one: counting too many
-  only keeps a substitution open, so its text is still read as commands.
+  case counts only in command position (§2.4): after an operator or after
+  then, do, else, elif, if, while, until, !, { or time. An argument case
+  counted as one would keep the $(...) open and hide what follows.
 - §2.6.3: a $(...) holds a whole script, so it reads its own here-documents;
   a body still pending at its ) is dropped and the next lines are read as
   commands (zsh; bash reads them as the body), so neither shell hides a
   command from the lexer.
 - §2.7.4, §2.2: the delimiter is the word after quote removal; $'...'
-  (bash, zsh) and $"..." (bash) quote it too. A body whose delimiter line
-  never comes raises ValueError: the operator may have been misread (bash
-  reads a[1<<2]=x as a subscript, zsh as a here-document) and hidden what
-  follows.
+  (bash, zsh, escapes decoded) and $"..." (bash) quote it too. A $(...),
+  ${...} or `...` in the word is one unit of it, so <<$(a;b) waits for the
+  line $(a;b). A body whose delimiter line never comes raises ValueError.
+- bash parse.y: the subscript of an assignment NAME[...]= is read as one
+  unit, so << in it is a shift; zsh reads a here-document there. The shells
+  disagree on which lines are commands, so a word NAME[...] holding <<
+  raises ValueError.
 - §2.3 rule 9: # begins a comment only at the start of a word, so not right
   after a $(...), $((...)), bash's <(...) or a removed backslash-newline.
 - §2.2.1: a backslash-newline is removed before the line is read.
 - §2.9.3: an unquoted newline separates commands, like ;.
-Quoted text is copied unchanged, including a $(...) inside double quotes, so a
-command whose quoting is malformed still fails to lex afterwards.
+- §2.2.3: inside "...", a $(...), ${...}, $((...)) or `...` is a unit,
+  so a " inside it does not close the string. bash's $'...' ends at the
+  first ' not escaped by a backslash. A top-level `...` is one unit too, so
+  its quotes and # are its own.
+Quoted text keeps its words for the lexer: a "..." is copied with the
+quotes of its inner units escaped, and $'...' and `...` become a "..." word.
+Commands inside quotes are not read. An unclosed quote is copied as is, so
+the lexer fails on it.
 An expansion that bash does not read as arithmetic is read again as commands,
 so each rewrite is cached for the duration of one shell_lines call: without
 the cache every nesting level doubles the work.
@@ -40,6 +50,7 @@ from functools import lru_cache
 import re
 
 WORD_END = ' \t\n;&|()<>'
+SUBSCRIPT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\[')
 # Pieces after which the next character starts a word: a blank, an operator
 # character, or the space that replaces a here-document operator.
 SEPARATING = {' ', '\t', ';', '&', '|', '(', ')', '<', '>', '<<<'}
@@ -51,12 +62,75 @@ def unquoted(text):
     return text.replace("'", '').replace('"', '').replace('\\', '')
 
 
-def _quoted_end(text, start):
-    """Index just past the quoted string opening at start, or len(text)."""
-    quote, index = text[start], start + 1
-    while index < len(text) and text[index] != quote:
-        index += 2 if quote == '"' and text[index] == '\\' else 1
-    return min(index + 1, len(text))
+def _escaped(text):
+    """text written as the inside of a double-quoted lexer word."""
+    return text.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def _closer(text, index, closer):
+    """Index just past the closer at or after index, a backslash escaping the
+    next character, or None when it never comes."""
+    while index < len(text) and text[index] != closer:
+        index += 2 if text[index] == '\\' else 1
+    return index + 1 if index < len(text) else None
+
+
+def _nested(text, index):
+    """(end, text) for the $(...), ${...}, $[...], $((...)) or `...` at index:
+    a unit, so a quote or # inside it belongs to it (§2.6.3, §2.2.3)."""
+    if text[index] == '`':
+        end = _closer(text, index + 1, '`') or len(text)
+        return end, text[index:end]
+    if text.startswith(('$((', '${', '$['), index):
+        found = _expansion(text, index)
+        if found:
+            return found
+    if text.startswith('$(', index):
+        return _substitution(text, index)
+    return index + 1, text[index]
+
+
+def _dquote(text, start):
+    """(end, word) for the "..." at start. A $(...), ${...}, $((...)) or
+    `...` inside is a unit whose quotes do not close it (§2.2.3); its text is
+    escaped for the lexer. Unclosed, the text is copied so the lexer fails."""
+    out, index = ['"'], start + 1
+    while index < len(text) and text[index] != '"':
+        if text[index] == '\\':
+            piece, index = text[index:index + 2], index + 2
+        elif text[index] == '`' or text.startswith(('$(', '${', '$['), index):
+            index, unit = _nested(text, index)
+            piece = _escaped(unit)
+        else:
+            piece, index = text[index], index + 1
+        out.append(piece)
+    if index >= len(text):
+        return len(text), text[start:]
+    return index + 1, ''.join(out) + '"'
+
+
+def _quoted(text, index):
+    """(end, word) for the quoted unit at index: '...', "...", `...` or bash's
+    $'...', where a backslash escapes the next character, \\' too. The last
+    two are given to the lexer as a double-quoted word."""
+    char = text[index]
+    if char == '"':
+        return _dquote(text, index)
+    if char == "'":
+        end = text.find("'", index + 1)
+        end = len(text) if end < 0 else end + 1
+        return end, text[index:end]
+    opening = 1 if char == '`' else 2
+    end = _closer(text, index + opening, "'" if opening == 2 else '`')
+    if end is None:
+        return len(text), text[index:]
+    inner = text[index + opening:end - 1] if opening == 2 else text[index:end]
+    return end, '"' + _escaped(inner) + '"'
+
+
+def _quote_start(text, index):
+    """True when a quoted unit opens at index."""
+    return text[index] in '\'"`' or text.startswith("$'", index)
 
 
 def _substitution(text, index):
@@ -67,19 +141,11 @@ def _substitution(text, index):
 
 def _span_piece(text, index):
     """(end, text) for one piece of an expansion: << and # stay text."""
-    char = text[index]
-    if char in '\'"':
-        end = _quoted_end(text, index)
-        return end, text[index:end]
-    if char == '\\':
+    if _quote_start(text, index):
+        return _quoted(text, index)
+    if text[index] == '\\':
         return index + 2, text[index:index + 2]
-    if char == '$' and text.startswith(('$((', '${', '$['), index):
-        found = _expansion(text, index)
-        if found:
-            return found
-    if text.startswith('$(', index):
-        return _substitution(text, index)
-    return index + 1, char
+    return _nested(text, index)
 
 
 @lru_cache(maxsize=None)
@@ -122,15 +188,43 @@ def _expansion(text, index):
     return found and (found[0], '$' * dollar + found[1])
 
 
+ANSI_C = {'a': '\a', 'b': '\b', 'e': '\x1b', 'E': '\x1b', 'f': '\f', 'n': '\n',
+          'r': '\r', 't': '\t', 'v': '\v', '\\': '\\', "'": "'", '"': '"', '?': '?'}
+ANSI_ESCAPE = re.compile(r'\\(x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{1,4}|U[0-9A-Fa-f]{1,8}|c.|[0-7]{1,3}|.)', re.S)
+
+
+def _ansi_escape(match):
+    code = match.group(1)
+    if code in ANSI_C:
+        return ANSI_C[code]
+    try:
+        if code[0] in 'xuU':
+            return chr(int(code[1:], 16))
+        if code[0] == 'c' and len(code) == 2:
+            return chr(ord(code[1]) & 31)
+        return chr(int(code, 8))
+    except ValueError:
+        return match.group(0)
+
+
+def _ansi_c(body):
+    """The text of bash's $'...' with its backslash escapes decoded."""
+    return ANSI_ESCAPE.sub(_ansi_escape, body)
+
+
 def _delimiter(word):
     """Quote removal on a here-document word: (delimiter, quoted)."""
     out, quoted, index = [], False, 0
     while index < len(word):
         char = word[index]
-        if char == '$' and word.startswith(('$\'', '$"'), index):
+        if word.startswith("$'", index):
+            end = _quoted(word, index)[0]
+            out.append(_ansi_c(word[index + 2:end - 1]))
+            quoted, index = True, end
+        elif word.startswith('$"', index):
             index += 1
         elif char in '\'"':
-            end = _quoted_end(word, index)
+            end = _quoted(word, index)[0]
             inner = word[index + 1:end - 1]
             if char == '"':
                 inner = re.sub(r'\\([$`"\\])', r'\1', inner.replace('\\\n', ''))
@@ -153,10 +247,13 @@ def _heredoc_word(text, start):
         index += 1 + (text[index] == '\\')
     word_start = index
     while index < len(text) and text[index] not in WORD_END:
-        if text[index] in '\'"':
-            index = _quoted_end(text, index)
+        if _quote_start(text, index):
+            index = _quoted(text, index)[0]
+        elif text[index] == '\\':
+            index += 2
         else:
-            index += 2 if text[index] == '\\' else 1
+            # A $(...) or ${...} is one unit of the word, ; or ( inside too.
+            index = _nested(text, index)[0]
     return (index, *_delimiter(text[word_start:index]), strip_tabs)
 
 
@@ -197,9 +294,8 @@ def _body_commands(body):
 def _next_piece(text, index, pending, word_start):
     """Return (end, replacement) for the shell syntax starting at index."""
     char = text[index]
-    if char in '\'"':
-        end = _quoted_end(text, index)
-        return end, text[index:end]
+    if _quote_start(text, index):
+        return _quoted(text, index)
     if char == '\\':
         piece = text[index:index + 2]
         return index + 2, '' if piece == '\\\n' else piece
@@ -240,11 +336,29 @@ def _is_word(text, index, word):
     return text.startswith(word, index) and text[end:end + 1] in ('', *WORD_END)
 
 
+# Reserved words after which the next word is again in command position.
+OPENERS = {'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', 'time'}
+
+
 def _reserved(text, index, word):
-    """True when word is a reserved word in command position at index."""
+    """True when word is a reserved word in command position at index (§2.4)."""
     if not _is_word(text, index, word):
         return False
-    return text[:index].rstrip(' \t')[-1:] in ('', ';', '&', '|', '(', '\n')
+    before = text[:index].rstrip(' \t')
+    if before[-1:] in ('', ';', '&', '|', '(', '\n'):
+        return True
+    return re.split(r'[ \t\n;&|()<>]', before)[-1] in OPENERS
+
+
+def _subscript_heredoc(text, index):
+    """True when a word NAME[...] opening at index holds <<. bash reads the
+    subscript of an assignment as arithmetic, zsh reads a here-document: the
+    shells disagree on which lines are commands."""
+    match = SUBSCRIPT.match(text, index)
+    if not match:
+        return False
+    found = _span(text, match.end() - 1)
+    return '<<' in text[match.end():found[0] if found else len(text)]
 
 
 @lru_cache(maxsize=None)
@@ -259,7 +373,9 @@ def _command(text, index, closer=None):
             continue
         if char == closer and depth == 0 and not (cases and closer == ')'):
             break
-        if word_start and _is_word(text, index, 'case'):
+        if word_start and _subscript_heredoc(text, index):
+            raise ValueError('<< inside a subscript: bash and zsh read different commands')
+        if word_start and _reserved(text, index, 'case'):
             cases += 1
         elif cases and _reserved(text, index, 'esac'):
             cases -= 1

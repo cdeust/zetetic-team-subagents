@@ -294,3 +294,40 @@ def test_operator_runs_separate_commands(tmp_path, command):
 ])
 def test_unterminated_heredoc_is_refused_only_for_git(tmp_path, command, expected):
     assert outcome(command, str(tmp_path)) == expected
+
+
+# PR #174 review, round 3: bash (and mostly zsh) runs the git line in each of
+# these; the round-2 rewrite read it as here-document data. A quote, $(...),
+# ${...} or `...` is one unit: a " inside "$(...)" does not close the outer
+# string (§2.2.3, §2.6.3); \' does not close $'...' (bash); the delimiter word
+# <<$(echo) holds the whole $(echo) (§2.7.4). bash reads << in a[...]= as
+# arithmetic and zsh as a here-document, so that is refused for git.
+@pytest.mark.parametrize('command', [
+    "echo $'\\' <<X ' \\';\ngit commit -m x\nX",                          # C1
+    'echo "$(echo "<<X")";\ngit commit -m x\nX)',                         # C2
+    'echo "$(echo "<<EOF ")";\ngit commit -m x\nEOF',                     # C4
+    'v="$(printf "%s" "<<EOF ")" && echo "$v";\ngit push origin main\nEOF',  # C5
+    'echo "$(echo "<<EOF ")";\ngit commit -m x\necho $\'it\\\'s\'\nEOF',   # C6
+    'cat <<$(echo);\n$(echo)\ngit commit -m x\n$',                        # B1
+    'cat <<${a;b};\n${a;b}\ngit commit -m x\n${a',                        # B2
+    'a[1<<2]=x;\ngit commit -m hi;\n2]=x',                                # A1
+    'a[1<<2]=x &&\ngit commit -m x\n2]=x',                                # A3
+    'echo "$(echo "$(echo "<<EOF")")";\ngit commit -m x\nEOF',
+    'cat <<$((1;2));\n$((1;2))\ngit commit -m x\n$',
+    "cat <<$'E\\x4fF'\nEOF\ngit commit -m x\nE\\x4fF",
+    "echo $'x\\'y' ; git commit -m x ; echo \\'",
+    'echo `echo a #` ; git commit -m x',
+    'echo $(echo case)#x; git commit -m y',
+])
+def test_units_keep_their_extent_so_no_git_line_is_hidden(tmp_path, command):
+    result = outcome(command, str(tmp_path))
+    assert result == 'refused' or {verb for _d, verb in result} & {'commit', 'push'}
+
+
+@pytest.mark.parametrize('command', [
+    'n="$(grep -c "<<EOF" /dev/null)"\ngit commit -m x',                  # U8
+    'git commit -m "$(cat <<\'EOF\'\nfix: say "hi\nEOF\n)"',
+    "$'git' commit -m x",
+])
+def test_quoted_units_do_not_refuse_a_plain_commit(tmp_path, command):
+    assert outcome(command, str(tmp_path)) == [(str(tmp_path), 'commit')]
