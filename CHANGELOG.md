@@ -22,7 +22,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- `rules/public-apis-reference.md`: how an agent uses the community list at https://github.com/public-apis/public-apis to find a free public API, then verifies the chosen API on its official documentation, terms and rate limits, and with one real request, before relying on it; keys stay out of code and commits. The list is a discovery aid, never evidence about an API.
+- `rules/public-apis-reference.md`: how an agent uses the community list at https://github.com/public-apis/public-apis to find a free public API, then verifies the chosen API on its official documentation, terms and rate limits, and with one real request, before relying on it; keys stay out of code and commits. The list is a discovery aid, never evidence about an API. The rule states the real `Auth` values, flags the sponsored APILayer table and the MCP-servers table as having different columns, and shows how to read one category without loading the whole README; `rules/agent-reference/research-resources.md` gains a short pointer so agents reach it.
 
 ### Fixed
 
