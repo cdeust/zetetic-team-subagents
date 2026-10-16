@@ -37,10 +37,9 @@ def listed() -> set:
 
 def is_trusted(top: str, common: str) -> bool:
     path, is_default = userfile.location(ENV_FILE, FILE_NAME)
-    if not userfile.usable(path, is_default, top, common):
-        return False  # a list that lives in the repository is the repository's own claim, not the user's
-    names = listed()
-    return os.path.realpath(top) in names or os.path.realpath(repo_root(top, common)) in names
+    # a list that lives in the repository is the repository's own claim, not the user's: `usable` is False for it
+    return userfile.usable(path, is_default, top, common) and any(
+        os.path.realpath(where) in listed() for where in (top, repo_root(top, common)))
 
 
 def refusal(top: str, common: str) -> str:

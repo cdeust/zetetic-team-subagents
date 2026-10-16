@@ -43,9 +43,15 @@ of the git common dir); listing a worktree trusts that worktree only. A reposito
 not listed is DENIED at `git commit` and `git push`/`gh pr create`, with the exact line to add; `git add` starts
 nothing in it, and the worker refuses to run if it is started by hand (`tools/task.sh`). No silent pass, nothing
 is run. The hooks never write this file. `ZETETIC_GATE_TRUSTED_REPOS` replaces the path (tests). A repository's
-project settings can set session environment variables, so an override that points inside the repository being
+project settings can set session environment variables, so an **override** that points inside the repository being
 judged (its working tree or its git directory) is ignored: a repository cannot list itself. A path to some other
 file that already lists the repository's exact real path would still be honoured.
+
+The **default** location is not an override. A repository whose root contains `~/.claude/zetetic` (a dotfiles
+repository at `$HOME`) is still trustable: the two files themselves, `gate-trusted-repos` and
+`gate-rule-changes`, are exempt from the in-repository rule, and only they. The exemption holds only while
+`$HOME` is the account's home directory (the one the account database gives); a session whose `HOME` was
+redirected into the repository gets no exemption, so the redirected default counts as an override and is ignored.
 
 Example: the repositories of the fleet (adjust the prefix to where you keep them):
 
@@ -75,6 +81,46 @@ working copy:
 - A legacy `scripts/gate.sh` is run from the trusted tree's copy of `scripts/`, exported from the git object
   database into a private directory; an edited script in the working copy does not judge itself.
 
+## Rule changes: rules may only grow without the owner
+
+The union above lags one commit. Commit A deletes `.zetetic/gate.json` (or replaces it by one check, `["true"]`);
+it passes, because HEAD's old checks still pass on it. Commit B is then judged by a HEAD with no rules and a
+failing file is allowed. So a **commit whose rules are not a superset of HEAD's is denied** before anything runs:
+
+```
+GATE-PROOF: this commit weakens the gate rules of <repo>; rules may only grow without you. Nothing was run.
+  - check "no-bad" was removed
+  - env changed (a variable can disarm a check)
+If you intend this, add this line to ~/.claude/zetetic/gate-rule-changes (create the file if it is absent):
+<absolute repository path> <hash of the new rules state>
+It covers this one rules state only. Then retry.
+```
+
+The denial names each rule being weakened. The line is `<absolute repository path> <32 hex>`: the hash is of the
+rules state the commit would LEAVE BEHIND (kind, rules, and for a legacy script its object id), so it covers that
+one state in that one repository; the next, different weakening is denied again. Listing the main checkout
+covers its worktrees. The hooks never write the file and never offer to; `ZETETIC_GATE_RULE_CHANGES` replaces
+the path (tests), under the same rule as the trusted list (an override inside the repository is ignored). After
+the commit the new state is HEAD's: it is the floor from then on. Only commits are floored: a push is judged by
+the rules of HEAD joined with the tip's, as before.
+
+**Superset, precisely** (`hooks/lib/gate_superset.py`; sound, deliberately conservative: everything it calls
+growth is growth; a spelling it cannot prove is reported and acknowledged once). With `old` = HEAD's rules and
+`new` = the commit's:
+
+| Part | `new` is no weaker when |
+|---|---|
+| `checks[]` | every check of `old` has a check of `new` with the **same `argv`** whose path selection covers it. `old` has no `paths` (runs for any change, deletions too): `new` has none. Otherwise `new` has none, or holds `**`, or holds every pattern of `old` literally (patterns are compared as strings). Names do not matter. Added checks are growth; a removed or replaced check (different `argv`, narrowed or dropped `paths`) is not |
+| `tests` | if `old` has a tests block, `new` has one with equal `argv`, `files` and `same_name` (either one changed changes which tests a change selects, and an empty selection falls back to the whole suite); `fast` equal, or non-empty in `old` and a superset in `new`; `map`: the same set of path patterns, and for each pattern `new` runs every test `old` ran (a pattern may gain tests; a new pattern would take paths away from the fallback, a removed one gives them up) |
+| `full_on` | `new` has every entry of `old` |
+| `env`, `link` | equal (an added variable such as `PYTEST_ADDOPTS=--co` can disarm a check) |
+| declaration | `off: true`, a deleted config, or no declaration at all is a weakening when HEAD declares rules. A stack default (no config, `package.json`, `Cargo.toml`, ...) is compared as the config it generates, so a config that replaces it must keep its checks |
+| legacy `scripts/gate.sh` | with no config, deleting it, making it non-executable, replacing it by another script or by a config is a weakening: a script's content cannot be compared, so the object id of the script itself is the rule (other files of `scripts/` do not count) |
+
+A repository with no rules at HEAD, and a repository's first commit, have nothing to weaken. What a check RUNS
+(a script it calls, a test file) is not a rule and is not compared: the set of declared commands is the floor,
+and CI is the check that sees what they do.
+
 ## Kind, and the cache key
 
 A verification is keyed by **kind + tree + digest of the effective rules**: `commit-<tree>-<12 hex>` or
@@ -101,7 +147,24 @@ A push is judged by the tip tree of every ref it publishes, not by HEAD's tree:
 | `git push --mirror` | every local branch and remote-tracking ref |
 | `git push` / `git push origin` | `remote.<remote>.push` when set; with `push.default=matching`, every local branch (a superset of what matching pushes); else the current branch |
 | `gh pr create --head [owner:]feat` | branch `feat`; without `--head`, the current branch |
-| `:feat`, `--delete`, `--tags`, `refs/tags/*`, `--dry-run` | no commit: not gated |
+| `refs/tags/t:refs/heads/main`, `refs/tags/*:refs/heads/*`, `t:refs/heads/x` | the commit behind each tag: `src` is resolved whatever `dst` is, tags included |
+| `--tags`, `refs/tags/t`, `tag t`, `feat:refs/tags/t` | the commit behind each tag, unless the remote already has it (below) |
+| `--follow-tags`, or `push.followTags=true` without `--no-follow-tags` | the pushed tips, and the annotated tags whose commit is an ancestor of one of them and not on the remote |
+| `:feat`, `--delete`, `--dry-run` | no commit: not gated |
+
+**Tags.** A tag publishes the commit behind it (the peeled commit of an annotated tag), so each tagged commit that
+is not already on the remote needs a green push record, and the denial names the tag (`[tag v1] GATE-PROOF: ...`).
+"Already on the remote" means a remote-tracking ref of the remote the push names reaches the commit
+(`git rev-list <commit> --not --remotes=<remote>` is empty), as of the last fetch; a tag that points at a blob
+or a tree publishes no commit. `git push --tags` pushes tags only, as git does (no current-branch default).
+
+**Options are parsed the way git parses them** (`hooks/lib/gate_pushargs.py`). A short cluster is read letter by
+letter and `-o` takes the REST of the cluster as its value: `-odebug` and `-on` are the option `-o` with a
+value, not the flags `d` and `n`; `-vodebug` is `-v` then `-o debug`. A long option may be abbreviated to any
+unambiguous prefix (`--dry`, `--dele`) and negated (`--no-tags`); `--repo`, `--receive-pack`, `--exec`,
+`--push-option` and `--recurse-submodules` take the next word when written without `=`. The table of valued
+options is compared by `tests/test_gate_publish_attacks.py` with what `git push -h` documents (git 2.50.1), so a
+git that grows a valued option fails a test instead of mis-parsing silently.
 
 A ref that does not resolve to a commit (a name that does not exist, a detached HEAD with no ref named, a branch
 that exists only on the remote) is **denied with the reason**: the hook never judges a tree it was not asked
@@ -134,8 +197,14 @@ written by the guarded Bash call: a PreToolUse hook that exits 1, is killed by S
 names a script that does not exist lets the call run when `onFailure` is absent, and does not let it run with
 `"onFailure": "block"`; the result is the same whether the hook comes from a settings file, from a plugin's
 `hooks/hooks.json` or from the `hooks` of `.claude-plugin/plugin.json`. `hooks/run-python.sh` fails closed for `gate-proof.py` only when no Python 3
-is found: it refuses a call whose payload mentions `git` or `gh`, and lets any other call through so a host
-without Python can still install one. Every other hook keeps failing open there.
+is found: it refuses a call whose payload has `git` or `gh` as a **command word**, and lets any other call through so a
+host without Python can still install one. A command word is `git`/`gh` preceded by the start of the command, a
+space, one of `; & | ( {`, a backtick, `/` (a path slash) or a JSON `\n`/`\t` escape, and followed by a space or such an escape:
+`echo highlights`, `ghost`, and a working directory under `github` or ending in `/git` are not refused, while
+`/usr/bin/git push`, `a && git commit`, `(gh pr create)` and a command after a newline are. The test is a shell
+`case` on the payload read with the `read` builtin: it needs no `grep` and no other tool on the `PATH`. The
+payload is matched as Claude Code serialises it; a JSON `\uXXXX` escape is not decoded. Every other hook keeps
+failing open there.
 
 ## The verdict is a function of the tree
 
@@ -241,13 +310,27 @@ full configured gate runs. CI runs the whole suite on the pull request and is th
 any of this. The map in `.zetetic/gate.json` is only as good as its author: `tests/test_gate_repo_config.py` pins
 the mappings that once missed a dependency (the files copied into `plugins/zetetic-gates`, the documented counts).
 
-## What the gate does not see
+## What the gate does not see (known limits)
 
 The gate parses the Bash command it is shown and the git state of the repository the command runs in. It does
-not see: a command wrapped in `bash -c '...'` or `eval`, `GIT_INDEX_FILE=` or `--git-dir`/`--work-tree` pointing
-at another index or repository, and commits made by `git merge`, `git cherry-pick` or `git rebase` (no
-`git commit` runs). These are limits of reading a command line, not of the verification; CI is the check that
-sees every tree that reaches the remote.
+not see:
+
+- **A wrapped or disguised command**: `bash -c '...'`, `sh -c`, `eval`, quoted words such as `g''it`, a variable
+  holding the program (`G=git; $G push`), an alias, an unquoted `$(...)` in a refspec.
+- **Another index or repository**: `GIT_INDEX_FILE=`, `--git-dir`, `--work-tree`.
+- **Commits that no `git commit` makes**: `git merge`, `git cherry-pick`, `git rebase`.
+- **What a check runs**: a rule is the declared command (`argv`, `paths`, the test map); the content of a script a
+  check calls is not compared by the rule floor (Rule changes).
+- **The rule floor on a push**: only commits are floored; a push is judged by the union of HEAD's rules and the
+  tip's.
+- **A legacy script's siblings**: only `scripts/gate.sh` itself is compared.
+
+These are limits of reading a command line and of comparing declared rules, not of the verification; CI is the
+check that sees every tree that reaches the remote.
+
+The Stop ledger keeps its behaviour: a later green of the same verb lifts the failures of OTHER trees (the
+ledger is ordered by line, and "an open failure" is one with no later green line of the same verb); the Stop
+block means "no failure is open", not "every failed tree was fixed".
 
 ## Settings to remove after installing the plugin
 

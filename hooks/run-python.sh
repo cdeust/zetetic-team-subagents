@@ -37,16 +37,30 @@ echo "[zetetic] On Windows, install Python from python.org and ensure 'py -3' wo
 echo "[zetetic] Microsoft Store python/python3 execution aliases. Hook skipped: $script" >&2
 #
 # gate-proof.py is the exception and FAILS CLOSED: a gate that opens when it cannot run is not a gate.
-# Without Python it cannot parse the command, so it refuses what can publish a commit by name: a
-# payload that mentions `git` or `gh` (the same coarse pre-filter the Python hook applies first). Any
-# other tool call passes, so a host without Python can still install one. The payload is read once here
-# because nothing else will read it.
+# Without Python it cannot parse the command, so it refuses what can publish a commit by name: a payload
+# in which `git` or `gh` stands as a COMMAND WORD (preceded by the start of the command, a space, a command
+# separator, a path slash or a JSON \n / \t escape, and followed by a space or such an escape). "highlights",
+# "ghost", a working directory under "github" or ending in "/git" do not match. Any other tool call passes,
+# so a host without Python can still install one. The payload is read once here because nothing else will,
+# and only shell builtins are used (read, case, printf): the refusal does not depend on any tool on the PATH.
+# The payload is matched as Claude Code serialises it; a JSON \uXXXX escape is not decoded.
+mentions_git_or_gh() {
+  local before word after
+  for before in '"' ' ' ';' '&' '|' '(' '`' '{' '/' '\n' '\t'; do
+    for word in git gh; do
+      for after in ' ' '\n' '\t'; do
+        case "$1" in *"$before$word$after"*) return 0 ;; esac
+      done
+    done
+  done
+  return 1
+}
 case "$script" in
   gate-proof.py | */gate-proof.py)
-    payload="$(cat 2>/dev/null || true)"
-    if [[ -z "$payload" ]] || printf '%s' "$payload" | grep -Eq '(git|gh)'; then
+    IFS= read -r -d '' payload || true
+    if [[ -z "$payload" ]] || mentions_git_or_gh "$payload"; then
       echo "GATE-PROOF: no working Python 3, so this call cannot be checked against the commit gate: refused (closed)." >&2
-      echo "GATE-PROOF: install Python 3 (python3, py -3 or python) and retry; calls that do not mention git or gh are not affected." >&2
+      echo "GATE-PROOF: install Python 3 (python3, py -3 or python) and retry; calls that do not run git or gh are not affected." >&2
       exit 2
     fi
     ;;
