@@ -113,3 +113,63 @@ def test_malformed_post_shell_retains_event_directory(tmp_path, command):
 def test_git_commands_preserve_both_verbs(tmp_path):
     assert module.git_commands('git push; git commit', str(tmp_path)) == [
         (str(tmp_path), 'push'), (str(tmp_path), 'commit')]
+
+
+# POSIX Shell Command Language §2.7.4 (Here-Document): the lines after the
+# operator's line, up to the delimiter line, are data. A quoted delimiter
+# turns off every expansion in them, so not even a $(...) there runs.
+@pytest.mark.parametrize('command', [
+    "mkdir -p /tmp/x && cat > f <<'EOF2'\nthe git hook won't run\nEOF2",
+    'cat > f <<"EOF"\nthe git hook won\'t run\nEOF',
+    "cat > f <<\\EOF\nthe git hook won't run\nEOF",
+    "cat > f <<E'O'F\nthe git hook won't run\nEOF",
+    "cat > f <<-'EOF'\n\tthe git hook won't run\n\tEOF",
+    "cat <<'A' > a; cat <<'B' > b\ngit won't\nA\nit is git\nB",
+    "cat > f <<'EOF'\nwon't $(git commit -m x)\nEOF",
+    "cat > f 2<<'EOF'\nthe git hook won't run\nEOF",
+    "cat > f <<'EOF'\nthe git hook won't run",
+    "cat > f <<'EOF'\nwon't\nEOF \ngit commit -m x",
+])
+def test_quoted_heredoc_body_is_data(tmp_path, command):
+    assert module.git_commands(command, str(tmp_path)) == []
+
+
+def test_post_inspection_reads_commands_around_a_heredoc(tmp_path):
+    other = tmp_path / 'other'
+    other.mkdir()
+    command = f"cd {other} && cat > f <<'EOF'\nthe git hook won't run\nEOF"
+    assert str(other) in module.post_directories(event(tmp_path, 'Bash', command=command))
+
+
+def outcome(command, base):
+    try:
+        return module.git_commands(command, base)
+    except ValueError:
+        return 'refused'
+
+
+def test_gate_refuses_only_when_a_commit_or_push_may_be_hidden(tmp_path):
+    """A lex failure refuses only if a commit or push survives heredoc removal."""
+    base = str(tmp_path)
+    commit, push = [(base, 'commit')], [(base, 'push')]
+    expected = {
+        "mkdir -p x && cat > f <<'EOF'\nthe git hook won't run\nEOF": [],
+        'mkdir -p x && git commit -m x': commit,
+        'echo "unterminated && git commit -m x': 'refused',
+        "echo \"unterminated && g'it' pu'sh": 'refused',
+        'echo "see the git log': [],
+        "cat <<EOF\nthe git hook won't run\nEOF": [],
+        'cat <<EOF\n$(git commit -m x)\nEOF': commit,
+        "cat <<EOF\nwon't $(git commit -m x)\nEOF": 'refused',
+        "cat > f <<'EOF'\nwon't\nEOF\ngit commit -m x": commit,
+        "cat > f <<'EOF' && git commit -m x\nwon't\nEOF": commit,
+        "cat > f <<-'EOF'\n\twon't\n\tEOF\n(git push)": push,
+        "git commit -m \"$(cat <<'EOF'\nmsg won't\nEOF\n)\"": commit,
+        "echo '<<EOF' && echo \"\nEOF\" && git push": push,
+        "git commit <<< \"it's fine\"": commit,
+        'echo $((1<<2))\n(git push)': push,
+        "echo hi # it's git\ngit push": push,
+        'mkdir x\ngit commit -m x': commit,
+        'gi\\\nt commit -m x': commit,
+    }
+    assert {command: outcome(command, base) for command in expected} == expected
