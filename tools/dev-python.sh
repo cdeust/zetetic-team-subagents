@@ -3,6 +3,7 @@
 # <main checkout>/.venv from requirements-dev.lock when none exists.
 # source: ADR-9849
 # Usage:  PY="$(tools/dev-python.sh)" || exit 1
+# DEV_PYTHON_CREATE=1 (default) creates the venv; 0 prints the command and exits 1.
 set -euo pipefail
 
 has_dev_deps() { [ -x "$1" ] && "$1" -c 'import pytest, yaml' >/dev/null 2>&1; }
@@ -30,6 +31,13 @@ if [ -z "$base" ] || [ ! -f "$lock" ]; then
   exit 1
 fi
 venv="$main/.venv"
+create="${DEV_PYTHON_CREATE:-1}"
+if [ "$create" != 1 ]; then
+  [ "$create" = 0 ] || echo "dev-python: DEV_PYTHON_CREATE must be 0 or 1, got '$create'" >&2
+  echo "dev-python: no dev venv and DEV_PYTHON_CREATE=0; create it with:" >&2
+  echo "  python3 -m venv $venv && $venv/bin/python -m pip install --require-hashes -r $lock" >&2
+  exit 1
+fi
 echo "dev-python: creating $venv from requirements-dev.lock" >&2
 [ -x "$venv/bin/python" ] || "$base" -m venv "$venv" >&2
 "$venv/bin/python" -m pip install -q --disable-pip-version-check \
