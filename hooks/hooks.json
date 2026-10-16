@@ -32,6 +32,17 @@
           }
         ],
         "matcher": "Bash|Read|Grep|Edit|Write|NotebookEdit|exec_command|shell_command|apply_patch|mcp__.*"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-proof.py\"",
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -95,6 +106,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-start.py\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
@@ -137,6 +158,15 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-gate-ledger.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "hooks": [
           {
