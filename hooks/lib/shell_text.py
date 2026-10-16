@@ -7,6 +7,9 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   data. Otherwise it undergoes parameter expansion, command substitution and
   arithmetic expansion, a backslash quoting only $ ` \\ and newline; quotes
   and # there are data. Only the commands of its $(...) and `...` are kept.
+- §2.6.2: ${...} ends at the first unquoted } that is not part of a nested
+  unit; a bare { inside it is text. Inside "${...}", bash reads ' as a quote
+  and zsh as a literal, so a ' there raises ValueError.
 - §2.6.2 Parameter Expansion, §2.6.4 Arithmetic Expansion: inside ${...} and
   $((...)), and bash's $[...] and ((...)) command, << and # are word or
   operator text, not a redirection or a comment. Only a command substitution
@@ -18,13 +21,15 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   case counts only in command position (§2.4, §2.9.1): as the first word of
   a command after any assignments, an operator, then, do, else, elif, if,
   while, until, !, {, coproc, or time and its options; a redirection and its
-  target leave it as it was (§2.7). Counting an argument
+  target leave it as it was (§2.7); &> and &>> are redirections. After an
+  assignment no word is reserved (bash). esac also ends an empty case right
+  after in. Words are matched with their backslash-newlines removed. Counting an argument
   case keeps the $(...) open, and missing a reserved one closes it early:
   either hides what follows.
-- §2.6.3: a $(...) holds a whole script, so it reads its own here-documents;
-  a body still pending at its ) is dropped and the next lines are read as
-  commands (zsh; bash reads them as the body), so neither shell hides a
-  command from the lexer.
+- §2.6.3: a $(...) holds a whole script, so it reads its own here-documents.
+  A body still pending at its ) is read by bash from the lines after the
+  substitution and by zsh not at all: the shells disagree on which lines
+  are commands, so this raises ValueError.
 - §2.7.4, §2.2: the delimiter is the word after quote removal; $'...'
   (bash, zsh, escapes decoded) and $"..." (bash) quote it too. A $(...),
   ${...} or `...` in the word is one unit of it, so <<$(a;b) waits for the
@@ -41,13 +46,11 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   so a " inside it does not close the string. bash's $'...' ends at the
   first ' not escaped by a backslash. A top-level `...` is one unit too, so
   its quotes and # are its own.
-Quoted text keeps its words for the lexer: a "..." is copied with the
-quotes of its inner units escaped, and $'...' and `...` become a "..." word.
-Commands inside quotes are not read. An unclosed quote is copied as is, so
-the lexer fails on it.
-An expansion that bash does not read as arithmetic is read again as commands,
-so each rewrite is cached for the duration of one shell_lines call: without
-the cache every nesting level doubles the work.
+Quoted text keeps its words for the lexer ("..." with its inner quotes
+escaped; $'...' and `...` as a "..." word); commands inside quotes are not
+read, and an unclosed quote is copied as is, so the lexer fails on it.
+A non-arithmetic expansion is read again as commands, so each rewrite is
+cached for one shell_lines call: otherwise each nesting level doubles it.
 """
 from functools import lru_cache
 import re
@@ -102,8 +105,10 @@ def _dquote(text, start):
         if text[index] == '\\':
             piece, index = text[index:index + 2], index + 2
         elif text[index] == '`' or text.startswith(('$(', '${', '$['), index):
-            index, unit = _nested(text, index)
-            piece = _escaped(unit)
+            end, unit = _nested(text, index)
+            if text.startswith('${', index) and "'" in text[index:end]:
+                raise ValueError("' inside \"${...}\": bash reads a quote, zsh a literal")
+            index, piece = end, _escaped(unit)
         else:
             piece, index = text[index], index + 1
         out.append(piece)
@@ -158,7 +163,9 @@ def _span(text, start):
     opener, out, depth, index = text[start], [], 0, start
     while index < len(text):
         char = text[index]
-        if char in (opener, CLOSERS[opener]):
+        # A bare { inside ${...} is text (bash, zsh): only nested units and
+        # the first unquoted } count. [ in $[...] and ( in ((...)) nest.
+        if char == CLOSERS[opener] or (char == opener and (opener != '{' or index == start)):
             depth += 1 if char == opener else -1
             out.append(char)
             index += 1
@@ -333,15 +340,21 @@ def _heredocs(text, index, pending, out):
     return index
 
 
-def _is_word(text, index, word):
-    """True when the text at index is word followed by a word end."""
-    end = index + len(word)
-    return text.startswith(word, index) and text[end:end + 1] in ('', *WORD_END)
+def _word_at(text, index):
+    """The word starting at index, its backslash-newlines removed (§2.2.1)."""
+    out = []
+    while index < len(text) and text[index] not in WORD_END:
+        if text.startswith('\\\n', index):
+            index += 2
+            continue
+        out.append(text[index])
+        index += 1
+    return ''.join(out)
+
 
 
 # Reserved words after which the next word is again in command position.
 OPENERS = {'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', 'coproc'}
-WORD = re.compile(r'[^ \t\n;&|()<>]*')
 ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+?=')
 # Operator pieces after which a new command starts.
 RESETS = {';', '&', '|', '(', ')'}
@@ -349,14 +362,25 @@ RESETS = {';', '&', '|', '(', ')'}
 REDIRECTS = {'<', '>', '<<<'}
 
 
-def _reserved(text, index, word):
-    """True when word is a reserved word in command position at index (§2.4)."""
-    if not _is_word(text, index, word):
-        return False
-    before = text[:index].rstrip(' \t')
+def _after_separator(text, index):
+    """True when the word at index follows an operator or an OPENERS word."""
+    before = text[:index].replace('\\\n', '').rstrip(' \t')
     if before[-1:] in ('', ';', '&', '|', '(', '\n'):
         return True
     return re.split(r'[ \t\n;&|()<>]', before)[-1] in OPENERS
+
+
+def _case_step(cases, header, word, separated):
+    """(cases, header) after a word that opens no case. An open header reads
+    the subject, then in; esac ends a case in the first pattern position (an
+    empty case, §2.9.4.3) or when separated: after an operator or OPENERS."""
+    if header == 'subject':
+        return cases, 'in'
+    if header == 'in' and word == 'in':
+        return cases, 'pattern'
+    if cases and word == 'esac' and (header == 'pattern' or separated):
+        return cases - 1, None
+    return cases, None
 
 
 def _redirection_word(text, index, word, redirect):
@@ -369,14 +393,19 @@ def _word_state(state, word):
     """(in command position, next state) for a word read in state (§2.4,
     §2.9.1): 'command' expects a command name, which assignments, the
     reserved words in OPENERS and time (with its -p options) leave expected;
+    after an assignment ('assigned') no word is reserved, as in bash;
     'args' reads the arguments of a command."""
     if state == 'time' and word.startswith('-'):
         return False, 'time'
     if state == 'args':
         return False, 'args'
+    if ASSIGNMENT.match(word):
+        return False, 'assigned'
+    if state == 'assigned':
+        return False, 'args'
     if word == 'time':
         return True, 'time'
-    if word in OPENERS or ASSIGNMENT.match(word):
+    if word in OPENERS:
         return True, 'command'
     return True, 'args'
 
@@ -389,7 +418,23 @@ def _subscript_heredoc(text, index):
     if not match:
         return False
     found = _span(text, match.end() - 1)
-    return '<<' in text[match.end():found[0] if found else len(text)]
+    return '<<' in _bare(text, match.end(), found[0] if found else len(text))
+
+
+def _bare(text, index, end):
+    """text[index:end] without its quotes and nested units."""
+    out = []
+    while index < end:
+        if _quote_start(text, index):
+            index = _quoted(text, index)[0]
+        elif text[index] == '\\':
+            index += 2
+        elif text.startswith(('$(', '${', '$['), index):
+            index = _nested(text, index)[0]
+        else:
+            out.append(text[index])
+            index += 1
+    return ''.join(out)
 
 
 @lru_cache(maxsize=None)
@@ -397,7 +442,7 @@ def _command(text, index, closer=None):
     """Rewrite commands from index up to an unmatched closer, ) or `:
     (index of the closer or len(text), text)."""
     out, pending, depth, cases, word_start, state = [], [], 0, 0, True, 'command'
-    redirect, last = False, ''
+    redirect, last, header = False, '', None
     while index < len(text):
         char = text[index]
         if char == '\n':
@@ -405,22 +450,25 @@ def _command(text, index, closer=None):
             state = 'command'
             continue
         if char == closer and depth == 0 and not (cases and closer == ')'):
+            if pending:
+                # bash reads the next lines as the body, zsh as commands.
+                raise ValueError('here-document still pending where a substitution ends')
             break
         if word_start and _subscript_heredoc(text, index):
             raise ValueError('<< inside a subscript: bash and zsh read different commands')
-        command_word = False
         if word_start and char not in WORD_END:
-            word = WORD.match(text, index).group()
+            word = _word_at(text, index)
             if not _redirection_word(text, index, word, redirect):
                 command_word, state = _word_state(state, word)
+                opens = command_word and word == 'case'
+                separated = word == 'esac' and _after_separator(text, index)
+                cases, header = (cases + 1, 'subject') if opens else _case_step(
+                    cases, header, word, separated)
             redirect = False
-        if command_word and _is_word(text, index, 'case'):
-            cases += 1
-        elif cases and _reserved(text, index, 'esac'):
-            cases -= 1
         index, piece = _next_piece(text, index, pending, word_start)
-        # The & of >& and the | of >| belong to the redirection operator.
-        if piece in RESETS and not (last in ('<', '>') and piece in ('&', '|')):
+        # The & of >& and >|, and of &> and &>>, belong to a redirection.
+        joined = last in ('<', '>') or (piece == '&' and text.startswith('>', index))
+        if piece in RESETS and not (joined and piece in ('&', '|')):
             state = 'command'
         redirect = redirect or piece in REDIRECTS
         last = piece or last

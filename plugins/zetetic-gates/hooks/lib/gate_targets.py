@@ -59,17 +59,40 @@ def _uninspectable(command, error):
     return []
 
 
-def git_commands(command, base):
-    try:
-        command = shell_text.shell_lines(command)
-    except ValueError as error:
-        return _uninspectable(command, error)
+def _flat_targets(command, base):
+    """The reading origin/main used: the raw command lexed as one flat line
+    (shlex, # comments). A command it cannot lex or validate adds nothing."""
     if not _mentions_command(command, 'git'):
         return []
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
+    lexer.whitespace_split = True
     try:
-        tokens = _tokens(command)
+        return _walk(list(lexer), base)
+    except ValueError:
+        return []
+
+
+def git_commands(command, base):
+    """Commit and push targets of command. The union with _flat_targets makes
+    the result never smaller than the flat reading whenever that reading
+    succeeds; the rewrite adds what the flat reading misses or refuses."""
+    flat = _flat_targets(command, base)
+    try:
+        rewritten = shell_text.shell_lines(command)
     except ValueError as error:
-        return _uninspectable(command, error)
+        return _uninspectable(command, error) or flat
+    if not _mentions_command(rewritten, 'git'):
+        return flat
+    try:
+        tokens = _tokens(rewritten)
+    except ValueError as error:
+        return _uninspectable(rewritten, error) or flat
+    targets = _walk(tokens, base)
+    return targets + [target for target in flat if target not in targets]
+
+
+def _walk(tokens, base):
+    """The commit and push targets of a token list split at separators."""
     current, segment, targets = os.path.abspath(base), [], []
     for token in [*tokens, ';']:
         if token not in git_cwd.SEPARATORS:
