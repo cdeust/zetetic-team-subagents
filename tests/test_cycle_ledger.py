@@ -246,6 +246,15 @@ def test_a_task_whose_worktree_is_gone_closes_on_its_pr_and_pushed_commit(path, 
                                         "bypasses": 0, "disposed": 1, "promise_rate": None}
 
 
+def test_worktree_gone_needs_both_the_repo_and_the_first_path_absent(tmp_path):
+    present = tmp_path / "a.py"
+    present.write_text("")
+    gone = str(tmp_path / "gone")
+    assert cl.worktree_gone({"repo": gone, "first_path": gone + "/a.py"})
+    assert not cl.worktree_gone({"repo": str(tmp_path), "first_path": gone + "/a.py"})
+    assert not cl.worktree_gone({"repo": gone, "first_path": str(present)})
+
+
 @pytest.mark.parametrize("case", ["worktree-exists", "not-a-pr", "unpushed", "unknown-task"])
 def test_close_disposed_refuses_without_proof_and_changes_nothing(path, repo, tmp_path, case):
     sha = commit(repo) if case == "unpushed" else pushed_commit(repo)

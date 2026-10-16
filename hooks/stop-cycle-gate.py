@@ -108,12 +108,13 @@ def _verdict(tools, task: dict, decls: dict, transcript: str) -> tuple:
     return cycle_evidence.evaluate(calls, decls, _task_file_test(cycle_evidence, cycle_ledger, calls)), end
 
 
-def _task_text(cycle_evidence, task: dict, verdict: dict, cwd: str) -> str:
+def _task_text(tools, task: dict, verdict: dict, cwd: str) -> str:
+    cycle_evidence, cycle_ledger = tools
     tool = f"python3 {_LEDGER_TOOL} --cwd {cwd}"
     lines = [f"- task {task['open']} ({task.get('agent_type')}; opened at {task.get('first_path')})"]
     if verdict.get("error"):
         lines.append(f"  {verdict['error']}")
-    if task.get("repo") and not os.path.isdir(task["repo"]):
+    if task.get("repo") and cycle_ledger.worktree_gone(task):
         lines.append(f"  its worktree {task['repo']} is gone; if its work was pushed: {tool} close-disposed "
                      f"{task['open']} --url <pull request> --sha <pushed commit>")
     lines +=[f"  {stage}: " + cycle_evidence.HOW[stage].format(tool=tool, task=task["open"])
@@ -121,13 +122,14 @@ def _task_text(cycle_evidence, task: dict, verdict: dict, cwd: str) -> str:
     return "\n".join(lines)
 
 
-def block_reason(cycle_evidence, unproven: list, cwd: str, caveats: list) -> str:
+def block_reason(tools, unproven: list, cwd: str, caveats: list) -> str:
+    cycle_evidence, _ = tools
     return "".join(f"NOTE: {c}\n" for c in caveats) + (
         f"{len(unproven)} engineering cycle task(s) not proven. A task that changed code closes only "
         "when every stage of /zetetic:engineering-loop is proven (check, recall, refine, investigate, "
         "implement, verify, benchmark, review, remember). Prove the missing stages below, then stop "
         "again; the gate re-reads the transcript.\n"
-        + "\n".join(_task_text(cycle_evidence, u["task"], u["verdict"], cwd) for u in unproven))
+        + "\n".join(_task_text(tools, u["task"], u["verdict"], cwd) for u in unproven))
 
 
 def _settle(tools, path: str, rows: list, judged: list) -> list:
@@ -207,7 +209,7 @@ def main() -> int:
         say(caveat)
     if unproven and not _let_through(tools, path, unproven, payload):
         sys.stdout.write(json.dumps({"decision": "block",
-                                     "reason": block_reason(cycle_evidence, unproven, cwd, caveats)}))
+                                     "reason": block_reason(tools, unproven, cwd, caveats)}))
     return 0
 
 
