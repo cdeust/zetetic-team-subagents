@@ -88,9 +88,17 @@ def test_commit_hidden_by_rewrite_reaches_commit_gate(package, consumer, command
     assert 'MAGIC_NUMBER' in result.stderr
 
 
-def test_heredoc_that_never_ends_is_refused_before_a_commit(package, consumer):
+@pytest.mark.parametrize('command', [
+    'a[1<<2]=x &&\ngit commit -m x', 'a[1<<2]=x &&\ngit commit -m x\n2]=x'])
+def test_subscript_heredoc_is_refused_before_a_commit(package, consumer, command):
     """bash reads a[1<<2]= as a subscript and runs the commit; zsh reads a
-    here-document that swallows it. The gate cannot tell, so it refuses."""
-    result = run_bash_hook(package, consumer, 'a[1<<2]=x &&\ngit commit -m x')
+    here-document that swallows it, ended or not. The gate refuses."""
+    result = run_bash_hook(package, consumer, command)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert '<< inside a subscript' in result.stderr
+
+
+def test_heredoc_that_never_ends_is_refused_before_a_commit(package, consumer):
+    result = run_bash_hook(package, consumer, "cat <<EOF\nwe don't git commit here")
     assert result.returncode == 2, result.stdout + result.stderr
     assert 'Here-document never ends' in result.stderr

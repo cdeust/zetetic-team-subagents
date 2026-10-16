@@ -1,0 +1,7 @@
+ok                     control-heredoc-commit         main=REFUSE             r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd="mkdir -p notes && cat > notes/a.txt <<'EOF'\nthe git hook won't run\nEOF\ngit commit -m fix"
+ok                     param-exp-<<                   main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo ${x//<<} &&\ngit commit -m hi'
+ok                     param-exp-push                 main=['push']           r2=['push']           head=['push']           bash=['push']           zsh=['push']           cmd='x=a; echo ${x/<</y} &&\ngit push'
+ok                     dollar-bracket                 main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo $[1<<2] &&\ngit commit -m hi'
+ok                     comment-in-kept-body           main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='cat <<EOF\n$( # note\ngit commit -m x\n)\nEOF'
+ok                     comment-in-dparen-subshell     main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='((echo a) # c\ngit commit -m x)'
+COUNTS {'ok': 6}
