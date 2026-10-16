@@ -25,8 +25,9 @@ import os
 from typing import NamedTuple
 
 import gate_git as gitq
-import gate_paths  # noqa: F401  (puts tools/lib on sys.path for task_store)
-import task_store
+import gate_paths
+
+task_store = gate_paths.task_store
 
 RESULTS = "gate-results.jsonl"
 WAIVERS = "gate-waivers.jsonl"
@@ -41,8 +42,8 @@ def _waiver_path(top: str) -> str:
 
 
 def _append(path: str, row: dict) -> None:
-    """One O_APPEND write of one line: concurrent workers' lines never interleave."""
-    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    """One O_APPEND write of one line: concurrent workers' lines never interleave. The file is the user's: 0600."""
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     try:
         os.write(fd, (json.dumps(row) + "\n").encode())
     finally:
