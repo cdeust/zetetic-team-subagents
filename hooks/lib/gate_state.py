@@ -15,8 +15,11 @@ waits, sleeps, or compares elapsed time. The task is keyed by what the verdict d
   in-flight    queued/running, alive   deny: verification running, retry when it finishes
   stale        in flight, worker dead  requeue once (explicit, counted), then as `started`
 
-Before any task starts, two refusals that need no task: an invalid gate config (closed), and a repository
-that is not in the user's trusted list (gate_trust): nothing declared by an untrusted repository runs.
+Before any task starts, the refusals that need no task: an invalid gate config (closed), a repository that is
+not in the user's trusted list (gate_trust: nothing declared by an untrusted repository runs), a floor that
+cannot be read (gate_floor, closed), and rules weaker than a floor anchor that the owner has not acknowledged.
+The anchors (gate_floor, docs/gate.md "Rule changes"): HEAD's rules for a commit, each state of the floor the
+user keeps for the repository, and for a push the rules of each destination ref as of the last fetch.
 ``check`` is the only entry that judges and starts; ``begin`` only starts; ``peek`` only reads.
 """
 from __future__ import annotations
@@ -31,6 +34,7 @@ import gate_paths  # noqa: E402
 PLUGIN_ROOT = gate_paths.PLUGIN_ROOT
 import gate_ack as ack  # noqa: E402
 import gate_config as config  # noqa: E402
+import gate_floor as floor  # noqa: E402
 import gate_git as gitq  # noqa: E402
 import gate_rules as rules_mod  # noqa: E402
 import gate_superset as superset  # noqa: E402
@@ -48,6 +52,9 @@ _TAIL_LINES = 12  # source: enough of the failing check's output to see the asse
 class Verdict(NamedTuple):
     allow: bool
     message: str
+    ends: tuple = ()  # the RuleSets (None: no rules) an allowed act leaves in force; () when the floor is not concerned
+    head: object = None  # HEAD's RuleSet, observed in force (None: no rules, or not concerned)
+    acked: bool = False  # the end state is weaker than an anchor and the owner acknowledged it
 
 
 def commit_trees(top: str, amend: bool, allow_empty: bool) -> tuple[str, str | None] | None:
@@ -73,6 +80,7 @@ class Plan(NamedTuple):
     tree: str
     base: str | None
     rules: rules_mod.Rules
+    acked: bool = False
 
     @property
     def key(self) -> str:
@@ -97,36 +105,93 @@ def job_argv(plan: Plan) -> list:
             "--kind", plan.verb, "--trusted", plan.rules.trusted, "--rules", plan.rules.digest]
 
 
-def _floor(top: str, common: str, rules: rules_mod.Rules) -> Verdict | None:
-    """The refusal of a commit whose rules are not a superset of HEAD's and that the owner has not
-    acknowledged (gate_superset, gate_ack); None when the rules only grew or the state is acknowledged."""
-    weakened = superset.weakenings(rules.old, rules.new)
-    state = rules_mod.state_hash(rules.new)
-    if not weakened or ack.acknowledged(top, common, state):
-        return None
-    return Verdict(False, ack.refusal(top, common, state, weakened))
+class Change(NamedTuple):
+    """What a commit or a push asks to judge: the tree, the tree it is measured from, and for a push the
+    remote-tracking refs of the branches it updates (gate_publish.Tip.dests)."""
+    tree: str
+    base: str | None
+    dests: tuple = ()
+
+
+class Anchors(NamedTuple):
+    """What the end state must be no weaker than (docs/gate.md, "Rule changes")."""
+    head: object  # HEAD's RuleSet: an anchor of a commit only (None: no rules, or a push)
+    kept: list  # the states of the floor the user keeps for the repository (gate_floor)
+    where: str  # the floor file, named in the denial
+    dests: list  # [(ref, RuleSet)]: the destinations of a push that declare rules
+
+
+def _weakenings(anchors: Anchors, new: object) -> list:
+    """Every rule of an anchor that the end state ``new`` does not keep, one sentence each."""
+    out = superset.weakenings(anchors.head, new) + floor.weakened(anchors.kept, new, anchors.where)
+    for ref, state in anchors.dests:
+        out += [f"{w} (the rules of {ref}, as of the last fetch)" for w in superset.weakenings(state, new)]
+    return out
+
+
+def _floor(repo: gitq.Repo, verb: str, anchors: Anchors, new: object) -> "Verdict | bool":
+    """The refusal of rules weaker than an anchor that the owner has not acknowledged (gate_superset, gate_ack);
+    else whether the end state passes only by the owner's acknowledgement (True) or because nothing weakens (False)."""
+    weakened = _weakenings(anchors, new)
+    if not weakened:
+        return False
+    state = rules_mod.state_hash(new)
+    if ack.acknowledged(repo.top, repo.common, state):
+        return True
+    return Verdict(False, ack.refusal(repo, state, weakened, verb))
+
+
+def _dest_rules(top: str, dests: tuple) -> list:
+    """[(ref, RuleSet)] of the destination refs that exist and declare rules. Raises gate_config.ConfigError
+    naming the ref whose config is invalid."""
+    pairs = []
+    for ref in dests:
+        tree = gitq.tree_of(top, ref)
+        try:
+            state = None if tree is None else rules_mod.of_tree(top, tree)
+        except config.ConfigError as exc:
+            raise config.ConfigError(f"{ref}: {exc}") from exc
+        if state is not None:
+            pairs.append((ref, state))
+    return pairs
+
+
+def _anchors(repo: gitq.Repo, verb: str, rules: rules_mod.Rules, change: Change) -> Anchors:
+    """Raises gate_config.ConfigError (a destination's config) or gate_floor.Unreadable (the floor)."""
+    return Anchors(rules.old if verb == "commit" else None, floor.read(repo.top, repo.common),
+                   floor.path_of(repo.top, repo.common), _dest_rules(repo.top, change.dests))
 
 
 def prepare(top: str, verb: str, tree: str, base: str | None) -> "Plan | Verdict":
-    """The plan for ``tree``, or the final Verdict when no task is needed: not gated (allow), the config is
-    invalid (deny, closed), the repository is not trusted (deny, with the line to add), or a commit weakens
-    the rules HEAD has (deny, naming each rule and the acknowledgement line)."""
-    try:
-        rules = rules_mod.effective(top, tree)
-    except config.ConfigError as exc:
-        return Verdict(False, f"GATE-PROOF: the gate config of {top} is invalid ({exc}): refused (closed).")
-    if not rules.sets:
-        return Verdict(True, "")
+    """``plan_for`` a change with no destinations (a commit, the head start, a requeue)."""
+    return plan_for(top, verb, Change(tree, base))
+
+
+def plan_for(top: str, verb: str, change: Change) -> "Plan | Verdict":
+    """The plan for ``change.tree``, or the final Verdict when no task is needed: not gated (allow), a config
+    is invalid (deny, closed), the floor cannot be read (deny, closed), the repository is not trusted (deny,
+    with the line to add), or the end state weakens an anchor (deny, naming each rule and the line to add)."""
     repo = gitq.locate(top)
     if repo is None:
         raise gitq.Unavailable(f"{top} is not a repository")
-    if not trust.is_trusted(top, repo.common):
+    try:
+        rules = rules_mod.effective(top, change.tree)
+        anchors = _anchors(repo, verb, rules, change)
+    except config.ConfigError as exc:
+        return Verdict(False, f"GATE-PROOF: the gate config of {top} is invalid ({exc}): refused (closed).")
+    except floor.Unreadable as exc:
+        return Verdict(False, f"GATE-PROOF: the rule floor of {top} cannot be read: {exc}. Refused (closed). "
+                              "See docs/gate.md (rule changes).")
+    if not (rules.sets or anchors.kept or anchors.dests):
+        return Verdict(True, "")
+    if rules.sets and not trust.is_trusted(top, repo.common):
         return Verdict(False, trust.refusal(top, repo.common))
-    if verb == "commit":
-        refused = _floor(top, repo.common, rules)
-        if refused:
-            return refused
-    return Plan(top, verb, tree, base, rules)
+    passed = _floor(repo, verb, anchors, rules.new)
+    if isinstance(passed, Verdict):
+        return passed
+    if not rules.sets:
+        return Verdict(True, "", (None,), None, passed)
+    return Plan(top, verb, change.tree, change.base, rules, passed)
 
 
 def _status_cmd(top: str, tid: str) -> str:
@@ -180,10 +245,21 @@ def verdict_of(plan: Plan, started: tasks.Started) -> Verdict:
 
 def check(top: str, verb: str, tree: str, base: str | None) -> Verdict:
     """Start-or-find the task for ``tree`` and judge it. Returns at once, whatever the task is doing."""
-    plan = prepare(top, verb, tree, base)
+    return _judged(prepare(top, verb, tree, base))
+
+
+def judge(top: str, verb: str, change: Change) -> Verdict:
+    """``check`` for a change that names its destinations (the tip of a push)."""
+    return _judged(plan_for(top, verb, change))
+
+
+def _judged(plan: "Plan | Verdict") -> Verdict:
+    """Post: the Verdict of a planned tree carries what the floor needs (gate-proof records it): the end state
+    the call leaves in force, HEAD's state, and whether the end state passed by the owner's acknowledgement."""
     if isinstance(plan, Verdict):
         return plan
-    return verdict_of(plan, tasks.start(KIND, plan.key, plan.argv, top))
+    verdict = verdict_of(plan, tasks.start(KIND, plan.key, plan.argv, plan.top))
+    return verdict._replace(ends=(plan.rules.new,), head=plan.rules.old, acked=plan.acked)
 
 
 def begin(top: str, verb: str, tree: str, base: str | None) -> tasks.Started | None:

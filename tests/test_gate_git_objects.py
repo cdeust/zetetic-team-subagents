@@ -93,6 +93,7 @@ def test_a_replace_ref_of_head_itself_does_not_choose_the_trusted_tree(gate):
 
 def grafted(g: Gate) -> tuple:
     """Three commits; the grafts file gives the last the first as its parent. (real parent tree, grafted parent tree)."""
+    git(g.repo, "update-ref", "refs/remotes/origin/main", "HEAD")  # as after a fetch: the remote has the rules commit
     for text in ("two\n", "three\n"):
         (g.repo / "a.txt").write_text(text)
         git(g.repo, "commit", "-q", "-am", text.strip(), "--no-verify")
@@ -102,7 +103,6 @@ def grafted(g: Gate) -> tuple:
 
 def push_base(g: Gate, env: dict | None = None) -> str:
     """The `--base` the push verification of HEAD was started with (the task record's argv)."""
-    git(g.repo, "update-ref", "refs/remotes/origin/main", "HEAD~2")
     rc, _, err = g.hook("gate-proof.py", "git push origin main") if env is None else _hook_env(g, env)
     assert rc == 2 and "verification started" in err, err
     argv = settle(g)["input"]["argv"]

@@ -38,12 +38,17 @@ def _home_is_the_account_home() -> bool:
     return account is None or os.path.realpath(account) == os.path.realpath(os.path.expanduser("~"))
 
 
+def default(file_name: str) -> str:
+    """The default location of the user's file ``file_name``: ``~/.claude/zetetic/<file_name>``."""
+    return os.path.join(os.path.expanduser("~"), ".claude", "zetetic", file_name)
+
+
 def location(env_name: str, file_name: str) -> tuple[str, bool]:
     """(path, is_default) of the user's file: the override variable when set, else the default under HOME."""
     override = os.environ.get(env_name)
     if override:
         return override, False
-    return os.path.join(os.path.expanduser("~"), ".claude", "zetetic", file_name), True
+    return default(file_name), True
 
 
 def _inside(path: str, directory: str) -> bool:
