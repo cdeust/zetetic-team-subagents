@@ -15,7 +15,6 @@ carries a timer. A missing object raises ``gate_git.Unavailable`` (callers refus
 from __future__ import annotations
 
 import os
-import subprocess
 
 import gate_git as gitq
 
@@ -109,8 +108,7 @@ class GitSource:
 
 
 def _blob(top: str, oid: str, rel: str, env: dict | None) -> str:
-    out = subprocess.run(["git", "cat-file", "blob", oid], cwd=top, capture_output=True, check=False,
-                         stdin=subprocess.DEVNULL, env={**(os.environ if env is None else env), **gitq.ENV})
+    out = gitq.run(top, ["cat-file", "blob", oid], env, text=False)
     if out.returncode != 0:
         raise gitq.Unavailable(f"cannot read {rel} ({oid[:12]}): {out.stderr.decode(errors='replace').strip()[:200]}")
     return out.stdout.decode("utf-8", errors="replace")

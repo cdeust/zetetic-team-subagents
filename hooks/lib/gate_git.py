@@ -13,6 +13,17 @@ tree. What bounds each call is what it reads:
 stops read-only commands from taking the index lock, ``GIT_TERMINAL_PROMPT=0`` forbids a credential
 prompt. Anything that can be slow (the changed-file list, the checkout of the tree, the checks) runs in
 the gate task (gate_run.py), never here.
+
+``run`` is the ONE place a git process of the gate is started, the worker's included (gate_run, gate_source),
+and every call reads the objects that are really there. git substitutes objects when told to: a replace ref
+(``git replace``, in ``refs/replace/`` or in the namespace ``GIT_REPLACE_REF_BASE`` names) stands for another
+object, so the blob of ``.zetetic/gate.json`` could read as ``{"off": true}`` and a checked file as clean content;
+a graft (``.git/info/grafts``, or the file ``GIT_GRAFT_FILE`` names) gives a commit other parents, so the base a
+change is measured from moves. ``SAME_OBJECTS`` turns both off (``GIT_NO_REPLACE_OBJECTS=1`` disables every
+replace ref, whatever its namespace; grafts are read from the null device, which is empty) and
+``GIT_REPLACE_REF_BASE`` is removed from the environment as well. Measured on git 2.50.1: with a replace ref the
+blob reads as the substitute and with ``GIT_NO_REPLACE_OBJECTS=1`` as the original, under ``GIT_REPLACE_REF_BASE``
+too; ``GIT_NO_REPLACE_OBJECTS=1`` leaves grafts in force and ``GIT_GRAFT_FILE`` set to the null device removes them.
 """
 from __future__ import annotations
 
@@ -22,7 +33,9 @@ import subprocess
 from typing import NamedTuple
 
 TREE_RE = re.compile(r"\A(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
-ENV = {"GIT_NO_LAZY_FETCH": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
+BOUNDS = {"GIT_NO_LAZY_FETCH": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}  # source: the hot-path bounds above
+SAME_OBJECTS = {"GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull}  # source: git(1) ENVIRONMENT; measured above
+DROPPED = frozenset({"GIT_REPLACE_REF_BASE"})  # source: git(1) ENVIRONMENT, the replace-ref namespace
 
 
 class Unavailable(Exception):
@@ -34,14 +47,28 @@ class Repo(NamedTuple):
     common: str  # absolute git common dir
 
 
-def git(directory: str, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    """Run git in ``directory``. ``env`` replaces the inherited environment (the worker passes one without
-    GIT_*, so a stray GIT_DIR cannot redirect the plumbing); the bounds in ``ENV`` always apply."""
+def environment(base: dict | None = None, bounded: bool = True) -> dict:
+    """The environment of a git process of the gate: ``base`` (default: ours) without ``DROPPED``, with
+    ``SAME_OBJECTS`` always and ``BOUNDS`` on the hot path (``bounded``; the worker may fetch, it is not there)."""
+    kept = {k: v for k, v in (os.environ if base is None else base).items() if k not in DROPPED}
+    return {**kept, **(BOUNDS if bounded else {}), **SAME_OBJECTS}
+
+
+def run(directory: str, args: list, env: dict | None = None, text: bool = True,
+        bounded: bool = True) -> subprocess.CompletedProcess:
+    """Run ``git ARGS`` in ``directory`` with ``environment(env, bounded)``; output as text or bytes.
+    Raises Unavailable when git cannot be started."""
     try:
-        return subprocess.run(["git", *args], cwd=directory, capture_output=True, text=True, check=False,
-                              stdin=subprocess.DEVNULL, env={**(os.environ if env is None else env), **ENV})
+        return subprocess.run(["git", *args], cwd=directory, capture_output=True, text=text, check=False,
+                              stdin=subprocess.DEVNULL, env=environment(env, bounded))
     except OSError as exc:  # FAILS_ON: git not installed / not executable / cwd vanished
         raise Unavailable(exc.__class__.__name__) from exc
+
+
+def git(directory: str, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    """Run git in ``directory`` on the hot path, output as text. ``env`` replaces the inherited environment (the
+    worker passes one without GIT_*, so a stray GIT_DIR cannot redirect the plumbing)."""
+    return run(directory, list(args), env)
 
 
 def locate(directory: str) -> Repo | None:
