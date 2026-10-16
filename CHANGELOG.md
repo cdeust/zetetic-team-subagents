@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `rules/public-apis-reference.md`: how an agent uses the community list at https://github.com/public-apis/public-apis to find a free public API, then verifies the chosen API on its official documentation, terms and rate limits, and with one real request, before relying on it; keys stay out of code and commits. The list is a discovery aid, never evidence about an API.
+
 ### Fixed
 
 - The async-task tests no longer leave processes behind (#168). `test_worker_sigterm_writes_terminal_state_and_stops_the_command` left a `cat <tmp>/term.hold` with ppid 1 on every run (68 accumulated on one machine) because its command was `sh -c "...; cat FIFO"`: the worker forwards SIGTERM to the command (`sh`, as `docs/async-tasks.md` says), `sh` died, and its `cat` child stayed blocked on the fifo. The blocked command now `exec`s into `cat`, so the announced pid is the one blocker and waiting for it waits for the blocker itself, and the SIGKILL and reaper tests release their fifo in a `finally`. Not a product bug: the worker documents that it signals the command, not its descendants. A new autouse guard in `tests/conftest.py` (`tests/leak_support.py`) scans, after each test's own teardown, for live non-zombie processes whose argv names the test's `tmp_path` (`/proc` on Linux, `ps` elsewhere; no timers), kills them and fails the test with their pids, so no leak survives the run that found it.
