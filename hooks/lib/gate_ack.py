@@ -25,17 +25,17 @@ def ack_file() -> str:
 
 
 def _entries() -> set:
-    """{(real path, hash)} of the well-formed lines; a line with more or fewer than two fields names nothing."""
-    pairs = (line.split() for line in userfile.lines(ack_file()) if line and not line.startswith("#"))
+    """{(real path, hash)} of the well-formed lines. A line with more or fewer than two fields, or whose first
+    field is not an absolute path (a blank line, a `# note`), names nothing."""
+    pairs = (line.split() for line in userfile.lines(ack_file()))
     return {(os.path.realpath(p[0]), p[1]) for p in pairs if len(p) == 2 and os.path.isabs(p[0])}
 
 
 def acknowledged(top: str, common: str, state: str) -> bool:
     path, is_default = userfile.location(ENV_FILE, FILE_NAME)
-    if not userfile.usable(path, is_default, top, common):
-        return False  # an acknowledgement that lives in the repository is the repository's own claim
-    found = _entries()
-    return (os.path.realpath(top), state) in found or (os.path.realpath(userfile.repo_root(top, common)), state) in found
+    # an acknowledgement that lives in the repository is the repository's own claim, not the owner's: `usable` is False for it
+    return userfile.usable(path, is_default, top, common) and any(
+        (os.path.realpath(where), state) in _entries() for where in (top, userfile.repo_root(top, common)))
 
 
 def refusal(top: str, common: str, state: str, weakened: list) -> str:

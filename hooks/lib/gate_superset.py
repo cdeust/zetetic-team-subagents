@@ -36,9 +36,8 @@ def _covers(new_paths: list | None, old_paths: list | None) -> bool:
     """True when a check selecting by ``new_paths`` selects everything one selecting by ``old_paths`` does."""
     if new_paths is None:
         return True
-    if old_paths is None:
-        return False  # a pathless check also runs for a deletion, which no pattern matches
-    return "**" in new_paths or set(old_paths) <= set(new_paths)
+    # an `old` with no paths also runs for a deletion, which no pattern matches: only a pathless `new` covers it
+    return old_paths is not None and ("**" in new_paths or set(old_paths) <= set(new_paths))
 
 
 def _checks(old: list, new: list) -> list:

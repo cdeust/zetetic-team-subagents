@@ -80,3 +80,22 @@ def test_the_empty_fast_list_of_the_old_rules_may_not_become_a_list():
     new = copy.deepcopy(BASE)
     assert superset.weakenings(rule_set(old), rule_set(new))  # an empty `fast` meant: the whole suite
     assert superset.weakenings(rule_set(old), rule_set(old)) == []
+
+
+def test_the_sentence_says_whether_a_check_was_removed_or_replaced():
+    replaced = copy.deepcopy(BASE)
+    replaced["checks"][0]["argv"] = ["other"]
+    assert superset.weakenings(rule_set(BASE), rule_set(replaced)) == ['check "always" was replaced (argv or paths differ)']
+    removed = copy.deepcopy(BASE)
+    del removed["checks"][0]
+    assert superset.weakenings(rule_set(BASE), rule_set(removed)) == ['check "always" was removed']
+
+
+def test_the_sentence_says_why_the_fast_list_changed():
+    empty = copy.deepcopy(BASE)
+    empty["tests"]["fast"] = []
+    shrunk = copy.deepcopy(BASE)
+    shrunk["tests"]["fast"] = ["tests/test_other.py"]
+    (was_empty,) = superset.weakenings(rule_set(empty), rule_set(BASE))
+    (lost,) = superset.weakenings(rule_set(BASE), rule_set(shrunk))
+    assert "it was empty" in was_empty and "an entry was removed" in lost

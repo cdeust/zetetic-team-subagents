@@ -66,19 +66,19 @@ def trusted_tree(top: str, judged: str) -> str:
     return gitq.tree_of(top, "HEAD") or judged
 
 
-def pair(top: str, judged: str, trusted: str | None = None, env: dict | None = None) -> tuple:
+def pair(top: str, judged: str, trusted: str, env: dict | None = None) -> tuple:
     """(rules of the trusted tree, rules of the judged tree), each a RuleSet or None (not gated).
 
-    Pre: ``judged`` is a tree of the repository at ``top``; ``trusted`` (the worker passes the tree the hook
-    trusted, because HEAD may have moved since) defaults to HEAD's tree. Raises gate_config.ConfigError.
+    Pre: ``judged`` and ``trusted`` are trees of the repository at ``top``. Raises gate_config.ConfigError.
     """
-    trusted = trusted or trusted_tree(top, judged)
     old = of_tree(top, trusted, env)
     return old, (of_tree(top, judged, env) if judged != trusted else old)
 
 
 def effective(top: str, judged: str, trusted: str | None = None, env: dict | None = None) -> Rules:
-    """Post: the union described above (the trusted tree's rules, plus the judged tree's when they differ)."""
+    """Pre: ``trusted`` (the worker passes the tree the hook trusted, because HEAD may have moved since)
+    defaults to HEAD's tree. Post: the union described above (the trusted tree's rules, plus the judged tree's
+    when they differ)."""
     trusted = trusted or trusted_tree(top, judged)
     old, new = pair(top, judged, trusted, env)
     sets: list = []

@@ -395,20 +395,20 @@ def test_the_key_is_verb_tree_and_a_digest_of_the_effective_rules(gate):
 # ---------------------------------------------------------------------- c. fail closed
 
 
-def no_python_path(tmp_path: Path) -> str:
-    """A PATH with the few tools run-python.sh needs and no python of any name."""
-    tools = tmp_path / "bin"
-    tools.mkdir(exist_ok=True)
-    for name in ("cat", "grep"):
+def no_python_path(tmp_path: Path, tools: tuple = ()) -> str:
+    """A PATH holding only ``tools`` (default: nothing at all) and no python of any name."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    for name in tools:
         found = subprocess.run(["sh", "-c", f"command -v {name}"], capture_output=True, text=True).stdout.strip()
-        if not (tools / name).exists():
-            (tools / name).symlink_to(found)
-    return str(tools)
+        if not (bin_dir / name).exists():
+            (bin_dir / name).symlink_to(found)
+    return str(bin_dir)
 
 
-def run_wrapper(tmp_path: Path, script: str, event: dict) -> tuple:
+def run_wrapper(tmp_path: Path, script: str, event: dict, tools: tuple = ()) -> tuple:
     out = subprocess.run(["/bin/bash", str(HOOKS / "run-python.sh"), str(HOOKS / script)], input=json.dumps(event),
-                         capture_output=True, text=True, env={"PATH": no_python_path(tmp_path), "HOME": str(tmp_path)})
+                         capture_output=True, text=True, env={"PATH": no_python_path(tmp_path, tools), "HOME": str(tmp_path)})
     return out.returncode, out.stderr
 
 

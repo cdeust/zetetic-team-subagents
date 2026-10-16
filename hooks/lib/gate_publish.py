@@ -56,10 +56,16 @@ def _refs(top: str, *prefixes: str) -> list:
     return _lines(top, "for-each-ref", "--format=%(refname)", *prefixes)
 
 
+def _commit_of(top: str, rev: str) -> str | None:
+    """The commit ``rev`` peels to, or None when it is not one (a missing name, a tag of a blob or a tree).
+    A failed `rev-parse --verify --quiet` prints nothing, so the object-id test alone decides."""
+    commit = gitq.git(top, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}").stdout.strip()
+    return commit if gitq.TREE_RE.match(commit) else None
+
+
 def _tip(top: str, name: str, rev: str) -> Tip:
-    out = gitq.git(top, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
-    commit = out.stdout.strip()
-    if out.returncode != 0 or not gitq.TREE_RE.match(commit):
+    commit = _commit_of(top, rev)
+    if commit is None:
         raise Unresolvable(f"cannot resolve {name!r} to a commit in {top}: the tree being published cannot be judged")
     tree = gitq.tree_of(top, commit)
     if tree is None:
@@ -128,13 +134,6 @@ def _branch_names(top: str, publish: dict) -> list:
     return names
 
 
-def _commit_of(top: str, rev: str) -> str | None:
-    """The commit ``rev`` peels to, or None when it is not one (a tag of a blob or a tree)."""
-    out = gitq.git(top, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
-    commit = out.stdout.strip()
-    return commit if out.returncode == 0 and gitq.TREE_RE.match(commit) else None
-
-
 def _remote_name(top: str, publish: dict) -> str:
     try:
         return _remote_of(top, publish)
@@ -152,14 +151,17 @@ def _all_tags(top: str) -> list:
     return [_Ref(r, _tag_label(r)) for r in _refs(top, "refs/tags")]
 
 
-def _follows_tags(top: str, publish: dict) -> bool:
-    """`--follow-tags` as written, else `push.followTags` (a boolean in the configuration); `gh` never follows."""
-    if publish["gh"]:
-        return False
-    if publish["follow_tags"] is not None:
-        return publish["follow_tags"]
+def _follow_tags_setting(top: str, written: bool | None) -> bool:
+    """`--follow-tags` / `--no-follow-tags` as written, else the boolean `push.followTags`."""
+    if written is not None:
+        return written
     out = gitq.git(top, "config", "--type=bool", "--get", "push.followTags")
     return out.returncode == 0 and out.stdout.strip() == "true"
+
+
+def _follows_tags(top: str, publish: dict) -> bool:
+    """Whether the push carries the annotated tags behind its commits. `gh pr create` pushes nothing by itself."""
+    return not publish["gh"] and _follow_tags_setting(top, publish["follow_tags"])
 
 
 def _followed_tags(top: str, tips: list) -> list:

@@ -147,3 +147,35 @@ def test_the_state_hash_names_one_state():
     assert rules.state_hash(rs(config=cfg())) != rules.state_hash(rs(config=cfg(env={"A": "1"})))
     assert rules.state_hash(None) != rules.state_hash(rs(config=cfg()))
     assert len(rules.state_hash(None)) == 32 and rules.state_hash(rs("legacy", None, "a" * 40)) != rules.state_hash(rs("legacy", None, "b" * 40))
+
+
+def test_a_worktree_is_acknowledged_through_the_checkout_it_belongs_to_and_not_the_other_way_round(tmp_path, monkeypatch):
+    main = tmp_path / "main"
+    main.mkdir()
+    git(main, "init", "-q", "-b", "main")
+    (main / "a").write_text("1\n")
+    git(main, "add", "a")
+    git(main, "commit", "-q", "-m", "c")
+    work = tmp_path / "work"
+    git(main, "worktree", "add", "-q", str(work), "-b", "side")
+    top_main, top_work = os.path.realpath(main), os.path.realpath(work)
+    common = gate_git.locate(str(work)).common
+    listing = tmp_path / "acks"
+    monkeypatch.setenv(gate_ack.ENV_FILE, str(listing))
+    state = "c" * 32
+    listing.write_text(f"{top_main} {state}\n")
+    assert gate_ack.acknowledged(top_work, common, state)  # the main checkout covers its worktrees
+    listing.write_text(f"{top_work} {state}\n")
+    assert gate_ack.acknowledged(top_work, common, state)  # a worktree covers itself
+    assert not gate_ack.acknowledged(top_main, gate_git.locate(str(main)).common, state)  # and not the main checkout
+
+
+@pytest.mark.parametrize("common,expected", [("/w/main/.git", "/w/main"), ("/srv/r.git", "/w/top"), ("/w/main/.git/", "/w/top")])
+def test_the_checkout_that_owns_a_git_directory(common, expected):
+    assert gate_trust.repo_root("/w/top", common) == expected  # only a directory named .git has a parent that is a checkout
+
+
+def test_the_state_hash_does_not_depend_on_the_order_of_keys():
+    one = rules.RuleSet("config", {"version": 1, "checks": [{"name": "a", "argv": ["x"]}]}, None)
+    two = rules.RuleSet("config", {"checks": [{"argv": ["x"], "name": "a"}], "version": 1}, None)
+    assert rules.state_hash(one) == rules.state_hash(two)

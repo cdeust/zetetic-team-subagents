@@ -269,3 +269,19 @@ def test_the_configuration_can_make_every_push_follow_tags(repo):
     assert list(resolve(repo, "git push origin main")) == ["main, tag ann"]  # the same push, now carrying the tag
     assert list(resolve(repo, "git push --no-follow-tags origin main")) == ["main"]  # the command line wins
     assert list(resolve(repo, "gh pr create")) == ["main"]  # gh pr create pushes nothing by itself
+
+
+def test_a_false_configuration_does_not_follow_tags(repo):
+    git(repo, "tag", "-a", "-m", "m", "ann", "main")
+    git(repo, "config", "push.followTags", "false")
+    assert list(resolve(repo, "git push origin main")) == ["main"]
+    assert list(resolve(repo, "git push --follow-tags origin main")) == ["main, tag ann"]  # the command line wins the other way too
+
+
+def test_a_tag_push_from_a_detached_head_names_the_conventional_remote(repo):
+    """No remote is written and HEAD is detached: the remote is `origin`, so a tag its tracking refs reach is not judged."""
+    git(repo, "update-ref", "refs/remotes/origin/feat", "feat")
+    git(repo, "checkout", "-q", "--detach")
+    assert list(resolve(repo, "git push --tags")) == []
+    git(repo, "update-ref", "-d", "refs/remotes/origin/feat")
+    assert list(resolve(repo, "git push --tags")) == ["tag v1"]

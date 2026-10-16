@@ -45,3 +45,9 @@ def test_refspecs_are_split_the_way_git_splits_them():
         pushargs.Refspec("refs/tags/v1", "refs/tags/v1"), pushargs.Refspec("e", "refs/tags/f")]
     assert [s.deletes for s in pushargs.refspecs([":d", "a"])] == [True, False]
     assert [s.to_tag for s in pushargs.refspecs(["a:refs/tags/t", "a:b"])] == [True, False]
+
+
+@pytest.mark.parametrize("args", [["--tags", "origin", ":feat"], ["--all", "origin", ":feat"], ["--mirror", "origin", ":feat"],
+                                  ["--follow-tags", "origin", ":feat"]])
+def test_a_deletion_beside_an_option_that_publishes_still_publishes(args):
+    assert pushargs.publishes_no_commit(args) is False
