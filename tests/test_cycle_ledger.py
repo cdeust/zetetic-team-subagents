@@ -1,6 +1,7 @@
 """Per-task cycle ledger: rows, checked declarations, the metric (tools/cycle_ledger.py)."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import stat
@@ -13,9 +14,9 @@ import cycle_ledger as cl
 import gates_jsonl
 
 
-def opener(repo, **fields):
+def opener(root, **fields):
     base = {"session_id": SESSION, "agent_id": None, "agent_type": "main",
-            "transcript_path": "/t/main.jsonl", "repo": str(repo), "first_path": "a.py"}
+            "transcript_path": "/t/main.jsonl", "repo": str(root), "first_path": "a.py"}
     return {**base, **fields}
 
 
@@ -137,9 +138,9 @@ def test_metrics_give_the_promise_rate_reopens_and_bypasses_per_agent_type(path,
              (20, "/t/eng.jsonl"))
     out = cl.metrics(gates_jsonl.read_rows(path))
     assert out["main"] == {"tasks": 1, "declared": 1, "proven": 3, "reopens": 2, "bypasses": 0,
-                           "promise_rate": 0.25}
+                           "disposed": 0, "promise_rate": 0.25}
     assert out["engineer"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0, "bypasses": 1,
-                               "promise_rate": None}  # a bypass proved nothing
+                               "disposed": 0, "promise_rate": None}  # a bypass proved nothing
     assert cl.open_tasks(gates_jsonl.read_rows(path)) == []  # and it closed the task
 
 
@@ -221,3 +222,167 @@ def test_parallel_opens_of_one_agent_record_a_single_task(path, repo):
         t.join()
     assert sum(created for _, created in results) == 1
     assert len([r for r in gates_jsonl.read_rows(path) if "open" in r]) == 1
+
+
+PR = "https://github.com/o/r/pull/7"
+
+
+def git_in(repo, *args, env=None) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+                          env=env).stdout.strip()
+
+
+def commit_file(repo, name: str, when: str = "") -> str:
+    """Commit a new file ``name``; ``when`` (ISO-8601) fixes the commit dates."""
+    (repo / name).write_text(name, encoding="utf-8")
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}
+    if when:
+        env.update(GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when)
+    git_in(repo, "add", name)
+    git_in(repo, "commit", "-qm", name, env=env)
+    return git_in(repo, "rev-parse", "HEAD")
+
+
+@pytest.fixture
+def origin(repo):
+    """``repo`` cloned-like from github.com/o/r: origin/main (= origin/HEAD) holds the base commit."""
+    git_in(repo, "remote", "add", "origin", "git@github.com:o/r.git")
+    git_in(repo, "update-ref", "refs/remotes/origin/main", commit_file(repo, "base.py"))
+    git_in(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+    return repo
+
+
+def pushed_work(repo, task, when: str = "") -> str:
+    """A commit of the task's work, dated when the task opened unless ``when``
+    says otherwise, that origin/feature contains and origin/main does not."""
+    sha = commit_file(repo, "work.py", when or task["time"])
+    git_in(repo, "update-ref", "refs/remotes/origin/feature", sha)
+    return sha
+
+
+def gone_task(path, tmp_path, **fields):
+    gone = tmp_path / "worktrees" / "gone"
+    return cl.open_task(path, opener(gone, **{"first_path": str(gone / "a.py"), **fields}))[0]
+
+
+def test_a_task_whose_worktree_is_gone_closes_on_its_pr_and_pushed_commit(path, origin, tmp_path, capsys):
+    task = gone_task(path, tmp_path)
+    sha = pushed_work(origin, task)
+    assert cl.main(["--cwd", str(origin), "close-disposed", task["open"], "--url", PR, "--sha", sha[:12]]) == 0
+    assert f"closed {task['open']} as disposed" in capsys.readouterr().out
+    rows = gates_jsonl.read_rows(path)
+    assert cl.open_tasks(rows) == []
+    assert rows[-1]["disposed"] == {"url": PR, "sha": sha}  # the abbreviation is recorded resolved
+    assert cl.metrics(rows)["main"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0,
+                                        "bypasses": 0, "disposed": 1, "promise_rate": None}
+
+
+def test_the_next_task_of_the_reader_starts_after_a_disposed_close(path, origin, tmp_path):
+    """A disposed close records where the reader's transcript ended, so the
+    stage calls made for the disposed task are not counted for the next one;
+    a subagent's end is read from its own agent-<id>.jsonl, not the parent's."""
+    main_log = tmp_path / "proj" / "sess.jsonl"
+    sub_log = tmp_path / "proj" / "sess" / "subagents" / "agent-ag1.jsonl"
+    sub_log.parent.mkdir(parents=True)
+    main_log.write_text("x" * 300)
+    sub_log.write_text("y" * 70)
+    main = gone_task(path, tmp_path, transcript_path=str(main_log))
+    sub = gone_task(path, tmp_path, agent_id="ag1", transcript_path=str(main_log))
+    sha = pushed_work(origin, sub)  # dated when the later of the two tasks opened
+    for task in (main, sub):
+        cl.close_disposed(str(origin), task["open"], PR, sha)
+    after_main, _ = cl.open_task(path, opener(origin, transcript_path=str(main_log)))
+    after_sub, _ = cl.open_task(path, opener(origin, agent_id="ag1", transcript_path=str(main_log)))
+    assert (after_main["window_start"], after_sub["window_start"]) == (300, 70)
+
+
+def test_worktree_gone_needs_both_recorded_absolute_paths_absent(tmp_path):
+    present = tmp_path / "a.py"
+    present.write_text("")
+    gone = str(tmp_path / "gone")
+    assert cl.worktree_gone({"repo": gone, "first_path": gone + "/a.py"})
+    assert not cl.worktree_gone({"repo": str(tmp_path), "first_path": gone + "/a.py"})
+    assert not cl.worktree_gone({"repo": gone, "first_path": str(present)})
+    assert not cl.worktree_gone({"repo": None, "first_path": gone + "/a.py"})  # no repository: nothing proven
+    assert not cl.worktree_gone({"first_path": gone + "/a.py"})
+    assert not cl.worktree_gone({"repo": gone, "first_path": "a.py"})  # relative to an unrecorded cwd
+    assert not cl.worktree_gone({"repo": gone})
+
+
+REFUSALS = {  # case -> what the refusal names
+    "worktree-exists": "not proven gone", "no-repo": "not proven gone", "relative-first-path": "not proven gone",
+    "unknown-task": "no open task", "not-a-pr": "not a GitHub pull-request URL",
+    "trailing-newline": "not a GitHub pull-request URL", "other-repo": "not a pull request of origin",
+    "no-origin": "no GitHub origin remote", "unpushed": "no branch of origin contains",
+    "already-in-main": "already in refs/remotes/origin/HEAD", "older-than-task": "committed before the task opened",
+}
+
+
+def _refusal_task(path, repo, tmp_path, case):
+    if case == "worktree-exists":
+        return cl.open_task(path, opener(repo, first_path=str(repo / "a.py")))[0]
+    if case == "no-repo":
+        return gone_task(path, tmp_path, repo=None)
+    if case == "relative-first-path":
+        return gone_task(path, tmp_path, first_path="a.py")
+    return gone_task(path, tmp_path)
+
+
+def _refusal_sha(repo, task, case):
+    if case == "unpushed":
+        return commit_file(repo, "work.py", task["time"])
+    if case == "already-in-main":
+        return git_in(repo, "rev-parse", "refs/remotes/origin/main")
+    return pushed_work(repo, task, "2000-01-01T00:00:00+00:00" if case == "older-than-task" else "")
+
+
+@pytest.mark.parametrize("case", sorted(REFUSALS))
+def test_close_disposed_refuses_without_proof_bound_to_the_task_and_changes_nothing(path, origin, tmp_path,
+                                                                                   case):
+    task = _refusal_task(path, origin, tmp_path, case)
+    sha = _refusal_sha(origin, task, case)
+    if case == "no-origin":
+        git_in(origin, "remote", "remove", "origin")
+    url = {"not-a-pr": "https://github.com/o/r/issues/7", "trailing-newline": PR + "\n",
+           "other-repo": "https://github.com/someone/else/pull/7"}.get(case, PR)
+    before = gates_jsonl.read_rows(path)
+    with pytest.raises(cl.DeclareRefused, match=REFUSALS[case]):
+        cl.close_disposed(str(origin), "nope" if case == "unknown-task" else task["open"], url, sha)
+    assert gates_jsonl.read_rows(path) == before
+
+
+@pytest.mark.parametrize("raced", [False, True])
+def test_close_disposed_runs_git_outside_the_lock_and_rereads_the_ledger_under_it(path, origin, tmp_path,
+                                                                                  monkeypatch, raced):
+    """Only ledger state is checked under the lock (git there would hold every
+    hook's open or close behind it); a task another process closed after the
+    git checks is refused, never closed twice."""
+    task = gone_task(path, tmp_path)
+    sha = pushed_work(origin, task)
+    held = []
+    real_git, real_locked = cl.git, cl.locked
+
+    def git_unlocked(*args, **kwargs):
+        assert not held, f"git {args[1:]} ran under the ledger lock"
+        return real_git(*args, **kwargs)
+
+    @contextlib.contextmanager
+    def watched_lock(lock_path):
+        with real_locked(lock_path):
+            if raced:
+                gates_jsonl.append_row(lock_path, {"close": task["open"], "evidence": {}, "counts": {}})
+            held.append(True)
+            try:
+                yield
+            finally:
+                held.clear()
+    monkeypatch.setattr(cl, "git", git_unlocked)
+    monkeypatch.setattr(cl, "locked", watched_lock)
+    if raced:
+        with pytest.raises(cl.DeclareRefused, match="no open task"):
+            cl.close_disposed(str(origin), task["open"], PR, sha)
+    else:
+        cl.close_disposed(str(origin), task["open"], PR, sha)
+    closes = [r for r in gates_jsonl.read_rows(path) if r.get("close") == task["open"]]
+    assert len(closes) == 1 and ("disposed" in closes[0]) is not raced

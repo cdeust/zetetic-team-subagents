@@ -30,6 +30,13 @@ Rows (``gates_jsonl.py`` contract, file ``cycles.jsonl``):
            plus "bypass": true and "missing": [stage...] when the emergency
            switch let an unproven task through: a bypass closes the task, so it
            is logged once, not on every later stop.
+           A task whose worktree was disposed after its push closes instead
+           with "disposed": {"url", "sha"} (``close_disposed``): its stages
+           cannot be re-proven once the files are gone, so the pushed commit
+           and its pull request are the evidence: a pull request of origin, and
+           a commit on a branch of origin, absent from origin's default branch,
+           committed after the task opened. Its window_end is the end of the
+           reader's transcript at the close, so the next task starts after it.
 A task is open while no close row names it. ``agent_id`` is null for the main
 agent; one open task per (session, agent) at a time, enforced by reading and
 appending under ``gates_jsonl.locked`` (parallel edits fire parallel hooks).
@@ -39,11 +46,13 @@ Pre-registered metric (two weeks before vs after), computed by ``metrics``:
                              / stages closed (declaration + transcript)
   reopen count(agent_type) = sum of "reopens": reviews followed by another edit.
 A bypassed close counts only as a bypass: it proved nothing, so it enters
-neither the promise rate nor the task and reopen counts.
+neither the promise rate nor the task and reopen counts. A disposed close
+counts only as disposed, for the same reason.
 """
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import re
@@ -59,8 +68,16 @@ LEDGER_NAME = "cycles.jsonl"
 # (sha, PR URL, memory id)"; the check is a command by engineering-loop step 0.
 DECLARABLE = {"check": ("command",), "refine": ("sha", "url", "memory"),
               "benchmark": ("sha", "url", "memory", "n/a")}
-_URL = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+/(pull|issues)/\d+/?$")
+_URL = re.compile(r"^https://github\.com/(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)/(?P<kind>pull|issues)/\d+/?$")
 _SHA = re.compile(r"^[0-9a-f]{7,40}$")
+# The GitHub repository an origin URL names: https (with or without
+# credentials), scp-like ``git@github.com:o/r.git`` and ``ssh://git@github.com/o/r``.
+_REMOTE = re.compile(r"(?:https://(?:[^@/]+@)?|ssh://git@|git@)github\.com[:/]"
+                     r"(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)(?:\.git)?/?")
+# Where origin's default branch is looked up, in order: what clone recorded,
+# then the two conventional names (a repository pushed from ``git init`` has
+# no origin/HEAD until ``git remote set-head origin --auto``).
+_DEFAULT_BRANCHES = ("refs/remotes/origin/HEAD", "refs/remotes/origin/main", "refs/remotes/origin/master")
 MAIN_AGENT = "main"
 
 
@@ -227,13 +244,146 @@ def close(path: str, task_id: str, verdict: Dict, scanned: tuple) -> Dict:
     return row
 
 
+def worktree_gone(task: Dict) -> bool:
+    """True when the task recorded its repository and its first edited path as
+    absolute paths and neither exists any more. This is the single rule that
+    ``close_disposed`` and the Stop gate's hint both apply. A task without a
+    repository proves no absence, and neither does a relative first path
+    (relative to a working directory nobody recorded): such a task is not gone."""
+    repo, first = task.get("repo"), task.get("first_path")
+    if not all(isinstance(p, str) and os.path.isabs(p) for p in (repo, first)):
+        return False
+    return not (os.path.exists(repo) or os.path.exists(first))
+
+
+def _open_task_row(path: str, task_id: str) -> Dict:
+    task = next((r for r in open_tasks(read_rows(path)) if r["open"] == task_id), None)
+    if task is None:
+        raise DeclareRefused(f"no open task {task_id} in {path}")
+    return task
+
+
+def _origin_repo(cwd: str) -> tuple:
+    """(owner, repository), lower case (GitHub names are case-insensitive), of
+    the GitHub repository the origin remote points at; DeclareRefused otherwise."""
+    remote = git(cwd, "remote", "get-url", "origin")
+    match = _REMOTE.fullmatch(remote.stdout.strip()) if remote.returncode == 0 else None
+    if match is None:
+        raise DeclareRefused(f"the repository at {cwd} has no GitHub origin remote to bind a pull request to")
+    return match["owner"].lower(), match["repo"].lower()
+
+
+def _check_pull_request(cwd: str, url: str) -> None:
+    """``url`` is, in full (no trailing newline), a pull request of origin."""
+    match = _URL.fullmatch(url) if isinstance(url, str) else None
+    if match is None or match["kind"] != "pull":
+        raise DeclareRefused(f"{url!r} is not a GitHub pull-request URL")
+    origin = _origin_repo(cwd)
+    if (match["owner"].lower(), match["repo"].lower()) != origin:
+        raise DeclareRefused(f"{url} is not a pull request of origin ({'/'.join(origin)})")
+
+
+def _default_branch(cwd: str) -> str:
+    for ref in _DEFAULT_BRANCHES:
+        if git(cwd, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode == 0:
+            return ref
+    raise DeclareRefused(f"no default branch of origin in {cwd} (looked for {', '.join(_DEFAULT_BRANCHES)}); "
+                         "run `git fetch origin` and `git remote set-head origin --auto`")
+
+
+def _committed_after_open(cwd: str, full: str, opened: object) -> None:
+    """The commit is not older than the task. Both stamps come from the clock
+    of the machine that made the edit and the commit; this orders two recorded
+    events and sets no age limit. An amended or rebased commit carries a new
+    committer date, so it passes; a commit that predates the task cannot be its
+    work and is refused."""
+    shown = git(cwd, "show", "-s", "--format=%ct", full)
+    try:
+        committed = int(shown.stdout.strip())
+        opened_at = dt.datetime.fromisoformat(opened).timestamp()
+    except (TypeError, ValueError):
+        raise DeclareRefused(f"cannot order {full} after the task's opening ({opened!r})") from None
+    if committed < opened_at:
+        raise DeclareRefused(f"{full} was committed before the task opened ({opened}): it is not the task's work")
+
+
+def _check_new_pushed_commit(cwd: str, sha: str, opened: object) -> str:
+    """The full sha of ``sha`` when it is a commit that a branch of origin
+    contains, that origin's default branch does not contain (new work, not the
+    base the task started from), and that was committed after the task opened."""
+    resolved = git(cwd, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}") \
+        if isinstance(sha, str) and _SHA.fullmatch(sha) else None
+    if resolved is None or resolved.returncode != 0:
+        raise DeclareRefused(f"{sha!r} is not a commit of the repository at {cwd}")
+    full = resolved.stdout.strip()
+    on_origin = git(cwd, "for-each-ref", "--contains", full, "--format=%(refname)", "refs/remotes/origin/")
+    if on_origin.returncode != 0 or not on_origin.stdout.strip():
+        raise DeclareRefused(f"no branch of origin contains {full}; push it first")
+    default = _default_branch(cwd)
+    merged = git(cwd, "merge-base", "--is-ancestor", full, default).returncode
+    if merged != 1:  # git-merge-base(1): 0 when it is an ancestor, 1 when not, anything else is an error
+        raise DeclareRefused(f"{full} is already in {default} (merge-base exit {merged}): "
+                             "give a commit of the task's own pushed work")
+    _committed_after_open(cwd, full, opened)
+    return full
+
+
+def _scanned_end(task: Dict) -> tuple:
+    """(window_end, transcript_path) of a disposed close: the current end of
+    the transcript the task's reader writes, so the reader's next task
+    (``_window_start``) starts after it and never re-counts a stage call made
+    for the disposed task. A subagent's tool events carry the PARENT
+    transcript_path, so its own file is derived as
+    ``reflection_subagent._transcript_path`` derives it:
+    ``<parent stem>/subagents/agent-<id>.jsonl``. A transcript that cannot be
+    read now holds nothing a next task could re-count: 0."""
+    transcript = task.get("transcript_path") or ""
+    agent_id = task.get("agent_id")
+    if not transcript:
+        return 0, transcript
+    if agent_id and os.path.basename(transcript) != f"agent-{agent_id}.jsonl":
+        stem = transcript[:-len(".jsonl")] if transcript.endswith(".jsonl") else transcript
+        transcript = os.path.join(stem, "subagents", f"agent-{agent_id}.jsonl")
+    try:
+        return os.path.getsize(transcript), transcript
+    except OSError:
+        return 0, transcript
+
+
+def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
+    """Close an open task whose worktree no longer exists (``worktree_gone``)
+    on a pull request of origin and a pushed commit of the task's own work
+    (``_check_new_pushed_commit``). Refuses (DeclareRefused), leaving the ledger
+    unchanged, when any of these fails. The git and filesystem checks run
+    before the lock, as in ``declare``; under it only the ledger state is
+    re-read, so a task closed meanwhile is not closed twice."""
+    path = ledger_path(cwd)
+    task = _open_task_row(path, task_id)
+    if not worktree_gone(task):
+        raise DeclareRefused(f"the worktree of {task_id} is not proven gone (repo {task.get('repo')!r}, "
+                             f"first path {task.get('first_path')!r}); prove its stages instead")
+    _check_pull_request(cwd, url)
+    full = _check_new_pushed_commit(cwd, sha, task.get("time"))
+    window_end, transcript = _scanned_end(task)
+    row = {"close": task_id, "disposed": {"url": url, "sha": full},
+           "evidence": {}, "counts": {"edits": 0, "reviews": 0, "reopens": 0},
+           "window_end": window_end, "transcript_path": transcript, "time": now_iso()}
+    with locked(path):
+        _open_task_row(path, task_id)
+        append_row(path, row)
+    return row
+
+
 def metrics(rows: List[Dict]) -> Dict[str, Dict]:
-    """agent_type -> {"tasks", "declared", "proven", "promise_rate", "reopens", "bypasses"}."""
+    """agent_type -> {"tasks", "declared", "proven", "promise_rate", "reopens", "bypasses", "disposed"}."""
     types = {r["open"]: r.get("agent_type") or MAIN_AGENT for r in rows if isinstance(r.get("open"), str)}
     out: Dict[str, Dict] = {}
     for r in (r for r in rows if isinstance(r.get("close"), str)):
         m = out.setdefault(types.get(r["close"], "?"), {"tasks": 0, "declared": 0, "proven": 0,
-                                                       "reopens": 0, "bypasses": 0})
+                                                       "reopens": 0, "bypasses": 0, "disposed": 0})
+        if r.get("disposed"):
+            m["disposed"] += 1
+            continue
         if r.get("bypass"):
             m["bypasses"] += 1
             continue
@@ -263,6 +413,12 @@ def _build_parser() -> argparse.ArgumentParser:
     dec.add_argument("--url", help="a GitHub pull-request or issue URL")
     dec.add_argument("--memory-id", type=int, help="the id Cortex `remember` returned")
     dec.add_argument("--not-applicable", dest="na", help="stage benchmark: why nothing is measurable")
+    dis = sub.add_parser("close-disposed",
+                         help="close a task whose worktree was removed after its push, on its PR and pushed commit")
+    dis.add_argument("task_id")
+    dis.add_argument("--url", required=True, help="the pull request of origin that carries the task's work")
+    dis.add_argument("--sha", required=True,
+                     help="a commit of that work on a branch of origin, not yet in its default branch")
     return parser
 
 
@@ -277,6 +433,9 @@ def _run(args) -> str:
         return "\n".join(_listing(r) for r in open_tasks(rows))
     if args.command == "metrics":
         return json.dumps(metrics(rows), indent=2, sort_keys=True)
+    if args.command == "close-disposed":
+        row = close_disposed(args.cwd, args.task_id, args.url, args.sha)
+        return f"closed {row['close']} as disposed: {args.url} {args.sha}"
     ref = {"command": args.ref_command, "sha": args.sha, "url": args.url,
            "memory": args.memory_id, "n/a": args.na}
     row = declare(args.cwd, args.task_id, args.stage, ref)
