@@ -22,7 +22,7 @@ try:
     os.makedirs(shim); os.makedirs(run)
     with open(shim + '/git', 'w') as f:
         f.write('#!/bin/sh\necho "SHIM-GIT $1"\n')
-    os.chmod(shim + '/git', 0o755)
+    os.chmod(shim + '/git', 0o700)  # owner-only: the shells run as this user
     def res(mod, cmd):
         try:
             return sorted(v for _d, v in mod.git_commands(cmd, '/tmp/base'))
@@ -35,7 +35,8 @@ try:
         out = re.findall(r'SHIM-GIT (\w+)', p.stdout + p.stderr)
         return sorted(x for x in out if x in ('commit', 'push'))
     cases = []
-    exec(open(sys.argv[1]).read())
+    with open(sys.argv[1]) as f:
+        exec(f.read())
     bad = 0
     for name, cmd in cases:
         r = {k: res(m, cmd) for k, m in mods.items()}
