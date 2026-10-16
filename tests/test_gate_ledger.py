@@ -125,3 +125,11 @@ def test_a_waiver_returns_the_row_it_appended(repo):
     row = ledger.waive(str(repo), A, "because")
     assert (row["tree"], row["reason"]) == (A, "because") and row["time"].endswith("Z")
     assert lines(repo, ledger.WAIVERS) == [row]
+
+
+def test_the_ledger_files_are_private_to_the_user(repo):
+    import stat
+    ledger.record(str(repo), ledger.Result("commit", A, "k", 1))
+    ledger.waive(str(repo), A, "because")
+    for path in (ledger._results_path(str(repo)), ledger._waiver_path(str(repo))):
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600, path

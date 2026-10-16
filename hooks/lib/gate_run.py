@@ -141,7 +141,7 @@ def _unpack(tar: tarfile.TarFile, member: tarfile.TarInfo, root: str) -> None:
         os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(target, "wb") as out:
             out.write(tar.extractfile(member).read())
-        os.chmod(target, member.mode & 0o777)
+        os.chmod(target, 0o700 if member.mode & 0o111 else 0o600)  # private to the user: the copy is only run by the worker
 
 
 def export_scripts(top: str, oid: str, dest: str) -> str:
