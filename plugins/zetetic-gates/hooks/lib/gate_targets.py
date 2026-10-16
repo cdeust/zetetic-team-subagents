@@ -24,6 +24,9 @@ def _load(module, filename):
 git_cwd = _load('git_command_cwd', 'git-command-cwd.py')
 shell_text = _load('shell_text', 'shell_text.py')
 _COMMIT_OR_PUSH = re.compile(r'\bgit\s.*\b(?:commit|push)\b', re.S)
+_PUNCTUATION = ';&|(){}'
+_OPERATORS = re.compile(r'&&|\|\||;;&|;;|;&|\|&|[;&|(){}]')
+_TERMINATORS = {';;': ';', ';&': ';', ';;&': ';', '|&': '|'}
 
 
 def _mentions_command(command, words):
@@ -32,23 +35,41 @@ def _mentions_command(command, words):
 
 
 def _tokens(command):
-    """Lex text from shell_text.shell_lines, which already removed comments."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
+    """Lex text from shell_text.shell_lines. Every # left there is inside
+    quotes, an expansion or a word, never a comment, so none is stripped.
+    shlex returns a run of operator characters as one token (`};`, `;(`,
+    `)&&`); each run is split into the operators the shell reads (§2.10.1),
+    and the case terminators ;; ;& ;;& separate commands like ;."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
     lexer.whitespace_split = True
     lexer.commenters = ''
-    return list(lexer)
+    tokens = []
+    for token in lexer:
+        if not token or token.strip(_PUNCTUATION):
+            tokens.append(token)
+        else:
+            tokens.extend(_TERMINATORS.get(op, op) for op in _OPERATORS.findall(token))
+    return tokens
+
+
+def _uninspectable(command, error):
+    """Refuse a command that cannot be read only if it may commit or push."""
+    if _COMMIT_OR_PUSH.search(shell_text.unquoted(command)):
+        raise ValueError(f'Cannot inspect shell quoting before git validation: {error}') from error
+    return []
 
 
 def git_commands(command, base):
-    command = shell_text.shell_lines(command)
+    try:
+        command = shell_text.shell_lines(command)
+    except ValueError as error:
+        return _uninspectable(command, error)
     if not _mentions_command(command, 'git'):
         return []
     try:
         tokens = _tokens(command)
     except ValueError as error:
-        if _COMMIT_OR_PUSH.search(shell_text.unquoted(command)):
-            raise ValueError('Cannot inspect shell quoting before git validation') from error
-        return []
+        return _uninspectable(command, error)
     current, segment, targets = os.path.abspath(base), [], []
     for token in [*tokens, ';']:
         if token not in git_cwd.SEPARATORS:
@@ -111,7 +132,10 @@ def _git_command(tokens, base, *, validate=True):
 
 
 def _shell_directories(command, base):
-    command = shell_text.shell_lines(command)
+    try:
+        command = shell_text.shell_lines(command)
+    except ValueError:
+        return []
     if not _mentions_command(command, 'git|cd'):
         return []
     try:
