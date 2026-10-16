@@ -80,10 +80,17 @@ def test_a_task_whose_worktree_is_gone_is_told_how_to_close_it_as_disposed(fire,
     (repo / "kept.py").write_text("")
     gates_jsonl.append_row(path, {**task, "open": "live0000task", "repo": str(removed),
                                   "first_path": str(repo / "kept.py")})
+    # the hint follows cycle_ledger.worktree_gone alone: these prove no absence
+    gates_jsonl.append_row(path, {**task, "open": "relative0task", "repo": str(removed), "first_path": "a.py"})
+    gates_jsonl.append_row(path, {**task, "open": "norepo00task", "repo": None,
+                                  "first_path": str(removed / "a.py")})
     _, out, _ = fire(gate_hook, stop_event(repo, transcript))
     reason = json.loads(out)["reason"]
     assert "close-disposed gone0000task --url <pull request>" in reason
     assert "close-disposed live0000task" not in reason  # its first edited path still exists
+    assert "close-disposed relative0task" not in reason
+    assert "close-disposed norepo00task" not in reason
+    assert "- task relative0task" in reason and "- task norepo00task" in reason  # still blocking
 
 
 def test_a_proven_task_closes_once_and_the_stop_is_allowed(fire, repo, transcript):
