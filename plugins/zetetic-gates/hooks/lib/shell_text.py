@@ -81,6 +81,8 @@ def _next_piece(text, index, pending):
         piece = text[index:index + 2]
         return index + 2, '' if piece == '\\\n' else piece
     if text.startswith('<<<', index):
+        # A here-string, not a here-document. Equivalent mutant: without this
+        # branch << reads an empty word (< ends it) and records nothing.
         return index + 3, '<<<'
     if text.startswith('<<', index):
         end, delimiter, quoted, strip_tabs = _heredoc_word(text, index + 2)
