@@ -29,9 +29,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gate_paths  # noqa: E402
 PLUGIN_ROOT = gate_paths.PLUGIN_ROOT
+import gate_ack as ack  # noqa: E402
 import gate_config as config  # noqa: E402
 import gate_git as gitq  # noqa: E402
 import gate_rules as rules_mod  # noqa: E402
+import gate_superset as superset  # noqa: E402
 import gate_trust as trust  # noqa: E402
 import tasks  # noqa: E402
 import task_store  # noqa: E402
@@ -95,9 +97,20 @@ def job_argv(plan: Plan) -> list:
             "--kind", plan.verb, "--trusted", plan.rules.trusted, "--rules", plan.rules.digest]
 
 
+def _floor(top: str, common: str, rules: rules_mod.Rules) -> Verdict | None:
+    """The refusal of a commit whose rules are not a superset of HEAD's and that the owner has not
+    acknowledged (gate_superset, gate_ack); None when the rules only grew or the state is acknowledged."""
+    weakened = superset.weakenings(rules.old, rules.new)
+    state = rules_mod.state_hash(rules.new)
+    if not weakened or ack.acknowledged(top, common, state):
+        return None
+    return Verdict(False, ack.refusal(top, common, state, weakened))
+
+
 def prepare(top: str, verb: str, tree: str, base: str | None) -> "Plan | Verdict":
     """The plan for ``tree``, or the final Verdict when no task is needed: not gated (allow), the config is
-    invalid (deny, closed), or the repository is not trusted (deny, with the line to add)."""
+    invalid (deny, closed), the repository is not trusted (deny, with the line to add), or a commit weakens
+    the rules HEAD has (deny, naming each rule and the acknowledgement line)."""
     try:
         rules = rules_mod.effective(top, tree)
     except config.ConfigError as exc:
@@ -109,6 +122,10 @@ def prepare(top: str, verb: str, tree: str, base: str | None) -> "Plan | Verdict
         raise gitq.Unavailable(f"{top} is not a repository")
     if not trust.is_trusted(top, repo.common):
         return Verdict(False, trust.refusal(top, repo.common))
+    if verb == "commit":
+        refused = _floor(top, repo.common, rules)
+        if refused:
+            return refused
     return Plan(top, verb, tree, base, rules)
 
 

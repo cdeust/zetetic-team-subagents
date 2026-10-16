@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -53,6 +54,14 @@ def settle(g: Gate) -> dict:
     return tasks.latest("gate", None, str(g.repo))
 
 
+def acknowledge(g: Gate) -> None:
+    """The owner's act (round 3): the denial of a weakening prints one line; the test, as the owner, files it in
+    its own acknowledgement file. What the tests below then prove is the union: HEAD's rules still judge the change."""
+    rc, _, err = g.gate(COMMIT)
+    assert rc == 2 and "weakens the gate rules" in err and g.started() == []
+    g.ack_file.write_text(re.findall(r"^(/\S+ [0-9a-f]{32})$", err, re.M)[0] + "\n")
+
+
 def stage_bad(g: Gate) -> str:
     (g.repo / "bad.txt").write_text("this file fails HEAD's rule\n")
     git(g.repo, "add", "bad.txt")
@@ -66,6 +75,7 @@ def test_a_staged_config_that_approves_everything_does_not_approve_its_own_chang
     stage_bad(gate)
     write_config(gate.repo, [{"name": "yes", "argv": ["true"]}])
     git(gate.repo, "add", ".zetetic/gate.json")
+    acknowledge(gate)  # round 3: without the owner this change is refused before anything runs (test_gate_rule_floor)
     assert gate.gate(COMMIT)[0] == 2  # starts the verification
     assert settle(gate)["state"] == "failed"  # HEAD's rule ran on the staged tree and found bad.txt
     rc, _, err = gate.gate(COMMIT)
@@ -76,6 +86,7 @@ def test_a_staged_off_switch_does_not_switch_the_gate_off(gate):
     stage_bad(gate)
     write_config(gate.repo, [], off=True)
     git(gate.repo, "add", ".zetetic/gate.json")
+    acknowledge(gate)
     assert gate.gate(COMMIT)[0] == 2
     assert settle(gate)["state"] == "failed"
     assert gate.gate(COMMIT)[0] == 2
@@ -103,6 +114,7 @@ def test_staged_environment_of_a_config_does_not_reach_heads_checks(gate):
     write_config(gate.repo, [{"name": "noop", "argv": ["true"]}], env={"HIJACK": "1"})
     git(gate.repo, "add", ".zetetic/gate.json")
     gate.stage("two\n")
+    acknowledge(gate)
     assert gate.gate(COMMIT)[0] == 2
     assert settle(gate)["state"] == "done"  # HEAD's check ran without the staged config's environment
 
