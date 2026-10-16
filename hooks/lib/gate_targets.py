@@ -23,7 +23,11 @@ def _load(module, filename):
 
 git_cwd = _load('git_command_cwd', 'git-command-cwd.py')
 shell_text = _load('shell_text', 'shell_text.py')
-_COMMIT_OR_PUSH = re.compile(r'\bgit\s.*\b(?:commit|push)\b', re.S)
+_GIT = re.compile(r'\bgit\s')
+_VERB = re.compile(r'\b(?:commit|push)\b')
+# source: one flat shlex pass is quadratic in a token's length (216 KB took
+# 3.2 s, 108 KB 1.0 s on 2026-10-16); 128 KiB keeps both readings near 3 s.
+MAX_COMMAND = 131072
 _PUNCTUATION = ';&|(){}'
 _OPERATORS = re.compile(r'&&|\|\||;;&|;;|;&|\|&|[;&|(){}]')
 _TERMINATORS = {';;': ';', ';&': ';', ';;&': ';', '|&': '|'}
@@ -54,14 +58,23 @@ def _tokens(command):
 
 def _uninspectable(command, error):
     """Refuse a command that cannot be read only if it may commit or push."""
-    if _COMMIT_OR_PUSH.search(shell_text.unquoted(command)):
+    if may_commit_or_push(command):
         raise ValueError(f'Cannot inspect shell quoting before git validation: {error}') from error
     return []
 
 
+def may_commit_or_push(text):
+    """True when text, quotes removed, may hold a git commit or push."""
+    text = shell_text.unquoted(text)
+    first = _GIT.search(text)
+    # A verb after the first git: the same as git\s.*(commit|push), linear.
+    return bool(first and _VERB.search(text, first.end()))
+
+
 def _flat_targets(command, base):
     """The reading origin/main used: the raw command lexed as one flat line
-    (shlex, # comments). A command it cannot lex or validate adds nothing."""
+    (shlex, # comments). None when it cannot lex or validate the command,
+    which is where origin/main refused it."""
     if not _mentions_command(command, 'git'):
         return []
     lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
@@ -69,14 +82,18 @@ def _flat_targets(command, base):
     try:
         return _walk(list(lexer), base)
     except ValueError:
-        return []
+        return None
 
 
 def git_commands(command, base):
-    """Commit and push targets of command. The union with _flat_targets makes
-    the result never smaller than the flat reading whenever that reading
-    succeeds; the rewrite adds what the flat reading misses or refuses."""
+    """Commit and push targets of command, never less than origin/main's
+    flat reading: its targets are added when it succeeds, and where it
+    refused, the command is refused too unless the rewrite finds a target
+    or no commit or push is left in the rewritten text."""
+    if len(command) > MAX_COMMAND:
+        return _uninspectable(command, ValueError(f'command longer than {MAX_COMMAND} characters'))
     flat = _flat_targets(command, base)
+    refused, flat = flat is None, flat or []
     try:
         rewritten = shell_text.shell_lines(command)
     except ValueError as error:
@@ -88,6 +105,9 @@ def git_commands(command, base):
     except ValueError as error:
         return _uninspectable(rewritten, error) or flat
     targets = _walk(tokens, base)
+    if refused and not targets:
+        _uninspectable(rewritten, ValueError(
+            'origin/main refused this command and the rewrite finds no commit or push in it'))
     return targets + [target for target in flat if target not in targets]
 
 

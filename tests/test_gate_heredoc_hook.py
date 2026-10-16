@@ -2,6 +2,8 @@
 
 Source: POSIX Shell Command Language §2.7.4 (Here-Document).
 """
+import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -111,3 +113,45 @@ def test_heredoc_pending_at_the_end_of_a_substitution_is_refused(package, consum
     result = run_bash_hook(package, consumer, 'x="$(cat <<EOF)"\ncat <<Y\nEOF\ntrue; git commit -m x\nY')
     assert result.returncode == 2, result.stdout + result.stderr
     assert 'here-document still pending' in result.stderr
+
+
+# Round 5: with an apostrophe origin/main's lexer cannot read, the rewrite
+# decides alone (Z1, Z2, Z7, and the pre-existing then-git form O1).
+WRAPPED = ": <<'Q'\nit's\nQ\n"
+
+
+@pytest.mark.parametrize('command', [
+    'echo ${x:-{} <<EOF }\ngit commit -m x\nEOF',
+    'echo ${x:-{} <<EOF }\ngit push\nEOF',
+    'echo "$(case x { x) echo ;; })"; git commit -m x; echo ";esac)"',
+    'if true; then git commit -m x; fi',
+])
+def test_wrapped_commit_is_blocked(package, consumer, command):
+    (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
+    subprocess.run(['git', 'add', '.'], cwd=consumer, check=True)
+    result = run_bash_hook(package, consumer, WRAPPED + command)
+    assert result.returncode == 2, result.stdout + result.stderr
+
+
+def load_hook(monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / 'hooks'))
+    spec = importlib.util.spec_from_file_location('zetetic_gates_hook', ROOT / 'hooks/zetetic-gates.py')
+    hook = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hook)
+    return hook
+
+
+@pytest.mark.parametrize('command, code', [('git commit -m x', 2), ('echo hi', None)])
+def test_unexpected_exception_blocks_only_a_commit(monkeypatch, capsys, command, code):
+    """Only exit 2 blocks a Claude Code tool call; any other failure lets it
+    through, so an unexpected error must not wave a commit on."""
+    hook = load_hook(monkeypatch)
+    monkeypatch.setattr(hook, 'run', lambda _event: (_ for _ in ()).throw(RuntimeError('boom')))
+    event = {'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_input': {'command': command}}
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(json.dumps(event)))
+    if code is None:
+        with pytest.raises(RuntimeError):
+            hook.main()
+    else:
+        assert hook.main() == code
+        assert 'unexpected RuntimeError' in capsys.readouterr().err

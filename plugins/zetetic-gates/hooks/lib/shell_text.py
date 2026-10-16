@@ -8,8 +8,13 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   arithmetic expansion, a backslash quoting only $ ` \\ and newline; quotes
   and # there are data. Only the commands of its $(...) and `...` are kept.
 - §2.6.2: ${...} ends at the first unquoted } that is not part of a nested
-  unit; a bare { inside it is text. Inside "${...}", bash reads ' as a quote
-  and zsh as a literal, so a ' there raises ValueError.
+  unit; a bare { inside it is text in bash, and in zsh only inside "...".
+  Unquoted, zsh counts a bare { and ends later: when the text between the
+  two ends could change which lines are commands, this raises ValueError.
+  Inside "${...}", bash reads ' as a quote and zsh as a literal, so a '
+  there raises ValueError.
+- zsh also reads case WORD { pattern) ... }, which bash rejects: a case
+  whose subject is not followed by in raises ValueError.
 - §2.6.2 Parameter Expansion, §2.6.4 Arithmetic Expansion: inside ${...} and
   $((...)), and bash's $[...] and ((...)) command, << and # are word or
   operator text, not a redirection or a comment. Only a command substitution
@@ -160,21 +165,55 @@ def _span_piece(text, index):
 def _span(text, start):
     """Rewrite the expansion opening at text[start] through its closer:
     (end, text), or None when it never closes."""
-    opener, out, depth, index = text[start], [], 0, start
+    opener, out, index = text[start], [text[start]], start + 1
     while index < len(text):
         char = text[index]
-        # A bare { inside ${...} is text (bash, zsh): only nested units and
-        # the first unquoted } count. [ in $[...] and ( in ((...)) nest.
-        if char == CLOSERS[opener] or (char == opener and (opener != '{' or index == start)):
-            depth += 1 if char == opener else -1
+        if char == CLOSERS[opener]:
             out.append(char)
-            index += 1
-            if depth == 0:
-                return index, ''.join(out)
-            continue
-        index, piece = _span_piece(text, index)
+            return index + 1, ''.join(out)
+        # A nested [ or ( is its own span, cached, so each character is read
+        # once however many spans open before it. A bare { inside ${...} is
+        # text for bash; _zsh_brace_check covers zsh.
+        if char == opener and opener != '{':
+            found = _span(text, index)
+            if found is None:
+                return None
+            index, piece = found
+        else:
+            index, piece = _span_piece(text, index)
         out.append(piece)
     return None
+
+
+def _zsh_brace_end(text, start):
+    """End of the ${...} opening at text[start] as zsh reads it unquoted:
+    every bare { and } counts. len(text) when it never closes."""
+    depth, index = 0, start
+    while index < len(text):
+        char = text[index]
+        if char in '{}':
+            depth += 1 if char == '{' else -1
+            index += 1
+            if depth == 0:
+                return index
+        elif _quote_start(text, index):
+            index = _quoted(text, index)[0]
+        elif char == '\\':
+            index += 2
+        elif text.startswith(('$(', '$[', '$(('), index):
+            index = _nested(text, index)[0]
+        else:
+            index += 1
+    return len(text)
+
+
+def _zsh_brace_check(text, index, end):
+    """Raise when bash ends the unquoted ${...} at index at end and zsh,
+    counting bare braces, ends it later past text that could hide or make a
+    command: an operator, quote, newline, comment, $ or backslash."""
+    later = text[end:_zsh_brace_end(text, index + 1)]
+    if re.search(r'[;&|()<>\n\'"`#$\\]', later):
+        raise ValueError('bare { inside ${...}: bash and zsh end it at different braces')
 
 
 @lru_cache(maxsize=None)
@@ -320,6 +359,8 @@ def _next_piece(text, index, pending, word_start):
         return end, ' '
     if text.startswith(('((', '$((', '${', '$['), index):
         found = _expansion(text, index)
+        if found and text.startswith('${', index):
+            _zsh_brace_check(text, index, found[0])
         if found:
             return found
     if text.startswith(('$(', '<(', '>('), index):
@@ -364,7 +405,10 @@ REDIRECTS = {'<', '>', '<<<'}
 
 def _after_separator(text, index):
     """True when the word at index follows an operator or an OPENERS word."""
-    before = text[:index].replace('\\\n', '').rstrip(' \t')
+    # A bounded look-back keeps this linear; the full text only when the
+    # window holds nothing but blanks.
+    window = text[max(0, index - 256):index]
+    before = (window if window.strip() else text[:index]).replace('\\\n', '').rstrip(' \t')
     if before[-1:] in ('', ';', '&', '|', '(', '\n'):
         return True
     return re.split(r'[ \t\n;&|()<>]', before)[-1] in OPENERS
@@ -378,6 +422,8 @@ def _case_step(cases, header, word, separated):
         return cases, 'in'
     if header == 'in' and word == 'in':
         return cases, 'pattern'
+    if header == 'in':
+        raise ValueError('case without in: zsh reads case WORD { ... }, bash does not')
     if cases and word == 'esac' and (header == 'pattern' or separated):
         return cases - 1, None
     return cases, None
@@ -418,7 +464,11 @@ def _subscript_heredoc(text, index):
     if not match:
         return False
     found = _span(text, match.end() - 1)
-    return '<<' in _bare(text, match.end(), found[0] if found else len(text))
+    if found is None:
+        # Unclosed: any << after it may be read either way. find() keeps
+        # this linear in the number of words.
+        return text.find('<<', match.end()) >= 0
+    return '<<' in _bare(text, match.end(), found[0])
 
 
 def _bare(text, index, end):

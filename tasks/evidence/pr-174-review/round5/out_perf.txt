@@ -1,0 +1,12 @@
+    0.01s  len=   6015  many a[ words 2k             REFUSE
+    0.01s  len=  24015  many a[ words 8k             REFUSE
+    0.00s  len= 140014  many esac 20k                REFUSE
+    0.01s  len=   1210  nested $( 400                REFUSE
+    0.01s  len=   1510  nested "$( 300               REFUSE
+    0.01s  len=   2417  nested ${ 400                REFUSE
+    0.01s  len=   9016  many ${ unclosed 3k          REFUSE
+    0.01s  len=  12016  many $( unclosed 3k          REFUSE
+    0.01s  len=   9016  many (( 3k                   REFUSE
+    0.01s  len=   9016  many x[ in subscript 3k      REFUSE
+    0.41s  len=  87795  heredocs 5k                  [('/tmp/base', 'commit')]
+    0.00s  len= 216016  200KB prose dq               REFUSE
