@@ -80,12 +80,53 @@ def test_what_each_command_publishes(repo, command, names):
 
 
 def test_two_names_for_one_commit_are_one_tip(repo):
-    assert list(resolve(repo, "git push origin main HEAD")) == ["main"]  # first name wins; the commit is judged once
+    assert list(resolve(repo, "git push origin main HEAD")) == ["main, HEAD"]  # judged once, named by both
 
 
-@pytest.mark.parametrize("specs", [[":feat"], ["refs/tags/v1"], ["refs/tags/*:refs/tags/*"], ["+:feat"]])
-def test_deletions_and_tags_publish_no_commit(repo, specs):
+@pytest.mark.parametrize("specs", [[":feat"], [":refs/tags/v1"], ["+:feat"]])
+def test_deletions_publish_no_commit(repo, specs):
     assert pub.resolve(str(repo), {**publish_of("git push origin feat"), "specs": specs}) == []
+
+
+@pytest.mark.parametrize("command,names", [
+    ("git push origin refs/tags/v1", ["tag v1"]),
+    ("git push origin tag v1", ["tag v1"]),
+    ("git push origin refs/tags/v1:refs/heads/x", ["refs/tags/v1"]),  # a tag to a branch: the source is the commit
+    ("git push origin v1:refs/heads/x", ["v1"]),
+    ("git push origin 'refs/tags/*:refs/tags/*'", ["tag v1"]),
+    ("git push origin 'refs/tags/*:refs/heads/*'", ["refs/tags/v1"]),
+    ("git push origin feat:refs/tags/viafeat", ["tag viafeat"]),
+    ("git push --tags", ["tag v1"]),
+    ("git push --tags origin main", ["main", "tag v1"]),
+    ("git push --follow-tags origin main", ["main"]),  # v1 is lightweight, and not reachable from main
+])
+def test_what_a_tag_publishes(repo, command, names):
+    assert sorted(resolve(repo, command)) == sorted(names)
+
+
+def test_a_tag_whose_commit_the_remote_already_reaches_publishes_nothing(repo):
+    git(repo, "update-ref", "refs/remotes/origin/feat", "feat")  # as after a fetch
+    assert list(resolve(repo, "git push origin refs/tags/v1")) == []
+    assert list(resolve(repo, "git push --tags")) == []
+    assert list(resolve(repo, "git push origin refs/tags/v1:refs/heads/x")) == ["refs/tags/v1"]  # to a branch it is judged anyway
+
+
+def test_two_tags_on_one_commit_are_one_tip_named_by_both(repo):
+    git(repo, "tag", "v2", "feat")
+    assert list(resolve(repo, "git push --tags")) == ["tag v1, tag v2"]
+
+
+def test_a_tag_of_a_blob_publishes_no_commit(repo):
+    blob = git(repo, "rev-parse", "main:a")
+    git(repo, "tag", "blobtag", blob)
+    assert sorted(resolve(repo, "git push --tags")) == ["tag v1"]
+
+
+def test_follow_tags_pushes_annotated_tags_reachable_from_the_pushed_tips(repo):
+    git(repo, "tag", "-a", "-m", "m", "ann", "main")
+    git(repo, "tag", "-a", "-m", "m", "elsewhere", "feat")
+    assert sorted(resolve(repo, "git push --follow-tags origin main")) == ["main, tag ann"]
+    assert sorted(resolve(repo, "git push --follow-tags origin feat main")) == ["feat, tag elsewhere", "main, tag ann"]
 
 
 def test_a_name_that_is_not_a_commit_is_unresolvable_with_the_name_in_the_reason(repo):
@@ -219,3 +260,12 @@ def test_a_git_failure_while_listing_refs_is_unresolvable_with_the_command_named
     monkeypatch.setattr(pub.gitq, "git", lambda *a, **k: failing)
     with pytest.raises(pub.Unresolvable, match="git for-each-ref failed: fatal: broken repository"):
         pub.resolve(str(repo), publish_of("git push --all"))
+
+
+def test_the_configuration_can_make_every_push_follow_tags(repo):
+    git(repo, "tag", "-a", "-m", "m", "ann", "main")
+    assert list(resolve(repo, "git push origin main")) == ["main"]
+    git(repo, "config", "push.followTags", "true")
+    assert list(resolve(repo, "git push origin main")) == ["main, tag ann"]  # the same push, now carrying the tag
+    assert list(resolve(repo, "git push --no-follow-tags origin main")) == ["main"]  # the command line wins
+    assert list(resolve(repo, "gh pr create")) == ["main"]  # gh pr create pushes nothing by itself

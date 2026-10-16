@@ -4,7 +4,8 @@ Pure parsing on top of gate_shell: no I/O, no git. ``actions(command, base_cwd)`
 
   {"kind": "commit", "dir", "why", "amend", "allow_empty"}   `git commit` (why: flags that make the
                                                               index at hook time unreliable)
-  {"kind": "push",   "dir", "why": [], "publish"}             `git push` that can publish a commit, `gh pr create`;
+  {"kind": "push",   "dir", "why": [], "publish"}             `git push` that can publish a commit (not a deletion or a
+                                                              dry run), `gh pr create`;
                                                               ``publish`` says WHICH refs (gate_publish resolves them)
   {"kind": "stage",  "dir"}                                  `git add|rm|mv|...`: the index may have changed
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 import os
 from typing import Iterator, NamedTuple
 
+import gate_pushargs as pushargs
 import gate_shell as shell
 
 # git subcommands that change the index (chained before a commit, the staged tree is unverifiable).
@@ -28,7 +30,6 @@ _COMMIT_LONG_ARG = frozenset(
 )
 _COMMIT_SHORT_ARG = frozenset("mFcCt")
 _COMMIT_SHORT_ATTACHED = frozenset("uS")  # optional-argument options: rest of cluster is the value.
-_PUSH_LONG_ARG = frozenset({"push-option", "repo", "receive-pack", "exec"})
 _GIT_GLOBAL_ARG = frozenset({"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
 _COMMIT_INDEX_LONG = ("all", "include", "only", "patch", "interactive")
 
@@ -88,59 +89,6 @@ def commit_info(args: list[str]) -> dict:
     return info
 
 
-def _push_flags(args: list[str]) -> tuple[dict, list[str]]:
-    flags = {"tags": False, "delete": False, "dry": False, "all": False, "mirror": False, "repo": False}
-    names = {"tags": "tags", "delete": "delete", "dry": "dry-run", "mirror": "mirror", "repo": "repo"}
-    positional: list[str] = []
-    i = 0
-    while i < len(args):
-        a = args[i]
-        i += 1
-        if a == "--":
-            positional += args[i:]
-            break
-        if a.startswith("--"):
-            name = a[2:].partition("=")[0]
-            for flag, long_name in names.items():
-                flags[flag] |= name == long_name
-            flags["all"] |= name in ("all", "branches")
-            i += name in _PUSH_LONG_ARG and "=" not in a
-        elif a.startswith("-") and len(a) > 1:
-            flags["delete"] |= "d" in a[1:]
-            flags["dry"] |= "n" in a[1:]
-            i += a[1:].endswith("o") and len(a) == 2
-        else:
-            positional.append(a)
-    return flags, positional
-
-
-def push_publish(args: list[str]) -> dict:
-    """Which refs a `git push` publishes, as words (gate_publish.resolve turns them into trees).
-
-    all/mirror: every local branch; specs: the refspecs given (none: the current branch, or what the
-    configuration says); remote: the remote named on the command line (None: not named, or `--repo`).
-    """
-    flags, positional = _push_flags(args)
-    remote = None if flags["repo"] or not positional else positional[0]
-    specs = positional if flags["repo"] else positional[1:]
-    return {"all": flags["all"], "mirror": flags["mirror"], "remote": remote, "specs": specs, "gh_head": None, "gh": False}
-
-
-def push_only_tags_or_delete(args: list[str]) -> bool:
-    """True when the push cannot publish a commit: tags only, deletion, or dry-run."""
-    flags, positional = _push_flags(args)
-    if flags["delete"] or flags["dry"]:
-        return True
-    if flags["all"] or flags["mirror"]:
-        return False
-    refspecs = positional if flags["repo"] else positional[1:]  # positional[0] is the remote (unless --repo names it)
-    if refspecs and refspecs[0] == "tag":
-        return True
-    if refspecs:
-        return all(r.startswith("refs/tags/") or r.startswith(":") for r in refspecs)
-    return flags["tags"]
-
-
 def _git_call(words: list[str], cwd: str) -> _Call | None:
     """Split `git [global options] SUB ARGS` (``words`` starts with `git`), resolving -C against ``cwd``."""
     gdir, i = cwd, 1
@@ -184,7 +132,8 @@ def gh_head(words: list[str]) -> str | None:
 
 
 def _gh_publish(words: list[str]) -> dict:
-    return {"all": False, "mirror": False, "remote": None, "specs": [], "gh_head": gh_head(words), "gh": True}
+    return {"all": False, "mirror": False, "tags": False, "follow_tags": None, "remote": None, "specs": [],
+            "gh_head": gh_head(words), "gh": True}
 
 
 def _cd_target(words: list[str], cwd: str) -> str:
@@ -206,8 +155,8 @@ def _git_action(call: _Call, staged_before: bool) -> dict | None:
             why.insert(0, "stages (add/rm/mv/...) in the same call before the commit")
         return {"kind": "commit", "dir": call.dir, "why": why,
                 "amend": info["amend"], "allow_empty": info["allow_empty"]}
-    if call.sub == "push" and not push_only_tags_or_delete(call.args):
-        return {"kind": "push", "dir": call.dir, "why": [], "publish": push_publish(call.args)}
+    if call.sub == "push" and not pushargs.publishes_no_commit(call.args):
+        return {"kind": "push", "dir": call.dir, "why": [], "publish": pushargs.publish(call.args)}
     return None
 
 
