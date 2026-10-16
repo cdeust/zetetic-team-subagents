@@ -79,6 +79,8 @@ def test_unquoted_heredoc_prose_is_not_refused(package, consumer, command):
     "cat <<$'EOF'\nbody\nEOF\ngit commit -m x",
     'cat <<A; echo $(cat <<B\nb\nB\n)\na\nA\ngit commit -m x',
     'x;(git commit -m x)',
+    'echo "$(echo &>/dev/null case)"; git commit -m x; echo ";esac)"',
+    'echo "${x:-{}"; git commit -m x; echo "}"',
 ])
 def test_commit_hidden_by_rewrite_reaches_commit_gate(package, consumer, command):
     (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
@@ -102,3 +104,10 @@ def test_heredoc_that_never_ends_is_refused_before_a_commit(package, consumer):
     result = run_bash_hook(package, consumer, "cat <<EOF\nwe don't git commit here")
     assert result.returncode == 2, result.stdout + result.stderr
     assert 'Here-document never ends' in result.stderr
+
+
+def test_heredoc_pending_at_the_end_of_a_substitution_is_refused(package, consumer):
+    """bash reads the lines after $(cat <<EOF) as its body, zsh as commands."""
+    result = run_bash_hook(package, consumer, 'x="$(cat <<EOF)"\ncat <<Y\nEOF\ntrue; git commit -m x\nY')
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert 'here-document still pending' in result.stderr

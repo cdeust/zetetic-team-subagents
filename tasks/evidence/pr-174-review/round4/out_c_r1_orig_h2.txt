@@ -1,0 +1,3 @@
+ok                     harmless-kept-body-comment     main=[]                 r3=[]                 head=[]                 bash=[]                 zsh=[]                 cmd="cat > hook.sh <<EOF\n#!/bin/sh\n# don't git commit from here\necho $(date)\nEOF"
+ok                     harmless-kept-body-comment-push main=[]                 r3=[]                 head=[]                 bash=[]                 zsh=[]                 cmd="cat > run.sh <<EOF\nstamp=$(date +%s)\n# we can't git push yet\nEOF\nchmod +x run.sh"
+COUNTS {'ok': 2}

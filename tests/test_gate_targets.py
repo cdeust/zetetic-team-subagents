@@ -1,6 +1,9 @@
 """Post-tool repository targets do not require obsolete patch preimages."""
 import importlib.util
+import os
 from pathlib import Path
+import re
+import shlex
 
 import pytest
 
@@ -258,7 +261,6 @@ def test_nesting_beyond_the_recursion_limit_is_refused_only_for_git(tmp_path, ta
     'cat <<\\\nEOF\nbody\nEOF\ngit commit -m x',
     "cat <<'E\\F'\nbody\nE\\F\ngit commit -m x",
     'cat <<A; echo $(cat <<B\nb\nB\n)\na\nA\ngit commit -m x',
-    'echo $(cat <<EOF)\ngit commit -m x\nEOF',
     'cat <<EOF\n"$(git commit -m x)"\nEOF',
     "cat <<EOF\n'$(git commit -m x)'\nEOF",
 ])
@@ -290,9 +292,12 @@ def test_operator_runs_separate_commands(tmp_path, command):
     ("cat <<EOF\nwe don't git commit here", 'refused'),
     ("cat > f <<'EOF'\nwon't\nEOF \ngit commit -m x", 'refused'),
     ("cat <<EOF\nit's fine", []),
-    ('let x=1<<2 &&\ngit commit -m x\n2', []),
+    # bash and zsh read the git line as body, but the flat reading gates it.
+    ('let x=1<<2 &&\ngit commit -m x\n2', 'commit'),
 ])
 def test_unterminated_heredoc_is_refused_only_for_git(tmp_path, command, expected):
+    if expected == 'commit':
+        expected = [(str(tmp_path), 'commit')]
     assert outcome(command, str(tmp_path)) == expected
 
 
@@ -350,3 +355,80 @@ def test_case_counts_only_in_command_position(tmp_path, command):
 ])
 def test_quoted_units_do_not_refuse_a_plain_commit(tmp_path, command):
     assert outcome(command, str(tmp_path)) == [(str(tmp_path), 'commit')]
+
+
+# PR #174 review, round 4: bash (or zsh) runs git in each of these and the
+# round-3 head returned []. case after &> or an assignment, esac right after
+# in or split by a backslash-newline, a bare { inside ${...}, and a
+# here-document still pending where a $(...) ends (bash reads the next lines
+# as its body, zsh does not).
+ROUND4 = [
+    'echo "$(echo &>/dev/null case)"; git commit -m x; echo ";esac)"',      # P1
+    'echo "$(a=1 case)"; git commit -m x; echo ";esac)"',                   # P3
+    'echo "$(case x in x) echo;; es\\\nac)"; git commit -m x; echo ";esac)"',  # P5
+    'v="$(echo &>/dev/null case)"; git push; echo ";esac)"',                # P7
+    'echo "$(case x in esac)"; git commit -m x; echo ";esac)"',             # P8
+    'echo "${x:-{}"; git commit -m x; echo "}"',                            # R1
+    'y="${x#{}"; git push; echo "}"',                                       # R5
+    'echo "${x:-\'}"; git commit -m x; echo "\'}"',                        # R2
+    'x="$(cat <<EOF)"\ncat <<Y\nEOF\ntrue; git commit -m x\nY',             # S1
+    'x=$(cat <<EOF)\ncat <<Y\nEOF\nls && git push origin main\nY',          # S3
+    'echo $(cat <<EOF)\ngit commit -m x\nEOF',
+]
+
+
+@pytest.mark.parametrize('command', ROUND4)
+def test_round4_inputs_are_gated_or_refused(tmp_path, command):
+    result = outcome(command, str(tmp_path))
+    assert result == 'refused' or {verb for _d, verb in result} & {'commit', 'push'}
+
+
+def test_a_shift_inside_arithmetic_in_a_subscript_is_gated(tmp_path):
+    assert outcome('a[$((1<<2))]=x; git commit -m x', str(tmp_path)) == [(str(tmp_path), 'commit')]
+
+
+def flat_reading(command, base):
+    """origin/main 811818b's git_commands, verbatim in behaviour: the raw
+    command lexed as one flat line, a lex failure being a refusal."""
+    if not re.search(r'\bgit\s', command.replace("'", '').replace('"', '').replace('\\', '')):
+        return []
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
+    lexer.whitespace_split = True
+    tokens = list(lexer)
+    current, segment, targets = os.path.abspath(base), [], []
+    for token in [*tokens, ';']:
+        if token not in module.git_cwd.SEPARATORS:
+            segment.append(token)
+            continue
+        directory, verb = module._git_command(segment, current)
+        target = (directory, verb) if verb in {'commit', 'push'} else None
+        if target and target not in targets:
+            targets.append(target)
+        if token in {'&&', ';'}:
+            current = module.git_cwd._cd_target(segment, current) or current
+        segment = []
+    return targets
+
+
+def corpus():
+    """Every command string this module tests, plus ROUND4."""
+    marks = [mark for value in list(globals().values())
+             for mark in getattr(value, 'pytestmark', []) if mark.name == 'parametrize']
+    rows = [row for mark in marks for row in mark.args[1]]
+    items = [item for row in rows for item in (row if isinstance(row, tuple) else (row,))]
+    return sorted(set(ROUND4) | {item for item in items if isinstance(item, str) and 'git' in item})
+
+
+def test_targets_are_a_superset_of_the_flat_reading(tmp_path):
+    """Wherever origin/main's flat reading succeeds, git_commands returns
+    every target it found, or refuses the command."""
+    base, checked = str(tmp_path), 0
+    for command in corpus():
+        try:
+            flat = flat_reading(command, base)
+        except ValueError:
+            continue
+        result = outcome(command, base)
+        assert result == 'refused' or set(flat) <= set(result), command
+        checked += 1
+    assert checked >= 90  # source: 98 commands of this module lex flat on 2026-10-16
