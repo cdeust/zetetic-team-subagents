@@ -1,0 +1,4 @@
+load [141, 160, 174]
+  13.76s len=131068 exit=0 one dq token at cap
+  15.00s len=131066 exit=0 one plain token at cap
+  13.94s len=131068 exit=0 many short words at cap

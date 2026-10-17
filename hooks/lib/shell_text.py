@@ -43,6 +43,11 @@ Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
   unit, so << in it is a shift; zsh reads a here-document there. The shells
   disagree on which lines are commands, so a word NAME[...] holding <<
   raises ValueError.
+- zsh: a ( right after a word character opens a glob group that is part of
+  the word (a(#b), *.py(N)), so a # inside it is not a comment. Not after =
+  (an array assignment) and not in f() (a function definition).
+- §2.7.4 (bash, zsh): in a body whose delimiter is unquoted, a
+  backslash-newline joins two lines before the delimiter is matched.
 - §2.3 rule 9: # begins a comment only at the start of a word, so not right
   after a $(...), $((...)), bash's <(...) or a removed backslash-newline.
 - §2.2.1: a backslash-newline is removed before the line is read.
@@ -103,8 +108,10 @@ def _nested(text, index):
 
 def _dquote(text, start):
     """(end, word) for the "..." at start. A $(...), ${...}, $((...)) or
-    `...` inside is a unit whose quotes do not close it (§2.2.3); its text is
-    escaped for the lexer. Unclosed, the text is copied so the lexer fails."""
+    `...` inside is a unit whose quotes do not close it (§2.2.3). Its
+    rewritten text goes in without quotes or backslashes: commands inside
+    quotes are not read, its words stay visible, and no nesting level
+    multiplies the escaping. Unclosed, the text is copied so the lexer fails."""
     out, index = ['"'], start + 1
     while index < len(text) and text[index] != '"':
         if text[index] == '\\':
@@ -113,7 +120,7 @@ def _dquote(text, start):
             end, unit = _nested(text, index)
             if text.startswith('${', index) and "'" in text[index:end]:
                 raise ValueError("' inside \"${...}\": bash reads a quote, zsh a literal")
-            index, piece = end, _escaped(unit)
+            index, piece = end, unquoted(unit)
         else:
             piece, index = text[index], index + 1
         out.append(piece)
@@ -302,19 +309,37 @@ def _heredoc_word(text, start):
             index += 2
         else:
             # A $(...) or ${...} is one unit of the word, ; or ( inside too.
-            index = _nested(text, index)[0]
+            end = _nested(text, index)[0]
+            # Any later zsh end changes the delimiter word itself.
+            if text.startswith('${', index) and _zsh_brace_end(text, index + 1) != end:
+                raise ValueError('bare { inside a heredoc delimiter: bash and zsh read different words')
+            index = end
     return (index, *_delimiter(text[word_start:index]), strip_tabs)
 
 
-def _heredoc_body(text, start, delimiter, strip_tabs):
-    """Read body lines from start through the delimiter line: (end, body).
-    Raises ValueError when no line holds the delimiter."""
-    index, lines = start, []
-    while index < len(text):
+def _body_line(text, index, joined):
+    """(end, line) for the body line at index. When joined (an unquoted
+    delimiter), a line ending in an odd run of backslashes continues on the
+    next one, as bash and zsh read it before matching the delimiter."""
+    parts = []
+    while True:
         newline = text.find('\n', index)
         end = len(text) if newline < 0 else newline + 1
         line = text[index:end].removesuffix('\n')
         index = end
+        odd = (len(line) - len(line.rstrip('\\'))) % 2
+        if not (joined and odd and newline >= 0):
+            return index, ''.join(parts) + line
+        parts.append(line[:-1])
+
+
+def _heredoc_body(text, start, delimiter, quoting):
+    """Read body lines from start through the delimiter line: (end, body).
+    quoting is (quoted, strip_tabs). Raises ValueError when no line holds
+    the delimiter."""
+    (quoted, strip_tabs), index, lines = quoting, start, []
+    while index < len(text):
+        index, line = _body_line(text, index, not quoted)
         if (line.lstrip('\t') if strip_tabs else line) == delimiter:
             return index, '\n'.join(lines)
         lines.append(line)
@@ -365,6 +390,12 @@ def _next_piece(text, index, pending, word_start):
             return found
     if text.startswith(('$(', '<(', '>('), index):
         return _substitution(text, index)
+    if char == '(' and not word_start and index and text[index - 1] not in WORD_END + '=' \
+            and not text.startswith('()', index):
+        # zsh reads a(#b) and *.py(N) as one word: no # in it is a comment.
+        found = _span(text, index)
+        if found:
+            return found
     if char == '#' and word_start:
         end = text.find('\n', index)
         return (len(text) if end < 0 else end), ''
@@ -375,7 +406,7 @@ def _heredocs(text, index, pending, out):
     """At an unquoted newline, consume the pending bodies: the next index."""
     out.append(' ;\n')
     for delimiter, quoted, strip_tabs in pending:
-        index, body = _heredoc_body(text, index, delimiter, strip_tabs)
+        index, body = _heredoc_body(text, index, delimiter, (quoted, strip_tabs))
         out.append(('' if quoted else _body_commands(body)) + ' ;\n')
     pending.clear()
     return index

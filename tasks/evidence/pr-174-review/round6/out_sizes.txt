@@ -1,0 +1,9 @@
+dq-subst d=10        input=    272 rewritten=54       tokens=6          time=  0.00s [('/tmp', 'commit')]
+dq-subst d=14        input=    292 rewritten=66       tokens=6          time=  0.00s [('/tmp', 'commit')]
+dq-subst d=20        input=    322 rewritten=84       tokens=6          time=  0.00s [('/tmp', 'commit')]
+dq-span d=14         input=    329 rewritten=103      tokens=6          time=  0.00s [('/tmp', 'commit')]
+dq-span d=20         input=    377 rewritten=139      tokens=6          time=  0.00s [('/tmp', 'commit')]
+newlines 30k         input= 126015 rewritten=162015   tokens=over cap   time=  0.98s REFUSE
+parens 20k           input=  80022 rewritten=100022   tokens=60006      time=  1.50s [('/tmp', 'commit')]
+ansi escapes 3k      input=   6025 rewritten=9024     tokens=7          time=  0.22s REFUSE
+one token at cap     input= 131016 rewritten=131016   tokens=4          time=  5.07s [('/tmp', 'commit')]

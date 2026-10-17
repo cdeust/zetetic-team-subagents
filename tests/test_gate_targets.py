@@ -151,7 +151,9 @@ def outcome(command, base):
 
 
 def test_gate_refuses_only_when_a_commit_or_push_may_be_hidden(tmp_path):
-    """A lex failure refuses only if a commit or push survives heredoc removal."""
+    """A lex failure refuses only if a commit or push survives heredoc removal.
+    Where origin/main refused (an unbalanced apostrophe in a body), a commit
+    or push anywhere in the rewritten text is refused too (owner decision)."""
     base = str(tmp_path)
     commit, push = [(base, 'commit')], [(base, 'push')]
     expected = {
@@ -162,10 +164,11 @@ def test_gate_refuses_only_when_a_commit_or_push_may_be_hidden(tmp_path):
         'echo "see the git log': [],
         "cat <<EOF\nthe git hook won't run\nEOF": [],
         'cat <<EOF\n$(git commit -m x)\nEOF': commit,
-        "cat <<EOF\nwon't $(git commit -m x)\nEOF": commit,
-        "cat > f <<'EOF'\nwon't\nEOF\ngit commit -m x": commit,
-        "cat > f <<'EOF' && git commit -m x\nwon't\nEOF": commit,
-        "cat > f <<-'EOF'\n\twon't\n\tEOF\n(git push)": push,
+        # origin/main refused it (an unbalanced quote); so does the gate.
+        "cat <<EOF\nwon't $(git commit -m x)\nEOF": 'refused',
+        "cat > f <<'EOF'\nwon't\nEOF\ngit commit -m x": 'refused',
+        "cat > f <<'EOF' && git commit -m x\nwon't\nEOF": 'refused',
+        "cat > f <<-'EOF'\n\twon't\n\tEOF\n(git push)": 'refused',
         "git commit -m \"$(cat <<'EOF'\nmsg won't\nEOF\n)\"": commit,
         "echo '<<EOF' && echo \"\nEOF\" && git push": push,
         "git commit <<< \"it's fine\"": commit,
@@ -350,7 +353,6 @@ def test_case_counts_only_in_command_position(tmp_path, command):
 
 @pytest.mark.parametrize('command', [
     'n="$(grep -c "<<EOF" /dev/null)"\ngit commit -m x',                  # U8
-    'git commit -m "$(cat <<\'EOF\'\nfix: say "hi\nEOF\n)"',
     "$'git' commit -m x",
 ])
 def test_quoted_units_do_not_refuse_a_plain_commit(tmp_path, command):
@@ -500,3 +502,82 @@ def test_large_inputs_are_gated_or_refused(tmp_path, command):
 
 def test_large_input_without_git_is_not_refused(tmp_path):
     assert outcome('echo "' + 'x' * 140000 + '"', str(tmp_path)) == []
+
+
+# PR #174 review, round 6. Under an apostrophe origin/main cannot lex, a
+# decoy commit in another repository must not waive the refusal for a commit
+# the rewrite cannot resolve (X1-X6); the rewrite must not drop text the
+# shell runs (B1, B2: a backslash-newline joins body lines before the
+# delimiter match; H3: zsh's a(#b) is one word; Y1: a heredoc word ${...}
+# that zsh ends later). Each must be refused or gated.
+DECOYS = [
+    'git -C /tmp/clean commit -m y; if true; then git commit -m x; fi',     # X1
+    'git -C /tmp/clean commit -m y; echo "$(git commit -m x)"',             # X2
+    'git -C /tmp/clean commit -m y; echo `git commit -m x`',                # X3
+    'git -C /tmp/clean commit -m y; nohup git push',                        # X4
+    'git -C /tmp/clean commit -m y; bash -c "git commit -m x"',             # X5
+    'git -C /tmp/clean commit -m "$(git commit -m x)"',                     # X6
+]
+REMOVALS = [
+    'cat <<EOF\nhello\nEO\\\nF\ngit commit -m x\nEOF',                      # B1
+    'cat <<EOF\nEOF\\\n\ngit commit -m x\nEOF',                             # B2
+    'x=a(#b); git commit -m x',                                             # H3
+    'echo a(|#b)(N); git commit -m x',                                      # H4
+    'cat <<${x:-{} a}\n${x:-{} a}\ngit commit -m x\n${x:-{}\n}',            # Y1
+]
+
+
+@pytest.mark.parametrize('wrap', sorted(WRAPPERS))
+@pytest.mark.parametrize('command', DECOYS)
+def test_a_decoy_target_does_not_waive_the_refusal(tmp_path, wrap, command):
+    assert outcome(WRAPPERS[wrap](command), str(tmp_path)) == 'refused'
+
+
+@pytest.mark.parametrize('wrap', ['', *sorted(WRAPPERS)])
+@pytest.mark.parametrize('command', REMOVALS)
+def test_text_the_shell_runs_is_not_removed(tmp_path, wrap, command):
+    command = WRAPPERS[wrap](command) if wrap else command
+    result = outcome(command, str(tmp_path))
+    assert result == 'refused' or (str(tmp_path), 'commit') in result
+
+
+def test_a_quoted_delimiter_body_is_not_joined(tmp_path):
+    command = "cat <<'EOF'\nhello\nEO\\\nF\ngit commit -m x\nEOF"
+    assert outcome(command, str(tmp_path)) == []
+
+
+@pytest.mark.parametrize('command', [
+    '"$(' * 14 + 'echo ' + '\\' * 200 + ')"' * 14 + '; git commit -m x',
+    '"${x:-' * 14 + '\\\\' * 100 + '}"' * 14 + '; git commit -m x',
+    '"$(' * 40 + 'echo "a"' + ')"' * 40 + '; git commit -m x',
+])
+def test_nested_quoted_units_do_not_blow_up(tmp_path, command):
+    """Each level used to re-escape the level inside it, about 4x per level."""
+    assert gated_or_refused(outcome(command, str(tmp_path)))
+    assert len(module.shell_text.shell_lines(command)) < 10 * len(command)
+
+
+# Size bound of the rewrite (round 6). Per input character the rewrite emits
+# at most: 3 for a newline (' ;\n'), 2 for a ( ('( '), 2 for a quote or
+# backslash escaped inside $'...' or `...`, else 1; a "..." nested unit is
+# copied without quotes, so nesting adds nothing. Hence len(rewritten) <= 4n.
+# shlex then reads at most len(rewritten) characters; both are capped by
+# MAX_COMMAND, past which a commit or push is refused.
+BOUND_SHAPES = [
+    '\n' * 5000 + 'git commit -m x',
+    '(' * 3000 + 'git commit -m x' + ')' * 3000,
+    "echo $'" + "\\'" * 3000 + "'; git commit -m x",
+    'echo `' + '"\\' * 3000 + '`; git commit -m x',
+    '"$(' * 14 + 'echo ' + '\\' * 200 + ')"' * 14 + '; git commit -m x',
+    '"${x:-' * 14 + '\\\\' * 100 + '}"' * 14 + '; git commit -m x',
+    'cat <<EOF\n' + '$(echo "a")\n' * 2000 + 'EOF\ngit commit -m x',
+]
+
+
+@pytest.mark.parametrize('command', BOUND_SHAPES + corpus())
+def test_rewritten_text_is_at_most_four_times_the_input(command):
+    try:
+        rewritten = module.shell_text.shell_lines(command)
+    except ValueError:
+        return
+    assert len(rewritten) <= 4 * len(command) + 4

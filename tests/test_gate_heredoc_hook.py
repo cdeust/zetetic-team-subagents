@@ -50,9 +50,15 @@ def test_heredoc_prose_is_not_refused(package, consumer):
 
 
 def test_commit_after_heredoc_reaches_commit_gate(package, consumer):
+    """origin/main refused this (the apostrophe), and the gate keeps that
+    refusal; without the apostrophe the commit reaches the commit gate."""
     (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
     subprocess.run(['git', 'add', '.'], cwd=consumer, check=True)
     result = run_bash_hook(package, consumer, HEREDOC + '\ngit commit -m fix')
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert 'origin/main refused this command' in result.stderr
+    plain = HEREDOC.replace("won't", 'will not') + '\ngit commit -m fix'
+    result = run_bash_hook(package, consumer, plain)
     assert result.returncode == 2, result.stdout + result.stderr
     assert 'MAGIC_NUMBER' in result.stderr
 
@@ -155,3 +161,29 @@ def test_unexpected_exception_blocks_only_a_commit(monkeypatch, capsys, command,
     else:
         assert hook.main() == code
         assert 'unexpected RuntimeError' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('command', [
+    'git -C {clean} commit -m y; if true; then git commit -m x; fi',
+    'git -C {clean} commit -m "$(git commit -m x)"',
+    'cat <<EOF\nhello\nEO\\\nF\ngit commit -m x\nEOF',
+    'x=a(#b); git commit -m x',
+    'cat <<${x:-{} a}\n${x:-{} a}\ngit commit -m x\n${x:-{}\n}',
+])
+def test_round6_wrapped_commit_is_blocked(package, consumer, tmp_path, command):
+    clean = tmp_path / 'clean'
+    subprocess.run(['git', 'init', '-q', str(clean)], check=True)
+    (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
+    subprocess.run(['git', 'add', '.'], cwd=consumer, check=True)
+    result = run_bash_hook(package, consumer, WRAPPED + command.replace('{clean}', str(clean)))
+    assert result.returncode == 2, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize('command', [
+    'git\tcommit -m x', 'git \\\ncommit -m x', 'git\\\n commit -m x', 'x=1\tgit\tpush'])
+def test_unexpected_exception_blocks_tab_and_continuation_forms(monkeypatch, capsys, command):
+    hook = load_hook(monkeypatch)
+    monkeypatch.setattr(hook, 'run', lambda _event: (_ for _ in ()).throw(RuntimeError('boom')))
+    event = {'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_input': {'command': command}}
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(json.dumps(event)))
+    assert hook.main() == 2
