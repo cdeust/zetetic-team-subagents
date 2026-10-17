@@ -1,0 +1,10 @@
+ok                     r1-1 ${x//<<}                  main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo ${x//<<} &&\ngit commit -m hi'
+ok                     r1-2 ${x/<</y}                 main=['push']           r2=['push']           head=['push']           bash=['push']           zsh=['push']           cmd='x=a; echo ${x/<</y} &&\ngit push'
+ok                     r1-3 $[1<<2]                   main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo $[1<<2] &&\ngit commit -m hi'
+ok                     r1-4 heredoc $( # note         main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='cat <<EOF\n$( # note\ngit commit -m x\n)\nEOF'
+ok                     r1-5 ((echo a) # c             main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='((echo a) # c\ngit commit -m x)'
+ok                     r1-h1 body # git commit        main=[]                 r2=[]                 head=[]                 bash=[]                 zsh=[]                 cmd="cat > f <<EOF\n# don't git commit here\necho $(date)\nEOF"
+ok                     r1-h2 body # git push          main=[]                 r2=[]                 head=[]                 bash=[]                 zsh=[]                 cmd='cat > f <<EOF\n# then git push it\nEOF'
+ok                     r1-h3 quoted body              main=REFUSE             r2=[]                 head=[]                 bash=[]                 zsh=[]                 cmd="mkdir -p x && cat > f <<'EOF'\nthe git hook won't run\nEOF"
+ok                     r1-h4 unquoted body            main=REFUSE             r2=[]                 head=[]                 bash=[]                 zsh=[]                 cmd="cat > f <<EOF\nthe git hook won't run, git commit later\nEOF"
+COUNTS {'ok': 9}

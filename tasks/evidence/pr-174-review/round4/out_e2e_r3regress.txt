@@ -1,0 +1,36 @@
+P1 &> then case              main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P1 &> then case              r3   exit=0 :: {}
+P1 &> then case              head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P3 assign then case          main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P3 assign then case          r3   exit=0 :: {}
+P3 assign then case          head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P4 a=1 then case             main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P4 a=1 then case             r3   exit=0 :: {}
+P4 a=1 then case             head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P5 es\nac missed             main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P5 es\nac missed             r3   exit=0 :: {}
+P5 es\nac missed             head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P7 &>case push               main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P7 &>case push               r3   exit=0 :: {}
+P7 &>case push               head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P8 in esac                   main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+P8 in esac                   r3   exit=0 :: {}
+P8 in esac                   head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+R1 ${x:-{} brace             main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+R1 ${x:-{} brace             r3   exit=0 :: {}
+R1 ${x:-{} brace             head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+R5 ${x#{} brace              main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+R5 ${x#{} brace              r3   exit=0 :: {}
+R5 ${x#{} brace              head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+R2 ${x:-'} in dq (zsh)       main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+R2 ${x:-'} in dq (zsh)       r3   exit=0 :: {}
+R2 ${x:-'} in dq (zsh)       head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: ' inside "${...}": bash reads a quote, zsh a literal
+S1 $(cat <<EOF) then heredoc main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+S1 $(cat <<EOF) then heredoc r3   exit=0 :: {}
+S1 $(cat <<EOF) then heredoc head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: here-document still pending where a substitution ends
+S2 unquoted $(cat<<EOF)      main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+S2 unquoted $(cat<<EOF)      r3   exit=0 :: {}
+S2 unquoted $(cat<<EOF)      head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: here-document still pending where a substitution ends
+S3 $(cat<<EOF) push          main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+S3 $(cat<<EOF) push          r3   exit=0 :: {}
+S3 $(cat<<EOF) push          head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: here-document still pending where a substitution ends

@@ -1,7 +1,11 @@
 """Resolve simple git command targets without executing the supplied command.
 
 Source: POSIX shell command lists; hooks/lib/git-command-cwd.py supplies the
-existing git flag and cd resolution helpers.
+existing git flag and cd resolution helpers. hooks/lib/shell_text.py first
+removes here-document data and comments and turns newlines into separators
+(POSIX Shell Command Language §2.7.4 Here-Document, §2.3, §2.9.3). A command
+that still cannot be lexed is refused only when its text may hold a git
+commit or push: anything else cannot reach the commit and push gates.
 """
 import importlib.util
 import os
@@ -9,28 +13,135 @@ import re
 from pathlib import Path
 import shlex
 
-spec = importlib.util.spec_from_file_location(
-    'git_command_cwd', Path(__file__).with_name('git-command-cwd.py'))
-git_cwd = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(git_cwd)
+
+def _load(module, filename):
+    spec = importlib.util.spec_from_file_location(module, Path(__file__).with_name(filename))
+    loaded = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded)
+    return loaded
+
+
+git_cwd = _load('git_command_cwd', 'git-command-cwd.py')
+shell_text = _load('shell_text', 'shell_text.py')
+_GIT = re.compile(r'\bgit\s')
+# Where origin/main refused, any word git left in the rewritten text refuses:
+# origin/main's own predicate is \bgit\s on the raw text, and a word git
+# (x=git, $x) can still run as a command once a verb is built at run time.
+_GIT_WORD = re.compile(r'\bgit\b')
+_VERB = re.compile(r'\b(?:commit|push)\b')
+# source: one flat shlex pass is quadratic in a token's length (216 KB took
+# 3.2 s, 108 KB 1.0 s on 2026-10-16); 128 KiB keeps both readings near 3 s.
+MAX_COMMAND = 131072
+_PUNCTUATION = ';&|(){}'
+_OPERATORS = re.compile(r'&&|\|\||;;&|;;|;&|\|&|[;&|(){}]')
+_TERMINATORS = {';;': ';', ';&': ';', ';;&': ';', '|&': '|'}
 
 
 def _mentions_command(command, words):
     # Conservative candidate filter only; shlex below decides real tokens.
-    # Removing quote characters also catches shell concatenation: g'it'.
-    candidate = command.replace("'", '').replace('"', '').replace('\\', '')
-    return re.search(r'\b(?:' + words + r')\s', candidate)
+    return re.search(r'\b(?:' + words + r')\s', shell_text.unquoted(command))
 
 
-def git_commands(command, base):
+def _tokens(command):
+    """Lex text from shell_text.shell_lines. Every # left there is inside
+    quotes, an expansion or a word, never a comment, so none is stripped.
+    shlex returns a run of operator characters as one token (`};`, `;(`,
+    `)&&`); each run is split into the operators the shell reads (§2.10.1),
+    and the case terminators ;; ;& ;;& separate commands like ;."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
+    lexer.whitespace_split = True
+    lexer.commenters = ''
+    tokens = []
+    for token in lexer:
+        if not token or token.strip(_PUNCTUATION):
+            tokens.append(token)
+        else:
+            tokens.extend(_TERMINATORS.get(op, op) for op in _OPERATORS.findall(token))
+    return tokens
+
+
+def _uninspectable(command, error):
+    """Refuse a command that cannot be read only if it may commit or push."""
+    if may_commit_or_push(command):
+        raise ValueError(f'Cannot inspect shell quoting before git validation: {error}') from error
+    return []
+
+
+def mentions_git(text):
+    """True when text, quotes removed, holds the word git."""
+    return bool(_GIT_WORD.search(shell_text.unquoted(text)))
+
+
+def _refuse_if_git(text, reason):
+    """Raise when text holds the word git: the rule applied wherever
+    origin/main refused, or may have refused, the command."""
+    if mentions_git(text):
+        raise ValueError(f'Cannot inspect shell quoting before git validation: {reason}')
+
+
+def may_commit_or_push(text):
+    """True when text, quotes removed, may hold a git commit or push."""
+    text = shell_text.unquoted(text)
+    first = _GIT.search(text)
+    # A verb after the first git: the same as git\s.*(commit|push), linear.
+    return bool(first and _VERB.search(text, first.end()))
+
+
+def _flat_targets(command, base):
+    """The reading origin/main used: the raw command lexed as one flat line
+    (shlex, # comments). None when it cannot lex the command, where
+    origin/main refused it; a git selector origin/main refused (GIT_DIR=,
+    --git-dir) raises the same ValueError here."""
     if not _mentions_command(command, 'git'):
         return []
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
     lexer.whitespace_split = True
     try:
         tokens = list(lexer)
+    except ValueError:
+        return None
+    return _walk(tokens, base)
+
+
+def git_commands(command, base):
+    """Commit and push targets of command. Where origin/main's flat reading
+    succeeds its targets are added. Where it refused (the word git followed
+    by a blank, and shlex cannot lex), the command is refused when the
+    rewrite cannot read it, or when the word git is in the rewritten text or
+    in any span the rewrite dropped other than here-document bodies. Every
+    return path below applies that rule first (round8/analysis.txt):
+    1 too long: refused when the word git is anywhere in the raw text.
+    2, 3 unreadable: refused when origin/main refused; else when it may commit.
+    4 origin/main refused and git is in the live or dropped text: refused.
+    5 rewritten too long, 6 no git left, 7 unlexable, 8 targets: origin/main
+      refused only without a word git there, so these follow the rewrite."""
+    if len(command) > MAX_COMMAND:
+        _refuse_if_git(command, f'command longer than {MAX_COMMAND} characters')
+        return []
+    flat = _flat_targets(command, base)
+    refused, flat = flat is None, flat or []
+    try:
+        rewritten, dropped = shell_text.read(command)
     except ValueError as error:
-        raise ValueError('Cannot inspect shell quoting before git validation') from error
+        if refused:
+            raise ValueError(f'origin/main refused this command, and it cannot be read: {error}') from error
+        return _uninspectable(command, error) or flat
+    if refused:
+        _refuse_if_git(rewritten + '\n' + dropped, 'origin/main refused this command and git is still in it')
+    if len(rewritten) > MAX_COMMAND:
+        return _uninspectable(command, ValueError(f'rewritten command longer than {MAX_COMMAND} characters')) or flat
+    if not _mentions_command(rewritten, 'git'):
+        return flat
+    try:
+        tokens = _tokens(rewritten)
+    except ValueError as error:
+        return _uninspectable(rewritten, error) or flat
+    targets = _walk(tokens, base)
+    return targets + [target for target in flat if target not in targets]
+
+
+def _walk(tokens, base):
+    """The commit and push targets of a token list split at separators."""
     current, segment, targets = os.path.abspath(base), [], []
     for token in [*tokens, ';']:
         if token not in git_cwd.SEPARATORS:
@@ -93,12 +204,14 @@ def _git_command(tokens, base, *, validate=True):
 
 
 def _shell_directories(command, base):
+    try:
+        command = shell_text.shell_lines(command)
+    except ValueError:
+        return []
     if not _mentions_command(command, 'git|cd'):
         return []
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|(){}')
-    lexer.whitespace_split = True
     try:
-        tokens = list(lexer)
+        tokens = _tokens(command)
     except ValueError:
         # Post-tool inspection retains the known event directory. An invalid
         # shell command supplies no reliable additional directory targets.
