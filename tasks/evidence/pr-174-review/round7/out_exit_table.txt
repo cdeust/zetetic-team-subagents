@@ -1,0 +1,54 @@
+case                               main before after  shells (y = a git commit/push ran)
+P1 plain                           0    0      2      bash:- zsh:y czsh:y
+P1 wrapped                         2    0      2      bash:- zsh:y czsh:y
+P2 wrapped                         2    0      2      bash:- zsh:y czsh:y
+P3 wrapped                         2    0      2      bash:- zsh:y czsh:y
+P5 wrapped push                    2    0      2      bash:- zsh:y czsh:y
+P1 suf-wrapped                     2    0      2      bash:- zsh:y czsh:y
+P1 ansi-wrapped                    2    0      2      bash:- zsh:y czsh:y
+I1 wrapped                         2    0      2      bash:y zsh:y czsh:y
+I4 wrapped                         2    0      2      bash:y zsh:y czsh:y
+C7 cost                            2    2      2      bash:y zsh:y czsh:y
+A3 plain                           0    0      0      bash:- zsh:- czsh:-
+A3 pre                             2    0      2      bash:- zsh:- czsh:-
+A3 suf                             2    0      2      bash:- zsh:- czsh:-
+A3 ansi                            2    0      2      bash:- zsh:- czsh:-
+P2 plain                           0    0      2      bash:- zsh:y czsh:y
+P2 pre                             2    0      2      bash:- zsh:y czsh:y
+P2 suf                             2    0      2      bash:- zsh:y czsh:y
+P2 ansi                            2    0      2      bash:- zsh:y czsh:y
+P3 plain                           0    0      2      bash:- zsh:y czsh:y
+P3 pre                             2    0      2      bash:- zsh:y czsh:y
+P3 suf                             2    0      2      bash:- zsh:y czsh:y
+P3 ansi                            2    0      2      bash:- zsh:y czsh:y
+P5 plain                           0    0      2      bash:- zsh:y czsh:y
+P5 pre                             2    0      2      bash:- zsh:y czsh:y
+P5 suf                             2    0      2      bash:- zsh:y czsh:y
+P5 ansi                            2    0      2      bash:- zsh:y czsh:y
+P10 plain                          0    0      2      bash:- zsh:y czsh:y
+P10 pre                            2    0      2      bash:- zsh:y czsh:y
+P10 suf                            2    0      2      bash:- zsh:y czsh:y
+P10 ansi                           2    0      2      bash:- zsh:y czsh:y
+P11 plain                          0    0      2      bash:- zsh:y czsh:y
+P11 pre                            2    0      2      bash:- zsh:y czsh:y
+P11 suf                            2    0      2      bash:- zsh:y czsh:y
+P11 ansi                           2    0      2      bash:- zsh:y czsh:y
+P12 plain                          0    0      2      bash:- zsh:y czsh:y
+P12 pre                            2    0      2      bash:- zsh:y czsh:y
+P12 suf                            2    0      2      bash:- zsh:y czsh:y
+P12 ansi                           2    0      2      bash:- zsh:y czsh:y
+I1 plain                           0    0      0      bash:y zsh:y czsh:y
+I1 pre                             2    0      2      bash:y zsh:y czsh:y
+I1 suf                             2    0      2      bash:y zsh:y czsh:y
+I1 ansi                            2    0      2      bash:y zsh:y czsh:y
+I4 plain                           0    0      0      bash:y zsh:y czsh:y
+I4 pre                             2    0      2      bash:y zsh:y czsh:y
+I4 suf                             2    0      2      bash:y zsh:y czsh:y
+I4 ansi                            2    0      2      bash:y zsh:y czsh:y
+L1 -c alias.c=commit               0    0      0      bash:- zsh:- czsh:-
+L2 -c alias quoted                 0    0      0      bash:- zsh:- czsh:-
+L3 zsh alias -g nl                 0    0      0      bash:- zsh:- czsh:-
+L3w zsh alias -g nl wrapped        2    0      2      bash:- zsh:- czsh:-
+I2 plain                           0    0      0      bash:y zsh:y czsh:y
+I2 git in data                     2    0      2      bash:y zsh:y czsh:y
+I2 pre                             0    0      0      bash:y zsh:y czsh:y
