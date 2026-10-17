@@ -3,8 +3,7 @@
 Sources: POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2),
 bash parse.y, zsh 5.9. Where bash and zsh read different commands, this
 raises ValueError (the caller refuses when the command may commit or push).
-The audit of every place text is dropped: tasks/evidence/pr-174-review/
-round7/analysis.txt.
+Dropped spans: tasks/evidence/pr-174-review/round8/analysis.txt.
 - §2.7.4 Here-document: the body runs from the line after the operator's
   line to the delimiter line (<<- strips tabs; an unquoted body joins
   backslash-newlines first). A quoted delimiter makes the body data; else
@@ -361,6 +360,7 @@ def _next_piece(text, index, pending, word_start):
         end, delimiter, quoted, strip_tabs = _heredoc_word(text, index + 2)
         if delimiter:
             pending.append((delimiter, quoted, strip_tabs))
+        _DROPPED[text, index] = text[index:end]
         return end, ' '
     if text.startswith(('((', '$((', '${', '$['), index):
         found = _expansion(text, index)
@@ -381,17 +381,15 @@ def _next_piece(text, index, pending, word_start):
         end = len(text) if end < 0 else end
         if text[index - 1:index] in ('(', ')'):
             return _hash_after_paren(text, index, end)
+        _DROPPED[text, index] = text[index:end]
         return end, ''
     return index + 1, char
 
 
 def _hash_after_paren(text, index, end):
-    """(end, text) for a # right after ( or ). zsh reads (a|b)#x, (a)#x and
-    =(cmd)#x as one word; bash and zsh read ((1))#x as a comment. The rest of
-    the line is kept as text, which reads at least the commands the comment
-    reading would, unless it holds a quote, $, `, \\, <, ( or ): kept, those
-    could open a here-document or a unit that hides the next lines, so the
-    command is uninspectable."""
+    """(end, text) for a # right after ( or ): kept as text (zsh reads (a)#x
+    as a word), and uninspectable when the rest of the line holds a quote,
+    $, `, \\, <, ( or ), which kept could hide the next lines."""
     if HASH_UNSAFE.search(text, index + 1, end):
         raise ValueError('# after ( or ): bash may read a comment, zsh a word')
     return index + 1, '#'
@@ -431,9 +429,7 @@ REDIRECTS = {'<', '>', '<<<'}
 
 def _previous_word(text, index):
     """(last character, word, scanned) before index, skipping blanks and
-    backslash-newlines. It reads only the blanks and the one word between
-    the previous word and index, so over all the words of a text the
-    characters scanned sum to at most twice its length."""
+    backslash-newlines; it reads back one word, at most 2n over a text."""
     i = index - 1
     while i >= 0 and (text[i] in ' \t' or (text[i] == '\n' and i and text[i - 1] == '\\')):
         i -= 1 + (text[i] == '\n')
@@ -574,11 +570,27 @@ def _command(text, index, closer=None):
 _CACHED = (_command, _span, _arithmetic)
 
 
+# Spans dropped other than here-document bodies (comments, here-document
+# operators with their words), by (text, start): a here-document body is
+# read as its own text, so its indices must not overwrite the command's.
+_DROPPED = {}
+
+
+def read(command):
+    """(rewritten, dropped): shell_lines(command), and the text of every span
+    it dropped except here-document bodies, one per line."""
+    try:
+        return shell_lines(command), '\n'.join(_DROPPED.values())
+    finally:
+        _DROPPED.clear()
+
+
 def shell_lines(command):
     """Return command with here-document data and comments removed and each
     unquoted newline turned into a ; separator. Raises ValueError when a
     here-document never ends or the nesting is deeper than the interpreter's
     recursion limit."""
+    _DROPPED.clear()
     try:
         return _command(command, 0)[1]
     except RecursionError as error:

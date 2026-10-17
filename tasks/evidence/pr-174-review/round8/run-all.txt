@@ -1,0 +1,92 @@
+14:54  up 1 day,  1:54, 4 users, load averages: 230,77 215,41 222,93
+============================================================
+ALL SUITES  (repo: /Users/cdeust/Developments/anthropic-partnership/zetetic-team-subagents/.claude/worktrees/fix-gate-heredoc)
+============================================================
+=== pytest (tests/)
+    ok
+=== tools/tests/acceptance-gate/run-tests.sh
+    ok
+=== tools/tests/adversarial-verify/run-tests.sh
+    ok
+=== tools/tests/agent-definition-auditor/run-tests.sh
+    ok
+=== tools/tests/changelog-commit-check/run-tests.sh
+    ok
+=== tools/tests/deletion-gate/run-tests.sh
+    ok
+=== tools/tests/dev-symlink-doctor/run-tests.sh
+    ok
+=== tools/tests/discoverability-baseline/run-tests.sh
+    ok
+=== tools/tests/doc-command-check/run-tests.sh
+    ok
+=== tools/tests/doc-count-check/run-tests.sh
+    ok
+=== tools/tests/fail-before/run-tests.sh
+    ok
+=== tools/tests/gates-plugin-sync/run-tests.sh
+    ok
+=== tools/tests/goa-fixture-freeze-gate/run-tests.sh
+    ok
+=== tools/tests/goa-no-raw-text-gate/run-tests.sh
+    ok
+=== tools/tests/hook-layer/run-tests.sh
+    ok
+=== tools/tests/manifest-gate/run-tests.sh
+    ok
+=== tools/tests/mutation-gate/run-tests.sh
+    ok
+=== tools/tests/mutation-sweep/run-tests.sh
+    ok
+=== tools/tests/plugin-version-check/run-tests.sh
+    ok
+=== tools/tests/pre-tool-redaction-gate/run-tests.sh
+    ok
+=== tools/tests/redaction-checker/run-tests.sh
+    ok
+=== tools/tests/release-verify/run-tests.sh
+    ok
+=== tools/tests/seed-reviewer-prefs/run-tests.sh
+    ok
+=== tools/tests/setup-plugin-served/run-tests.sh
+    ok
+=== tools/tests/skill-agent-model-matrix-drift/run-tests.sh
+    ok
+=== tools/tests/skill-model-tier-policy/run-tests.sh
+    ok
+=== tools/tests/skill-routing-table-drift/run-tests.sh
+    ok
+=== tools/tests/stop-redaction-gate/run-tests.sh
+    ok
+=== tools/tests/test-matrix/run-tests.sh
+    ok
+=== tools/tests/threshold-drift/run-tests.sh
+    ok
+=== tools/tests/zetetic-checker/run-tests.sh
+    ok
+=== scripts/test-agent-id-propagation.sh
+    ok
+=== scripts/test-memory-concurrency.sh
+    ok
+=== scripts/test-memory-e2e.sh
+    ok
+=== scripts/test-memory-mcp.sh
+    ok
+=== scripts/test-memory-pii-expanded.sh
+    ok
+=== scripts/test-memory-pii.sh
+    ok
+=== scripts/test-memory-stale-lock.sh
+    ok
+=== scripts/test-spawn-agent.sh
+    ok
+=== scripts/test-state-layout.sh
+    ok
+=== scripts/test-worktree-sweep-safety.sh
+    ok
+
+============================================================
+RESULT: 41 passed, 0 failed
+============================================================
+exit=0
+15:16  up 1 day,  2:15, 4 users, load averages: 217,25 240,13 246,00

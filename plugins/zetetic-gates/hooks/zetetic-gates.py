@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from lib.host_events import HostEventError, normalize_event
-from lib.gate_targets import git_commands, may_commit_or_push, post_directories
+from lib.gate_targets import git_commands, mentions_git, post_directories
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,7 +103,7 @@ def main():
         # only exit 2 blocks). An unexpected failure never waves a commit on.
         tool_input = event.get('tool_input') if isinstance(event, dict) else None
         texts = tool_input.values() if isinstance(tool_input, dict) else ()
-        if any(isinstance(text, str) and may_commit_or_push(text) for text in texts):
+        if any(isinstance(text, str) and mentions_git(text) for text in texts):
             print(f'Zetetic gates: unexpected {type(error).__name__}: {error}', file=sys.stderr)
             return 2
         raise

@@ -640,3 +640,81 @@ def test_esac_look_back_reads_each_character_at_most_twice(monkeypatch):
     module.shell_text.shell_lines(command)
     assert len(scanned) == 400
     assert sum(scanned) <= 2 * len(command)
+
+
+# PR #174 review, round 8. Where origin/main refused, the word git is looked
+# for in the rewritten text and in every span the rewrite dropped except
+# here-document bodies (comments, here-document operators and delimiter
+# words), so no comment misreading in either shell can hide a git: zsh reads
+# <->#x, <1-9>#x, (b|#x) and (b| #x) as words (S10-S21p); bash rejects them.
+DROPPED_SPANS = [
+    '[[ 5 == <->#x ]]; git commit -m x',                                    # S10
+    'case 5 in <1-9>#x) echo IN;; esac; git commit -m x',                   # S11
+    '[[ a == (b|#x) ]]; git commit -m x',                                   # S12
+    'case a in (b|#x) echo IN;; esac; git commit -m x',                     # S13
+    'ls <->#x 2>/dev/null; git commit -m x',                                # S16
+    '[[ a == (b| #x) ]]; git commit -m x',                                  # S17
+    '[[ a == (<->|#x) ]]; git commit -m x',                                 # S19
+    'x=<->#x; git commit -m x',                                             # S21
+    'x=<->#x; git push',                                                    # S21p
+    "cat <<git\n$(x=gi; ${x}t commit -m m)\ngit",                            # S22
+]
+# The size caps return before the rewrite: verb built at run time (Z1, Z2).
+SIZE_CAPS = [
+    'git status; ' + '\n' * 45000 + 'x=git; y=comm; $x ${y}it -m m',       # Z1
+    'git status; : ' + 'a ' * 66000 + '\nx=git; y=comm; $x ${y}it -m m',   # Z2
+]
+
+
+@pytest.mark.parametrize('wrap', sorted(WRAPPERS))
+@pytest.mark.parametrize('command', DROPPED_SPANS + SIZE_CAPS)
+def test_where_origin_main_refused_no_dropped_span_hides_git(tmp_path, wrap, command):
+    assert outcome(WRAPPERS[wrap](command), str(tmp_path)) == 'refused'
+
+
+def test_a_comment_before_a_heredoc_operator_keeps_the_commit_live(tmp_path):
+    """Comments are tested, not kept: kept, '<<EOF' would make the commit data."""
+    assert outcome('echo a # <<EOF\ngit commit -m x\nEOF', str(tmp_path)) == [(str(tmp_path), 'commit')]
+
+
+def test_dropped_spans_are_comments_and_heredoc_operators_only():
+    rewritten, dropped = module.shell_text.read("cat <<'E' # note\nbody git\nE\necho a # c git")
+    assert dropped.split('\n') == ["<<'E'", '# note', '# c git']
+    assert 'body' not in rewritten + dropped
+
+
+# Every return path of git_commands (round8/analysis.txt): the rule "where
+# origin/main refused and the word git is there, refuse" holds on each.
+W = ": <<'Q'\nit's\nQ\n"
+BUILT = 'x=git; y=comm; $x ${y}it -m m'
+
+
+@pytest.mark.parametrize('path, command, expected', [
+    ('1 input over cap, git', 'git status; : ' + 'a ' * 66000 + '\n' + BUILT, 'refused'),
+    ('1 input over cap, no git', 'echo ' + 'a ' * 66000, []),
+    ('2 unreadable, main refused', W + 'cat <<EOF\ngit status', 'refused'),
+    ('3 unreadable, main lexed, commit', 'cat <<EOF\ngit commit -m x', 'refused'),
+    ('3 unreadable, main lexed, no commit', 'cat <<EOF\nhello', []),
+    ('4 main refused, git live', W + 'git status; ' + BUILT, 'refused'),
+    ('4 main refused, git in a comment', W + 'echo a # git status', 'refused'),
+    ('4 main refused, git only in data', "cat <<'E'\nit's git\nE\necho ok", []),
+    ('5 rewritten over cap, commit', 'git commit -m x' + '\n' * 45000, 'refused'),
+    ('5 rewritten over cap, no git', 'echo x' + '\n' * 45000, []),
+    ('6 no git left', 'echo git', []),
+    ('7 unlexable rewrite, main lexed', 'git commit -m "$(echo "a)"', 'refused'),
+    ('8 targets', 'git commit -m x', 'commit'),
+])
+def test_every_return_path_applies_the_refusal_rule(tmp_path, path, command, expected):
+    result = outcome(command, str(tmp_path))
+    if expected == 'commit':
+        assert result == [(str(tmp_path), 'commit')], path
+    else:
+        assert result == expected, path
+
+
+def test_a_body_comment_does_not_overwrite_a_command_comment():
+    """The body of an unquoted here-document is read as its own text: a
+    comment at the same index there must not replace the command's."""
+    command = "abcdefg #git\ncat <<E\n$(echo  #c\n)\nE"  # # at index 8 of each text
+    _rewritten, dropped = module.shell_text.read(command)
+    assert '#git' in dropped.split('\n')
