@@ -102,7 +102,8 @@ def main():
         # Any other exit code lets the tool call through (Claude Code hooks:
         # only exit 2 blocks). An unexpected failure never waves a commit on.
         tool_input = event.get('tool_input') if isinstance(event, dict) else None
-        if may_commit_or_push(json.dumps(tool_input)):
+        texts = tool_input.values() if isinstance(tool_input, dict) else ()
+        if any(isinstance(text, str) and may_commit_or_push(text) for text in texts):
             print(f'Zetetic gates: unexpected {type(error).__name__}: {error}', file=sys.stderr)
             return 2
         raise

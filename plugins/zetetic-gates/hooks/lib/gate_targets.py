@@ -73,23 +73,24 @@ def may_commit_or_push(text):
 
 def _flat_targets(command, base):
     """The reading origin/main used: the raw command lexed as one flat line
-    (shlex, # comments). None when it cannot lex or validate the command,
-    which is where origin/main refused it."""
+    (shlex, # comments). None when it cannot lex the command, where
+    origin/main refused it; a git selector origin/main refused (GIT_DIR=,
+    --git-dir) raises the same ValueError here."""
     if not _mentions_command(command, 'git'):
         return []
     lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
     lexer.whitespace_split = True
     try:
-        return _walk(list(lexer), base)
+        tokens = list(lexer)
     except ValueError:
         return None
+    return _walk(tokens, base)
 
 
 def git_commands(command, base):
-    """Commit and push targets of command, never less than origin/main's
-    flat reading: its targets are added when it succeeds, and where it
-    refused, the command is refused too unless the rewrite finds a target
-    or no commit or push is left in the rewritten text."""
+    """Commit and push targets of command. Where origin/main's flat reading
+    succeeds its targets are added; where it refused, the command is refused
+    whenever its rewritten text may commit or push."""
     if len(command) > MAX_COMMAND:
         return _uninspectable(command, ValueError(f'command longer than {MAX_COMMAND} characters'))
     flat = _flat_targets(command, base)
@@ -98,6 +99,10 @@ def git_commands(command, base):
         rewritten = shell_text.shell_lines(command)
     except ValueError as error:
         return _uninspectable(command, error) or flat
+    if len(rewritten) > MAX_COMMAND:
+        return _uninspectable(command, ValueError(f'rewritten command longer than {MAX_COMMAND} characters'))
+    if refused:
+        _uninspectable(rewritten, ValueError('origin/main refused this command'))
     if not _mentions_command(rewritten, 'git'):
         return flat
     try:
@@ -105,9 +110,6 @@ def git_commands(command, base):
     except ValueError as error:
         return _uninspectable(rewritten, error) or flat
     targets = _walk(tokens, base)
-    if refused and not targets:
-        _uninspectable(rewritten, ValueError(
-            'origin/main refused this command and the rewrite finds no commit or push in it'))
     return targets + [target for target in flat if target not in targets]
 
 
