@@ -718,3 +718,74 @@ def test_a_body_comment_does_not_overwrite_a_command_comment():
     command = "abcdefg #git\ncat <<E\n$(echo  #c\n)\nE"  # # at index 8 of each text
     _rewritten, dropped = module.shell_text.read(command)
     assert '#git' in dropped.split('\n')
+
+
+# PR #174 review, round 9. Where origin/main refused, a command name built at
+# run time refuses too: with git only in here-document data, x=gi; ${x}t
+# commit (I2d) runs git commit in bash and zsh, and no word git is left.
+BUILT_NAMES = [
+    'x=gi; ${x}t commit -m m',                                              # I2d
+    '$(printf gi)t commit -m m',                                            # N1
+    '`echo gi`t commit -m m',                                               # N2
+    'x=gi; exec ${x}t commit -m m',                                         # N3
+    'x=gi; true && ${x}t commit -m m',                                      # N4
+    'x=gi; if true; then ${x}t commit -m m; fi',                            # N5
+    'x=gi; A=1 ${x}t commit -m m',                                          # N6
+    'x=gi; env -i PATH="$PATH" ${x}t commit -m m',                          # N7
+    "x=gi; sh -c 'x=gi; ${x}t commit -m m'",                                # N8
+    '/usr/bin/gi? commit -m m',                                             # N9
+    '{gi,}t commit -m m',                                                   # N10
+    'echo gi | xargs -I@ @t commit -m m',                                   # N11
+    'x=gi; >/dev/null ${x}t commit -m m',                                   # N14
+    'x=gi; case a in a) ${x}t commit -m m;; esac',                          # N15
+    'x=gi; noglob ${x}t commit -m m',                                       # N16
+    'x=gi; - ${x}t commit -m m',                                            # N17
+    'x=gi; cat <(${x}t commit -m m)',                                       # N18
+]
+DATA_GIT = {
+    'pre': lambda command: ": <<'Q'\nit's git\nQ\n" + command,
+    'suf': lambda command: command + "\n: <<'Q'\nit's git\nQ",
+}
+
+
+@pytest.mark.parametrize('wrap', sorted(DATA_GIT))
+@pytest.mark.parametrize('command', BUILT_NAMES)
+def test_where_origin_main_refused_a_built_command_name_refuses(tmp_path, wrap, command):
+    assert outcome(DATA_GIT[wrap](command), str(tmp_path)) == 'refused'
+
+
+@pytest.mark.parametrize('command', [
+    'echo $x',
+    '[[ $x == y ]] && echo ok',
+    'case $x in a) echo a;; esac',
+    'for f in *.py; do echo "$f"; done',
+    'gh pr create --title t --body "$(cat b.md)"',
+    'x=$(date); echo "$x" > f',
+    '[ -f a ] && echo b',
+    '{ echo a; echo b; } > f',
+    'echo "$(date) $x"',
+    'echo a > "$f"',
+])
+def test_a_built_argument_is_not_a_built_command_name(tmp_path, command):
+    assert outcome(DATA_GIT['pre'](command), str(tmp_path)) == []
+
+
+@pytest.mark.parametrize('command, expected', [
+    ('git status; : ' + 'a ' * 66000 + '\nx=gi; ${x}t commit -m m', 'refused'),
+    (': ' + 'a ' * 66000 + '\nx=gi; ${x}t commit -m m', []),
+])
+def test_the_input_cap_refuses_wherever_origin_main_could_refuse(tmp_path, command, expected):
+    """Over 128 KiB the word git anywhere refuses: origin/main could refuse
+    only text holding git and a blank, so a built name needs no own check."""
+    assert outcome(command, str(tmp_path)) == expected
+
+
+def test_each_character_is_examined_by_at_most_one_word_scan(monkeypatch):
+    """Positions inside text already examined are skipped: the scans are
+    disjoint, so the cost is linear in the text."""
+    text = ('then env A=1 then time { a; }; ' * 2000) + '$x'
+    spans, built_at = [], module._built_at
+    monkeypatch.setattr(module, '_built_at',
+                        lambda t, i: spans.append((i, built_at(t, i)[1])) or built_at(t, i))
+    assert module.builds_command_name(text)
+    assert all(end <= start for (_s, end), (start, _e) in zip(spans, spans[1:]))

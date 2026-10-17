@@ -1,0 +1,5 @@
+FAIL-OPEN-PREEXISTING  same            c_r9_residual_b:R3 which, cp, ./x  main=[] r6=[] r7=[] bash=[('.', 'commit')] zsh=[('.', 'commit')] czsh=[('.', 'commit')] flatEq=True t7=0.00 cmd=': <<\'Q\'\nit\'s git\nQ\np=$(printf gi)t; cp "$(which "$p")" ./x; ./x commit -m m\n: <<\'Q\'\nit\'s\nQ'
+FAIL-OPEN-PREEXISTING  same            c_r9_residual_b:R4 which, ln, ./x  main=[] r6=[] r7=[] bash=[('.', 'commit')] zsh=[('.', 'commit')] czsh=[('.', 'commit')] flatEq=True t7=0.00 cmd=': <<\'Q\'\nit\'s git\nQ\np=gi; ln -sf "$(which "${p}t")" ./x; ./x commit -m m\n: <<\'Q\'\nit\'s\nQ'
+FAIL-OPEN-PREEXISTING  same            c_r9_residual_b:R5 which, cp, PATH, x main=[] r6=[] r7=[] bash=[('.', 'commit')] zsh=[('.', 'commit')] czsh=[('.', 'commit')] flatEq=True t7=0.00 cmd=': <<\'Q\'\nit\'s git\nQ\np=gi; mkdir -p b; cp "$(which "${p}t")" b/x; PATH=$PWD/b:$PATH x commit -m m\n: <<\'Q\'\nit\'s\nQ'
+COUNTS-vs-main {'FAIL-OPEN-PREEXISTING': 3}
+COUNTS-vs-r6 {'same': 3}
