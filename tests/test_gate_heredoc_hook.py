@@ -187,3 +187,17 @@ def test_unexpected_exception_blocks_tab_and_continuation_forms(monkeypatch, cap
     event = {'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_input': {'command': command}}
     monkeypatch.setattr(sys, 'stdin', io.StringIO(json.dumps(event)))
     assert hook.main() == 2
+
+
+@pytest.mark.parametrize('command', [
+    'cat =(echo a)#x; git commit -m x',
+    'case a in (a)#x) echo IN;; esac; git commit -m x',
+    'diff =(echo a)#x =(echo a) ; git push',
+    'git status; x=git; y=comm; $x ${y}it -m m',
+    'y=comm; git -c alias.c=${y}it c -m x',
+])
+def test_round7_wrapped_command_is_blocked(package, consumer, command):
+    (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
+    subprocess.run(['git', 'add', '.'], cwd=consumer, check=True)
+    result = run_bash_hook(package, consumer, WRAPPED + command)
+    assert result.returncode == 2, result.stdout + result.stderr

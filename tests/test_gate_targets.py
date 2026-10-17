@@ -130,7 +130,6 @@ def test_git_commands_preserve_both_verbs(tmp_path):
     "cat <<'A' > a; cat <<'B' > b\ngit won't\nA\nit is git\nB",
     "cat > f <<'EOF'\nwon't $(git commit -m x)\nEOF",
     "cat > f 2<<'EOF'\nthe git hook won't run\nEOF",
-    "cat > f <<'EOF'\nthe git hook won't run",
 ])
 def test_quoted_heredoc_body_is_data(tmp_path, command):
     assert module.git_commands(command, str(tmp_path)) == []
@@ -161,7 +160,7 @@ def test_gate_refuses_only_when_a_commit_or_push_may_be_hidden(tmp_path):
         'mkdir -p x && git commit -m x': commit,
         'echo "unterminated && git commit -m x': 'refused',
         "echo \"unterminated && g'it' pu'sh": 'refused',
-        'echo "see the git log': [],
+        'echo "see the git log': 'refused',  # origin/main refused it; so does the gate
         "cat <<EOF\nthe git hook won't run\nEOF": [],
         'cat <<EOF\n$(git commit -m x)\nEOF': commit,
         # origin/main refused it (an unbalanced quote); so does the gate.
@@ -257,7 +256,6 @@ def test_nesting_beyond_the_recursion_limit_is_refused_only_for_git(tmp_path, ta
     'echo $((1))#b; git commit -m x',
     'cat <(echo a)#b; git commit -m x',
     'echo a\\\n#b; git commit -m x',
-    '((1))#a <<EOF\ngit commit -m x\nEOF',
     "cat <<$'EOF'\nbody\nEOF\ngit commit -m x",
     'cat <<$"EOF"\nbody\nEOF\ngit commit -m x',
     'cat <<EO\\\nF\nbody\nEOF\ngit commit -m x',
@@ -365,6 +363,7 @@ def test_quoted_units_do_not_refuse_a_plain_commit(tmp_path, command):
 # here-document still pending where a $(...) ends (bash reads the next lines
 # as its body, zsh does not).
 ROUND4 = [
+    '((1))#a <<EOF\ngit commit -m x\nEOF',  # comment in bash and zsh; << kept would hide the commit
     'echo "$(echo &>/dev/null case)"; git commit -m x; echo ";esac)"',      # P1
     'echo "$(a=1 case)"; git commit -m x; echo ";esac)"',                   # P3
     'echo "$(case x in x) echo;; es\\\nac)"; git commit -m x; echo ";esac)"',  # P5
@@ -581,3 +580,63 @@ def test_rewritten_text_is_at_most_four_times_the_input(command):
     except ValueError:
         return
     assert len(rewritten) <= 4 * len(command) + 4
+
+
+# PR #174 review, round 7. P*: zsh reads a #-group after ( or ) as one word
+# and runs the git command after it; bash rejects these lines. I1, I4, A3:
+# the commit verb is built at run time; origin/main refused these (they
+# mention git and hold an apostrophe it cannot lex), so the gate refuses
+# whenever the word git is left in the rewritten text.
+PAREN_HASH = [
+    'cat =(echo a)#x; git commit -m x',                                     # P1
+    '[[ a == (a|b)#x ]]; git commit -m x',                                  # P2
+    'case a in (a)#x) echo IN;; esac; git commit -m x',                     # P3
+    'cat =(echo a)#x; git push',                                            # P5
+    'case b in a|(b)#x) echo IN;; esac; git commit -m x',                   # P10
+    '[[ a != (b)#x ]] && git commit -m x',                                  # P11
+    'diff =(echo a)#x =(echo a) ; git push',                                # P12
+]
+BUILT_VERBS = [
+    'git status; x=git; y=comm; $x ${y}it -m m',                            # I1
+    'git status; $(printf gi)t $(printf com)mit -m m',                      # I4
+    'y=comm; git -c alias.c=${y}it c -m x',                                 # A3
+]
+
+
+@pytest.mark.parametrize('wrap', ['', *sorted(WRAPPERS)])
+@pytest.mark.parametrize('command', PAREN_HASH)
+def test_a_hash_after_a_paren_hides_no_command(tmp_path, wrap, command):
+    command = WRAPPERS[wrap](command) if wrap else command
+    assert gated_or_refused(outcome(command, str(tmp_path)))
+
+
+@pytest.mark.parametrize('wrap', sorted(WRAPPERS))
+@pytest.mark.parametrize('command', BUILT_VERBS)
+def test_where_origin_main_refused_a_git_word_refuses(tmp_path, wrap, command):
+    assert outcome(WRAPPERS[wrap](command), str(tmp_path)) == 'refused'
+
+
+@pytest.mark.parametrize('command, expected', [
+    # I2: the only git followed by a blank is data, yet x=git runs it.
+    (": <<'Q'\nit's git\nQ\nx=git; y=comm; $x ${y}it -m m", 'refused'),
+    # The motivating prose: git only in data, no word git left.
+    ("mkdir -p x && cat > f <<'EOF'\nthe git hook won't run\nEOF", []),
+    # origin/main refused these; nothing can be read past the open quote.
+    ("cat > f <<'EOF'\nthe git hook won't run", 'refused'),
+    # Cost, as on origin/main: the word git is live, though no commit.
+    ("cat <<'EOF'\ndon't\nEOF\ngit status", 'refused'),
+])
+def test_refusal_follows_origin_main_where_it_refused(tmp_path, command, expected):
+    assert outcome(command, str(tmp_path)) == expected
+
+
+def test_esac_look_back_reads_each_character_at_most_twice(monkeypatch):
+    """Each esac reads back only to the previous word; before round 7 a run
+    of more than 256 blanks made it re-read the whole text."""
+    command = 'git commit -m x; ' + (' ' * 300 + 'esac ;') * 400
+    scanned, word = [], module.shell_text._previous_word
+    monkeypatch.setattr(module.shell_text, '_previous_word',
+                        lambda text, index: scanned.append(word(text, index)[2]) or word(text, index))
+    module.shell_text.shell_lines(command)
+    assert len(scanned) == 400
+    assert sum(scanned) <= 2 * len(command)

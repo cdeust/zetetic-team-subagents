@@ -24,6 +24,10 @@ def _load(module, filename):
 git_cwd = _load('git_command_cwd', 'git-command-cwd.py')
 shell_text = _load('shell_text', 'shell_text.py')
 _GIT = re.compile(r'\bgit\s')
+# Where origin/main refused, any word git left in the rewritten text refuses:
+# origin/main's own predicate is \bgit\s on the raw text, and a word git
+# (x=git, $x) can still run as a command once a verb is built at run time.
+_GIT_WORD = re.compile(r'\bgit\b')
 _VERB = re.compile(r'\b(?:commit|push)\b')
 # source: one flat shlex pass is quadratic in a token's length (216 KB took
 # 3.2 s, 108 KB 1.0 s on 2026-10-16); 128 KiB keeps both readings near 3 s.
@@ -89,8 +93,11 @@ def _flat_targets(command, base):
 
 def git_commands(command, base):
     """Commit and push targets of command. Where origin/main's flat reading
-    succeeds its targets are added; where it refused, the command is refused
-    whenever its rewritten text may commit or push."""
+    succeeds its targets are added. Where it refused (only commands whose
+    text matches the word git followed by a blank), the command is refused whenever its rewritten
+    text still holds the word git: this refuses only where origin/main did,
+    and spares only commands whose every git is here-document data or a
+    comment."""
     if len(command) > MAX_COMMAND:
         return _uninspectable(command, ValueError(f'command longer than {MAX_COMMAND} characters'))
     flat = _flat_targets(command, base)
@@ -98,11 +105,14 @@ def git_commands(command, base):
     try:
         rewritten = shell_text.shell_lines(command)
     except ValueError as error:
+        if refused:
+            raise ValueError(f'origin/main refused this command, and it cannot be read: {error}') from error
         return _uninspectable(command, error) or flat
     if len(rewritten) > MAX_COMMAND:
         return _uninspectable(command, ValueError(f'rewritten command longer than {MAX_COMMAND} characters'))
-    if refused:
-        _uninspectable(rewritten, ValueError('origin/main refused this command'))
+    if refused and _GIT_WORD.search(shell_text.unquoted(rewritten)):
+        raise ValueError('Cannot inspect shell quoting before git validation: '
+                         'origin/main refused this command and git is still in it')
     if not _mentions_command(rewritten, 'git'):
         return flat
     try:

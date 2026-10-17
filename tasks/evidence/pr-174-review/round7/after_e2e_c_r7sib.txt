@@ -1,0 +1,21 @@
+L1 -c alias.c=commit             runs: bash=[] zsh=[] czsh=[]   cmd='git -c alias.c=commit c -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+L2 -c alias quoted               runs: bash=[] zsh=[] czsh=[]   cmd="git -c alias.c='commit -m x' c"
+    main exit=0 :: {}
+    head exit=0 :: {}
+L3 zsh alias -g nl               runs: bash=[] zsh=[] czsh=[]   cmd='alias -g c=commit\ngit c -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+L3w zsh alias -g nl wrapped      runs: bash=[] zsh=[] czsh=[]   cmd=": <<'Q'\nit's\nQ\nalias -g c=commit\ngit c -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command and git is still in it
+I2 plain                         runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='x=git; y=comm; $x ${y}it -m m'
+    main exit=0 :: {}
+    head exit=0 :: {}
+I2 git in data                   runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's git\nQ\nx=git; y=comm; $x ${y}it -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command and git is still in it
+I2 pre                           runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\nx=git; y=comm; $x ${y}it -m m"
+    main exit=0 :: {}
+    head exit=0 :: {}

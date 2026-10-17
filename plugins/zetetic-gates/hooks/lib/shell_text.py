@@ -1,66 +1,45 @@
 """Rewrite a shell command so that a lexer sees only the commands it runs.
 
-Sources, POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2):
-- §2.7.4 Here-Document: the body is the lines after the operator's line up to
-  a line holding only the delimiter, with leading tabs removed for <<-. When
-  any part of the delimiter word is quoted the body is not expanded: it is
-  data. Otherwise it undergoes parameter expansion, command substitution and
-  arithmetic expansion, a backslash quoting only $ ` \\ and newline; quotes
-  and # there are data. Only the commands of its $(...) and `...` are kept.
-- §2.6.2: ${...} ends at the first unquoted } that is not part of a nested
-  unit; a bare { inside it is text in bash, and in zsh only inside "...".
-  Unquoted, zsh counts a bare { and ends later: when the text between the
-  two ends could change which lines are commands, this raises ValueError.
-  Inside "${...}", bash reads ' as a quote and zsh as a literal, so a '
-  there raises ValueError.
-- zsh also reads case WORD { pattern) ... }, which bash rejects: a case
-  whose subject is not followed by in raises ValueError.
-- §2.6.2 Parameter Expansion, §2.6.4 Arithmetic Expansion: inside ${...} and
-  $((...)), and bash's $[...] and ((...)) command, << and # are word or
-  operator text, not a redirection or a comment. Only a command substitution
-  there holds commands; it is rewritten like any other.
-- bash parse.y parse_arith_cmd (beyond §2.6.4): (( and $(( are arithmetic
-  only when the ) matching the inner ( is directly followed by ); otherwise
-  they open nested subshells, which are commands.
-- §2.9.4.3 case: a pattern's ) inside $(...) does not end the substitution.
-  case counts only in command position (§2.4, §2.9.1): as the first word of
-  a command after any assignments, an operator, then, do, else, elif, if,
-  while, until, !, {, coproc, or time and its options; a redirection and its
-  target leave it as it was (§2.7); &> and &>> are redirections. After an
-  assignment no word is reserved (bash). esac also ends an empty case right
-  after in. Words are matched with their backslash-newlines removed. Counting an argument
-  case keeps the $(...) open, and missing a reserved one closes it early:
-  either hides what follows.
-- §2.6.3: a $(...) holds a whole script, so it reads its own here-documents.
-  A body still pending at its ) is read by bash from the lines after the
-  substitution and by zsh not at all: the shells disagree on which lines
-  are commands, so this raises ValueError.
-- §2.7.4, §2.2: the delimiter is the word after quote removal; $'...'
-  (bash, zsh, escapes decoded) and $"..." (bash) quote it too. A $(...),
-  ${...} or `...` in the word is one unit of it, so <<$(a;b) waits for the
-  line $(a;b). A body whose delimiter line never comes raises ValueError.
-- bash parse.y: the subscript of an assignment NAME[...]= is read as one
-  unit, so << in it is a shift; zsh reads a here-document there. The shells
-  disagree on which lines are commands, so a word NAME[...] holding <<
-  raises ValueError.
-- zsh: a ( right after a word character opens a glob group that is part of
-  the word (a(#b), *.py(N)), so a # inside it is not a comment. Not after =
-  (an array assignment) and not in f() (a function definition).
-- §2.7.4 (bash, zsh): in a body whose delimiter is unquoted, a
-  backslash-newline joins two lines before the delimiter is matched.
-- §2.3 rule 9: # begins a comment only at the start of a word, so not right
-  after a $(...), $((...)), bash's <(...) or a removed backslash-newline.
-- §2.2.1: a backslash-newline is removed before the line is read.
-- §2.9.3: an unquoted newline separates commands, like ;.
-- §2.2.3: inside "...", a $(...), ${...}, $((...)) or `...` is a unit,
-  so a " inside it does not close the string. bash's $'...' ends at the
-  first ' not escaped by a backslash. A top-level `...` is one unit too, so
-  its quotes and # are its own.
-Quoted text keeps its words for the lexer ("..." with its inner quotes
-escaped; $'...' and `...` as a "..." word); commands inside quotes are not
-read, and an unclosed quote is copied as is, so the lexer fails on it.
-A non-arithmetic expansion is read again as commands, so each rewrite is
-cached for one shell_lines call: otherwise each nesting level doubles it.
+Sources: POSIX Shell Command Language (IEEE Std 1003.1-2017, XCU ch. 2),
+bash parse.y, zsh 5.9. Where bash and zsh read different commands, this
+raises ValueError (the caller refuses when the command may commit or push).
+The audit of every place text is dropped: tasks/evidence/pr-174-review/
+round7/analysis.txt.
+- §2.7.4 Here-document: the body runs from the line after the operator's
+  line to the delimiter line (<<- strips tabs; an unquoted body joins
+  backslash-newlines first). A quoted delimiter makes the body data; else
+  only the commands of its $(...) and `...` are kept. The delimiter is the
+  word after quote removal ($'...' decoded, $"..."); a $(...), ${...} or
+  `...` in it is one unit. A body that never ends, or that is still pending
+  where a $(...) ends (bash reads the next lines, zsh not), raises.
+- §2.6.2, §2.6.4: inside ${...}, $((...)), $[...] and ((...)), << and # are
+  text; a $(...) there is rewritten like any other. ${...} ends at the first
+  unquoted } outside nested units (a bare { is text in bash, and in zsh only
+  inside "..."); where zsh ends it later past text that could change which
+  lines are commands, or a ' sits inside "${...}", this raises.
+- bash parse_arith_cmd: (( is arithmetic only when the ) matching its inner
+  ( is directly followed by ); otherwise it opens nested subshells.
+- §2.9.4.3: a case pattern's ) does not end a $(...). case counts only in
+  command position (§2.4, §2.9.1, §2.7: after operators, assignments not
+  followed by a reserved word, OPENERS, time and its options, redirections
+  and their targets; &> and &>> are redirections); esac also ends an empty
+  case right after in. zsh's case WORD { ... } (no in) raises.
+- bash: << in an assignment subscript NAME[...]= is a shift, zsh reads a
+  here-document: a word NAME[...] holding << raises.
+- §2.3 rule 9: # begins a comment only at the start of a word. zsh reads a
+  ( after a word character as a glob group (a(#b), *.py(N)), and (a|b)#x,
+  (a)#x) and =(cmd)#x as words: a # right after ( or ) is kept as text,
+  and raises when the rest of its line could open a unit or here-document.
+- §2.2.1, §2.9.3: a backslash-newline is removed; an unquoted newline
+  separates commands, like ;.
+- §2.2.3: inside "...", a $(...), ${...}, $((...)) or `...` is a unit, so a
+  " inside it does not close the string; bash's $'...' ends at the first '
+  not escaped by a backslash; a top-level `...` is one unit too.
+Quoted text keeps its words for the lexer ("..." with nested units unquoted;
+$'...' and `...` as a "..." word); commands inside quotes are not read, and
+an unclosed quote is copied as is, so the lexer fails on it. Each rewrite of
+an expansion is cached for one shell_lines call, so nesting does not
+multiply the work.
 """
 from functools import lru_cache
 import re
@@ -69,6 +48,7 @@ WORD_END = ' \t\n;&|()<>'
 SUBSCRIPT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\[')
 # Pieces after which the next character starts a word: a blank, an operator
 # character, or the space that replaces a here-document operator.
+HASH_UNSAFE = re.compile('[\'"`$\\\\<()]')
 SEPARATING = {' ', '\t', ';', '&', '|', '(', ')', '<', '>', '<<<'}
 CLOSERS = {'{': '}', '[': ']', '(': ')'}
 
@@ -398,8 +378,23 @@ def _next_piece(text, index, pending, word_start):
             return found
     if char == '#' and word_start:
         end = text.find('\n', index)
-        return (len(text) if end < 0 else end), ''
+        end = len(text) if end < 0 else end
+        if text[index - 1:index] in ('(', ')'):
+            return _hash_after_paren(text, index, end)
+        return end, ''
     return index + 1, char
+
+
+def _hash_after_paren(text, index, end):
+    """(end, text) for a # right after ( or ). zsh reads (a|b)#x, (a)#x and
+    =(cmd)#x as one word; bash and zsh read ((1))#x as a comment. The rest of
+    the line is kept as text, which reads at least the commands the comment
+    reading would, unless it holds a quote, $, `, \\, <, ( or ): kept, those
+    could open a here-document or a unit that hides the next lines, so the
+    command is uninspectable."""
+    if HASH_UNSAFE.search(text, index + 1, end):
+        raise ValueError('# after ( or ): bash may read a comment, zsh a word')
+    return index + 1, '#'
 
 
 def _heredocs(text, index, pending, out):
@@ -434,15 +429,27 @@ RESETS = {';', '&', '|', '(', ')'}
 REDIRECTS = {'<', '>', '<<<'}
 
 
+def _previous_word(text, index):
+    """(last character, word, scanned) before index, skipping blanks and
+    backslash-newlines. It reads only the blanks and the one word between
+    the previous word and index, so over all the words of a text the
+    characters scanned sum to at most twice its length."""
+    i = index - 1
+    while i >= 0 and (text[i] in ' \t' or (text[i] == '\n' and i and text[i - 1] == '\\')):
+        i -= 1 + (text[i] == '\n')
+    last, chars = (text[i] if i >= 0 else ''), []
+    while i >= 0 and text[i] not in ' \t\n;&|()<>':
+        chars.append(text[i])
+        i -= 1
+        if i > 0 and text[i] == '\n' and text[i - 1] == '\\':
+            i -= 2
+    return last, ''.join(reversed(chars)), index - 1 - i
+
+
 def _after_separator(text, index):
     """True when the word at index follows an operator or an OPENERS word."""
-    # A bounded look-back keeps this linear; the full text only when the
-    # window holds nothing but blanks.
-    window = text[max(0, index - 256):index]
-    before = (window if window.strip() else text[:index]).replace('\\\n', '').rstrip(' \t')
-    if before[-1:] in ('', ';', '&', '|', '(', '\n'):
-        return True
-    return re.split(r'[ \t\n;&|()<>]', before)[-1] in OPENERS
+    last, word, _scanned = _previous_word(text, index)
+    return last in ('', ';', '&', '|', '(', '\n') or word in OPENERS
 
 
 def _case_step(cases, header, word, separated):
