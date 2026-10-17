@@ -201,3 +201,26 @@ def test_round7_wrapped_command_is_blocked(package, consumer, command):
     subprocess.run(['git', 'add', '.'], cwd=consumer, check=True)
     result = run_bash_hook(package, consumer, WRAPPED + command)
     assert result.returncode == 2, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize('command', [
+    '[[ 5 == <->#x ]]; git commit -m x',
+    'case a in (b|#x) echo IN;; esac; git commit -m x',
+    'x=<->#x; git push',
+    'git status; ' + '\n' * 45000 + 'x=git; y=comm; $x ${y}it -m m',
+])
+def test_round8_wrapped_command_is_blocked(package, consumer, command):
+    (consumer / 'sample.py').write_text('DELAY = 2.741592\n')
+    subprocess.run(['git', 'add', '.'], cwd=consumer, check=True)
+    result = run_bash_hook(package, consumer, WRAPPED + command)
+    assert result.returncode == 2, result.stdout + result.stderr
+
+
+def test_unexpected_exception_blocks_a_built_verb(monkeypatch):
+    """The fallback refuses on the word git, not on a literal commit verb."""
+    hook = load_hook(monkeypatch)
+    monkeypatch.setattr(hook, 'run', lambda _event: (_ for _ in ()).throw(RuntimeError('boom')))
+    command = 'x=git; y=comm; $x ${y}it -m m'
+    event = {'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_input': {'command': command}}
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(json.dumps(event)))
+    assert hook.main() == 2

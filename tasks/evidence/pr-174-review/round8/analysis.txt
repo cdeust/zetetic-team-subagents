@@ -1,0 +1,102 @@
+PR #174 round 8: the dropped-span rule and every return path of git_commands.
+
+1. The class: text the rewrite drops
+
+Rounds 5, 6 and 7 each fixed the characters after which someone had seen zsh
+read a # as part of a word ((, ), then |, >, a blank: <->#x, (b|#x)), and
+missed the next one. The class is not a set of characters but "text the
+rewrite drops". shell_text drops exactly these spans of the input
+(round7/analysis.txt section 2, re-checked against the code at this commit):
+  a. comments: # at a word start through the end of the line
+     (_next_piece, the '#' branch);
+  b. here-document operators with their delimiter words, <<WORD
+     (_next_piece, the '<<' branch, replaced by a blank);
+  c. here-document bodies: a quoted body entirely; of an unquoted body
+     everything but the commands of its $(...) and `...`;
+  d. backslash-newlines and the quote characters of nested units (no word
+     is lost: two lines are joined, or quotes are removed).
+shell_text.read() returns, next to the rewritten text, the text of every
+span of kind a and b, collected as they are dropped (dict keyed by the
+text read and the start index: a span revisited by a cached read is stored
+once, so the dropped text is at most n characters for an input of n; one
+pass, linear). The text is part of the key because an unquoted body's
+substitutions are read as their own text: keyed by index alone, a body
+comment overwrote a command comment at the same index (found in the round-8
+self-review; test_a_body_comment_does_not_overwrite_a_command_comment).
+Where origin/main refused, git_commands tests the word git (\bgit\b on the
+quote-stripped text) on the rewritten text and on the dropped text. A shell
+that reads a dropped comment as a word, or a delimiter word as anything,
+can only run what is written in it, so a git it runs is in one of the two
+texts. Kind c stays data by the owner's rule: that is the PR's purpose.
+Not done, on purpose: re-scanning with comment removal switched off.
+`echo a # <<EOF` / `git commit -m x` / `EOF` is a comment then a live commit
+in both shells; a scanner that keeps the comment reads <<EOF as an operator
+and the commit line as data. Testing the dropped text instead keeps the
+live reading intact (test_a_comment_before_a_heredoc_operator_keeps_the_commit_live).
+
+Consequences. Under any wrapper (origin/main refused) S10-S21p are refused:
+the dropped comment holds git commit or git push. S22 (`cat <<git`, git only
+as the delimiter word) is refused too, because the delimiter word is a
+dropped span of kind b; it is no longer a boundary. Cost: a command origin/
+main refused whose only word git is in a comment or a delimiter word stays
+refused, as on origin/main. In plain form (origin/main lexes) S10-S21p are
+still not gated: origin/main misses them too (its shlex also reads the # as
+a comment).
+
+Boundaries that remain, also on origin/main:
+  - I2d: `: <<'Q'` / `it's git` / `Q` / `x=gi; ${x}t commit -m m`. The only
+    "git " is here-document data (kind c), and no word git is live: no
+    predicate on live or dropped text sees it.
+  - I2 with no "git " anywhere: origin/main does not refuse it (its filter
+    needs git followed by a blank), so neither does the gate.
+  - Q10 `git -C "$(pwd)" commit`, Q11 `cd "$(...)" && git commit`, U6: the
+    directory is read as literal text, so the commit is gated in the wrong
+    directory or not at all, as on origin/main.
+  - git -c alias.c=commit c: the verb is read as c, as on origin/main.
+
+2. Every return path of git_commands, the rule it applies, and its test
+   (tests/test_gate_targets.py::test_every_return_path_applies_the_refusal_rule
+   unless named otherwise). "The rule": where origin/main refused and the
+   word git is there, refuse.
+
+  1 len(command) > MAX_COMMAND, before _flat_targets (whether origin/main
+    refused is not computed: one shlex pass is quadratic in a token's
+    length). Refuses when the word git is anywhere in the raw text, a
+    superset of the rule. Tests: "1 input over cap, git" refused (Z2's
+    shape), "1 input over cap, no git" [].
+  2 the rewrite raises and origin/main refused: refuses. Test: "2 unreadable,
+    main refused".
+  3 the rewrite raises and origin/main lexed: refuses when it may commit or
+    push, else returns origin/main's targets. Origin/main did not refuse, so
+    the rule does not apply. Tests: "3 unreadable, main lexed, commit",
+    "3 ..., no commit".
+  4 origin/main refused and the word git is in the rewritten or dropped text:
+    refuses. Every later path is reached only when origin/main lexed or no
+    word git is in either text, so the rule holds on them by construction.
+    Tests: "4 main refused, git live", "4 main refused, git in a comment",
+    "4 main refused, git only in data" ([], the PR's motivating case);
+    test_where_origin_main_refused_no_dropped_span_hides_git (S10-S22,
+    Z1, Z2 under three wrappers).
+  5 len(rewritten) > MAX_COMMAND: refuses when it may commit or push, else
+    origin/main's targets. Round 7 ran this before the rule, so Z1 (45 000
+    newlines, rewritten to 135 000) passed; it now runs after path 4.
+    Tests: "5 rewritten over cap, commit", "5 ..., no git".
+  6 no git left in the rewritten text: origin/main's targets. Test: "6 no
+    git left".
+  7 the rewritten text cannot be lexed: refuses when it may commit or push,
+    else origin/main's targets. Test: "7 unlexable rewrite, main lexed".
+  8 targets: the rewrite's targets plus origin/main's. Test: "8 targets";
+    test_targets_are_a_superset_of_the_flat_reading.
+  9 hooks/zetetic-gates.py main(), an unexpected exception: exits 2 when any
+    string of the tool input holds the word git (was: a literal commit or
+    push after git, which a verb built at run time passes). Tests:
+    test_unexpected_exception_blocks_a_built_verb, the four tab and
+    backslash-newline forms, test_unexpected_exception_blocks_only_a_commit
+    (echo hi re-raises).
+
+3. Bounds (Knuth)
+   read(): the comment branch and the '<<' branch each store one slice of
+   the input per start index; the slices are disjoint (a comment ends at a
+   newline, a delimiter word at a word end), so the dropped text is at most
+   n characters and the \bgit\b search over rewritten + dropped is linear in
+   3n + n. No new scan.

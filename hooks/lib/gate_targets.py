@@ -67,6 +67,18 @@ def _uninspectable(command, error):
     return []
 
 
+def mentions_git(text):
+    """True when text, quotes removed, holds the word git."""
+    return bool(_GIT_WORD.search(shell_text.unquoted(text)))
+
+
+def _refuse_if_git(text, reason):
+    """Raise when text holds the word git: the rule applied wherever
+    origin/main refused, or may have refused, the command."""
+    if mentions_git(text):
+        raise ValueError(f'Cannot inspect shell quoting before git validation: {reason}')
+
+
 def may_commit_or_push(text):
     """True when text, quotes removed, may hold a git commit or push."""
     text = shell_text.unquoted(text)
@@ -93,26 +105,31 @@ def _flat_targets(command, base):
 
 def git_commands(command, base):
     """Commit and push targets of command. Where origin/main's flat reading
-    succeeds its targets are added. Where it refused (only commands whose
-    text matches the word git followed by a blank), the command is refused whenever its rewritten
-    text still holds the word git: this refuses only where origin/main did,
-    and spares only commands whose every git is here-document data or a
-    comment."""
+    succeeds its targets are added. Where it refused (the word git followed
+    by a blank, and shlex cannot lex), the command is refused when the
+    rewrite cannot read it, or when the word git is in the rewritten text or
+    in any span the rewrite dropped other than here-document bodies. Every
+    return path below applies that rule first (round8/analysis.txt):
+    1 too long: refused when the word git is anywhere in the raw text.
+    2, 3 unreadable: refused when origin/main refused; else when it may commit.
+    4 origin/main refused and git is in the live or dropped text: refused.
+    5 rewritten too long, 6 no git left, 7 unlexable, 8 targets: origin/main
+      refused only without a word git there, so these follow the rewrite."""
     if len(command) > MAX_COMMAND:
-        return _uninspectable(command, ValueError(f'command longer than {MAX_COMMAND} characters'))
+        _refuse_if_git(command, f'command longer than {MAX_COMMAND} characters')
+        return []
     flat = _flat_targets(command, base)
     refused, flat = flat is None, flat or []
     try:
-        rewritten = shell_text.shell_lines(command)
+        rewritten, dropped = shell_text.read(command)
     except ValueError as error:
         if refused:
             raise ValueError(f'origin/main refused this command, and it cannot be read: {error}') from error
         return _uninspectable(command, error) or flat
+    if refused:
+        _refuse_if_git(rewritten + '\n' + dropped, 'origin/main refused this command and git is still in it')
     if len(rewritten) > MAX_COMMAND:
-        return _uninspectable(command, ValueError(f'rewritten command longer than {MAX_COMMAND} characters'))
-    if refused and _GIT_WORD.search(shell_text.unquoted(rewritten)):
-        raise ValueError('Cannot inspect shell quoting before git validation: '
-                         'origin/main refused this command and git is still in it')
+        return _uninspectable(command, ValueError(f'rewritten command longer than {MAX_COMMAND} characters')) or flat
     if not _mentions_command(rewritten, 'git'):
         return flat
     try:
