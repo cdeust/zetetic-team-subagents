@@ -183,6 +183,9 @@ jobs:
       - name: Run state-layout suite (issue #136)
         run: bash scripts/test-state-layout.sh
 
+      - name: Run session-cache suite
+        run: bash scripts/test-session-cache.sh
+
   zetetic-checker:
     name: Zetetic Standard Checker (hard gate)
     runs-on: ubuntu-latest
