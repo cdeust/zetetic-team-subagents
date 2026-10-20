@@ -5,14 +5,27 @@
 #   tools/session-store.sh save "<context summary>"
 #   tools/session-store.sh load
 #
-# Stores context in .claude/session-cache.json (Cortex integration is handled
-# by Claude directly via MCP; this is the fallback for non-Cortex environments).
+# Stores context in
+#   ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/session-cache/<sha256(toplevel)[0:16]>.json
+# one file per working tree (git toplevel, or the physical pwd outside git).
+# The cache lives under the user's Claude config dir and never inside the
+# working repository: a file written there is untracked, and a worktree manager
+# refuses to delete a worktree that holds an untracked file.
+# (Cortex integration is handled by Claude directly via MCP; this is the
+# fallback for non-Cortex environments.)
 # Exit codes: 0 success, 1 error
 
 set -euo pipefail
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-CACHE_DIR="$REPO_ROOT/.claude"
-CACHE_FILE="$CACHE_DIR/session-cache.json"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)"
+if command -v sha256sum >/dev/null 2>&1; then
+  TREE_KEY="$(printf '%s' "$REPO_ROOT" | sha256sum | cut -c1-16)"
+elif command -v shasum >/dev/null 2>&1; then
+  TREE_KEY="$(printf '%s' "$REPO_ROOT" | shasum -a 256 | cut -c1-16)"
+else
+  TREE_KEY="$(printf '%s' "$REPO_ROOT" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])')"
+fi
+CACHE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/session-cache"
+CACHE_FILE="$CACHE_DIR/$TREE_KEY.json"
 ACTION="${1:-}"; CONTEXT="${2:-}"
 
 case "$ACTION" in
