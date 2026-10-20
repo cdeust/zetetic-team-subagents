@@ -74,10 +74,6 @@ _SHA = re.compile(r"^[0-9a-f]{7,40}$")
 # credentials), scp-like ``git@github.com:o/r.git`` and ``ssh://git@github.com/o/r``.
 _REMOTE = re.compile(r"(?:https://(?:[^@/]+@)?|ssh://git@|git@)github\.com[:/]"
                      r"(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)(?:\.git)?/?")
-# Where origin's default branch is looked up, in order: what clone recorded,
-# then the two conventional names (a repository pushed from ``git init`` has
-# no origin/HEAD until ``git remote set-head origin --auto``).
-_DEFAULT_BRANCHES = ("refs/remotes/origin/HEAD", "refs/remotes/origin/main", "refs/remotes/origin/master")
 MAIN_AGENT = "main"
 
 
@@ -283,14 +279,6 @@ def _check_pull_request(cwd: str, url: str) -> None:
         raise DeclareRefused(f"{url} is not a pull request of origin ({'/'.join(origin)})")
 
 
-def _default_branch(cwd: str) -> str:
-    for ref in _DEFAULT_BRANCHES:
-        if git(cwd, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode == 0:
-            return ref
-    raise DeclareRefused(f"no default branch of origin in {cwd} (looked for {', '.join(_DEFAULT_BRANCHES)}); "
-                         "run `git fetch origin` and `git remote set-head origin --auto`")
-
-
 def _committed_after_open(cwd: str, full: str, opened: object) -> None:
     """The commit is not older than the task. Both stamps come from the clock
     of the machine that made the edit and the commit; this orders two recorded
@@ -307,10 +295,29 @@ def _committed_after_open(cwd: str, full: str, opened: object) -> None:
         raise DeclareRefused(f"{full} was committed before the task opened ({opened}): it is not the task's work")
 
 
-def _check_new_pushed_commit(cwd: str, sha: str, opened: object) -> str:
-    """The full sha of ``sha`` when it is a commit that a branch of origin
-    contains, that origin's default branch does not contain (new work, not the
-    base the task started from), and that was committed after the task opened."""
+def _touches_first_path(cwd: str, full: str, task: Dict) -> None:
+    """The commit changes the file the task first edited (its ``first_path``
+    relative to its recorded ``repo``). This is what ties a sha to THIS task:
+    it needs neither the worktree nor a recorded branch, only the commit."""
+    rel = os.path.relpath(task["first_path"], task["repo"])
+    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        raise DeclareRefused(f"the task's first path {task['first_path']!r} is outside its repository "
+                             f"{task['repo']!r}")
+    # -m --first-parent: a merge commit lists what it brought in over its first parent; --root: a root commit too.
+    changed = git(cwd, "diff-tree", "--no-commit-id", "--name-only", "-r", "-m", "--first-parent", "--root", full)
+    if changed.returncode != 0 or rel.replace(os.sep, "/") not in changed.stdout.splitlines():
+        raise DeclareRefused(f"{full} does not change {rel}, the file the task first edited: it is not shown "
+                             "to be the task's work; give the commit that carries it")
+
+
+def _check_task_commit(cwd: str, sha: str, task: Dict) -> str:
+    """The full sha of ``sha`` when it provably is the task's own work on origin:
+    a commit that (1) a ref of origin reaches, a feature branch or the default
+    branch alike (after a merge, fast-forward or rebase the work is in the
+    default branch; after a squash-merge the squash commit is, and the feature
+    branch is gone), (2) was committed after the task opened, and (3) changes
+    the file the task first edited. Condition 3 binds the commit to the task:
+    a sibling session's unrelated pushed commit fails it."""
     resolved = git(cwd, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}") \
         if isinstance(sha, str) and _SHA.fullmatch(sha) else None
     if resolved is None or resolved.returncode != 0:
@@ -318,13 +325,10 @@ def _check_new_pushed_commit(cwd: str, sha: str, opened: object) -> str:
     full = resolved.stdout.strip()
     on_origin = git(cwd, "for-each-ref", "--contains", full, "--format=%(refname)", "refs/remotes/origin/")
     if on_origin.returncode != 0 or not on_origin.stdout.strip():
-        raise DeclareRefused(f"no branch of origin contains {full}; push it first")
-    default = _default_branch(cwd)
-    merged = git(cwd, "merge-base", "--is-ancestor", full, default).returncode
-    if merged != 1:  # git-merge-base(1): 0 when it is an ancestor, 1 when not, anything else is an error
-        raise DeclareRefused(f"{full} is already in {default} (merge-base exit {merged}): "
-                             "give a commit of the task's own pushed work")
-    _committed_after_open(cwd, full, opened)
+        raise DeclareRefused(f"no ref of origin contains {full}; push it (after a squash-merge give the squash "
+                             "commit on the default branch) and run `git fetch origin`")
+    _committed_after_open(cwd, full, task.get("time"))
+    _touches_first_path(cwd, full, task)
     return full
 
 
@@ -353,7 +357,7 @@ def _scanned_end(task: Dict) -> tuple:
 def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
     """Close an open task whose worktree no longer exists (``worktree_gone``)
     on a pull request of origin and a pushed commit of the task's own work
-    (``_check_new_pushed_commit``). Refuses (DeclareRefused), leaving the ledger
+    (``_check_task_commit``). Refuses (DeclareRefused), leaving the ledger
     unchanged, when any of these fails. The git and filesystem checks run
     before the lock, as in ``declare``; under it only the ledger state is
     re-read, so a task closed meanwhile is not closed twice."""
@@ -363,7 +367,7 @@ def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
         raise DeclareRefused(f"the worktree of {task_id} is not proven gone (repo {task.get('repo')!r}, "
                              f"first path {task.get('first_path')!r}); prove its stages instead")
     _check_pull_request(cwd, url)
-    full = _check_new_pushed_commit(cwd, sha, task.get("time"))
+    full = _check_task_commit(cwd, sha, task)
     window_end, transcript = _scanned_end(task)
     row = {"close": task_id, "disposed": {"url": url, "sha": full},
            "evidence": {}, "counts": {"edits": 0, "reviews": 0, "reopens": 0},
@@ -418,7 +422,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dis.add_argument("task_id")
     dis.add_argument("--url", required=True, help="the pull request of origin that carries the task's work")
     dis.add_argument("--sha", required=True,
-                     help="a commit of that work on a branch of origin, not yet in its default branch")
+                     help="a commit of that work that origin reaches (its branch, or its default branch once merged)")
     return parser
 
 

@@ -255,8 +255,9 @@ def origin(repo):
 
 def pushed_work(repo, task, when: str = "") -> str:
     """A commit of the task's work, dated when the task opened unless ``when``
-    says otherwise, that origin/feature contains and origin/main does not."""
-    sha = commit_file(repo, "work.py", when or task["time"])
+    says otherwise, that origin/feature contains and origin/main does not. It
+    changes a.py, the file ``gone_task`` first edited."""
+    sha = commit_file(repo, "a.py", when or task["time"])
     git_in(repo, "update-ref", "refs/remotes/origin/feature", sha)
     return sha
 
@@ -314,8 +315,9 @@ REFUSALS = {  # case -> what the refusal names
     "worktree-exists": "not proven gone", "no-repo": "not proven gone", "relative-first-path": "not proven gone",
     "unknown-task": "no open task", "not-a-pr": "not a GitHub pull-request URL",
     "trailing-newline": "not a GitHub pull-request URL", "other-repo": "not a pull request of origin",
-    "no-origin": "no GitHub origin remote", "unpushed": "no branch of origin contains",
-    "already-in-main": "already in refs/remotes/origin/HEAD", "older-than-task": "committed before the task opened",
+    "no-origin": "no GitHub origin remote", "unpushed": "no ref of origin contains",
+    "base-commit-of-main": "committed before the task opened", "older-than-task": "committed before the task opened",
+    "unrelated-pushed-commit": "does not change a.py", "unrelated-commit-on-main": "does not change a.py",
 }
 
 
@@ -331,9 +333,19 @@ def _refusal_task(path, repo, tmp_path, case):
 
 def _refusal_sha(repo, task, case):
     if case == "unpushed":
-        return commit_file(repo, "work.py", task["time"])
-    if case == "already-in-main":
-        return git_in(repo, "rev-parse", "refs/remotes/origin/main")
+        return commit_file(repo, "a.py", task["time"])
+    if case == "unrelated-pushed-commit":  # a sibling session's push: after the task opened, on origin, not its work
+        sha = commit_file(repo, "sibling.py", task["time"])
+        git_in(repo, "update-ref", "refs/remotes/origin/sibling", sha)
+        return sha
+    if case == "unrelated-commit-on-main":
+        sha = commit_file(repo, "sibling.py", task["time"])
+        git_in(repo, "update-ref", "refs/remotes/origin/main", sha)
+        return sha
+    if case == "base-commit-of-main":  # the base the task started from: it touches a.py but predates the task
+        sha = commit_file(repo, "a.py", "2000-01-01T00:00:00+00:00")
+        git_in(repo, "update-ref", "refs/remotes/origin/main", sha)
+        return sha
     return pushed_work(repo, task, "2000-01-01T00:00:00+00:00" if case == "older-than-task" else "")
 
 
@@ -386,3 +398,30 @@ def test_close_disposed_runs_git_outside_the_lock_and_rereads_the_ledger_under_i
         cl.close_disposed(str(origin), task["open"], PR, sha)
     closes = [r for r in gates_jsonl.read_rows(path) if r.get("close") == task["open"]]
     assert len(closes) == 1 and ("disposed" in closes[0]) is not raced
+
+
+def test_a_task_closes_after_its_pr_was_squash_merged_and_the_branch_pruned(path, origin, tmp_path):
+    """No origin branch holds the task's own commit any more; the squash commit
+    on the default branch (it changes the task's file) is the proof."""
+    task = gone_task(path, tmp_path)
+    squash = commit_file(origin, "a.py", task["time"])
+    git_in(origin, "update-ref", "refs/remotes/origin/main", squash)
+    row = cl.close_disposed(str(origin), task["open"], PR, squash)
+    assert row["disposed"] == {"url": PR, "sha": squash}
+    assert cl.open_tasks(gates_jsonl.read_rows(path)) == []
+
+
+@pytest.mark.parametrize("give", ["merge-commit", "feature-commit"])
+def test_a_task_closes_after_a_merge_commit_put_its_work_in_the_default_branch(path, origin, tmp_path, give):
+    task = gone_task(path, tmp_path)
+    base = git_in(origin, "rev-parse", "HEAD")
+    work = pushed_work(origin, task)
+    git_in(origin, "checkout", "-q", "--detach", base)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t", "GIT_COMMITTER_DATE": task["time"]}
+    git_in(origin, "merge", "--no-ff", "-q", "-m", "merge", work, env=env)
+    merge = git_in(origin, "rev-parse", "HEAD")
+    git_in(origin, "update-ref", "refs/remotes/origin/main", merge)
+    git_in(origin, "update-ref", "-d", "refs/remotes/origin/feature")  # the branch is deleted after the merge
+    sha = merge if give == "merge-commit" else work
+    assert cl.close_disposed(str(origin), task["open"], PR, sha)["disposed"]["sha"] == sha
