@@ -10,6 +10,10 @@
 #   C2  `load` prints the saved context.
 #   C3  Two different repos get different cache files under the config dir.
 #   C4  The cache file is under $CLAUDE_CONFIG_DIR/session-cache/.
+#   C5  `load` from a subdirectory finds the repo's cache.
+#   C6  A linked worktree gets its own cache and stays clean.
+#   C7  With only shasum on PATH, the key matches sha256(toplevel)[0:16].
+#   C8  With neither sha256sum nor shasum, the python3 fallback gives the same key.
 #
 # HOME and CLAUDE_CONFIG_DIR point at a throwaway dir; the real ~/.claude is
 # never touched.
@@ -67,6 +71,64 @@ if [[ -d "$CLAUDE_CONFIG_DIR/session-cache" ]] && [[ -z "$(find "$CLAUDE_CONFIG_
   pass "C4 cache lives under CLAUDE_CONFIG_DIR/session-cache/"
 else
   fail "C4 stray files outside session-cache/"
+fi
+
+# C5
+mkdir -p "$TMP/repoA/sub/dir"
+if (cd "$TMP/repoA/sub/dir" && bash "$STORE" load) | grep -q "context-A"; then
+  pass "C5 load from a subdirectory finds the repo's cache"
+else
+  fail "C5 load from a subdirectory missed the repo's cache"
+fi
+
+# C6
+WT="$TMP/repoA/.claude/worktrees/wtA"
+git -C "$TMP/repoA" worktree add -q "$WT" -b wt-branch
+(cd "$WT" && bash "$STORE" save "context-WT" >/dev/null)
+if [[ -z "$(git -C "$WT" status --porcelain)" ]] \
+   && (cd "$WT" && bash "$STORE" load) | grep -q "context-WT" \
+   && (cd "$TMP/repoA" && bash "$STORE" load) | grep -q "context-A"; then
+  pass "C6 a worktree gets its own cache and stays clean"
+else
+  fail "C6 worktree cache collided with the main checkout or dirtied it"
+fi
+
+# C7, C8: a PATH holding only the commands session-store.sh needs.
+expected_key() {
+  printf '%s' "$1" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])'
+}
+mkbin() {
+  mkdir -p "$1"
+  local c
+  for c in bash git cut mkdir cat date python3 dirname; do
+    ln -sf "$(command -v "$c")" "$1/$c"
+  done
+}
+ROOT_A="$(cd "$TMP/repoA" && git rev-parse --show-toplevel)"
+KEY_A="$(expected_key "$ROOT_A")"
+
+mkbin "$TMP/bin-shasum"
+if command -v shasum >/dev/null 2>&1; then
+  ln -sf "$(command -v shasum)" "$TMP/bin-shasum/shasum"
+  rm -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json"
+  (cd "$TMP/repoA" && PATH="$TMP/bin-shasum" bash "$STORE" save "context-S" >/dev/null 2>&1) || true
+  if [[ -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json" ]]; then
+    pass "C7 shasum-only path gives the sha256 key"
+  else
+    fail "C7 shasum-only path did not write $KEY_A.json"
+  fi
+else
+  fail "C7 shasum not installed on this host"
+fi
+
+mkbin "$TMP/bin-nohash"
+rm -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json"
+(cd "$TMP/repoA" && PATH="$TMP/bin-nohash" bash "$STORE" save "context-P" >/dev/null 2>&1) || true
+if [[ -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json" ]] \
+   && (cd "$TMP/repoA" && PATH="$TMP/bin-nohash" bash "$STORE" load) | grep -q "context-P"; then
+  pass "C8 no hash tool: python3 fallback gives the same key"
+else
+  fail "C8 no hash tool: save/load failed"
 fi
 
 printf "\n%d passed, %d failed\n" "$PASS_COUNT" "$FAIL_COUNT"

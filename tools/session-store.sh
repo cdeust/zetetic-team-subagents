@@ -19,8 +19,10 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)"
 if command -v sha256sum >/dev/null 2>&1; then
   TREE_KEY="$(printf '%s' "$REPO_ROOT" | sha256sum | cut -c1-16)"
-else
+elif command -v shasum >/dev/null 2>&1; then
   TREE_KEY="$(printf '%s' "$REPO_ROOT" | shasum -a 256 | cut -c1-16)"
+else
+  TREE_KEY="$(printf '%s' "$REPO_ROOT" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])')"
 fi
 CACHE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/session-cache"
 CACHE_FILE="$CACHE_DIR/$TREE_KEY.json"
