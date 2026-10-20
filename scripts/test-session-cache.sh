@@ -14,6 +14,9 @@
 #   C6  A linked worktree gets its own cache and stays clean.
 #   C7  With only shasum on PATH, the key matches sha256(toplevel)[0:16].
 #   C8  With neither sha256sum nor shasum, the python3 fallback gives the same key.
+#   C9  With only sha256sum on PATH, the key matches sha256(toplevel)[0:16].
+#   C10 In a non-git directory reached through a symlink, the key uses the
+#       physical path (pwd -P).
 #
 # HOME and CLAUDE_CONFIG_DIR point at a throwaway dir; the real ~/.claude is
 # never touched.
@@ -129,6 +132,30 @@ if [[ -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json" ]] \
   pass "C8 no hash tool: python3 fallback gives the same key"
 else
   fail "C8 no hash tool: save/load failed"
+fi
+
+mkbin "$TMP/bin-sha256sum"
+if command -v sha256sum >/dev/null 2>&1; then
+  ln -sf "$(command -v sha256sum)" "$TMP/bin-sha256sum/sha256sum"
+  rm -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json"
+  (cd "$TMP/repoA" && PATH="$TMP/bin-sha256sum" bash "$STORE" save "context-H" >/dev/null 2>&1) || true
+  if [[ -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_A.json" ]]; then
+    pass "C9 sha256sum-only path gives the sha256 key"
+  else
+    fail "C9 sha256sum-only path did not write $KEY_A.json"
+  fi
+else
+  fail "C9 sha256sum not installed on this host"
+fi
+
+mkdir -p "$TMP/plain-real"
+ln -s "$TMP/plain-real" "$TMP/plain-link"
+KEY_PLAIN="$(expected_key "$(cd "$TMP/plain-real" && pwd -P)")"
+(cd "$TMP/plain-link" && bash "$STORE" save "context-N" >/dev/null 2>&1) || true
+if [[ -f "$CLAUDE_CONFIG_DIR/session-cache/$KEY_PLAIN.json" ]]; then
+  pass "C10 non-git symlinked directory is keyed by its physical path"
+else
+  fail "C10 expected $KEY_PLAIN.json for the physical path"
 fi
 
 printf "\n%d passed, %d failed\n" "$PASS_COUNT" "$FAIL_COUNT"
