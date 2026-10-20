@@ -89,6 +89,36 @@ run_dev "$TMP/main/.claude/worktrees/wt" STUB_HAS_DEPS=1
   || bad "rc=$RC out='$OUT' err='$ERR'"
 [[ ! -e "$TMP/main/.claude/worktrees/wt/.venv" ]] && ok "no venv in the worktree" || bad "worktree .venv created"
 
+echo "== PYTHON_BIN with pytest is echoed back"
+make_checkout "$TMP/cg"
+run_dev "$TMP/cg" PYTHON_BIN="$STUB_BIN/python3" STUB_HAS_DEPS=1
+[[ "$RC" -eq 0 && "$OUT" == "$STUB_BIN/python3" ]] && ok "prints PYTHON_BIN" || bad "rc=$RC out='$OUT' err='$ERR'"
+[[ ! -e "$TMP/cg/.venv" ]] && ok "no venv created" || bad ".venv was created"
+
+echo "== an existing .venv in the checkout is preferred"
+make_checkout "$TMP/cv"
+mkdir -p "$TMP/cv/.venv/bin" && cp "$STUB_BIN/python3" "$TMP/cv/.venv/bin/python"
+run_dev "$TMP/cv" STUB_HAS_DEPS=1
+[[ "$RC" -eq 0 && "$OUT" == "$TMP/cv/.venv/bin/python" ]] && ok "prints the .venv python" || bad "rc=$RC out='$OUT' err='$ERR'"
+if grep -qE -- '-m venv|pip' "$LOG"; then bad "created or installed: $(cat "$LOG")"; else ok "no venv or pip call"; fi
+
+echo "== run-all and fail-before stop when dev-python.sh fails"
+# A fixture holding both runners beside a dev-python.sh that always fails.
+FF="$TMP/ff"
+mkdir -p "$FF/tests" "$FF/tools/tests/fail-before" "$FF/plugins/zetetic-gates/tools"
+cp "$REPO_ROOT/tests/run-all.sh" "$FF/tests/run-all.sh"
+cp "$REPO_ROOT/tools/tests/fail-before/run-tests.sh" "$FF/tools/tests/fail-before/run-tests.sh"
+printf '#!/usr/bin/env bash\necho "dev-python: STUB-DIAGNOSTIC" >&2\nexit 1\n' > "$FF/tools/dev-python.sh"
+chmod +x "$FF/tools/dev-python.sh"
+OUT="$(env -u PYTHON_BIN PATH="$STUB_PATH" bash "$FF/tests/run-all.sh" 2>&1)"; RC=$?
+[[ "$RC" -eq 1 && "$OUT" == *STUB-DIAGNOSTIC* && "$OUT" == *"FATAL: tools/dev-python.sh"* ]] \
+  && ok "run-all: exit 1 with the diagnostic" || bad "run-all rc=$RC out: $OUT"
+[[ "$OUT" != *"ALL SUITES"* && "$OUT" != *"=== pytest"* ]] && ok "run-all: stopped before any suite" || bad "run-all went on: $OUT"
+OUT="$(env -u PYTHON_BIN PATH="$STUB_PATH" bash "$FF/tools/tests/fail-before/run-tests.sh" 2>&1)"; RC=$?
+[[ "$RC" -eq 1 && "$OUT" == *STUB-DIAGNOSTIC* && "$OUT" == *"FATAL: tools/dev-python.sh"* ]] \
+  && ok "fail-before: exit 1 with the diagnostic" || bad "fail-before rc=$RC out: $OUT"
+[[ "$(wc -l <<<"$OUT" | tr -d ' ')" -eq 2 ]] && ok "fail-before: printed only the diagnostic and the stop" || bad "fail-before went on: $OUT"
+
 echo
 echo "dev-python: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]] || exit 1

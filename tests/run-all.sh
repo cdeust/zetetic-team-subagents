@@ -25,7 +25,7 @@ cd "$REPO_ROOT" || { echo "FATAL: cannot cd to repo root $REPO_ROOT" >&2; exit 1
 
 # Python interpreter used for the pytest suite: PYTHON_BIN if set, else a
 # .venv, created from requirements-dev.lock when missing. source: ADR-9849
-PYTHON_BIN="$(tools/dev-python.sh)" || PYTHON_BIN="${PYTHON_BIN:-python3}"
+PYTHON_BIN="$(tools/dev-python.sh)" || { echo "FATAL: tools/dev-python.sh found no Python with pytest and yaml (its diagnostic is above)" >&2; exit 1; }
 export PYTHON_BIN
 
 list_shell_suites() {

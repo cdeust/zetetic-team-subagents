@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 GATE="$(cd ../../../plugins/zetetic-gates/tools && pwd)/fail-before-checker.sh"
 # Same interpreter tests/run-all.sh uses. source: ADR-9849
-PYTHON="$(../../dev-python.sh)" || PYTHON="${PYTHON_BIN:-$(command -v python3)}"
+PYTHON="$(../../dev-python.sh)" || { echo "FATAL: tools/dev-python.sh found no Python with pytest and yaml (its diagnostic is above)" >&2; exit 1; }
 
 PASS=0
 FAIL=0
