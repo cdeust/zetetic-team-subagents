@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- The Claude Code workflows follow the documented setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"; actions pinned by SHA). `.github/workflows/claude-review.yml`, on `pull_request` only, installs the `code-review@claude-code-plugins` plugin and runs its skill with `--comment` (`/code-review:code-review --comment <repo>/pull/<n>`), with read-only `contents`, `pull-requests` and `issues` permissions and `allowed_bots: "dependabot[bot]"` (the action refused Dependabot PRs as a non-human actor); it no longer applies findings or arms auto-merge. `.github/workflows/claude.yml` keeps only the `@claude` job. Neither checks out the PR head ref, which clears CodeQL `actions/untrusted-checkout/high`, `actions/untrusted-checkout-toctou/high` and `actions/untrusted-checkout/medium`.
+
 ### Changed
 
 - Every delegation applies a genius pattern (owner decision 2026-10-21). `rules/agent-routes.json` maps 23 task classes to a built-in `subagent_type` (`general-purpose`, `Explore`, `Plan`) plus 1 or 2 genius agents, and `scripts/generate-routing-table.py` renders it in `rules/agent-routing-table.md`. The 34 skills that named team agents now name genius patterns in `agents:`; `tools/skill-runner.sh` tells the caller to delegate to a built-in agent at the genius tier with a `GENIUS:` line instead of spawning an agent. `scripts/spawn-agent.sh`, `tools/agent-catalog.sh`, `scripts/setup.sh`, the model-override template, the autonomous build loop workflow, the cycle review evidence (`tools/cycle_evidence.py`) and the agent-based doc counts (`97` agents, no team count) follow.
