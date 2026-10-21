@@ -23,9 +23,10 @@ set -uo pipefail   # NOT -e: suites are run and their exit codes collected.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || { echo "FATAL: cannot cd to repo root $REPO_ROOT" >&2; exit 1; }
 
-# Python interpreter used for the pytest suite. Overridable so a contributor
-# whose default python3 lacks pytest can point at one that has it.
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+# Python interpreter used for the pytest suite: PYTHON_BIN if set, else a
+# .venv, created from requirements-dev.lock when missing. source: ADR-9849
+PYTHON_BIN="$(tools/dev-python.sh)" || { echo "FATAL: tools/dev-python.sh found no Python with pytest and yaml (its diagnostic is above)" >&2; exit 1; }
+export PYTHON_BIN
 
 list_shell_suites() {
   local s
