@@ -1,0 +1,31 @@
+{
+  "_doc": "Task class -> Claude Code built-in subagent_type + the genius patterns the delegated agent MUST apply. Owner decision 2026-10-21: the team-role agents were removed; every delegation runs on a built-in type and carries a 'GENIUS: <name>[, <name>]' line naming files in agents/genius/. Read by hooks/pre-agent-genius-gate.py (suggestions) and scripts/generate-routing-table.py (rendering). 'replaces' is the removed team-role agent whose job the class inherits. Removed with no genius equivalent: latex-engineer, memory-writer (the context-guard hook writes the checkpoint itself), orchestrator (the main session routes by shape), advisor (the native advisor tool).",
+  "builtin_types": ["general-purpose", "Explore", "Plan", "claude"],
+  "system_types": ["claude-code-guide", "statusline-setup"],
+  "routes": [
+    {"task_class": "implement code", "replaces": "engineer", "subagent_type": "general-purpose", "geniuses": ["dijkstra", "liskov"], "keywords": ["implement", "write code", "add feature", "fix bug", "build", "endpoint", "function"]},
+    {"task_class": "structural design and decomposition", "replaces": "architect", "subagent_type": "Plan", "geniuses": ["simon", "alexander"], "keywords": ["architecture", "decompose", "module", "layer", "boundary", "design", "dependency"]},
+    {"task_class": "code review", "replaces": "code-reviewer", "subagent_type": "general-purpose", "geniuses": ["popper", "feynman"], "keywords": ["review", "diff", "pull request", "pr ", "patch", "code quality"]},
+    {"task_class": "refactoring", "replaces": "refactorer", "subagent_type": "general-purpose", "geniuses": ["simon", "dijkstra"], "keywords": ["refactor", "restructure", "extract", "rename", "split file", "clean up"]},
+    {"task_class": "simplification", "replaces": "simplifier", "subagent_type": "general-purpose", "geniuses": ["euler", "thompson"], "keywords": ["simplify", "reduce complexity", "dead code", "remove duplication", "over-engineer"]},
+    {"task_class": "test design", "replaces": "test-engineer", "subagent_type": "general-purpose", "geniuses": ["popper", "dijkstra"], "keywords": ["test", "coverage", "mutation", "assert", "fixture", "regression test"]},
+    {"task_class": "security audit", "replaces": "security-auditor", "subagent_type": "general-purpose", "geniuses": ["taleb", "boyd"], "keywords": ["security", "vulnerab", "threat", "owasp", "injection", "secret", "supply chain"]},
+    {"task_class": "infrastructure and delivery", "replaces": "devops-engineer", "subagent_type": "general-purpose", "geniuses": ["hamilton", "deming"], "keywords": ["ci", "deploy", "docker", "pipeline", "infrastructure", "terraform", "monitoring", "rollback"]},
+    {"task_class": "frontend implementation", "replaces": "frontend-engineer", "subagent_type": "general-purpose", "geniuses": ["jobs", "kay"], "keywords": ["frontend", "component", "react", "css", "ui code", "accessibility", "client state"]},
+    {"task_class": "ux design", "replaces": "ux-designer", "subagent_type": "general-purpose", "geniuses": ["jobs", "ranganathan"], "keywords": ["ux", "wcag", "user flow", "usability", "interface design", "navigation"]},
+    {"task_class": "database work", "replaces": "dba", "subagent_type": "general-purpose", "geniuses": ["lavoisier", "lamport"], "keywords": ["database", "schema", "migration", "sql", "index", "query plan", "postgres"]},
+    {"task_class": "data analysis", "replaces": "data-scientist", "subagent_type": "general-purpose", "geniuses": ["fisher", "laplace"], "keywords": ["dataset", "eda", "feature", "distribution", "missing data", "model fit", "statistic"]},
+    {"task_class": "ml operations", "replaces": "mlops", "subagent_type": "general-purpose", "geniuses": ["deming", "curie"], "keywords": ["mlops", "training pipeline", "model registry", "drift", "serving", "gpu"]},
+    {"task_class": "experiment design and run", "replaces": "experiment-runner", "subagent_type": "general-purpose", "geniuses": ["fisher", "ibnalhaytham"], "keywords": ["experiment", "ablation", "baseline", "seed", "hypothesis", "control group"]},
+    {"task_class": "literature and evidence research", "replaces": "research-scientist", "subagent_type": "general-purpose", "geniuses": ["cochrane", "peirce"], "keywords": ["literature", "paper", "arxiv", "citation", "evidence", "survey", "state of the art"]},
+    {"task_class": "academic review", "replaces": "reviewer-academic", "subagent_type": "general-purpose", "geniuses": ["popper", "toulmin"], "keywords": ["peer review", "reviewer 2", "rebuttal", "novelty", "submission"]},
+    {"task_class": "scientific writing", "replaces": "paper-writer", "subagent_type": "general-purpose", "geniuses": ["toulmin", "feynman"], "keywords": ["write paper", "abstract", "related work", "manuscript", "limitations section"]},
+    {"task_class": "teaching and explanation", "replaces": "professor", "subagent_type": "general-purpose", "geniuses": ["vygotsky", "feynman"], "keywords": ["explain", "teach", "tutorial", "onboarding", "curriculum"]},
+    {"task_class": "git history investigation", "replaces": "git-historian", "subagent_type": "Explore", "geniuses": ["ginzburg", "darwin"], "keywords": ["git log", "git blame", "regression", "which commit", "history", "bisect"]},
+    {"task_class": "codebase exploration", "replaces": null, "subagent_type": "Explore", "geniuses": ["borges", "ginzburg"], "keywords": ["find where", "explore", "search the codebase", "locate", "where is", "map the"]},
+    {"task_class": "root-cause debugging", "replaces": null, "subagent_type": "general-purpose", "geniuses": ["curie", "feynman"], "keywords": ["debug", "root cause", "stack trace", "crash", "flaky", "intermittent", "failing"]},
+    {"task_class": "performance work", "replaces": null, "subagent_type": "general-purpose", "geniuses": ["knuth", "curie"], "keywords": ["performance", "profile", "slow", "latency", "throughput", "optimi"]},
+    {"task_class": "planning", "replaces": null, "subagent_type": "Plan", "geniuses": ["polya", "simon"], "keywords": ["plan", "roadmap", "strategy", "step-by-step", "approach for"]}
+  ],
+  "fallback_geniuses": ["popper", "feynman"]
+}

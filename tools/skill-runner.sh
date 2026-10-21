@@ -11,14 +11,15 @@
 # it is a bash script with no visibility into the Claude process invoking it.
 # So "detect the caller's tier and compare" is not implementable here. Instead
 # it compares each agent named in the skill's `agents:` frontmatter against a
-# fixed baseline tier (sonnet: the most common team-agent model, 16/23 in
-# agents/*.md, measured 2026-09-04 -- see tools/tests/skill-model-tier-policy).
-# An agent whose own `model:` exceeds that baseline (opus, fable) is a
-# deliberate capability escalation the skill's author chose -- inlining its
-# procedure at the caller's tier would silently drop that upgrade with no
-# indication anything was lost. When one is found, a banner is printed before
-# the procedure body naming it; the caller must spawn it as a real subagent
-# via the Agent tool, not inline it.
+# fixed baseline tier (sonnet; see tools/tests/skill-model-tier-policy).
+# Since the team-role agents were removed (owner decision 2026-10-21) the
+# `agents:` list names genius patterns, all declared `model: opus`. A pattern
+# whose own `model:` exceeds the baseline is a deliberate capability escalation
+# the skill's author chose -- inlining its procedure at the caller's tier would
+# silently drop that upgrade with no indication anything was lost. When one is
+# found, a banner is printed before the procedure body naming it; the caller
+# delegates through the Agent tool to a built-in agent run at that tier, with
+# a `GENIUS:` line naming the patterns, instead of inlining.
 #
 # Exit codes: 0 found, 1 not found
 
@@ -123,13 +124,14 @@ done < <(_frontmatter_agents "$SKILL_FILE")
 
 if [[ "${#escalations[@]}" -gt 0 ]]; then
   echo "!!! MODEL-TIER ESCALATION REQUIRED !!!"
-  echo "This skill names an agent above the baseline tier ($BASELINE_MODEL):"
+  echo "This skill names genius patterns above the baseline tier ($BASELINE_MODEL):"
   for e in "${escalations[@]}"; do
     echo "  - $e"
   done
-  echo "Spawn each one as a real subagent via the Agent tool. Do NOT inline"
-  echo "its procedure at the caller's own tier -- that silently drops the"
-  echo "capability upgrade its model: field declares."
+  echo "Delegate through the Agent tool to a built-in agent (general-purpose, Explore"
+  echo "or Plan) run at that tier, with a GENIUS: line naming these patterns. Do NOT"
+  echo "inline the procedure at the caller's own tier -- that silently drops the"
+  echo "capability upgrade the model: field declares."
   echo ""
 fi
 

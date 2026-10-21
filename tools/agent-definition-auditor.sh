@@ -212,7 +212,7 @@ check_genius_extras() {
 # check_move_scaffold — B2/B3: Move-anchor presence and depth, with a
 # structural scribe exemption. An agent whose body declares a <procedure>
 # scaffold instead of <canonical-moves>/"Move N" is a single-purpose,
-# budgeted scribe (e.g. memory-writer.md) by deliberate design, not a
+# budgeted scribe by deliberate design, not a
 # reasoning agent that forgot its Moves. Detection is structural — the
 # file's own body says so via <procedure> — not a hardcoded name list;
 # this schema has no kind:/agent_type: frontmatter field to key off
@@ -273,7 +273,7 @@ check_file() {
   [[ "$kind" == "genius" ]] && check_genius_extras "$f" "$rel"
 
   # P1 collaboration
-  if grep -qiE '(Pair (with|Dijkstra|Lamport|engineer)|Distinct from|Hand off|hand-?off)' "$f"; then
+  if grep -qiE '(Pair (with|Dijkstra|Lamport)|Distinct from|Hand off|hand-?off)' "$f"; then
     P1p=$(( P1p + 1 ))
   else
     P1f=$(( P1f + 1 ))

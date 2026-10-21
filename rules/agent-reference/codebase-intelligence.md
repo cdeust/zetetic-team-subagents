@@ -2,7 +2,7 @@
 name: codebase-intelligence
 description: "ai-architect-mcp-codebase MCP workflow: analyze_codebase bootstrap, qualified-name syntax, per-tool usage table, graceful degradation"
 read_when: "First use of the property-graph MCP tools in a session"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 **Optional MCP server: `ai-architect-mcp-codebase`** (from [`ai-architect-mcp-codebase`](https://github.com/cdeust/ai-architect-mcp-codebase)). When configured in `.mcp.json` or `~/.claude/settings.json`, the agent gains property-graph intelligence over Rust/Python/TypeScript codebases. Prefer these MCP tools to manual `Grep`/`Glob`/`Read` traversal — they return structured cross-file truth instead of pattern matches.

@@ -107,7 +107,7 @@ run_hook "$(payload "$FENCED")" env REDACTION_STOP_BLOCK=on
 run_case "H9 fenced block ignored" test -z "$OUT" -a -z "$ERR"
 
 # H10 SubagentStop uses the same contract
-run_hook "$(payload "$DASH" '{"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"paper-writer"}')" env REDACTION_STOP_BLOCK=on
+run_hook "$(payload "$DASH" '{"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"general-purpose"}')" env REDACTION_STOP_BLOCK=on
 run_case "H10 SubagentStop: decision block" grep -q '"decision": *"block"' <<<"$OUT"
 
 # H11 checker absent → fail open. Copy the hook to a tree with no tools/ and

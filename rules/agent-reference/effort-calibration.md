@@ -2,7 +2,7 @@
 name: effort-calibration
 description: "Model selection (Opus/Sonnet/Haiku specs, cost, latency) and effort-level calibration rules"
 read_when: "Choosing a model or effort level for a subagent; re-evaluating your own effort mid-task"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 ## Model Selection & Effort Calibration

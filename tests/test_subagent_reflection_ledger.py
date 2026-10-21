@@ -34,7 +34,7 @@ def test_C_an_unreadable_ledger_is_a_ledger_error_naming_the_path(reflection_rep
 
 def test_C_both_hooks_report_an_unreadable_ledger_and_exit_zero(reflection_repo, tmp_path, monkeypatch, capsys):
     _make_ledger_unreadable(reflection_repo)
-    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="general-purpose")
     code, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
     assert code == 0 and "ledger NOT written" in err and "cannot read the ledger" in err
     code, out, err = run_hook(stop_hook, stop_event(reflection_repo), monkeypatch, capsys)

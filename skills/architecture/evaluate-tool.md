@@ -11,7 +11,7 @@ trigger: >
 agents:
   - hopper
   - engelbart
-  - architect
+  - simon
   - feynman
 shapes: [anticipate-obsolescence, cargo-cult-detector, augment-not-automate]
 input: The tool(s) to evaluate. The use case. The current solution (if any).
@@ -34,7 +34,7 @@ hand_off:
 2. **hopper: obsolescence check.** Is the current tool defending position by merit or by sunk cost? Is a better abstraction clearly available?
 3. **feynman: cargo-cult check.** Is the proposed tool recommended because "successful companies use it" without a causal mechanism?
 4. **engelbart: augmentation check.** Does this tool augment the team's capability, or just automate a task? Which is needed?
-5. **architect: structured comparison.** Score each option against the pre-defined criteria. Include migration cost.
+5. **simon: structured comparison.** Score each option against the pre-defined criteria. Include migration cost.
 6. **Honest trade-offs.** No option is all upside. Document the downsides of the recommendation.
 
 ## Output Format

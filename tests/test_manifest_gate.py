@@ -10,7 +10,7 @@ named postconditions from the module's docstring, not mirrored against the
 implementation.
 
 # §4.1 exception: test files may exceed 500 lines when organized by fixture
-# grouping (test-engineer agent domain-context override). This file is organized
+# grouping (fixture-grouping exception, see .craftsmanship.conf). This file is organized
 # by function under test, not by concern count — splitting would fragment the
 # fixture helpers shared across groups and reduce readability without reducing
 # any real coupling.  Rationale: test_engineer.md §domain-context, bullet 1.

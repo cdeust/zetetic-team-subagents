@@ -1,8 +1,8 @@
 # Genius Agent Index — Route by Problem Shape
 
-The orchestrator selects genius agents by **problem shape**, not by field or historical person. Each shape is a trigger pattern — a recognizable structure in the problem that activates a specific reasoning procedure. A single agent may serve multiple shapes; a single problem may invoke multiple agents in sequence (see "Pairs well with" in each agent's frontmatter).
+The delegating session selects genius agents by **problem shape**, not by field or historical person. Each shape is a trigger pattern — a recognizable structure in the problem that activates a specific reasoning procedure. A single agent may serve multiple shapes; a single problem may invoke multiple agents in sequence (see "Pairs well with" in each agent's frontmatter).
 
-> **Rule:** if no shape below matches the problem, do not force a genius agent. Use a standard team agent instead.
+> **Rule:** if no shape below matches the problem, do not force a genius agent. Use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ---
 
@@ -190,15 +190,15 @@ The orchestrator selects genius agents by **problem shape**, not by field or his
 |---|---|
 | Anomaly found → isolate → explain | mcclintock → curie → shannon or noether |
 | Estimate → measure → formalize | fermi → curie → shannon |
-| Conjecture → prove → implement | ramanujan → dijkstra or lamport → engineer |
-| Design under failure → specify → implement | hamilton → lamport → engineer |
+| Conjecture → prove → implement | ramanujan → dijkstra or lamport → a general-purpose delegate |
+| Design under failure → specify → implement | hamilton → lamport → a general-purpose delegate |
 | Slow phenomenon → formalize → predict gaps | darwin → shannon → mendeleev |
 | Integrity audit of a result | feynman (+ curie for re-measurement) |
 | New tool design | engelbart (augmentation frame) → hopper (abstraction layer) → dijkstra (correctness) |
 | Symmetry reduction → formal spec | noether → lamport |
 | Cargo cult detected → rederive → rebuild | feynman → dijkstra or hopper |
 | Structural hypothesis from constraints | kekule (count bonds) → mendeleev (tabulate) |
-| Serendipity captured → isolate → develop | fleming → mcclintock or curie → engineer |
+| Serendipity captured → isolate → develop | fleming → mcclintock or curie → a general-purpose delegate |
 | Matched-group anomaly → cheap intervention → institutional resistance | semmelweis → fisher (rigorous design) → feynman (integrity) |
 | Runtime malleability needed | kay → liskov (contracts) → hopper (abstraction) |
 | Performance audit | knuth (profile 3%) → fermi (estimate) → curie (measure) |
@@ -213,7 +213,7 @@ The orchestrator selects genius agents by **problem shape**, not by field or his
 | Stuck on problem → heuristics → test | polya → peirce → fisher |
 | Decision under bias → debias → verify | kahneman → popper → feynman |
 | System misbehavior → diagnose → intervene | meadows → beer → deming |
-| Design trade-off → resolve contradiction → implement | altshuller → engineer |
+| Design trade-off → resolve contradiction → implement | altshuller → a general-purpose delegate |
 | Unknown system → reverse engineer (type known) | rejewski → ventris |
 | Unknown system → reverse engineer (type unknown) | champollion → ventris |
 | Unknown system → reverse engineer (no parallel) | ventris (standalone) |
@@ -234,7 +234,7 @@ The orchestrator selects genius agents by **problem shape**, not by field or his
 | Systematic doubt → fresh investigation | ibnalhaytham → galileo → curie |
 | Thoughtlessness diagnosis → process redesign | arendt → deming |
 | Notation blocking progress → redesign | euler → panini |
-| Problem in many forms → normalize → solve | alkhwarizmi → knuth (analyze) → engineer |
+| Problem in many forms → normalize → solve | alkhwarizmi → knuth (analyze) → a general-purpose delegate |
 | System changing scale → predict breaks → redesign | thompson → fermi (estimate) → alexander (redesign) |
 | Metric gaming / Goodhart's Law → audit framework | zhuangzi → midgley (hidden metaphor) → meadows (system archetype) |
 | Teams in runaway escalation → diagnose → intervene | bateson → meadows (system trap) → ostrom (governance) |
@@ -1163,7 +1163,7 @@ Read the checkpoint fully before touching any file, tool, or search.
 
 ### You receive; you do not initiate
 
-Mid-task system messages are injected by the **harness/orchestrator**. The agent receives and obeys them; it cannot send one to itself. This is a developer API feature.
+Mid-task system messages are injected by the **harness**. The agent receives and obeys them; it cannot send one to itself. This is a developer API feature.
 
 ### How to handle a received mid-task system message
 1. Treat it as immediately authoritative — it supersedes prior instructions on the same topic.
@@ -1184,7 +1184,7 @@ SCOPE_UPDATE_REQUEST: {
   "requested_change": "<what you need from the harness>"
 }
 ```
-The orchestrator will respond with a mid-task system message (granting or denying).
+The delegating session will respond with a mid-task system message (granting or denying).
 
 ### What NOT to do
 - Do not embed a scope update in a user turn — it bypasses the operator channel and may break caching.
@@ -1263,7 +1263,7 @@ Claude Code dynamic workflows (research preview) run 10s–100s of parallel suba
 Before triggering a dynamic workflow, confirm ALL of these are true:
 1. The task genuinely cannot be decomposed into a small (≤5) set of targeted subtasks.
 2. Manual fan-out via the `Agent` tool would require >20 independent agents to be useful.
-3. The cost has been acknowledged by the user or the orchestrator has explicit budget authorization.
+3. The cost has been acknowledged by the user or the delegating session has explicit budget authorization.
 4. No simpler approach (grep, read, targeted search, sequential agents) can answer the question.
 
 If even one of these is false: **do not use dynamic workflows**.
@@ -1277,7 +1277,7 @@ If even one of these is false: **do not use dynamic workflows**.
 ### What to use instead (in order of preference)
 1. **Read + Grep + targeted search** — covers 90% of codebase exploration.
 2. **Agent tool with 2–5 focused subagents** — covers most parallel analysis needs.
-3. **Sequential specialist agents** — orchestrator → architect → engineer chain.
+3. **Sequential specialist agents** — chain of delegates (Simon's decomposition, then a general-purpose delegate).
 4. **Dynamic workflows** — only when the above have been tried and are insufficient.
 
 ### Cost estimation before triggering
@@ -1341,7 +1341,7 @@ The Cortex session_start hook injects hot+anchored memories and the latest check
 
 **Neither should be modified mid-session.** Modifying the system prompt mid-session busts the KV cache (full context reload cost). Hot memory injection at session start is handled by the hook — not by the agent.
 
-**Opus 4.8 exception**: Mid-conversation `"system"` role messages (injected by the harness/orchestrator) are cache-safe incremental updates that do not modify the top-level system prompt. Use these for token-budget updates, permission changes, and scope narrowing. You receive them; you do not send them.
+**Opus 4.8 exception**: Mid-conversation `"system"` role messages (injected by the harness) are cache-safe incremental updates that do not modify the top-level system prompt. Use these for token-budget updates, permission changes, and scope narrowing. You receive them; you do not send them.
 
 ### What to write where
 
@@ -1352,7 +1352,7 @@ The Cortex session_start hook injects hot+anchored memories and the latest check
 | Mid-task scope change received | `/memories/<scope>/scope-history.md` | `memory-tool.sh create` |
 | Insight worth surfacing across ALL future sessions | `cortex:remember` directly (tags, agent_topic) | MCP tool |
 | Cross-session architecture or design knowledge | Wiki (`cortex:wiki_write`) | MCP tool |
-| Cross-agent lesson | Propose to orchestrator — you cannot write `/memories/lessons/` | — |
+| Cross-agent lesson | Propose to the delegating session — you cannot write `/memories/lessons/` | — |
 
 ### Cortex recall vs memory-tool.sh search
 
@@ -1390,7 +1390,7 @@ cortex:recall(query="payment refund logic", agent_topic="<your-agent-topic>")
 ```
 
 When is an unscoped recall appropriate?
-- Explicitly seeking cross-agent context (e.g., "what did the architect decide about X?")
+- Explicitly seeking cross-agent context (e.g., "what did the earlier delegate decide about X?")
 - Retrieving shared project decisions from `/memories/project/` or `/memories/lessons/`
 - Looking up wiki documentation
 
@@ -1420,12 +1420,12 @@ MEMORY_AGENT_ID=feynman tools/memory-tool.sh view /memories/genius/feynman/
 #### Promotion path — the only legitimate cross-agent memory flow
 
 Agent memory stays isolated until explicitly promoted. Promotion is always
-mediated by the orchestrator or curator:
+mediated by the delegating session or curator:
 
 ```
 Agent local FS (/memories/<scope>/)
   ↓  agent writes decision/lesson to its own scope
-  ↓  signals orchestrator: "this is worth sharing"
+  ↓  signals the delegating session: "this is worth sharing"
 Orchestrator reviews
   ↓  writes to /memories/lessons/ or /memories/project/
   ↓  (ACL blocks direct agent writes to lessons/)

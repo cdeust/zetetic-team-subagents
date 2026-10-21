@@ -2,7 +2,7 @@
 name: memory-architecture
 description: "Two-store Cortex memory architecture: session hooks, local FS vs Cortex DB, sync queue, what-to-write-where, wiki vs memory, isolation and promotion rules"
 read_when: "Before your first non-trivial memory operation in a session; whenever deciding where a memory belongs"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 ## Cortex Memory Architecture — How It Actually Works
@@ -54,7 +54,7 @@ The Cortex session_start hook injects hot+anchored memories and the latest check
 
 **Neither should be modified mid-session.** Modifying the system prompt mid-session busts the KV cache (full context reload cost). Hot memory injection at session start is handled by the hook — not by the agent.
 
-**Mid-conversation system-message exception** (Opus 5, Opus 4.8, Fable 5, Mythos 5 — not Sonnet 5): mid-conversation `"system"` role messages (injected by the harness/orchestrator) are cache-safe incremental updates that do not modify the top-level system prompt. Use these for token-budget updates, permission changes, and scope narrowing. You receive them; you do not send them.
+**Mid-conversation system-message exception** (Opus 5, Opus 4.8, Fable 5, Mythos 5 — not Sonnet 5): mid-conversation `"system"` role messages (injected by the harness) are cache-safe incremental updates that do not modify the top-level system prompt. Use these for token-budget updates, permission changes, and scope narrowing. You receive them; you do not send them.
 
 ### What to write where
 
@@ -65,7 +65,7 @@ The Cortex session_start hook injects hot+anchored memories and the latest check
 | Mid-task scope change received | `/memories/<scope>/scope-history.md` | `memory-tool.sh create` |
 | Insight worth surfacing across ALL future sessions | `cortex:remember` directly (tags, agent_topic) | MCP tool |
 | Cross-session architecture or design knowledge | Wiki (`cortex:wiki_write`) | MCP tool |
-| Cross-agent lesson | Propose to orchestrator — you cannot write `/memories/lessons/` | — |
+| Cross-agent lesson | Propose to the delegating session — you cannot write `/memories/lessons/` | — |
 
 ### Cortex recall vs memory-tool.sh search
 
@@ -103,7 +103,7 @@ cortex:recall(query="payment refund logic", agent_topic="<your-agent-topic>")
 ```
 
 When is an unscoped recall appropriate?
-- Explicitly seeking cross-agent context (e.g., "what did the architect decide about X?")
+- Explicitly seeking cross-agent context (e.g., "what did the earlier delegate decide about X?")
 - Retrieving shared project decisions from `/memories/project/` or `/memories/lessons/`
 - Looking up wiki documentation
 
@@ -133,12 +133,12 @@ MEMORY_AGENT_ID=feynman tools/memory-tool.sh view /memories/genius/feynman/
 #### Promotion path — the only legitimate cross-agent memory flow
 
 Agent memory stays isolated until explicitly promoted. Promotion is always
-mediated by the orchestrator or curator:
+mediated by the delegating session or curator:
 
 ```
 Agent local FS (/memories/<scope>/)
   ↓  agent writes decision/lesson to its own scope
-  ↓  signals orchestrator: "this is worth sharing"
+  ↓  signals the delegating session: "this is worth sharing"
 Orchestrator reviews
   ↓  writes to /memories/lessons/ or /memories/project/
   ↓  (ACL blocks direct agent writes to lessons/)

@@ -49,7 +49,7 @@ gates:
     # the scoped runner (tools/mutation_check.sh) so the loop never freezes on
     # non-code or tool-less iterations: PASS when no mutation-applicable source
     # changed; BLOCK only on a surviving mutant; degrade LOUDLY (warn, pass) when
-    # no runner is configured (test-engineer Move 8 step 2). The authoritative
+    # no runner is configured (coding-standards.md section 12). The authoritative
     # external check stays the human/CI re-gate (INV-2). source: coding-standards §12.
     cmd: "bash tools/mutation-gate.sh {files}"
     mandatory: true

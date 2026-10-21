@@ -92,11 +92,11 @@ cp -r zetetic-team-subagents/skills/ ~/.claude/skills/
     { "glob": "genius/*", "model": "sonnet" }
   ],
   "agents": {
-    "refactorer":       { "model": "haiku",  "effort": "low"    },
-    "engineer":         { "model": "sonnet", "effort": "medium" },
-    "architect":        { "model": "opus",   "effort": "high"   },
-    "code-reviewer":    "sonnet",
-    "test-engineer":    { "effort": "medium" }
+    "ginzburg":         { "model": "haiku",  "effort": "low"    },
+    "dijkstra":         { "model": "sonnet", "effort": "medium" },
+    "lamport":          { "model": "opus",   "effort": "high"   },
+    "popper":           "sonnet",
+    "curie":            { "effort": "medium" }
   }
 }
 ```
@@ -109,10 +109,6 @@ cp -r zetetic-team-subagents/skills/ ~/.claude/skills/
 
 | Agents | Model | Effort | Why |
 |---|---|---|---|
-| `refactorer`, `latex-engineer` | haiku | low | Mechanical (Fowler catalog / template) |
-| `engineer`, `code-reviewer`, `test-engineer`, `frontend-engineer`, `dba`, `devops-engineer`, `data-scientist`, `experiment-runner`, `mlops`, `ux-designer`, `professor` | sonnet | medium | Procedural with decision points |
-| `orchestrator` | opus | medium | Routing, not deep reasoning |
-| `architect`, `security-auditor`, `research-scientist`, `paper-writer`, `reviewer-academic` | opus | high | Deep structural / evidence reasoning |
 | 97 genius agents (default) | sonnet | medium-or-high (from frontmatter) | Procedural patterns at medium; deep-reasoning patterns (Feynman, Dijkstra, Lamport, Gödel, Einstein) at high |
 
 Estimated token savings vs. all-opus default: **~2.5–3×** on typical sessions (measured against opus-only baseline; report your own measurements at [Discussions](https://github.com/cdeust/zetetic-team-subagents/discussions) if they differ).
@@ -121,13 +117,13 @@ Re-run `setup.sh update` after editing.
 
 ## Adaptive reasoning depth (stakes-driven)
 
-Five team agents (`engineer`, `architect`, `code-reviewer`, `security-auditor`, `research-scientist`) adjust reasoning depth dynamically:
+The delegated agents adjust reasoning depth dynamically:
 
 - **Low-stakes** change → reason one level below baseline (skip exploratory alternatives)
 - **Medium-stakes** → baseline
 - **High-stakes** → reason one level above baseline (enumerate alternatives, full verification loop)
 
-Stakes classification is objective (see [`rules/coding-standards.md`](../rules/coding-standards.md) §10). No config: built into the agent's Moves.
+Stakes classification is objective (see [`rules/coding-standards.md`](../rules/coding-standards.md) §10). No config: built into the genius agents' Moves.
 
 ## Project-local checker config: `<repo-root>/.zetetic.conf`
 

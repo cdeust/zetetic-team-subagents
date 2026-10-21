@@ -32,10 +32,9 @@ body:
         - curie (measurement discipline)
         - popper (falsifiability / test risk)
         - dijkstra (correctness / contracts)
-        - code-reviewer (rules/coding-standards.md compliance)
-        - test-engineer (mutation survival / coverage)
-        - architect (decomposition / dependency direction)
-        - security-auditor (STRIDE / supply chain)
+        - /code-review (rules/coding-standards.md compliance)
+        - /security-review (STRIDE / supply chain)
+        - simon (decomposition / dependency direction)
         - other (specify in finding)
     validations:
       required: true

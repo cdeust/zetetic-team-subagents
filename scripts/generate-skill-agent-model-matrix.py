@@ -6,7 +6,7 @@ frontmatter field.
 Why this exists (agent-to-skill migration plan, Phase 1): tools/skill-runner.sh
 prints a skill's body verbatim with no mechanism to honor a referenced agent's
 `model:` tier -- inlining a skill that names an opus-tier agent (e.g.
-skills/engineering/review.md -> architect, model: opus) at a lower-tier
+skills/engineering/review.md -> simon, model: opus) at a lower-tier
 caller's session silently drops that capability upgrade. Before deciding how
 widespread the problem is, the true scope has to be measured, not assumed --
 an earlier draft of this plan named "5 files" from memory; this script proves

@@ -2,7 +2,7 @@
 name: autonomous-build-loop
 description: >
   Drive a non-trivial build task to completion through a closed loop: refine the prompt into a
-  verifiable acceptance contract, plan, zetetically verify the plan, build with the orchestrator on an
+  verifiable acceptance contract, plan, zetetically verify the plan, build with a builder agent (built-in `general-purpose`, GENIUS: dijkstra, liskov) on an
   isolated iteration branch, then judge the result with EXTERNAL gates (a deterministic gate tool,
   independent reviewers, a contract diff) and iterate until every gate is green or the budget is spent.
   Convergence is driven by the gates, not by the model re-grading its own output. Fails closed.
@@ -12,7 +12,6 @@ trigger: >
   actually passes review/tests/the spec", "iterate until it's right" — rather than a single best-effort
   pass; when shipping a not-quite-done change is costly enough to pay for gated iteration.
 agents:
-  - orchestrator
   - dijkstra
   - popper
   - liskov
@@ -42,8 +41,8 @@ agents and skills; this skill wires them into a loop and adds the two missing pi
 controller** and **the whole-task acceptance gate**.
 
 - **Vehicle:** a deterministic Workflow script (`.claude/workflows/autonomous-build-loop.js`) owns the
-  loop, the iteration budget, and the convergence decision; each build round delegates to the existing
-  `orchestrator` agent.
+  loop, the iteration budget, and the convergence decision; each build round delegates to a built-in `general-purpose` builder agent
+  carrying `GENIUS: dijkstra, liskov` (every delegation of the loop carries a `GENIUS:` line).
 - **Acceptance gate (deterministic core):** `tools/acceptance-gate.sh` runs command-gates
   (zetetic-checker, test suites, contract-derived `checkable_cmd` checks) scoped to the iteration's
   commit range, aggregates their **exit codes**, and **rejects an empty diff**. The Workflow combines
@@ -58,12 +57,12 @@ controller** and **the whole-task acceptance gate**.
 refine ─▶ contract ──┐                          (the spec everything is judged against)
 setup ─▶ integration branch off baseRef          (so iter-1 can branch off it)
                      ▼
-        ┌─▶ plan ─▶ verify-plan ─▶ build(orchestrator commits to abl/iter-N)
+        ┌─▶ plan ─▶ verify-plan ─▶ build(builder commits to abl/iter-N)
         │                                   │
         │                                   ▼
         │   ACCEPT  =  TWO deterministic-gate runners agree (acceptance-gate.sh,
         │                  scoped to integration...iter-N; JS parses raw output)
-        │           AND independent reviews (code-reviewer + security/architect
+        │           AND independent reviews (popper+feynman, plus taleb+boyd / simon+alexander
         │                  chosen from the diff's paths) all approve with evidence
         │           AND two compare-to-contract agents both find nothing unmet
         │                                   │
@@ -130,7 +129,7 @@ the Stop hook is the idiomatic real-exec gate it recommends.
 Workflow({ name: 'autonomous-build-loop', args: { task: '<what to build>', maxIterations: 4, baseRef: 'HEAD' } })
 ```
 
-The run is a real, heavyweight operation — it spawns the orchestrator and reviewer agents and commits
+The run is a real, heavyweight operation — it spawns the builder and reviewer agents and commits
 code on `abl/iter-N` branches. Start it on a task with a clear success criterion. On success, **re-run
 the deterministic gate on the integration branch yourself**, then merge to `main` (the loop never
 pushes or touches main).

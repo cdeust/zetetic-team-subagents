@@ -22,20 +22,19 @@ is decided here, and the numbers are derived from it rather than remembered.
 ## The quantities
 
 Run every command from the repository root. Each is a claim key used by the
-gate; the value in the last column was measured on 2026-09-08.
+gate; the value in the last column was re-measured on 2026-10-21.
 
 | key | quantity | command | value |
 |---|---|---|---|
 | `genius_agents` | genius agents | `grep -l '^name:' agents/genius/*.md \| wc -l` | 97 |
-| `team_agents` | team-role agents | `grep -l '^name:' agents/*.md \| wc -l` | 23 |
-| `agents_total` | agents, all kinds | `genius_agents + team_agents` | 120 |
+| `agents_total` | agents, all kinds (only genius agents exist since 2026-10-21) | `genius_agents` | 97 |
 | `problem_skills` | problem-shaped skills | `find skills -name 'SKILL.md' \| wc -l` | 15 |
 | `category_skills` | category skills | `skills_total - problem_skills` | 71 |
 | `skills_total` | skill documents | `find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' \| wc -l` | 86 |
-| `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 21 |
-| `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 30 |
+| `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 25 |
+| `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 33 |
 | `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 30 |
-| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 62 |
+| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 66 |
 | `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 41 |
 | `memory_suites` | memory tool suites | `ls scripts/test-memory-*.sh \| wc -l` | 6 |
 
@@ -48,10 +47,11 @@ auditor does not audit it. The definition is mechanical rather than
 path-based, so a non-agent document added under `agents/` is excluded by
 construction rather than by remembering to exclude it.
 
-**`agents_total` is the sum of two populations, not a third measurement.**
-Genius agents and team agents live in different directories and are counted
-separately; the total is arithmetic. A single `find agents -name '*.md'` would
-silently re-include `INDEX.md` and any future non-agent document.
+**`agents_total` equals `genius_agents`.** Owner decision 2026-10-21 removed the 23
+team-role agents, so the genius directory is the only agent population. The key is kept
+(rather than deleted) so the README badge and footer keep a claim to be checked against, and
+so a future second population has a place to be added. A single `find agents -name '*.md'`
+would still silently include `INDEX.md`, so the count stays the `name:` grep.
 
 **Skills are counted in two populations, and the total is one measurement.**
 `problem_skills` are the directories holding a `SKILL.md`: the fifteen

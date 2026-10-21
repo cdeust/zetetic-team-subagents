@@ -335,7 +335,7 @@ test_i11() {
 
 # ── I12: `_user` has a registered home scope (issue #31) ─────────────────────
 # The checkpoint protocol (token-budget.md, hooks/stop-context-guard.py,
-# memory-writer.md's "primary path") defaults MEMORY_AGENT_ID to `_user` for
+# the checkpoint protocol's "primary path") defaults MEMORY_AGENT_ID to `_user` for
 # the top-level interactive session and prescribes writing its own checkpoint
 # to /memories/_user/checkpoint.md — the same own-scope pattern every team
 # agent gets (I1). Unlike team agents, `_user` had no `_user` entry in

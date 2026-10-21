@@ -2,13 +2,13 @@
 """stop-reflection-gate.py -- Stop hook: no stop while a reflection is pending.
 
 Companion of ``subagent-stop-reflection.py``. Reads the per-repo ledger
-``<git-common-dir>/zetetic-gates/reflections.jsonl`` and blocks the orchestrator's
+``<git-common-dir>/zetetic-gates/reflections.jsonl`` and blocks the session's
 stop while THIS session has a pending row, with the exact procedure:
 
   1. read the subagent transcript;
   2. write ONE Cortex memory tagged ``lesson-candidate`` with
      ``agent_topic=<agent type>`` (the type exactly as the ledger recorded it,
-     e.g. ``zetetic-team-subagents:engineer``): what worked, what failed, what the
+     e.g. ``general-purpose``): what worked, what failed, what the
      agent should do differently next time, quoting transcript lines;
   3. lift the row: ``python3 <root>/tools/reflection_ledger.py lift <agent_id>
      --memory-id <id>``, which refuses without the memory id.

@@ -6,8 +6,8 @@ A native MCP server exposing Anthropic's `memory_20250818` schema, backed by a l
 
 ```python
 # From within a Claude Code session, agents call:
-memory.view(path="/memories/engineer/decisions.md")
-memory.create(path="/memories/engineer/2026-04-25.md", file_text="...")
+memory.view(path="/memories/genius/curie/decisions.md")
+memory.create(path="/memories/genius/curie/2026-04-25.md", file_text="...")
 memory.str_replace(path="...", old_str="...", new_str="...")
 memory.insert(path="...", insert_line=1, insert_text="...")
 memory.delete(path="...")
@@ -67,7 +67,7 @@ Plus local-extension errors for path-traversal rejection and ACL denials. Full t
 
 ## Scope ACL
 
-24 scopes declared in `memory/scope-registry.json` with `owners` (write list), `readers` (read list), `ttl_days`, and `max_file_kb`. Default: per-team-agent dedicated scope (engineer → `/memories/engineer/`); 97 genius agents share `/memories/genius/<slug>/` by subpath convention. Curator scopes (`global`, `lessons`) are write-locked to `_user` and the `orchestrator` agent.
+24 scopes declared in `memory/scope-registry.json` with `owners` (write list), `readers` (read list), `ttl_days`, and `max_file_kb`. Default: the 97 genius agents share `/memories/genius/<slug>/` by subpath convention. Curator scopes (`global`, `lessons`) are write-locked to `_user` and the `_curator` ids. The scopes of the removed team-role agents stay declared as data so existing memory under them stays readable; no agent writes there any more.
 
 `strict_unknown_scope: true`: writes to undeclared scopes are denied. Adding a new scope requires editing `scope-registry.json`.
 

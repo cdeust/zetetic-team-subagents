@@ -9,7 +9,7 @@ trigger: >
   is being used without understanding its assumptions; when "the literature" is cited
   without specific papers.
 agents:
-  - research-scientist
+  - cochrane
 shapes: []
 input: A topic, technique, or question to research. Context on why it matters.
 output: Literature review with paper citations, key findings, applicability assessment, and recommendations.
@@ -21,14 +21,14 @@ zetetic_gate:
 composes: [verify-claim]
 aliases: [lit-review, find-papers, research]
 hand_off:
-  technique_found: "/implement — engineer implements the verified technique"
+  technique_found: "/implement — dijkstra implements the verified technique"
   assumptions_dont_match: "(stop) — the technique doesn't apply to your setting"
 ---
 
 ## Procedure
 
 1. **State the question.** What do you need to know? Why does it matter for the current work?
-2. **Search.** research-scientist finds 3-10 relevant papers from primary sources (arXiv, ACM, IEEE, journals).
+2. **Search.** cochrane finds 3-10 relevant papers from primary sources (arXiv, ACM, IEEE, journals).
 3. **Read.** For each paper: read the actual paper. Extract the key method, the assumptions, the experimental conditions, and the results. Not the abstract.
 4. **Cross-reference.** Do independent papers agree? Where do they disagree?
 5. **Applicability.** Do the paper's assumptions match your setting? (Dataset size, hardware, domain, constraints.) If not, the technique may not transfer.

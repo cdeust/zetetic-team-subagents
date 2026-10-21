@@ -1,21 +1,11 @@
 # Quick Review
 
-Fast review of staged changes. Critical findings only — no style nits.
+Review of the staged changes with Claude Code's native commands, not a home-made procedure.
 
 ## Instructions
 
-1. Get the staged diff: `git diff --cached`
-
-2. Review for critical issues ONLY:
-   - Layer boundary violations (core importing infrastructure)
-   - Security vulnerabilities (injection, auth bypass, secret exposure)
-   - Correctness bugs (wrong logic, missing error handling for real cases)
-   - SOLID violations that affect correctness (LSP breaks, leaky abstractions)
-
-3. Skip: style, naming, formatting, minor improvements. This is the fast pass.
-
-4. For each finding: file:line, what's wrong, why it matters, suggested fix.
-
-5. If no critical findings, say "No critical issues in staged changes."
+1. Run `/code-review` on the staged diff (`git diff --cached`).
+2. Run `/security-review` on the same diff.
+3. One run each, one cycle: apply what they report and the review is over. No second round.
 
 $ARGUMENTS
