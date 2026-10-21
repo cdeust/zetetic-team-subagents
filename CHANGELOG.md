@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `rules/public-apis-reference.md`: how an agent uses the community list at https://github.com/public-apis/public-apis to find a free public API, then verifies the chosen API on its official documentation, terms and rate limits, and with one real request, before relying on it; keys stay out of code and commits. The list is a discovery aid, never evidence about an API. The rule states the real `Auth` values, flags the sponsored APILayer table and the MCP-servers table as having different columns, and shows how to read one category without loading the whole README; `rules/agent-reference/research-resources.md` gains a short pointer so agents reach it.
+
 ### Fixed
 
 - The session hooks no longer write `.claude/session-cache.json` inside the user's working repository (#175). `tools/session-store.sh` (called by `hooks/session-end.sh` to save and by `hooks/lib/session-sections.sh` to load) now keeps the cache at `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/session-cache/<first 16 hex of sha256 of the absolute working-tree path>.json`, one file per working tree, same JSON and same `save`/`load` interface. The in-repo file was untracked in any repo that did not gitignore it, and a worktree manager refuses to delete a worktree holding an untracked file, so it blocked every cleanup. There is no fallback read from the old location; existing in-repo cache files are left in place. When neither `sha256sum` nor `shasum` is installed, the key is computed with `python3` `hashlib`, giving the same key. The `.claude/session-cache.json` line is removed from this repo's `.gitignore`. Covered by `scripts/test-session-cache.sh`, which also checks `load` from a subdirectory, a linked worktree, the `sha256sum`-only path, the `shasum`-only path, the no-hash-tool path and a non-git directory reached through a symlink.
