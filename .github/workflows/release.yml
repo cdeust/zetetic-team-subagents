@@ -11,6 +11,7 @@ name: Release
 #   gh attestation verify zetetic-team-subagents.tar.gz --repo cdeust/zetetic-team-subagents
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*.*.*"
@@ -20,7 +21,8 @@ permissions:
 
 jobs:
   release:
-    name: Run tests and publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    name: Build and publish release
     runs-on: ubuntu-latest
     permissions:
       contents: write       # create the release + upload assets
@@ -37,27 +39,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ripgrep jq python3
-
-      - name: Run full test suite
-        run: |
-          bash scripts/test-memory-e2e.sh
-          bash scripts/test-memory-concurrency.sh
-          bash scripts/test-memory-stale-lock.sh
-          bash scripts/test-memory-mcp.sh
-          bash scripts/test-agent-id-propagation.sh
-          bash scripts/test-memory-pii.sh
-          bash scripts/test-memory-pii-expanded.sh
-
-      - name: Run structural auditor
-        run: bash tools/agent-definition-auditor.sh
-
-      - name: Run zetetic-checker on the source tree
-        run: |
-          # Strict profile on a release tag (no MAGIC_NUMBER /
-          # UNSOURCED / TODO_NO_REF in the codebase itself).
-          ZETETIC_PROFILE=strict bash tools/zetetic-checker.sh --full || true
-          # Note: --full mode is informational here; --staged mode is the
-          # commit-time gate. Tag-time check is advisory.
 
       - name: Build the attestable release bundle (tarball + exec manifest + SBOM)
         run: bash tools/build-release-bundle.sh dist

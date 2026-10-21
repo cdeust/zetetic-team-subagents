@@ -1,0 +1,30 @@
+{
+  "python_version": "3.12",
+  "node_version": "20",
+  "linux_packages": [
+    "jq",
+    "ripgrep"
+  ],
+  "require_commands": [
+    "go",
+    "cargo",
+    "npm"
+  ],
+  "version_source": ".claude-plugin/plugin.json:version",
+  "tag_prefix": "v",
+  "schema_version": 1,
+  "source_sha": "6fa8cc5deeeb63d65b767f2e9d79486858eb710b",
+  "postgres": false,
+  "runner": "ubuntu-latest",
+  "categories": {
+    "unit": "bash .github/ci/run.sh unit",
+    "regression": "bash .github/ci/run.sh regression",
+    "e2e": "bash .github/ci/run.sh e2e",
+    "environment": "bash .github/ci/run.sh environment",
+    "installation": "bash .github/ci/run.sh installation"
+  },
+  "release_workflows": [
+    "release.yml"
+  ],
+  "environment_runners": []
+}
