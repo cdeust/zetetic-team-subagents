@@ -1,0 +1,5 @@
+    0.01s  len=   3015  many a[ words 1k             REFUSE
+    0.01s  len=   6015  many a[ words 2k             REFUSE
+    0.01s  len=  12015  many a[ words 4k             REFUSE
+    0.01s  len=   4516  many (( 1.5k                 REFUSE
+    0.01s  len=   9016  many (( 3k                   REFUSE

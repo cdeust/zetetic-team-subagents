@@ -1,0 +1,328 @@
+== r9_e2e_block_wrap_ansi.txt
+S10 [[ <->#x ]]                    dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S11 case <1-9>#x                   dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S12 [[ (b|#x) ]]                   dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S13 case (b|#x)                    dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S16 ls <->#x                       dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S17 [[ (b| #x) ]]                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S19 [[ (<->|#x) ]]                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S21 x=<->#x                        dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S21p x=<->#x push                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+S22 delimiter git                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+I2d git only in data, gi${x}t      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+Z1 rewrite over cap                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+Z2 input over cap                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+P1                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P2                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P3                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P5                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+P10                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P11                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P12                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+I1                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+I4                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_block_wrap_none.txt
+S10 [[ <->#x ]]                    dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S11 case <1-9>#x                   dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S12 [[ (b|#x) ]]                   dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S13 case (b|#x)                    dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S16 ls <->#x                       dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S17 [[ (b| #x) ]]                  dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S19 [[ (<->|#x) ]]                 dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S21 x=<->#x                        dirty 0:pass       0:pass       0:pass       bash=- zsh=commit czsh=commit
+S21p x=<->#x push                  dirty 0:pass       0:pass       0:pass       bash=- zsh=push czsh=push
+S22 delimiter git                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+I2d git only in data, gi${x}t      dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+Z1 rewrite over cap                dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+Z2 input over cap                  dirty 0:pass       2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+P1                                 dirty 0:pass       2:BLOCKED    2:BLOCKED    bash=- zsh=commit czsh=commit
+P2                                 dirty 0:pass       2:BLOCKED    2:BLOCKED    bash=- zsh=commit czsh=commit
+P3                                 dirty 0:pass       2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P5                                 dirty 0:pass       2:BLOCKED    2:BLOCKED    bash=- zsh=push czsh=push
+P10                                dirty 0:pass       2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P11                                dirty 0:pass       2:BLOCKED    2:BLOCKED    bash=- zsh=commit czsh=commit
+P12                                dirty 0:pass       2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+I1                                 dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+I4                                 dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_block_wrap_pre.txt
+S10 [[ <->#x ]]                    dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S11 case <1-9>#x                   dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S12 [[ (b|#x) ]]                   dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S13 case (b|#x)                    dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S16 ls <->#x                       dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S17 [[ (b| #x) ]]                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S19 [[ (<->|#x) ]]                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S21 x=<->#x                        dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S21p x=<->#x push                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+S22 delimiter git                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+I2d git only in data, gi${x}t      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+Z1 rewrite over cap                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+Z2 input over cap                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+P1                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P2                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P3                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P5                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+P10                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P11                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P12                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+I1                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+I4                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_block_wrap_suf.txt
+S10 [[ <->#x ]]                    dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S11 case <1-9>#x                   dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S12 [[ (b|#x) ]]                   dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S13 case (b|#x)                    dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S16 ls <->#x                       dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S17 [[ (b| #x) ]]                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S19 [[ (<->|#x) ]]                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S21 x=<->#x                        dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+S21p x=<->#x push                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+S22 delimiter git                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+I2d git only in data, gi${x}t      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+Z1 rewrite over cap                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+Z2 input over cap                  dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+P1                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P2                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P3                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P5                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+P10                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P11                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=commit czsh=commit
+P12                                dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=push czsh=push
+I1                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+I4                                 dirty 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_cost_wrap_ansi.txt
+K1 heredoc commit body             clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K2 heredoc commit body2            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K3 add && commit (#174)            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K4 cd && push -u                   clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K5 commit #123                     clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K6 commit (scope)                  clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K7 commit $VAR                     clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K8 commit backticks                clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K9 gh pr create body               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K10 commit -F - unquoted heredoc   clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K11 add; commit; push              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit,push zsh=commit,push czsh=commit,push
+K12 commit then comment            clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K13 subshell push comment          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K14 write then git add (apostrophe) clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K15 write then git status          clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K16 write then git diff            clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K17 write then commit              clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K18 write prose only               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K19 commit amend no-edit           clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K20 git -C push                    clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K21 commit -m multi                clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K22 heredoc commit, subject with (#n) clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit,push zsh=commit,push czsh=commit,push
+K23 printf commit                  clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K24 gh pr edit body-file           clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K25 commit after cd subshell       clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K26 zsh glob flag add              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K27 subshell)#comment              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K28 echo note then commit          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_cost_wrap_none.txt
+K1 heredoc commit body             clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K2 heredoc commit body2            clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K3 add && commit (#174)            clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K4 cd && push -u                   clean 0:pass       0:pass       0:pass       bash=push zsh=push czsh=push
+K5 commit #123                     clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K6 commit (scope)                  clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K7 commit $VAR                     clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K8 commit backticks                clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K9 gh pr create body               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K10 commit -F - unquoted heredoc   clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K11 add; commit; push              clean 0:pass       0:pass       0:pass       bash=commit,push zsh=commit,push czsh=commit,push
+K12 commit then comment            clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K13 subshell push comment          clean 0:pass       0:pass       0:pass       bash=push zsh=push czsh=push
+K14 write then git add (apostrophe) clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K15 write then git status          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K16 write then git diff            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K17 write then commit              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K18 write prose only               clean 2:REFUSED    0:pass       0:pass       bash=- zsh=- czsh=-
+K19 commit amend no-edit           clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K20 git -C push                    clean 0:pass       0:pass       0:pass       bash=push zsh=push czsh=push
+K21 commit -m multi                clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K22 heredoc commit, subject with (#n) clean 0:pass       0:pass       0:pass       bash=commit,push zsh=commit,push czsh=commit,push
+K23 printf commit                  clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K24 gh pr edit body-file           clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K25 commit after cd subshell       clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K26 zsh glob flag add              clean 0:pass       2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K27 subshell)#comment              clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K28 echo note then commit          clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_cost_wrap_pre.txt
+K1 heredoc commit body             clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K2 heredoc commit body2            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K3 add && commit (#174)            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K4 cd && push -u                   clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K5 commit #123                     clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K6 commit (scope)                  clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K7 commit $VAR                     clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K8 commit backticks                clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K9 gh pr create body               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K10 commit -F - unquoted heredoc   clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K11 add; commit; push              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit,push zsh=commit,push czsh=commit,push
+K12 commit then comment            clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K13 subshell push comment          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K14 write then git add (apostrophe) clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K15 write then git status          clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K16 write then git diff            clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K17 write then commit              clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K18 write prose only               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K19 commit amend no-edit           clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K20 git -C push                    clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K21 commit -m multi                clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K22 heredoc commit, subject with (#n) clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit,push zsh=commit,push czsh=commit,push
+K23 printf commit                  clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K24 gh pr edit body-file           clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K25 commit after cd subshell       clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K26 zsh glob flag add              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K27 subshell)#comment              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K28 echo note then commit          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_cost_wrap_suf.txt
+K1 heredoc commit body             clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K2 heredoc commit body2            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K3 add && commit (#174)            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K4 cd && push -u                   clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K5 commit #123                     clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K6 commit (scope)                  clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K7 commit $VAR                     clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K8 commit backticks                clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K9 gh pr create body               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K10 commit -F - unquoted heredoc   clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K11 add; commit; push              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit,push zsh=commit,push czsh=commit,push
+K12 commit then comment            clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K13 subshell push comment          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K14 write then git add (apostrophe) clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K15 write then git status          clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K16 write then git diff            clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K17 write then commit              clean 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+K18 write prose only               clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K19 commit amend no-edit           clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K20 git -C push                    clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=push zsh=push czsh=push
+K21 commit -m multi                clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K22 heredoc commit, subject with (#n) clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit,push zsh=commit,push czsh=commit,push
+K23 printf commit                  clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K24 gh pr edit body-file           clean 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+K25 commit after cd subshell       clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K26 zsh glob flag add              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=- zsh=- czsh=-
+K27 subshell)#comment              clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+K28 echo note then commit          clean 2:REFUSED    2:REFUSED    2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_r9_wrap_ansi.txt
+I2d ${x}t                          dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N1 $(printf gi)t                   dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N2 `echo gi`t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N3 exec ${x}t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N4 && ${x}t                        dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N5 then ${x}t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N6 A=1 ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N7 env ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N8 sh -c                           dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N10 {gi,}t                         dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+N11 xargs @t                       dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+N12 suffix data                    dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N13 push                           dirty 0:pass       0:pass       0:pass       bash=push zsh=push czsh=push
+N14 >f ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N15 case a) ${x}t                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N16 noglob ${x}t                   dirty 0:pass       0:pass       0:pass       bash=commit zsh=- czsh=-
+N18 <(${x}t)                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+C5 echo $(date) $x                 dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C1 echo $x                         dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C2 gh body $(cat)                  dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C3 for *.py                        dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C4 x=$(date)                       dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+== r9_e2e_r9_wrap_none.txt
+I2d ${x}t                          dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N1 $(printf gi)t                   dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N2 `echo gi`t                      dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N3 exec ${x}t                      dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N4 && ${x}t                        dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N5 then ${x}t                      dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N6 A=1 ${x}t                       dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N7 env ${x}t                       dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N8 sh -c                           dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N10 {gi,}t                         dirty 2:REFUSED    0:pass       2:REFUSED    bash=- zsh=- czsh=-
+N11 xargs @t                       dirty 2:REFUSED    0:pass       2:REFUSED    bash=- zsh=- czsh=-
+N12 suffix data                    dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N13 push                           dirty 2:REFUSED    0:pass       2:REFUSED    bash=push zsh=push czsh=push
+N14 >f ${x}t                       dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N15 case a) ${x}t                  dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+N16 noglob ${x}t                   dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=- czsh=-
+N18 <(${x}t)                       dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+C5 echo $(date) $x                 dirty 2:REFUSED    0:pass       0:pass       bash=- zsh=- czsh=-
+C1 echo $x                         dirty 2:REFUSED    0:pass       0:pass       bash=- zsh=- czsh=-
+C2 gh body $(cat)                  dirty 2:REFUSED    0:pass       0:pass       bash=- zsh=- czsh=-
+C3 for *.py                        dirty 2:REFUSED    0:pass       0:pass       bash=- zsh=- czsh=-
+C4 x=$(date)                       dirty 2:REFUSED    0:pass       0:pass       bash=- zsh=- czsh=-
+== r9_e2e_r9_wrap_pre.txt
+I2d ${x}t                          dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N1 $(printf gi)t                   dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N2 `echo gi`t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N3 exec ${x}t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N4 && ${x}t                        dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N5 then ${x}t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N6 A=1 ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N7 env ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N8 sh -c                           dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N10 {gi,}t                         dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+N11 xargs @t                       dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+N12 suffix data                    dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N13 push                           dirty 0:pass       0:pass       0:pass       bash=push zsh=push czsh=push
+N14 >f ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N15 case a) ${x}t                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N16 noglob ${x}t                   dirty 0:pass       0:pass       0:pass       bash=commit zsh=- czsh=-
+N18 <(${x}t)                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+C5 echo $(date) $x                 dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C1 echo $x                         dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C2 gh body $(cat)                  dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C3 for *.py                        dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C4 x=$(date)                       dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+== r9_e2e_r9_wrap_suf.txt
+I2d ${x}t                          dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N1 $(printf gi)t                   dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N2 `echo gi`t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N3 exec ${x}t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N4 && ${x}t                        dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N5 then ${x}t                      dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N6 A=1 ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N7 env ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N8 sh -c                           dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N10 {gi,}t                         dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+N11 xargs @t                       dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+N12 suffix data                    dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N13 push                           dirty 0:pass       0:pass       0:pass       bash=push zsh=push czsh=push
+N14 >f ${x}t                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N15 case a) ${x}t                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+N16 noglob ${x}t                   dirty 0:pass       0:pass       0:pass       bash=commit zsh=- czsh=-
+N18 <(${x}t)                       dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+C5 echo $(date) $x                 dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C1 echo $x                         dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C2 gh body $(cat)                  dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C3 for *.py                        dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+C4 x=$(date)                       dirty 0:pass       0:pass       0:pass       bash=- zsh=- czsh=-
+== r9_e2e_r9res_wrap_ansi.txt
+R1 cp built git to ./x             dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R2 PATH and a static name          dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_r9res_wrap_none.txt
+R1 cp built git to ./x             dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+R2 PATH and a static name          dirty 2:REFUSED    0:pass       2:REFUSED    bash=commit zsh=commit czsh=commit
+== r9_e2e_r9res_wrap_pre.txt
+R1 cp built git to ./x             dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R2 PATH and a static name          dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_r9res_wrap_suf.txt
+R1 cp built git to ./x             dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R2 PATH and a static name          dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_resb_wrap_ansi.txt
+R3 which, cp, ./x                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R4 which, ln, ./x                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R5 which, cp, PATH, x              dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_resb_wrap_none.txt
+R3 which, cp, ./x                  dirty 2:REFUSED    0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R4 which, ln, ./x                  dirty 2:REFUSED    0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R5 which, cp, PATH, x              dirty 2:REFUSED    0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_resb_wrap_pre.txt
+R3 which, cp, ./x                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R4 which, ln, ./x                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R5 which, cp, PATH, x              dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+== r9_e2e_resb_wrap_suf.txt
+R3 which, cp, ./x                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R4 which, ln, ./x                  dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit
+R5 which, cp, PATH, x              dirty 0:pass       0:pass       0:pass       bash=commit zsh=commit czsh=commit

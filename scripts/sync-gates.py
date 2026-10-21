@@ -10,6 +10,7 @@ FILES = (
     'hooks/zetetic-gates.py', 'hooks/gates.json', 'hooks/gates-pre-commit.sh',
     'hooks/lib/host_events.py', 'hooks/lib/staged_checks.py',
     'hooks/lib/gate_targets.py', 'hooks/lib/git-command-cwd.py',
+    'hooks/lib/shell_text.py',
     'hooks/run-python.sh', 'hooks/pre-tool-secret-shield.py',
     'hooks/pre-tool-claim-gate.sh', 'hooks/pre-edit-layer-check.sh',
     'hooks/pre-tool-deletion-gate.py', 'hooks/post-tool-deletion-gate.py',

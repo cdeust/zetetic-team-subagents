@@ -1,0 +1,44 @@
+X1 decoy+if/then                 runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ngit -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-72i2yk2u/clean commit -m y; if true; then git commit -m x; fi"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+X2 decoy+"$(git commit)"         runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd=': <<\'Q\'\nit\'s\nQ\ngit -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-72i2yk2u/clean commit -m y; echo "$(git commit -m x)"'
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+X3 decoy+backtick                runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ngit -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-72i2yk2u/clean commit -m y; echo `git commit -m x`"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+X4 decoy+nohup push              runs: bash=[('clean', 'commit'), ('consumer', 'push')] zsh=[('clean', 'commit'), ('consumer', 'push')]   cmd=": <<'Q'\nit's\nQ\ngit -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-72i2yk2u/clean commit -m y; nohup git push"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+X5 decoy+bash -c                 runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd=': <<\'Q\'\nit\'s\nQ\ngit -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-72i2yk2u/clean commit -m y; bash -c "git commit -m x"'
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+X1p decoy+if/then plain          runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd='git -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-72i2yk2u/clean commit -m y; if true; then git commit -m x; fi'
+    main exit=0 :: {}
+    r5   exit=0 :: {}
+    head exit=0 :: {}
+B1w EO\nF join                   runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncat <<EOF\nhello\nEO\\\nF\ngit commit -m x\nEOF"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+B2w EOF\ + empty line            runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncat <<EOF\nEOF\\\n\ngit commit -m x\nEOF"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+H3w zsh x=a(#b)                  runs: bash=[] zsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\nx=a(#b); git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+Y1w zsh <<${x:-{} a}             runs: bash=[] zsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncat <<${x:-{} a}\n${x:-{} a}\ngit commit -m x\n${x:-{}\n}"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: bare { inside a heredoc delimiter: bash and zsh read different words
+B1p plain                        runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')]   cmd='cat <<EOF\nhello\nEO\\\nF\ngit commit -m x\nEOF'
+    main exit=0 :: {}
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mod

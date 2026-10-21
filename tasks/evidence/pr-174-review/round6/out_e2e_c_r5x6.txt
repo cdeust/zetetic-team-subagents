@@ -1,0 +1,8 @@
+X6 commit inside decoy segment   runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd=': <<\'Q\'\nit\'s\nQ\ngit -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-bzvdj641/clean commit -m "$(git commit -m x)"'
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    r5   exit=0 :: {}
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
+X6p plain                        runs: bash=[('clean', 'commit'), ('consumer', 'commit')] zsh=[('clean', 'commit'), ('consumer', 'commit')]   cmd='git -C /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/r174e5-bzvdj641/clean commit -m "$(git commit -m x)"'
+    main exit=0 :: {}
+    r5   exit=0 :: {}
+    head exit=0 :: {}

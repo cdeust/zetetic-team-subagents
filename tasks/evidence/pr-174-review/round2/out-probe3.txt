@@ -1,0 +1,10 @@
+ok         herestring-hash-semi         main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='cat <<<#x; git commit -m x'
+ok         herestring-sp-hash-semi      main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='cat <<< #x; git commit -m x'
+ok         redir-out-hash-semi          main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='echo a >#x; git commit -m x'
+ok         redir-in-hash-semi           main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='cat <#x; git commit -m x'
+ok         redir-append-hash            main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='echo a >>#x; git commit -m x'
+ok         redir-fd-hash                main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='echo a 2>#x; git commit -m x'
+EXTRA      heredoc-op-then-hash-word    main=[]           e67=['commit']   new=['commit']   bash=[]           zsh=[]           cmd='cat <<#x\nbody\n#x\ngit commit -m x'
+ok         amp-hash                     main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='echo a&#x\ngit commit -m x'
+ok         dparen-comment-heredoc       main=[]           e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='((1))#a <<EOF\ngit commit -m x\nEOF'
+new FAIL-OPEN vs bash: 0

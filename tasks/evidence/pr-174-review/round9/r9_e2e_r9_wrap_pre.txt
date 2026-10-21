@@ -1,0 +1,44 @@
+I2d ${x}t                          WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=57
+    dirty main=0:pass r6=0:pass r7=0:pass
+N1 $(printf gi)t                   WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=59
+    dirty main=0:pass r6=0:pass r7=0:pass
+N2 `echo gi`t                      WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=56
+    dirty main=0:pass r6=0:pass r7=0:pass
+N3 exec ${x}t                      WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=62
+    dirty main=0:pass r6=0:pass r7=0:pass
+N4 && ${x}t                        WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=65
+    dirty main=0:pass r6=0:pass r7=0:pass
+N5 then ${x}t                      WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=75
+    dirty main=0:pass r6=0:pass r7=0:pass
+N6 A=1 ${x}t                       WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=61
+    dirty main=0:pass r6=0:pass r7=0:pass
+N7 env ${x}t                       WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=74
+    dirty main=0:pass r6=0:pass r7=0:pass
+N8 sh -c                           WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=65
+    dirty main=0:pass r6=0:pass r7=0:pass
+N10 {gi,}t                         WRAP=pre runs: bash=- zsh=- czsh=-  len=52
+    dirty main=0:pass r6=0:pass r7=0:pass
+N11 xargs @t                       WRAP=pre runs: bash=- zsh=- czsh=-  len=68
+    dirty main=0:pass r6=0:pass r7=0:pass
+N12 suffix data                    WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=57
+    dirty main=0:pass r6=0:pass r7=0:pass
+N13 push                           WRAP=pre runs: bash=push zsh=push czsh=push  len=50
+    dirty main=0:pass r6=0:pass r7=0:pass
+N14 >f ${x}t                       WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=68
+    dirty main=0:pass r6=0:pass r7=0:pass
+N15 case a) ${x}t                  WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=77
+    dirty main=0:pass r6=0:pass r7=0:pass
+N16 noglob ${x}t                   WRAP=pre runs: bash=commit zsh=- czsh=-  len=97
+    dirty main=0:pass r6=0:pass r7=0:pass
+N18 <(${x}t)                       WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=64
+    dirty main=0:pass r6=0:pass r7=0:pass
+C5 echo $(date) $x                 WRAP=pre runs: bash=- zsh=- czsh=-  len=68
+    dirty main=0:pass r6=0:pass r7=0:pass
+C1 echo $x                         WRAP=pre runs: bash=- zsh=- czsh=-  len=46
+    dirty main=0:pass r6=0:pass r7=0:pass
+C2 gh body $(cat)                  WRAP=pre runs: bash=- zsh=- czsh=-  len=100
+    dirty main=0:pass r6=0:pass r7=0:pass
+C3 for *.py                        WRAP=pre runs: bash=- zsh=- czsh=-  len=67
+    dirty main=0:pass r6=0:pass r7=0:pass
+C4 x=$(date)                       WRAP=pre runs: bash=- zsh=- czsh=-  len=66
+    dirty main=0:pass r6=0:pass r7=0:pass
