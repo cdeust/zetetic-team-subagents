@@ -250,7 +250,9 @@ def given_env(text: str) -> dict:
 
 def _verify(args: argparse.Namespace, top: str, common: str) -> tuple[int, state.Basis]:
     """(exit code, the basis the verdict is recorded on: the one the arguments name, which the worker checks)."""
-    root = tempfile.mkdtemp(prefix=f"zetetic-gate-{args.tree[:16]}-")  # this attempt's own: no other worker shares it
+    # this attempt's own: no other worker shares it. Canonical, because a check sees its directory through
+    # getcwd() ($PWD, os.getcwd()): {top} must name it the same way (macOS TMPDIR is /var -> /private/var)
+    root = os.path.realpath(tempfile.mkdtemp(prefix=f"zetetic-gate-{args.tree[:16]}-"))
     basis = state.Basis(args.rules, args.runner, args.kind)
     try:
         rules = rules_mod.effective(top, args.tree, args.trusted, _clean_env())
