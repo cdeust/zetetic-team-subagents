@@ -96,7 +96,51 @@ def test_lexer_resolves_quotes_heredocs_and_redirections():
     assert words("cat <<<word tail") == ["cat", "tail"]
     assert words("a \\\nb") == ["a", "b"]  # line continuation
     assert words("a # comment git commit\nb") == ["a", "b"]
-    assert words("echo $(git status)") == ["echo", "git", "status"]
+    assert words("echo $(git status)") == ["git", "status", "echo", "$(git status)"]  # bash runs the substitution first
+
+
+@pytest.mark.parametrize("command", [
+    'out="$(git commit -m "capture form" 2>&1)"; echo "$out"', 'echo "$(git commit -m \\"x\\")"',
+    "x=`git commit -m y`", 'x="`git commit -m y`"', "cat <(git commit -m x)", 'echo "${x:-$(git commit -m y)}"',
+    'echo "$(echo "$(git commit -m deep)")"', "echo $(git commit -m x) --amend",
+])
+def test_a_command_substitution_is_an_invocation_wherever_it_is_written(command):
+    """Review round 5, B4: inside double quotes a `$(...)` or backtick pair is still run by bash."""
+    assert [k for k, _ in kinds(command)] == ["commit"]
+
+
+@pytest.mark.parametrize("command", ['out="$(git push origin main 2>&1)"', "echo `git push origin main`",
+                                     'r="$(gh pr create --fill)"'])
+def test_a_publishing_command_inside_a_substitution_is_judged(command):
+    assert [k for k, _ in kinds(command)] == ["push"]
+
+
+@pytest.mark.parametrize("message", ['fix: a 5" display', "fix: the agent's message", 'fix: handle "quoted" names',
+                                     "fix: a ) and a ( in the body", "fix: `code` and $(not run) in a heredoc"])
+def test_a_heredoc_message_inside_a_substitution_is_not_read_as_arguments(message):
+    """The inch mark of review round 5: a `"` in the heredoc body ended the string and made the rest look like paths."""
+    commit = commit_of(f"git commit -m \"$(cat <<'EOF'\n{message}\n\nBody.\nEOF\n)\"")
+    assert commit["why"] == []
+
+
+@pytest.mark.parametrize("command,where", [
+    ("(cd /elsewhere); git commit -m x", BASE), ('x="$(cd /elsewhere)"; git commit -m x', BASE),
+    ("cd /elsewhere | true; git commit -m x", BASE), ("(cd /elsewhere && git commit -m x)", "/elsewhere"),
+    ("cd /a && (cd /b) && git commit -m x", "/a"), ("cd /elsewhere; git commit -m x", "/elsewhere"),
+])
+def test_a_cd_does_not_outlive_its_subshell(command, where):
+    """A `cd` run in a subshell (parentheses, a substitution, a pipeline element) leaves the directory of what follows."""
+    assert kinds(command) == [("commit", where)]
+
+
+def test_a_substitution_runs_before_the_command_that_holds_it():
+    assert commit_of('git commit -m "$(git add . && echo msg)"')["why"]  # it stages, then commits: not judgeable
+
+
+def test_output_redirection_targets_are_tokens_and_descriptor_duplications_are_not():
+    targets = lambda cmd: [(k, w) for k, w in sh.lex(cmd) if k.startswith("redir")]  # noqa: E731
+    assert targets("echo a >> /x 2>&1 < /in") == [("redir>", "/x"), ("redir<", "/in")]
+    assert targets("echo a &>/x >|/y 1<>/z >&/w >&2") == [("redir>", "/x"), ("redir>", "/y"), ("redir>", "/z"), ("redir>", "/w")]
 
 
 def test_segments_and_prefix_stripping():

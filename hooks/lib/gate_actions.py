@@ -160,22 +160,31 @@ def _git_action(call: _Call, staged_before: bool) -> dict | None:
     return None
 
 
-def _simple_commands(command: str) -> Iterator[list[str]]:
-    for seg in shell.segments(shell.lex(command)):
-        words = shell.strip_prefix(seg)
-        if words:
-            yield words
+def simple_commands(command: str, base_cwd: str) -> Iterator[tuple[str, shell.Command]]:
+    """(directory, command) for each simple command of ``command``, in the order bash runs them (a substitution
+    first). A `cd` moves what follows it, but not past the end of its subshell: `(...)`, a substitution, or a
+    pipeline element (bash runs each in a subshell)."""
+    cwd, outer = base_cwd, []
+    for kind, cmd in shell.events(command):
+        if kind == "open":
+            outer.append(cwd)
+        elif kind == "close":
+            cwd = outer.pop() if outer else cwd
+        else:
+            words = shell.strip_prefix(cmd.words)
+            if words and os.path.basename(words[0]) in ("cd", "pushd") and not cmd.piped:
+                cwd = _cd_target(words, cwd)
+            yield cwd, cmd._replace(words=words)
 
 
 def actions(command: str, base_cwd: str) -> list[dict]:
     """Every gated invocation in ``command``, each with the directory it runs in."""
     acts: list[dict] = []
-    cwd, staged_before = base_cwd, False
-    for words in _simple_commands(command):
-        prog = os.path.basename(words[0])
-        if prog in ("cd", "pushd"):
-            cwd = _cd_target(words, cwd)
-        elif prog == "git":
+    staged_before = False
+    for cwd, cmd in simple_commands(command, base_cwd):
+        words = cmd.words
+        prog = os.path.basename(words[0]) if words else ""
+        if prog == "git":
             call = _git_call(words, cwd)
             act = _git_action(call, staged_before) if call else None
             staged_before |= call is not None and call.sub in INDEX_CHANGERS

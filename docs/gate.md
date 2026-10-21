@@ -401,7 +401,11 @@ The gate parses the Bash command it is shown and the git state of the repository
 not see:
 
 - A wrapped or disguised command: `bash -c '...'`, `sh -c`, `eval`, quoted words such as `g''it`, a variable
-  holding the program (`G=git; $G push`), an alias, an unquoted `$(...)` in a refspec.
+  holding the program (`G=git; $G push`), an alias. A command substitution is seen wherever it is written,
+  double quotes included (`out="$(git commit ...)"`, backticks, `<(...)`): bash runs it, so the gate judges it,
+  and a `cd` inside a subshell, a substitution or a pipeline element does not move what follows. A refspec computed
+  by a substitution (`git push origin "$(git branch --show-current)"`) is not evaluated: it names no ref, and the
+  push is refused with the reason. A `)` in a `case` pattern inside a substitution ends it early.
 - Another index or repository: `GIT_INDEX_FILE=`, `--git-dir`, `--work-tree`.
 - Commits that no `git commit` makes: `git merge`, `git cherry-pick`, `git rebase`.
 - What a check runs: a rule is the declared command (`argv`, `paths`, the test map); the content of a script a
