@@ -28,6 +28,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `.github/workflows/claude.yml`: every push to a PR runs a Claude Code review (`/code-review` then `/security-review`, one cycle), applies the findings and arms squash auto-merge; `@claude` in a comment or issue runs Claude on that request. Action pinned by SHA (anthropics/claude-code-action v1.0.256).
 - `hooks/pre-agent-genius-gate.py`, a PreToolUse hook on `Agent`/`Task` that denies a call whose prompt has no `GENIUS: <name>[, <name>]` line, names more than two geniuses, names a genius with no `agents/genius/<name>.md`, or uses a removed team-role `subagent_type` or a genius as a `subagent_type`. Enforce is the default (`ZETETIC_AGENT_GATE=observe|off` to change). Tests in `tests/test_agent_genius_gate.py`.
 
 - `rules/public-apis-reference.md`: how an agent uses the community list at https://github.com/public-apis/public-apis to find a free public API, then verifies the chosen API on its official documentation, terms and rate limits, and with one real request, before relying on it; keys stay out of code and commits. The list is a discovery aid, never evidence about an API. The rule states the real `Auth` values, flags the sponsored APILayer table and the MCP-servers table as having different columns, and shows how to read one category without loading the whole README; `rules/agent-reference/research-resources.md` gains a short pointer so agents reach it.
