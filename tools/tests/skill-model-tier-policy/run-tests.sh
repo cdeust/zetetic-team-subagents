@@ -6,7 +6,7 @@
 # resolves a skill and prints its Markdown body verbatim, with no mechanism
 # to honor a referenced agent's `model:` frontmatter -- a skill whose
 # `agents:` list names an opus-tier agent (e.g. skills/engineering/review.md
-# -> architect, model: opus) silently loses that capability upgrade when run
+# -> simon, model: opus) silently loses that capability upgrade when run
 # inline at whatever tier the calling session happens to be. This suite
 # proves the runner's escalation banner fires exactly when it should: for an
 # agent above the baseline tier, and never for one at or below it -- a test
@@ -138,22 +138,22 @@ rm -rf "$tmp"
 # T6: real-worktree sanity check, deterministic against THIS checkout's own
 # skills/ and agents/ (not whatever happens to be installed at
 # ~/.claude/skills on the machine running the suite) --
-# skills/engineering/review.md names architect (opus) and must escalate.
+# skills/engineering/review.md names popper and simon (opus) and must escalate.
 out="$(ZETETIC_SKILLS="$REPO_ROOT/skills" ZETETIC_AGENTS="$REPO_ROOT/agents" bash "$RUNNER" review 2>&1)"
-if grep -q "$BANNER" <<<"$out" && grep -q "architect" <<<"$out"; then
-  ok "T6 real skills/engineering/review.md: escalation banner names architect"
+if grep -q "$BANNER" <<<"$out" && grep -q "simon" <<<"$out"; then
+  ok "T6 real skills/engineering/review.md: escalation banner names simon"
 else
-  bad "T6 real skills/engineering/review.md: expected escalation banner naming architect"
+  bad "T6 real skills/engineering/review.md: expected escalation banner naming simon"
 fi
 
 # T7: real-worktree negative sanity check --
-# skills/research/literature-review.md names only research-scientist
-# (sonnet) and must not escalate.
-out="$(ZETETIC_SKILLS="$REPO_ROOT/skills" ZETETIC_AGENTS="$REPO_ROOT/agents" bash "$RUNNER" literature-review 2>&1)"
+# skills/advisor-model/advisor-model.md declares `agents: []` (it consults the
+# native advisor tool, not a genius) and must not escalate.
+out="$(ZETETIC_SKILLS="$REPO_ROOT/skills" ZETETIC_AGENTS="$REPO_ROOT/agents" bash "$RUNNER" advisor-model 2>&1)"
 if ! grep -q "$BANNER" <<<"$out"; then
-  ok "T7 real skills/research/literature-review.md: no escalation banner"
+  ok "T7 real skills/advisor-model/advisor-model.md: no escalation banner"
 else
-  bad "T7 real skills/research/literature-review.md: banner fired, expected none"
+  bad "T7 real skills/advisor-model/advisor-model.md: banner fired, expected none"
 fi
 
 echo ""

@@ -120,8 +120,8 @@ def test_inherit_env_defaults_the_agent_id_when_unset(monkeypatch):
 
 
 def test_inherit_env_preserves_an_explicit_agent_id(monkeypatch):
-    monkeypatch.setenv("MEMORY_AGENT_ID", "engineer")
-    assert srv._inherit_env()["MEMORY_AGENT_ID"] == "engineer"
+    monkeypatch.setenv("MEMORY_AGENT_ID", "curie")
+    assert srv._inherit_env()["MEMORY_AGENT_ID"] == "curie"
 
 
 def test_inherit_env_forwards_the_rest_of_the_environment(monkeypatch):

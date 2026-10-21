@@ -64,10 +64,10 @@ def reflection_repo(tmp_path):
 
 @pytest.fixture
 def schedule(reflection_repo, tmp_path, monkeypatch, capsys):
-    """schedule(agent_id, session): run the SubagentStop hook for one engineer run."""
+    """schedule(agent_id, session): run the SubagentStop hook for one general-purpose run."""
     def _schedule(agent_id="a1b2c3", session=SESSION):
         transcript = make_transcript(tmp_path, agent_id=agent_id)
-        run_hook(start_hook, event(reflection_repo, transcript, agent_id=agent_id, agent_type="engineer",
+        run_hook(start_hook, event(reflection_repo, transcript, agent_id=agent_id, agent_type="general-purpose",
                                    session_id=session), monkeypatch, capsys)
     return _schedule
 

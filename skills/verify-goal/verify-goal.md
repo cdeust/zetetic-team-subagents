@@ -11,7 +11,7 @@ trigger: >
   native goal evaluator needs transcript evidence to decide; on every tick of a timed loop
   driving a goal.
 agents:
-  - test-engineer
+  - popper
 shapes: []
 input: >
   The path of an active goal file (default: the only active file under .zetetic/goals/).

@@ -39,9 +39,9 @@ set -e
 
 # ---- Set up a throwaway target repo used by the remaining tests -------------
 TARGET="$TMP/target-repo"
-mkdir -p "$TARGET/agents"
+mkdir -p "$TARGET/agents/genius"
 git -C "$TARGET" init -q -b main
-cp "$REPO/agents/engineer.md" "$TARGET/agents/engineer.md"
+cp "$REPO/agents/genius/curie.md" "$TARGET/agents/genius/curie.md"
 git -C "$TARGET" add -A
 git -C "$TARGET" commit -q -m init
 
@@ -61,7 +61,7 @@ VALID_CONTRACT="$TMP/valid-contract.json"
 cat >"$VALID_CONTRACT" <<JSON
 {
   "schema_version": "1.0.0",
-  "agent": "engineer",
+  "agent": "curie",
   "target_repo": "$TARGET",
   "owned_paths": ["src/**"],
   "excluded_paths": [],
@@ -71,7 +71,7 @@ cat >"$VALID_CONTRACT" <<JSON
   "acceptance_oracle": {"type": "test", "criterion": "pytest tests/ -q exits 0"},
   "model": "sonnet",
   "tool_grant": ["Read", "Edit", "Bash"],
-  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "engineer"}
+  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "curie"}
 }
 JSON
 
@@ -79,7 +79,7 @@ JSON
 echo "test: no contract supplied is denied before any mutation"
 BEFORE="$(worktree_count)"
 set +e
-( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" engineer "task" >/dev/null 2>&1 )
+( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" curie "task" >/dev/null 2>&1 )
 rc=$?
 set -e
 [[ $rc -ne 0 ]] || fail "expected non-zero exit with no contract, got 0"
@@ -89,7 +89,7 @@ pass "no contract -> deny, worktree count unchanged ($BEFORE)"
 # ---- Test 3: unknown agent (valid contract, unresolvable agent name) -------
 echo "test: unknown agent is denied, no worktree created"
 UNKNOWN_CONTRACT="$TMP/unknown-agent-contract.json"
-sed 's/"agent": "engineer"/"agent": "no-such-agent-xyz"/' "$VALID_CONTRACT" > "$UNKNOWN_CONTRACT"
+sed 's/"agent": "curie"/"agent": "no-such-agent-xyz"/' "$VALID_CONTRACT" > "$UNKNOWN_CONTRACT"
 BEFORE="$(worktree_count)"
 set +e
 ( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$UNKNOWN_CONTRACT" no-such-agent-xyz "task" >/dev/null 2>&1 )
@@ -116,7 +116,7 @@ json.dump(contract, open(sys.argv[2], "w"))
 PY
 BEFORE="$(worktree_count)"
 set +e
-DENY_OUTPUT="$( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$INVALID_CONTRACT" engineer "task" 2>&1 )"
+DENY_OUTPUT="$( cd "$TARGET" && PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$INVALID_CONTRACT" curie "task" 2>&1 )"
 rc=$?
 set -e
 [[ $rc -ne 0 ]] || fail "expected non-zero exit for schema-invalid contract, got 0"
@@ -127,17 +127,17 @@ pass "deny reason present on stderr, worktree count unchanged ($BEFORE)"
 
 # ---- Test 4: frontmatter stripping -------------------------------------------
 echo "test: frontmatter stripping"
-BODY="$(awk 'BEGIN{f=0} /^---$/{f++; next} f>=2{print}' "$REPO/agents/engineer.md")"
+BODY="$(awk 'BEGIN{f=0} /^---$/{f++; next} f>=2{print}' "$REPO/agents/genius/curie.md")"
 [[ -n "$BODY" ]]                                    || fail "body empty"
-grep -q "^name: engineer" <<<"$BODY"                && fail "body still contains YAML 'name:'"
-grep -q "You are the procedure" <<<"$BODY"           || fail "body missing identity text"
+grep -q "^name: curie" <<<"$BODY"                && fail "body still contains YAML 'name:'"
+grep -q "You are the Curie reasoning pattern" <<<"$BODY"           || fail "body missing identity text"
 pass "frontmatter removed, identity preserved ($(wc -l <<<"$BODY" | tr -d ' ') lines)"
 
 # ---- Test 5: end-to-end with a valid contract + claude shim -----------------
 echo "test: worktree creation + claude invocation (shimmed, valid contract)"
 (
   cd "$TARGET"
-  PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$VALID_CONTRACT" engineer "hello task" >/dev/null
+  PATH="$SHIM_DIR:$PATH" "$SPAWN" --contract "$VALID_CONTRACT" curie "hello task" >/dev/null
 )
 
 [[ -f "$RECORD" ]] || fail "claude shim was not invoked"
@@ -153,13 +153,13 @@ pass "claude invoked with correct flags"
 # Verify MEMORY_AGENT_ID was exported into the shim environment.
 [[ -f "$ENV_RECORD" ]] || fail "MEMORY_AGENT_ID env record not written by shim"
 RECORDED_ID="$(cat "$ENV_RECORD")"
-[[ "$RECORDED_ID" == "engineer" ]] || fail "MEMORY_AGENT_ID expected 'engineer', got '$RECORDED_ID'"
-pass "MEMORY_AGENT_ID=engineer reached the spawned process"
+[[ "$RECORDED_ID" == "curie" ]] || fail "MEMORY_AGENT_ID expected 'curie', got '$RECORDED_ID'"
+pass "MEMORY_AGENT_ID=curie reached the spawned process"
 
 # Verify worktree + branch were created.
 WT="$(git -C "$TARGET" worktree list --porcelain | awk '/^worktree/ {print $2}' | grep -v "^$TARGET\$" | head -1)"
 [[ -n "$WT" && -d "$WT" ]] || fail "worktree not created"
-BR="$(git -C "$TARGET" branch --list 'agent/engineer/*' | head -1 | tr -d ' *')"
+BR="$(git -C "$TARGET" branch --list 'agent/curie/*' | head -1 | tr -d ' *')"
 [[ -n "$BR" ]] || fail "agent branch not created"
 pass "worktree=$WT branch=$BR"
 

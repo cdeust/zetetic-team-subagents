@@ -103,16 +103,17 @@ $ /deep-research "transformer attention alternatives 2024-2026, focus on
 
 ## #4: The architecture decision the agent refused to make
 
-A login bug needed to ship before a demo. The dev asked the engineer agent to add a `try/except` around the failing call and log the error. Standard band-aid. Five minutes of work.
+A login bug needed to ship before a demo. The dev asked a delegate (built-in `general-purpose`, `GENIUS: curie, dijkstra`) to add a `try/except` around the failing call and log the error. Standard band-aid. Five minutes of work.
 
 ```
 $ /implement "wrap the auth.verify() call in try/except, log to sentry,
               return False on any exception"
 
-[engineer]  Refusing: this matches refusal-condition #1 (band-aid without RCA).
+[curie, dijkstra]  Refusing: a patch that hides the symptom is not a root cause
+            (a cause needs a repro AND a fix that removes the symptom).
             Producing the RCA artifact instead.
 
-ROOT CAUSE ANALYSIS (Move 4)
+ROOT CAUSE ANALYSIS
   Symptom: auth.verify() raises TimeoutError under load
   Trace:   auth/verify.py:42 → calls oauth_provider.introspect() with 5s timeout
   Layer violation: domain layer (auth) calls infrastructure (oauth_provider) directly
@@ -122,7 +123,7 @@ ROOT CAUSE ANALYSIS (Move 4)
   Under sustained load, every request would now silently fail-open, returning
   False. That is the worse failure mode (permission denial vs. permission breach).
 
-PROPOSED FIX (Move 1: layer assignment + Move 2: contract)
+PROPOSED FIX (layer assignment + contract)
   - Define IdentityVerifier interface in core/auth
   - OAuth implementation moves to infrastructure/oauth_introspector
   - Composition root wires them; timeout becomes a constructor parameter
@@ -206,5 +207,5 @@ Each scenario corresponds to a real skill or agent invocation:
 | #1 Unsourced constant | `tools/zetetic-checker.sh --staged` + `/verify-claim` | [`tools/zetetic-checker.sh`](../tools/zetetic-checker.sh) + [`skills/zetetic/verify-claim.md`](../skills/zetetic/verify-claim.md) |
 | #2 Latency bug | `/genius route "<problem>"` | [`agents/genius/curie.md`](../agents/genius/curie.md) + [`agents/genius/knuth.md`](../agents/genius/knuth.md) |
 | #3 Literature search | `/deep-research "<topic>"` | [`skills/research/deep-research.md`](../skills/research/deep-research.md) |
-| #4 Architecture refusal | `/implement` (engineer agent) | [`agents/engineer.md`](../agents/engineer.md): refusal-conditions section, bullet #1 |
+| #4 Architecture refusal | `/implement` (delegate with `GENIUS: curie, dijkstra`) | [`agents/genius/curie.md`](../agents/genius/curie.md) and [`agents/genius/dijkstra.md`](../agents/genius/dijkstra.md): refusal-conditions sections |
 | #5 Incident postmortem | `/incident-investigation` | [`skills/engineering/incident-investigation.md`](../skills/engineering/incident-investigation.md) |

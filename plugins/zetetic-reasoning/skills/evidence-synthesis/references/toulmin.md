@@ -162,7 +162,7 @@ When an argument needs to be constructed, evaluated, or attacked; when a claim i
 6. **Identify the rebuttal.** Under what specific conditions does the claim fail, even if the evidence is granted?
 7. **Map the full argument.** Diagram the six parts. Identify sub-arguments where a claim feeds as data into another argument. Identify gaps.
 8. **Identify the field's standards.** What counts as good evidence, a strong warrant, and an honest qualifier in this field? Are those standards being met?
-9. **Hand off.** Evidence synthesis to Cochrane; causal warrant validation to Pearl; falsification testing to Popper; formal proof to Godel; implementation to engineer.
+9. **Hand off.** Evidence synthesis to Cochrane; causal warrant validation to Pearl; falsification testing to Popper; formal proof to Godel; implementation to a general-purpose delegate.
 
 ## Output format
 

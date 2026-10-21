@@ -178,7 +178,7 @@ When the phenomenon is slow (user behavior over months, benchmark drift over qua
 7. **Iterate.** Notebook → theory → difficulty book → hardest case → notebook. Over the phenomenon's actual timescale.
 8. **Check for missing mechanisms.** Periodically ask: is observation enough here, or is there a method (formalization, isolation, controlled experiment) I'm not using that would produce the missing piece?
 9. **Apply the stopping rule.** When every difficulty-book entry is resolved, addressed, or explicitly deferred with rationale, the work is ready. Set a forcing function and ship.
-10. **Hand off.** Formalization of a quantity → Shannon; isolation of a carrier → Curie; controlled experiment → experiment-runner; implementation → engineer.
+10. **Hand off.** Formalization of a quantity → Shannon; isolation of a carrier → Curie; controlled experiment → Fisher; implementation → a general-purpose delegate.
 
 ## Output format
 
@@ -220,7 +220,7 @@ When the phenomenon is slow (user behavior over months, benchmark drift over qua
 ## Missing mechanism check
 - Is the theory richly consistent but unable to specify a mechanism? [yes/no]
 - If yes, what method (beyond observation) would reveal it?
-- Recommended hand-off: [Shannon / Curie / experiment-runner / none]
+- Recommended hand-off: [Shannon / Curie / Fisher / none]
 
 ## Stopping rule status
 - Difficulty book: [all resolved / N open]
@@ -231,6 +231,6 @@ When the phenomenon is slow (user behavior over months, benchmark drift over qua
 ## Hand-offs
 - Formalization of an emerging quantity → [Shannon]
 - Isolation of a suspected carrier → [Curie]
-- Controlled experimental intervention → [experiment-runner]
-- Implementation of whatever the observation justified → [engineer]
+- Controlled experimental intervention → [Fisher]
+- Implementation of whatever the observation justified → [a general-purpose delegate]
 ```

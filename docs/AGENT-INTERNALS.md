@@ -13,7 +13,7 @@ model: opus
 effort: high
 shapes: [proof-and-program-together, locality-of-reasoning, ...]
 tools: [Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch]
-memory_scope: genius   # team agents: <slug>; genius agents: "genius" (shared scope, per-slug subpath)
+memory_scope: genius   # genius agents: "genius" (shared scope, per-slug subpath)
 ---
 
 <identity>...</identity>
@@ -44,7 +44,7 @@ distinct-from-X clauses; loaded only when the agent is invoked):**
 
 ## Why this shape
 
-The orchestrator routes based on frontmatter: a sentence is enough. The invoked agent reads its full body. This separates **routing cost** (paid every session) from **methodology cost** (paid only when used), aligning with Claude Code's startup token budget while preserving every word of the canonical moves and procedure depth.
+The delegating session routes based on frontmatter: a sentence is enough. The invoked agent reads its full body. This separates **routing cost** (paid every session) from **methodology cost** (paid only when used), aligning with Claude Code's startup token budget while preserving every word of the canonical moves and procedure depth.
 
 ## Frontmatter fields
 
@@ -52,12 +52,12 @@ The orchestrator routes based on frontmatter: a sentence is enough. The invoked 
 |---|---|---|
 | `name` | yes | The agent slug; matches the filename and `MEMORY_AGENT_ID` |
 | `description` | yes | One-sentence routing signal; appears in the agent picker |
-| `when_to_use` | yes | One-clause trigger; helps the orchestrator pick |
+| `when_to_use` | yes | One-clause trigger; helps the delegating session pick |
 | `model` | yes | `opus` / `sonnet` / `haiku`: overridable via `~/.claude/zetetic/agent-models.json` |
 | `effort` | yes | `low` / `medium` / `high` / `max`: reasoning-token budget |
 | `shapes` | genius only | Problem-shape labels matched by the shape-router |
 | `tools` | yes | Subset of `Read, Edit, Write, Bash, Glob, Grep, WebFetch, WebSearch, Agent` |
-| `memory_scope` | yes | Maps to `scope-registry.json` for ACL: team agents use their slug; all genius agents use `genius` |
+| `memory_scope` | yes | Maps to `scope-registry.json` for ACL: all genius agents use `genius` |
 
 ## Body sections
 

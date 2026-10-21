@@ -5,7 +5,7 @@ Owner decision 2026-10-13: after each action performed by an agent, a
 reflection task is scheduled so agents improve next time. This module is the
 mechanism behind that decision. ``hooks/subagent-stop-reflection.py`` appends a
 pending row when a subagent stops; ``hooks/stop-reflection-gate.py`` refuses to
-let the orchestrator stop while a row is pending; the ``lift`` command below
+let the session stop while a row is pending; the ``lift`` command below
 is the only way to clear a row, and it demands the Cortex memory id that holds
 the lesson as evidence.
 

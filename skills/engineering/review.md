@@ -8,8 +8,8 @@ trigger: >
   When a PR needs review; when code has changed and nobody has checked architectural integrity;
   when "it works in tests" is the only defense for a merge.
 agents:
-  - code-reviewer
-  - architect
+  - popper
+  - simon
 shapes: []
 input: A PR, a diff, or a set of changed files to review.
 output: >
@@ -23,8 +23,8 @@ zetetic_gate:
 composes: []
 aliases: [code-review, pr-review]
 hand_off:
-  security_finding: "/secure — security-auditor does a deep dive"
-  architecture_violation: "/decompose — architect proposes restructuring"
+  security_finding: "/secure — taleb does a deep dive"
+  architecture_violation: "/decompose — simon proposes restructuring"
   correctness_doubt: "/prove-correct — dijkstra verifies the logic"
 ---
 
@@ -34,13 +34,9 @@ Review code changes for Clean Architecture violations (wrong dependency directio
 
 ## Procedure
 
-1. **code-reviewer reads the diff.** Identifies all changed files and their architectural layer.
-2. **Layer audit.** For each changed file: does it import only from allowed layers? (Core → shared only; infrastructure → shared only; handlers → core + infrastructure.)
-3. **SOLID audit.** For each changed class/module: SRP (one reason to change?), OCP (extension over modification?), LSP (subtypes substitutable?), ISP (focused interfaces?), DIP (core defines, infrastructure implements?).
-4. **Anti-pattern scan.** Swallowed errors, magic numbers, grab-bag utils, dead code, backward-compat shims.
-5. **Security scan.** Input validation at boundaries, injection vectors, secret exposure.
-6. **architect reviews** structural changes (new modules, moved files, changed boundaries).
-7. **Report.** Each finding: file:line, category, principle violated, severity, suggested fix.
+The review is Claude Code's own, not one written for this skill: run `/code-review` on the diff (correctness, Clean Architecture and SOLID layer integrity), then `/security-review` (security). One run each, one cycle. Apply what they report and the review is over: no second round.
+
+The genius patterns in `agents:` (popper, simon) govern the code while it is written, not a longer review: the delegate that writes the change applies them, and the change respects the published method they carry.
 
 ## Zetetic Gates
 
@@ -53,24 +49,7 @@ Review code changes for Clean Architecture violations (wrong dependency directio
 
 ## Output Format
 
-```
-## Code Review: [PR/files]
-
-### Critical (blocks merge)
-| # | File:Line | Category | Principle | Issue | Fix |
-|---|-----------|----------|-----------|-------|-----|
-
-### Important (should fix before merge)
-| # | File:Line | Category | Principle | Issue | Fix |
-|---|-----------|----------|-----------|-------|-----|
-
-### Minor (optional, improve later)
-| # | File:Line | Category | Principle | Issue | Fix |
-|---|-----------|----------|-----------|-------|-----|
-
-### Architecture assessment
-[Does this change respect layer boundaries? Any structural concerns?]
-```
+The unmodified output of `/code-review` and `/security-review`: findings with file:line, then the author's list of what was applied.
 
 ## Anti-patterns
 

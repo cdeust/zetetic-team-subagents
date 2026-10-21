@@ -312,7 +312,7 @@ tools/bench-agent-cost/analyze_results.py \
 `--model haiku --effort low` above is a **cost-bounded smoke/gate run**,
 distinct from the frozen production protocol (default `--model sonnet
 --effort medium`, matching this repo's own sonnet baseline per
-`rules/agent-vs-skill-classification.md`). The smoke run exists to prove
+`rules/agent-vs-skill-classification.md` as it stood when this protocol was frozen; the file was retired 2026-10-21). The smoke run exists to prove
 the tool's plumbing end to end (Move 1: "smoke tests on a tiny subset
 are allowed pre-freeze; full runs are not") -- its numbers are not a claim
 about representative production cost or quality at the sonnet tier, and

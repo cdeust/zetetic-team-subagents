@@ -1,7 +1,17 @@
 {
-  "//stop-context-guard-removed": "2026-09-04: stop-context-guard.py was registered here AND by context-guard@session-optimizer-marketplace simultaneously -- confirmed live double-firing (two near-identical checkpoint-threshold blocks per crossing, ~55-66K tokens wasted per spurious memory-writer spawn). context-guard already owns this hook; removed here. Do not re-add without first confirming context-guard is disabled.",
+  "//stop-context-guard-removed": "2026-09-04: stop-context-guard.py was registered here AND by context-guard@session-optimizer-marketplace simultaneously -- confirmed live double-firing (two near-identical checkpoint-threshold blocks per crossing, ~55-66K tokens wasted per spurious checkpoint-agent spawn). context-guard already owns this hook; removed here. Do not re-add without first confirming context-guard is disabled.",
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-agent-genius-gate.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "when": "command contains 'git push'",

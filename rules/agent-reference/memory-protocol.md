@@ -2,7 +2,7 @@
 name: memory-protocol
 description: "Three memory retrieval surfaces (view / search / cortex:recall), the replica invariant, and common memory mistakes"
 read_when: "Before your first memory search in a session; when a recall returns nothing or looks stale"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 ## 3 — Three retrieval surfaces — know which to reach for
@@ -48,5 +48,5 @@ It indexes Cortex — full content lives in Cortex (via `cortex_id`), the YAML i
 - **Skipping the preamble `view`.** Resuming mid-task without checking memory causes duplicated work and lost state.
 - **Writing code blocks as memory.** Memory files exceeding 100 KB are rejected. Code belongs in the codebase; decisions belong in memory.
 - **Using `cortex:recall` when you know the path.** Semantic search is slower and non-deterministic. Use `view` first.
-- **Writing to `/memories/lessons/` directly.** ACL will reject it. Propose lessons through the orchestrator.
+- **Writing to `/memories/lessons/` directly.** ACL will reject it. Propose lessons through the delegating session.
 - **Treating a Cortex miss as evidence the memory doesn't exist.** Cortex sync may be pending. If `cortex:recall` returns nothing, run `tools/memory-tool.sh view /memories/<scope>/` before concluding the memory is absent.

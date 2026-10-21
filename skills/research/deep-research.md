@@ -29,7 +29,7 @@ zetetic_gate:
 composes: [literature-review, verify-claim]
 aliases: [research, investigate, deep-dive]
 hand_off:
-  technique_found: "/implement — engineer implements the verified technique"
+  technique_found: "/implement — dijkstra implements the verified technique"
   claims_unverifiable: "(stop) — insufficient evidence; report what is known and what is not"
   needs_systematic_review: "/systematic-review — question requires formal meta-analysis"
 ---

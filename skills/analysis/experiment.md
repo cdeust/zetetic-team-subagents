@@ -9,7 +9,6 @@ trigger: >
   to "run it and see what happens" without a pre-specified plan.
 agents:
   - fisher
-  - experiment-runner
 shapes: [randomize-to-eliminate-confounds, block-to-reduce-variance, replicate-to-estimate-variance, factorial-design, design-before-run]
 input: A causal hypothesis to test. Available resources (users, machines, time).
 output: Experimental design document with hypothesis, randomization, blocking, power calculation, analysis plan.

@@ -20,12 +20,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Every delegation applies a genius pattern (owner decision 2026-10-21). `rules/agent-routes.json` maps 23 task classes to a built-in `subagent_type` (`general-purpose`, `Explore`, `Plan`) plus 1 or 2 genius agents, and `scripts/generate-routing-table.py` renders it in `rules/agent-routing-table.md`. The 34 skills that named team agents now name genius patterns in `agents:`; `tools/skill-runner.sh` tells the caller to delegate to a built-in agent at the genius tier with a `GENIUS:` line instead of spawning an agent. `scripts/spawn-agent.sh`, `tools/agent-catalog.sh`, `scripts/setup.sh`, the model-override template, the autonomous build loop workflow, the cycle review evidence (`tools/cycle_evidence.py`) and the agent-based doc counts (`97` agents, no team count) follow.
+- `/zetetic:engineering-loop` states that every modification is governed by the genius pattern named for the task, applied while the code is written from the published method it carries. The review is Claude Code's native `/code-review` plus `/security-review`, one run each, one cycle.
+- `hooks/stop-context-guard.py` writes the checkpoint itself (`tools/checkpoint_summary.py`): last user requests, files edited, commands run, tool errors, last assistant message, open TODOs and repository state, measured from the transcript. It no longer blocks the turn or asks the model to spawn a subagent.
+
 ### Added
+
+- `hooks/pre-agent-genius-gate.py`, a PreToolUse hook on `Agent`/`Task` that denies a call whose prompt has no `GENIUS: <name>[, <name>]` line, names more than two geniuses, names a genius with no `agents/genius/<name>.md`, or uses a removed team-role `subagent_type` or a genius as a `subagent_type`. Enforce is the default (`ZETETIC_AGENT_GATE=observe|off` to change). Tests in `tests/test_agent_genius_gate.py`.
 
 - `rules/public-apis-reference.md`: how an agent uses the community list at https://github.com/public-apis/public-apis to find a free public API, then verifies the chosen API on its official documentation, terms and rate limits, and with one real request, before relying on it; keys stay out of code and commits. The list is a discovery aid, never evidence about an API. The rule states the real `Auth` values, flags the sponsored APILayer table and the MCP-servers table as having different columns, and shows how to read one category without loading the whole README; `rules/agent-reference/research-resources.md` gains a short pointer so agents reach it.
 
 ### Removed
 
+- The 23 team-role agents (`advisor`, `architect`, `code-reviewer`, `data-scientist`, `dba`, `devops-engineer`, `engineer`, `experiment-runner`, `frontend-engineer`, `git-historian`, `latex-engineer`, `memory-writer`, `mlops`, `orchestrator`, `paper-writer`, `professor`, `refactorer`, `research-scientist`, `reviewer-academic`, `security-auditor`, `simplifier`, `test-engineer`, `ux-designer`), owner decision 2026-10-21: only the genius reasoning agents are kept (97 agents plus `agents/genius/INDEX.md`). Delegation runs on the Claude Code built-in agents (`general-purpose`, `Explore`, `Plan`), each applying 1 or 2 genius patterns. `latex-engineer`, `memory-writer`, `orchestrator` and `advisor` have no genius equivalent and no route (the checkpoint is now written by the context-guard hook itself, the delegating session routes by shape, and the advisor is the native advisor tool). Also retired: `rules/agent-vs-skill-classification.md` (a study of the 23 agents). The `agents` array of `.claude-plugin/plugin.json` is gone with them.
+- The `ZETETIC-REVIEW: APPROVE` / `REQUEST_CHANGES` verdict ritual, the "three violations means rebuild" rule and the "no iteration budget" rule of `/zetetic:engineering-loop`: the review is Claude Code's native `/code-review` plus `/security-review`, one run each, one cycle.
 - The `adversarial-verify` pre-verdict workflow (`.claude/workflows/adversarial-verify.js`, with its tests in `tools/tests/adversarial-verify/`) and the code-reviewer CR-4 mandatory gate (rule 12, adversarial verification before any APPROVE) are removed. They triggered REQUEST CHANGES loops over non-defects and multiplied review cost (five agents per review). The code-reviewer's last rule (emit the verdict) is now rule 12. The zetetic spine beat of the same name (write the test that catches the bug) is unchanged.
 
 ### Fixed

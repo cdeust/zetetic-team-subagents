@@ -8,7 +8,6 @@ trigger: >
   when hyperparameter search needs structure.
 agents:
   - fisher
-  - experiment-runner
 shapes: [randomize-to-eliminate-confounds, factorial-design, design-before-run]
 input: Research hypothesis. Available resources (compute, data, time).
 output: Experimental design document with ablation plan, controls, power calculation.

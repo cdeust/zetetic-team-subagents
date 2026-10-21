@@ -25,7 +25,7 @@ def test_stop_blocks_while_pending_and_names_the_procedure(reflection_repo, monk
     decision = json.loads(out)
     assert decision["decision"] == "block"
     reason = decision["reason"]
-    for needle in ("lesson-candidate", "agent_topic", "a1b2c3", "engineer", "--memory-id",
+    for needle in ("lesson-candidate", "agent_topic", "a1b2c3", "general-purpose", "--memory-id",
                    "reflection_ledger.py", "Quote the transcript lines"):
         assert needle in reason
 
@@ -99,12 +99,12 @@ def test_lift_refuses_unknown_and_already_lifted_agents(reflection_repo, capsys,
 def test_list_command_prints_pending_entries(reflection_repo, capsys, schedule):
     schedule()
     assert ledger.main(["--cwd", str(reflection_repo), "list"]) == 0
-    assert capsys.readouterr().out.startswith("a1b2c3\tengineer")
+    assert capsys.readouterr().out.startswith("a1b2c3\tgeneral-purpose")
 
 
 def test_B_a_row_without_session_id_blocks_and_is_called_unattributed(
         reflection_repo, tmp_path, monkeypatch, capsys):
-    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="general-purpose")
     del payload["session_id"]
     run_hook(start_hook, payload, monkeypatch, capsys)
     _, out, err = run_hook(stop_hook, stop_event(reflection_repo), monkeypatch, capsys)

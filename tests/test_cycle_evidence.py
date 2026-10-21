@@ -137,14 +137,19 @@ def test_verify_accepts_only_the_declared_check_run_as_the_whole_foreground_comm
 
 @pytest.mark.parametrize("case", [
     (call("Skill", skill="code-review"), True), (call("Skill", skill="zetetic:review"), True),
-    (call("Agent", subagent_type="zetetic-team-subagents:code-reviewer"), True),
-    (call("Agent", subagent_type="code-reviewer"), True),
+    (call("Agent", subagent_type="general-purpose", description="Review the diff",
+          prompt="GENIUS: popper, feynman\nReview the diff."), True),
+    (call("Agent", subagent_type="Plan", prompt="GENIUS: popper\nplease review this"), True),
+    (call("Agent", subagent_type="general-purpose", description="Review the diff",
+          prompt="no genius line here"), False),
+    (call("Agent", subagent_type="general-purpose", description="Implement the parser",
+          prompt="GENIUS: dijkstra\nImplement the parser."), False),
+    (call("Agent", subagent_type="code-reviewer", prompt="review"), False),
     (call("Skill", skill="superpowers:receiving-code-review"), False),
     (call("Skill", skill="superpowers:requesting-code-review"), False),
-    (call("Agent", subagent_type="zetetic-team-subagents:reviewer-academic"), False),
     (call("Skill", skill="refine-gate:refine"), False),
 ])
-def test_review_is_an_exact_review_skill_or_a_code_reviewer_agent(case):
+def test_review_is_an_exact_review_skill_or_a_genius_pattern_review_agent(case):
     review_call, counts = case
     assert ev._review(review_call) is counts
 

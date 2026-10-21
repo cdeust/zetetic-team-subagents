@@ -11,7 +11,7 @@ agents:
   - fermi
   - curie
   - knuth
-  - engineer
+  - dijkstra
 shapes: [order-of-magnitude-first, residual-with-a-carrier, profile-before-optimizing]
 input: A slow system or component with whatever metrics are currently available.
 output: "Performance report: expected bracket, measured actuals, profiled hot path, fix with before/after."
@@ -39,9 +39,9 @@ hand_off:
 5. If actual exceeds bracket → the excess is a residual. curie isolates by bisection/ablation.
 6. **Gate:** two independent methods confirm the residual carrier.
 
-### Phase 3: Profile and fix (knuth + engineer)
+### Phase 3: Profile and fix (knuth + dijkstra)
 7. knuth profiles the identified component. Identifies the 3% hot path. Analyzes complexity.
-8. engineer implements the fix. Only the hot path.
+8. dijkstra implements the fix. Only the hot path.
 9. curie re-measures. Before/after with statistical comparison.
 
 ## Output Format

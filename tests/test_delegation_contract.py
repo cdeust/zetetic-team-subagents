@@ -35,11 +35,11 @@ def _materialize(fixture_name: str, target_repo: Path) -> Path:
 
 @pytest.fixture
 def target_repo(tmp_path: Path) -> Path:
-    """A minimal fake target repo containing agents/engineer.md, so
+    """A minimal fake target repo containing agents/genius/curie.md, so
     unknown-agent vs. known-agent resolution is exercised for real."""
     repo = tmp_path / "target"
-    (repo / "agents").mkdir(parents=True)
-    (repo / "agents" / "engineer.md").write_text("---\nname: engineer\n---\nbody\n", encoding="utf-8")
+    (repo / "agents" / "genius").mkdir(parents=True)
+    (repo / "agents" / "genius" / "curie.md").write_text("---\nname: curie\n---\nbody\n", encoding="utf-8")
     (repo / "src").mkdir()
     return repo
 
@@ -47,7 +47,7 @@ def target_repo(tmp_path: Path) -> Path:
 def test_valid_contract_launches(target_repo: Path) -> None:
     contract_path = _materialize("fixture-valid.json", target_repo)
     contract = dc.validate(contract_path, target_repo)
-    assert contract["agent"] == "engineer"
+    assert contract["agent"] == "curie"
     assert contract["push_authority"] == "forbidden"
 
 

@@ -38,7 +38,7 @@ hand_off:
   needs_spec: "/spec — lamport: formal specification for concurrent/distributed components"
   needs_resilience: "/design-for-failure — hamilton: failure mode design"
   needs_security: "/security-audit — rejewski: deep security audit"
-  ready_to_implement: "/implement — engineer builds it"
+  ready_to_implement: "/implement — dijkstra builds it"
 ---
 
 ## Procedure

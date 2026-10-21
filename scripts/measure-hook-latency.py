@@ -65,7 +65,7 @@ def payload(hook, sandbox):
     elif event == "UserPromptSubmit":
         base["prompt"] = "fix the failing test in the parser"
     elif event in ("Stop", "SubagentStop"):
-        base.update(stop_hook_active=False, agent_id="a1", agent_type="engineer",
+        base.update(stop_hook_active=False, agent_id="a1", agent_type="general-purpose",
                     last_assistant_message="done")
     elif event == "Notification":
         base.update(message="needs input", notification_type="idle_prompt")

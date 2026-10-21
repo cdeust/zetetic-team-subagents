@@ -2,7 +2,7 @@
 name: conjecture-to-code
 description: >
   Generate candidate patterns rapidly (ramanujan), prove correctness (dijkstra/lamport),
-  implement (engineer). The prover is MANDATORY — ramanujan refuses to operate without one.
+  implement (dijkstra). The prover is MANDATORY — ramanujan refuses to operate without one.
 category: compose
 trigger: >
   When a problem space is large and opaque; when rapid hypothesis generation followed
@@ -12,7 +12,6 @@ agents:
   - ramanujan
   - dijkstra
   - lamport
-  - engineer
 shapes: [conjecture-generator, proof-and-program-together, invariants-not-traces]
 input: A problem requiring candidate solutions. The correctness standard.
 output: "Verified solution: conjectures generated, proof of the selected candidate, implementation."
@@ -25,7 +24,7 @@ composes: [prove-correct, spec]
 aliases: [generate-and-prove, hypothesis-to-code]
 hand_off:
   all_conjectures_refuted: "Ramanujan's domain competence may not match — try a different approach"
-  conjecture_verified: "/implement — engineer builds it"
+  conjecture_verified: "/implement — dijkstra builds it"
 ---
 
 ## Procedure
@@ -40,8 +39,8 @@ hand_off:
 5. For concurrent/distributed correctness → lamport: write spec, model-check, prove invariants.
 6. **Gate:** only conjectures that survive proof proceed. Refuted conjectures are documented as negative results.
 
-### Phase 3: Implement (engineer)
-7. engineer implements the verified solution with the proof as the derivation guide.
+### Phase 3: Implement (dijkstra)
+7. dijkstra implements the verified solution with the proof as the derivation guide.
 8. Tests verify the implementation against the spec/proof.
 
 ## Output Format

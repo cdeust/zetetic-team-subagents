@@ -26,7 +26,7 @@ zetetic_gate:
 composes: [literature-review, verify-claim]
 aliases: [meta-analysis, systematic-search, evidence-synthesis]
 hand_off:
-  evidence_sufficient: "/implement — engineer implements the evidence-backed technique"
+  evidence_sufficient: "/implement — dijkstra implements the evidence-backed technique"
   evidence_insufficient: "(stop) — insufficient primary studies; report what exists and what is missing"
   high_heterogeneity: "/deep-research — investigate moderators before pooling"
 ---

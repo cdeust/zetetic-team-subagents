@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# agent-catalog.sh — List, search, and describe zetetic agents
+# agent-catalog.sh — List, search, and describe zetetic agents (genius agents only)
 #
 # Usage:
-#   tools/agent-catalog.sh [--team|--genius|--all] [--shape <shape>] [--search <keyword>]
+#   tools/agent-catalog.sh [--genius|--all] [--shape <shape>] [--search <keyword>]
 #
 # Exit codes: 0 success, 1 no matches, 2 usage error
 
@@ -24,7 +24,6 @@ MODE="all"; SHAPE=""; SEARCH=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --team)   MODE="team";   shift ;;
     --genius) MODE="genius"; shift ;;
     --all)    MODE="all";    shift ;;
     --shape)  SHAPE="$2";    shift 2 ;;
@@ -44,14 +43,6 @@ print_agent() {
 found=0
 printf "  %-18s %-7s %s\n" "AGENT" "TYPE" "DESCRIPTION"
 printf "  %-18s %-7s %s\n" "-----" "----" "-----------"
-
-if [[ "$MODE" == "team" || "$MODE" == "all" ]]; then
-  for f in "$AGENTS_DIR"/*.md; do
-    [[ ! -f "$f" ]] && continue
-    [[ -n "$SEARCH" ]] && ! grep -qi "$SEARCH" "$f" 2>/dev/null && continue
-    print_agent "$f" "team"; found=1
-  done
-fi
 
 if [[ "$MODE" == "genius" || "$MODE" == "all" ]]; then
   for f in "$GENIUS_DIR"/*.md; do
