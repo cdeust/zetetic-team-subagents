@@ -25,12 +25,12 @@ from test_gate_attacks import COMMIT, settle
 
 PATHLESS = {"name": "always", "argv": ["true"]}
 SCOPED = {"name": "scoped", "argv": ["sh", "-c", "test ! -e bad.txt"], "paths": ["a/**", "b/**", "**/*.txt"]}
+RATCHET = {"name": "ratchet", "argv": ["true"], "paths": ["**/*.py"], "scope": "added"}  # judges added files only
 BASE = {
     "version": 1,
     "full_on": ["Makefile", "pyproject.toml"],
     "env": {"KEEP": "1"},
-    "link": ["node_modules"],
-    "checks": [PATHLESS, SCOPED],
+    "checks": [PATHLESS, SCOPED, RATCHET],
     "tests": {
         "argv": ["sh", "-c", "true", "gate", "{tests}"],
         "files": ["tests/test_*.py"],
@@ -78,7 +78,7 @@ WEAKENINGS = {
     "full-on-shrunk": (edit(lambda c: c.update(full_on=["Makefile"])), "full_on"),
     "env-changed": (edit(lambda c: c["env"].update(HIJACK="1")), "env"),
     "env-removed": (drop("env"), "env"),
-    "link-changed": (edit(lambda c: c.update(link=[])), "link"),
+    "check-scoped-to-added-files": (edit(lambda c: c["checks"][1].update(scope="added")), "scoped"),
 }
 
 
@@ -186,7 +186,7 @@ def test_the_acknowledgement_file_is_not_honoured_from_inside_the_repository(gat
 
 @pytest.mark.parametrize("grow", [
     "check-added", "check-renamed", "check-reordered", "path-added", "pathless-stays", "test-added-to-a-map-pattern",
-    "full-on-grown", "fast-grown", "tests-added-from-none",
+    "full-on-grown", "fast-grown", "tests-added-from-none", "ratchet-widened-to-every-file",
 ])
 def test_growth_is_not_a_weakening(gate, grow):
     cfg = copy.deepcopy(BASE)
@@ -206,6 +206,8 @@ def test_growth_is_not_a_weakening(gate, grow):
         cfg["tests"]["fast"].append("tests/test_other.py")
     elif grow == "tests-added-from-none":
         commit_config(gate, drop("tests")(BASE))
+    elif grow == "ratchet-widened-to-every-file":
+        del cfg["checks"][2]["scope"]
     gate.stage("two\n")
     stage_config(gate, cfg)
     rc, _, err = gate.gate(COMMIT)

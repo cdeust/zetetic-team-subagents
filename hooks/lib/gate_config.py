@@ -29,15 +29,23 @@ PY = "{python}"  # whole-argv-element placeholder: the interpreter the gate reso
 FILES = "{files}"  # whole-argv-element placeholder: the changed files this check applies to
 TESTS = "{tests}"  # whole-argv-element placeholder: the selected test paths
 PROBE_PATHS = (CONFIG_REL.replace(os.sep, "/"), LEGACY_OFF, LEGACY_SCRIPT.replace(os.sep, "/"), "package.json",
-               "Cargo.toml", "go.mod", "pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini", "tests")  # what `declaration` asks a tree about (not `scripts`: git lists a directory pathspec only when no deeper one is given)
+               "package-lock.json", "Cargo.toml", "go.mod", "pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini",
+               "tests")  # what `declaration` asks a tree about (not `scripts`: git lists a directory pathspec only when no deeper one is given)
 DEFAULT_FULL_ON = [".zetetic/gate.json"]  # source: a change to the rules runs every check the new rules declare (always in full_on)
-_TOP_KEYS = {"version", "off", "full_on", "checks", "tests", "env", "link"}
-_CHECK_KEYS = {"name", "paths", "argv"}
+_TOP_KEYS = {"version", "off", "full_on", "checks", "tests", "env"}
+_CHECK_KEYS = {"name", "paths", "argv", "scope"}
 _TESTS_KEYS = {"argv", "files", "map", "same_name", "fast"}
+SCOPES = ("added",)  # source: the ratchet of CI's craftsmanship job (.github/workflows/ci.yml, --diff-filter=A)
 
 
 class ConfigError(ValueError):
     """The config file exists but is not valid; the gate refuses rather than guess."""
+
+
+class Diff(NamedTuple):
+    """What a change is: the paths that differ from its base (deletions included), and those it adds."""
+    paths: list
+    added: frozenset = frozenset()
 
 
 class Step(NamedTuple):
@@ -94,6 +102,8 @@ def _validate_check(check: object, n: int) -> None:
         raise ConfigError(f"checks[{n}].argv must not be empty")
     if "paths" in check:
         _list_of_str(check["paths"], f"checks[{n}].paths")
+    if "scope" in check and check["scope"] not in SCOPES:
+        raise ConfigError(f"checks[{n}].scope must be one of: " + ", ".join(SCOPES))
 
 
 def _validate_tests(tests: object) -> None:
@@ -116,13 +126,13 @@ def _validate_setup(cfg: dict) -> None:
     env = cfg.get("env", {})
     if not isinstance(env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
         raise ConfigError("env must be an object of string values")
-    for rel in _list_of_str(cfg.get("link", []), "link"):
-        if os.path.isabs(rel) or ".." in rel.split("/") or not rel:
-            raise ConfigError(f"link entries are paths inside the repository, got {rel!r}")
 
 
 def validate(cfg: object) -> dict:
     """Pre: ``cfg`` is parsed JSON. Post: the same object, or ConfigError naming the first problem."""
+    if isinstance(cfg, dict) and "link" in cfg:
+        raise ConfigError('"link" is not read: a check never sees the working copy, so an untracked directory cannot '
+                          "decide a verdict; install dependencies with a check (for example npm ci)")
     if not isinstance(cfg, dict) or set(cfg) - _TOP_KEYS:
         raise ConfigError("the gate config must be an object with keys: " + ", ".join(sorted(_TOP_KEYS)))
     if cfg.get("version") != 1:
@@ -161,7 +171,10 @@ def load(where: object) -> dict | None:
 
 
 def _npm(src: object) -> list:
-    text = source.as_source(src).read("package.json")
+    """lint and test when package.json declares them, preceded by `npm ci` when the tree has a package-lock.json:
+    the dependencies a check sees come from the tree's lock, never from the working copy's node_modules."""
+    src = source.as_source(src)
+    text = src.read("package.json")
     try:
         scripts = (json.loads(text) if text else {}).get("scripts") or {}
     except (ValueError, AttributeError):
@@ -172,6 +185,8 @@ def _npm(src: object) -> list:
     test = scripts.get("test")
     if isinstance(test, str) and "no test specified" not in test:
         out.append({"name": "test", "argv": ["npm", "test", "--silent"]})
+    if out and src.isfile("package-lock.json"):
+        out.insert(0, {"name": "install", "argv": ["npm", "ci", "--no-audit", "--no-fund"]})
     return out
 
 
@@ -186,8 +201,10 @@ def _python(src: object) -> list:
 def stack_config(where: object) -> dict | None:
     """The documented default (rule 4): the whole suite of the stack found in ``where``, as a config.
 
-    Dependencies live outside the tree (node_modules, a cargo target dir), so the config links the first
-    from the main checkout and points the second at a directory shared by every verification.
+    Dependencies are not in the tree. npm's are installed into the private checkout from the tree's
+    package-lock.json (`npm ci`, the first check), never linked from the working copy; cargo's build directory is
+    shared by every verification (cargo locks it, and keys a workspace crate's artifacts by its source path,
+    which is a fresh private directory each time).
     """
     src = source.as_source(where)
     checks: list = []
@@ -197,19 +214,17 @@ def stack_config(where: object) -> dict | None:
                    {"name": "clippy", "argv": ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]},
                    {"name": "test", "argv": ["cargo", "test", "--workspace"]}]
         env["CARGO_TARGET_DIR"] = "{common}/zetetic-gate-target"
-    npm = _npm(src)
-    checks += npm + _python(src)
+    checks += _npm(src) + _python(src)
     if src.isfile("go.mod"):
         checks += [{"name": "vet", "argv": ["go", "vet", "./..."]}, {"name": "test", "argv": ["go", "test", "./..."]}]
     if not checks:
         return None
-    return {"version": 1, "checks": checks, "env": env, "link": ["node_modules"] if npm else []}
+    return {"version": 1, "checks": checks, "env": env}
 
 
-def setup_for(cfg: dict, top: str, common: str) -> tuple[dict, list]:
-    """(environment additions, repository paths to link from ``top``), placeholders {top} and {common} resolved."""
-    env = {k: v.replace("{top}", top).replace("{common}", common) for k, v in cfg.get("env", {}).items()}
-    return env, list(cfg.get("link", []))
+def check_env(cfg: dict, checkout: str, common: str) -> dict:
+    """The environment additions of ``cfg``: {top} is the private checkout of the tree, {common} the git common dir."""
+    return {k: v.replace("{top}", checkout).replace("{common}", common) for k, v in cfg.get("env", {}).items()}
 
 
 def declaration(where: object) -> str | None:
@@ -270,13 +285,14 @@ def _expand_argv(argv: list, placeholder: str, values: list) -> list:
     return out
 
 
-def _file_steps(cfg: dict, root: str, changed: list, full: bool) -> list:
-    live = [p for p in changed if os.path.lexists(os.path.join(root, p))]
-    universe = _walk(root) if full else live
+def _file_steps(cfg: dict, root: str, diff: Diff, full: bool) -> list:
+    live = [p for p in diff.paths if os.path.lexists(os.path.join(root, p))]
+    every, added = (_walk(root) if full else live), [p for p in live if p in diff.added]
     steps = []
     for check in cfg.get("checks", []):
+        universe = added if check.get("scope") == "added" else every  # a ratchet judges what the change adds, in full mode too
         hit = [p for p in universe if "paths" not in check or matches(check["paths"], p)]
-        if hit or "paths" not in check:  # no `paths`: runs whenever anything changed, deletions included
+        if hit or not {"paths", "scope"} & set(check):  # neither: runs whenever anything changed, deletions included
             steps.append(Step(check["name"], _expand_argv(check["argv"], FILES, hit)))
     return steps
 
@@ -308,19 +324,22 @@ def _test_step(cfg: dict, root: str, changed: list, full: bool) -> list:
     return [Step("tests-full", _expand_argv(tests["argv"], TESTS, []))]
 
 
-def plan(cfg: dict, root: str, changed: list, force_full: bool = False) -> list:
-    """The steps to run for ``changed`` (repo-relative paths, deletions included) in the tree ``root``.
+def plan(cfg: dict, root: str, changed: "Diff | list", force_full: bool = False) -> list:
+    """The steps to run for ``changed`` in the tree ``root``: a Diff, or a list of repo-relative paths (deletions
+    included), which is a Diff that adds nothing.
 
     Rules (docs/gate.md): a change to any ``full_on`` path runs every check over every file and the whole
     test suite. Otherwise a check runs iff a changed file still present matches its ``paths`` (no
-    ``paths``: always), with {files} the matching ones; tests are the union of ``tests.map`` entries
+    ``paths``: always), with {files} the matching ones. A check with ``"scope": "added"`` (a ratchet) sees only
+    the files the change ADDS, in full mode too, and runs only when one of them matches; tests are the union of ``tests.map`` entries
     whose paths match a changed path, the ``same_name`` test of each changed file ({stem}: its name without extension, '-' as '_'), and changed test files
     themselves; none selected -> ``tests.fast``; still none -> the whole suite. No change -> no steps.
     ``force_full`` (the base tree has no green verification of this kind, gate_run): the full_on case for
     every change, and even for none, because nothing earlier vouches for what is not in ``changed``.
     """
-    if not changed and not force_full:
+    diff = changed if isinstance(changed, Diff) else Diff(list(changed))
+    if not diff.paths and not force_full:
         return []
     full_on = DEFAULT_FULL_ON + cfg.get("full_on", [])
-    full = force_full or any(matches(full_on, p) for p in changed)
-    return _file_steps(cfg, root, changed, full) + _test_step(cfg, root, changed, full)
+    full = force_full or any(matches(full_on, p) for p in diff.paths)
+    return _file_steps(cfg, root, diff, full) + _test_step(cfg, root, diff.paths, full)

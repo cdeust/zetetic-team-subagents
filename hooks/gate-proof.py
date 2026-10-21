@@ -3,7 +3,7 @@
 
 Rule (owner, 2026-09-30): only VALID, WORKING code is committed. Prose does not enforce that; this hook does.
 Repatriated from ~/.claude/hooks/gate-proof.py (issue: no-timeouts programme PR-1); what changed:
-the proof is the state of an async task (tools/lib/tasks.py) keyed by verb + tree + rules digest
+the proof is the state of an async task (tools/lib/tasks.py) keyed by verb + tree + rules digest + runner digest
 (hooks/lib/gate_state.py), not a file written by a synchronous `scripts/gate.sh`, and there is no git timer.
 
   commit  tree = `git write-tree` (the index NOW).   The task for it is started if absent (dedup by key),

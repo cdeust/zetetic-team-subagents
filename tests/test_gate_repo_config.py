@@ -55,7 +55,7 @@ def selected_checks(changed: str) -> list:
 
 @pytest.mark.parametrize("path", ["hooks/hooks.json", "hooks/gate-proof.py", "hooks/run-python.sh", ".claude-plugin/plugin.json",
                                   ".claude-plugin/marketplace.json", "docs/gate.md", "README.md", "CONTRIBUTING.md",
-                                  "agents/engineer.md", "skills/_index.md", "commands/_index.md", "tools/doc-count-check.sh"])
+                                  "agents/genius/feynman.md", "skills/_index.md", "commands/_index.md", "tools/doc-count-check.sh"])
 def test_a_change_that_can_move_a_documented_count_selects_doc_count_check(path):
     """PR #169 round 1: README/CONTRIBUTING said 24 hook registrations, the tree had 27, and the affected-only
     gate had selected neither doc-count-check nor the suite that runs it, so CI was the first to see it."""

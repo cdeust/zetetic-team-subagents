@@ -32,7 +32,7 @@ def test_staging_starts_one_task_and_dedups_by_tree(gate):
     assert gate.head_start()[0] == 0
     running = gate.await_running(tree)
     assert running["state"] == "running" and running["kind"] == "gate"
-    assert running["key"].startswith(f"commit-{tree}-")  # the key is verb + tree + digest of the effective rules
+    assert running["key"].startswith(f"commit-{tree}-")  # the key is verb + tree + rules digest + runner digest
     gate.head_start()  # a second add of the same tree, then the commit hook: neither starts another task
     assert gate.gate(COMMIT)[0] == 2
     assert gate.finish(tree)["state"] == "done"
@@ -208,7 +208,7 @@ def test_the_hot_path_has_no_timer():
                  "lib/gate_ledger.py", "lib/gate_actions.py", "lib/gate_config.py", "lib/gate_shell.py",
                  "lib/gate_source.py", "lib/gate_rules.py", "lib/gate_trust.py", "lib/gate_publish.py", "lib/gate_paths.py",
                  "lib/gate_superset.py", "lib/gate_ack.py", "lib/gate_userfile.py", "lib/gate_pushargs.py",
-                 "lib/gate_floor.py"):
+                 "lib/gate_floor.py", "lib/gate_runner.py"):
         assert _time_bounds((HOOKS / name).read_text()) == [], name
 
 

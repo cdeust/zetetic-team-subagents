@@ -1,12 +1,14 @@
-"""The gate's verdict on a tree, read from (and started in) the async task `gate-<verb>-<tree>-<rules>`.
+"""The gate's verdict on a tree, read from (and started in) the async task `gate-<verb>-<tree>-<rules>-<runner>`.
 
 The decision is a function of the task record alone (docs/async-tasks.md, docs/gate.md); nothing here
-waits, sleeps, or compares elapsed time. The task is keyed by what the verdict depends on:
+waits, sleeps, or compares elapsed time. The task is keyed by what the verdict depends on (Basis):
 
   verb     `commit` or `push`: a push needs a push-kind green record; a commit's never stands in for it
            (a repository's push-only gates, e.g. scripts/gate.sh push, would otherwise be lost)
   tree     the tree judged
   rules    the digest of the effective rules (gate_rules): a verdict is never reused under other rules
+  runner   the digest of the environment and interpreter the checks run with (gate_runner): never reused
+           under another runner
 
   disposition  record                  verdict
   cached       done, rc 0              allow (the cached proof)
@@ -24,7 +26,9 @@ user keeps for the repository, and for a push the rules of each destination ref 
 """
 from __future__ import annotations
 
+import json
 import os
+import shlex
 import sys
 from typing import NamedTuple
 
@@ -37,6 +41,7 @@ import gate_config as config  # noqa: E402
 import gate_floor as floor  # noqa: E402
 import gate_git as gitq  # noqa: E402
 import gate_rules as rules_mod  # noqa: E402
+import gate_runner as runner_mod  # noqa: E402
 import gate_superset as superset  # noqa: E402
 import gate_trust as trust  # noqa: E402
 import tasks  # noqa: E402
@@ -73,6 +78,23 @@ def push_trees(top: str) -> tuple[str, str | None]:
     return tree, gitq.tree_of(top, "HEAD^")
 
 
+class Basis(NamedTuple):
+    """What a verdict depends on besides the tree: the rules, the runner and the kind of act."""
+    rules: str  # gate_rules.Rules.digest
+    runner: str  # gate_runner.Runner.digest
+    kind: str  # `commit` or `push`
+
+
+def basis_of(verb: str, rules: rules_mod.Rules, runner: str) -> Basis:
+    """The Basis of a ``verb`` verification under ``rules`` and the runner digest ``runner``."""
+    return Basis(rules.digest, runner, verb)
+
+
+def task_key(basis: Basis, tree: str) -> str:
+    """`<kind>-<tree>-<rules>-<runner>`: the key of the verification of ``tree`` on ``basis``."""
+    return f"{basis.kind}-{tree}-{basis.rules}-{basis.runner}"
+
+
 class Plan(NamedTuple):
     """What a verification of one tree is: enough to start it, find it, and describe it."""
     top: str
@@ -80,11 +102,16 @@ class Plan(NamedTuple):
     tree: str
     base: str | None
     rules: rules_mod.Rules
+    runner: runner_mod.Runner
     acked: bool = False
 
     @property
+    def basis(self) -> Basis:
+        return basis_of(self.verb, self.rules, self.runner.digest)
+
+    @property
     def key(self) -> str:
-        return task_key(self.verb, self.tree, self.rules.digest)
+        return task_key(self.basis, self.tree)
 
     @property
     def id(self) -> str:
@@ -95,14 +122,13 @@ class Plan(NamedTuple):
         return job_argv(self)
 
 
-def task_key(verb: str, tree: str, digest: str) -> str:
-    return f"{verb}-{tree}-{digest}"
-
-
 def job_argv(plan: Plan) -> list:
-    """The command the worker runs. ``verb`` is `commit` or `push`; ``base`` is the tree the change is measured from."""
+    """The command the worker runs. ``verb`` is `commit` or `push`; ``base`` is the tree the change is measured from.
+    The runner travels with it: the interpreter is argv[0] and the checks' environment is ``--env``, both recorded in
+    the task's input, so whoever launches the task (the hook, or a requeue from any shell) runs the same runner."""
     return [sys.executable, "-B", RUN, "run", "--repo", plan.top, "--tree", plan.tree, "--base", plan.base or "-",
-            "--kind", plan.verb, "--trusted", plan.rules.trusted, "--rules", plan.rules.digest]
+            "--kind", plan.verb, "--trusted", plan.rules.trusted, "--rules", plan.rules.digest,
+            "--runner", plan.runner.digest, "--env", json.dumps(plan.runner.env, sort_keys=True)]
 
 
 class Change(NamedTuple):
@@ -191,7 +217,11 @@ def plan_for(top: str, verb: str, change: Change) -> "Plan | Verdict":
         return passed
     if not rules.sets:
         return Verdict(True, "", (None,), None, passed)
-    return Plan(top, verb, change.tree, change.base, rules, passed)
+    try:
+        runner = runner_mod.resolve(top, repo.common, rules.sets)
+    except runner_mod.Refused as exc:
+        return Verdict(False, f"GATE-PROOF: {exc}. Refused (closed); nothing was run. See docs/gate.md (the runner).")
+    return Plan(top, verb, change.tree, change.base, rules, runner, passed)
 
 
 def _status_cmd(top: str, tid: str) -> str:
@@ -211,9 +241,11 @@ def _tail(rec: dict) -> str:
 def failed_message(plan: Plan, rec: dict) -> str:
     cause = rec.get("reason") or f"rc={rec.get('rc')}" + (f", signal {rec['signal']}" if rec.get("signal") else "")
     return (f"GATE-PROOF: verification FAILED for tree {plan.tree} ({plan.verb}; {cause}).\n"
+            f"Runner: {runner_mod.describe(plan.runner)}\n"
             f"Output: {rec.get('output_path')}\n{_tail(rec)}\n"
             f"Fix the cause and restage (a different tree starts a new verification). After an "
-            f"infrastructure failure only: python3 {CLI} requeue --repo {plan.top} --kind {plan.verb}")
+            f"infrastructure failure only: python3 {shlex.quote(CLI)} requeue --repo {shlex.quote(plan.top)} "
+            f"--id {shlex.quote(rec['id'])}")
 
 
 def pending_message(plan: Plan, rec: dict, started: bool) -> str:
@@ -278,9 +310,8 @@ def peek(plan: Plan) -> dict | None:
     return tasks.status(plan.id, plan.top)
 
 
-def base_is_green(top: str, verb: str, base: str | None, digest: str) -> bool:
-    """True when ``base``'s tree has a green record of the same verb under the same rules (read only).
-
-    Affected-only selection is valid only then: it assumes everything outside the diff was verified.
-    """
-    return base is not None and tasks.is_green(tasks.status(task_store.task_id(KIND, task_key(verb, base, digest)), top))
+def base_is_green(top: str, basis: Basis, base: str | None) -> bool:
+    """True when ``base``'s tree has a green record on the same ``basis`` (rules, runner, and kind for a legacy
+    script) (read only). Affected-only selection is valid only then: it assumes everything outside the diff was
+    verified."""
+    return base is not None and tasks.is_green(tasks.status(task_store.task_id(KIND, task_key(basis, base)), top))

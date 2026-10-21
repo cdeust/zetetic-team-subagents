@@ -85,7 +85,7 @@ def test_the_floor_directory_and_file_are_private_to_the_user(repo):
 
 def test_every_state_kind_survives_the_file(repo):
     top, common = repo
-    stack = rules.RuleSet("stack", {"version": 1, "checks": [{"name": "t", "argv": ["x"]}], "env": {}, "link": []}, None)
+    stack = rules.RuleSet("stack", {"version": 1, "checks": [{"name": "t", "argv": ["x"]}], "env": {}}, None)
     floor.record(top, common, [LEGACY, stack, A], lowered=False)
     assert hashes(floor.read(top, common)) == hashes([LEGACY, stack, A])
 

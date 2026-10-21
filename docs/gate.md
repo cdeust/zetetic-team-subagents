@@ -1,29 +1,31 @@
 # The commit and push gate
 
-No commit or push of an unverified tree. Verification is an async task keyed by the kind of act, the tree hash
-and the rules; the hook that guards `git commit` reads the task's state and never waits
+No commit or push of an unverified tree. Verification is an async task keyed by the kind of act, the tree hash,
+the rules and the runner; the hook that guards `git commit` reads the task's state and never waits
 (`docs/async-tasks.md`).
 
 ## Flow
 
 ```
 git add ...            PostToolUse hooks/gate-start.py   starts the commit task for the staged tree if absent, returns at once
-git commit ...         PreToolUse  hooks/gate-proof.py   reads gate-commit-<staged tree>-<rules>:
+git commit ...         PreToolUse  hooks/gate-proof.py   reads gate-commit-<staged tree>-<rules>-<runner>:
                                                            done and green  -> allow
-                                                           failed          -> deny, names the output file
+                                                           failed          -> deny, names the output file and the runner
                                                            running/started -> deny, "retry when it finishes"
-git push / gh pr create  PreToolUse same hook            reads gate-push-<tip tree>-<rules> for the tip of EVERY ref published
+git push / gh pr create  PreToolUse same hook            reads gate-push-<tip tree>-<rules>-<runner> for the tip of EVERY ref published
 Stop                   Stop        hooks/stop-gate-ledger.py  an open failure blocks the stop while work is at risk
 ```
 
-The task id is `gate-<kind>-<tree>-<rules>` (the cache key below); the state directory is
-`<git-common-dir>/zetetic-tasks/`, so every worktree of a repository shares it and the repository is the
-namespace. Asking never reruns a green key and never starts a second task for a key that has one.
+The task id is `gate-<kind>-<tree>-<rules>-<runner>` (the cache key below); the state directory is `<git-common-dir>/zetetic-tasks/`, so every worktree of a repository shares
+it and the repository is the namespace. Asking never reruns a green key and never starts a second task for a key
+that has one.
 
-Status of a verification: `tools/task.sh status gate-<kind>-<tree>-<rules> --repo <repo>` (the hook prints
-the exact command). Retry after an infrastructure failure: `python3 hooks/lib/gate_task.py requeue --repo <repo>
---kind commit|push`. A worker that died without a result is requeued once, automatically, by the next attempt
-(attempt N+1, counted in the record). Waiver: `python3 hooks/lib/gate_task.py waive --tree <tree> --reason
+Status of a verification: `tools/task.sh status <task id> --repo <repo>` (the hook prints the exact command).
+Retry after an infrastructure failure: `python3 hooks/lib/gate_task.py requeue --repo <repo>
+--id <task id>` (the failure names it). It relaunches the command the task recorded, whose runner (the hook's
+interpreter, argv[0], and the checks' environment, `--env`) travels with it: a requeue from a shell whose environment
+is not the hook's still retries the verification the hook keyed. A worker that died without a result is requeued
+once, automatically, by the next attempt (attempt N+1, counted in the record). Waiver: `python3 hooks/lib/gate_task.py waive --tree <tree> --reason
 "..."` lifts the Stop block for that tree and is appended to `gate-waivers.jsonl`; it never lets a commit
 through, only a green record does.
 
@@ -174,10 +176,10 @@ and `new` = the rules the commit or the pushed tip leaves behind:
 
 | Part | `new` is no weaker when |
 |---|---|
-| `checks[]` | every check of `old` has a check of `new` with the **same `argv`** whose path selection covers it. `old` has no `paths` (runs for any change, deletions too): `new` has none. Otherwise `new` has none, or holds `**`, or holds every pattern of `old` literally (patterns are compared as strings). Names do not matter. Added checks are growth; a removed or replaced check (different `argv`, narrowed or dropped `paths`) is not |
+| `checks[]` | every check of `old` has a check of `new` with the **same `argv`** whose path selection covers it. `old` has no `paths` (runs for any change, deletions too): `new` has none. Otherwise `new` has none, or holds `**`, or holds every pattern of `old` literally (patterns are compared as strings). A `new` with `"scope": "added"` keeps only an `old` with the same scope (it judges fewer files); dropping the scope is growth. Names do not matter. Added checks are growth; a removed, replaced or narrowed check (different `argv`, narrowed or dropped `paths`, a scope added) is not |
 | `tests` | if `old` has a tests block, `new` has one with equal `argv`, `files` and `same_name` (either one changed changes which tests a change selects, and an empty selection falls back to the whole suite); `fast` equal, or non-empty in `old` and a superset in `new`; `map`: the same set of path patterns, and for each pattern `new` runs every test `old` ran (a pattern may gain tests; a new pattern would take paths away from the fallback, a removed one gives them up) |
 | `full_on` | `new` has every entry of `old` |
-| `env`, `link` | equal (an added variable such as `PYTEST_ADDOPTS=--co` can disarm a check) |
+| `env` | equal (an added variable such as `PYTEST_ADDOPTS=--co` can disarm a check) |
 | declaration | `off: true`, a deleted config, or no declaration at all is a weakening when the anchor declares rules. A stack default (no config, `package.json`, `Cargo.toml`, ...) is compared as the config it generates, so a config that replaces it must keep its checks |
 | legacy `scripts/gate.sh` | with no config, deleting it, making it non-executable, replacing it by another script or by a config is a weakening: a script's content cannot be compared, so the object id of the script itself is the rule (other files of `scripts/` do not count) |
 
@@ -188,17 +190,19 @@ and CI is the check that sees what they do.
 
 ## Kind, and the cache key
 
-A verification is keyed by **kind + tree + digest of the effective rules**: `commit-<tree>-<12 hex>` or
-`push-<tree>-<12 hex>`.
+A verification is keyed by **kind + tree + digest of the effective rules + digest of the runner**:
+`commit-<tree>-<12 hex>-<12 hex>` or `push-<tree>-<12 hex>-<12 hex>`.
 
 - **Kind.** A push needs a green record of kind `push`; a commit's record never stands in for it. A
   repository whose gate has push-only checks (`scripts/gate.sh push` adding `test bench oracle`) keeps them.
 - **Rules.** A verdict is never reused under other rules.
-- **Affected-only selection is valid only when the base tree has a green record of the same kind** under the
-  same rules (the base is HEAD's tree for a commit, the tip's parent for a push or an amend). Otherwise the full
-  configured gate runs: every check over every file, and the whole suite. A push of a branch whose parent was
-  never pushed is therefore verified in full, and so is the first commit after a change to the rules (the
-  base's record was made under the previous rules).
+- **Runner.** A verdict is never reused under another runner (The verdict is a function of the tree, below): a
+  failure under an interpreter without pytest does not follow the tree to an interpreter that has it.
+- **Affected-only selection is valid only when the base tree has a green record on the same basis** (kind,
+  rules, runner); the base is HEAD's tree for a commit, the tip's parent for a push or an amend. Otherwise the
+  full configured gate runs: every check over every file (a ratchet check over the files the change adds), and
+  the whole suite. A push of a branch whose parent was never pushed is therefore verified in full, and so is the
+  first commit after a change to the rules or the runner.
 
 ## What a push publishes
 
@@ -293,17 +297,54 @@ there.
 
 ## The verdict is a function of the tree
 
-The worker (`hooks/lib/gate_run.py`) checks the tree out into a private directory through a private index and
-runs the checks there, then removes it. Editing the working tree while a verification runs cannot change its
+A verdict is a function of (tree, rules, runner), and nothing an agent can change in its working copy or its
+session decides it. The worker (`hooks/lib/gate_run.py`) checks the tree out into a private directory through a
+private index and runs the checks there. Editing the working tree while a verification runs cannot change its
 verdict. The previous gate achieved this by refusing to run when tracked files were modified but unstaged; an
 async gate cannot, because the author keeps working.
 
-Checks that need an untracked or ignored file get it through the config: `link` symlinks a directory such as
-`node_modules` from the checkout, `env` points a build at a shared location (the stack default for Cargo sets
-`CARGO_TARGET_DIR={common}/zetetic-gate-target`, so builds are incremental across verifications). The venv
-python is found in the checkout, then in the main checkout (`{python}` below). A killed worker (SIGKILL cannot
-be handled) leaves its private checkout under the system temp directory; the next attempt for the same tree
-replaces it.
+**The runner** (`hooks/lib/gate_runner.py`) is what a check runs with besides the tree and the rules, and it is
+the third component of the key:
+
+- The environment is an allowlist of the hook's variables (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`,
+  `TMP`, `TEMP`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TERM`, and the Windows ones a process needs),
+  plus `PYTHONDONTWRITEBYTECODE=1`, plus the rule set's own `env`. Everything else is dropped:
+  `PYTEST_ADDOPTS=--collect-only` in the session's environment no longer turns a failing suite green, and
+  `CLAUDE_PLUGIN_ROOT`, which Claude Code exports to plugin hooks, no longer reaches a repository's tests. `PATH`
+  keeps only absolute entries outside the repository (its working tree, its main checkout, its git directory), so
+  an untracked `node_modules/.bin` or `.venv/bin` cannot stand in for a command a check runs.
+- `{python}` is the interpreter that runs the gate itself (`sys.executable`, the one `hooks/run-python.sh`
+  found), never the repository's `.venv`, whose content is the working copy's. Its identity is what a check sees
+  when it starts it: the executable, its real path, its version, its prefixes, its import path, and the name and
+  version of every distribution in its site directories (user site included), measured once with the check
+  environment. A `pip install` into it changes the key. An interpreter that would import from the repository (it
+  lives there, or an editable install of the working copy is on its path) is refused, closed, with the reason.
+  So a verification under a python3 without pytest fails with that interpreter named in the denial, and the same
+  tree asked under an interpreter that has pytest is verified again under its own key. A runner built from the
+  tree (a venv provisioned from a hash-pinned lock) is not implemented: the interpreter is the host's, named.
+- Dependencies never come from the working copy: `link` is gone. The npm stack default installs from the
+  tree's `package-lock.json` (`npm ci`, its first check) into the private checkout. The Cargo stack default sets
+  `CARGO_TARGET_DIR={common}/zetetic-gate-target`, shared by every verification: cargo locks that directory and
+  keys a workspace crate's artifacts by its source path, a fresh private directory each time.
+
+The task records its runner: the interpreter is the command's argv[0] and the checks' environment is its `--env`
+argument, so the record says what a verdict was reached with, and a requeue launched from any shell runs the same
+runner. The worker re-derives the rules digest and the runner digest (filtering `--env` through the allowlist again
+and measuring the interpreter now) and refuses to run when either differs from the ones it was started with (a task
+started by hand with another variable, or an interpreter that changed since). Each worker creates its own
+private directory (`mkdtemp`: the checkout, its private index and a legacy script's exported copy) and removes
+only that directory, on every exit it can observe. Two verifications of one tree under two keys (a commit and
+another runner, two worktrees) therefore never share or delete each other's checkout. A worker killed with
+SIGKILL (which cannot be handled) leaves its uniquely named directory under the system temp directory; no later
+worker removes it.
+
+**This repository's own gate.** The CI job `gate-self-verification` (`.github/workflows/ci.yml`) runs
+`python hooks/lib/gate_task.py verify --repo . --base <PR base>` on HEAD's tree, with `CLAUDE_PLUGIN_ROOT` set as
+Claude Code sets it and the trusted list, the floor and the task state in the runner's temp directory: the hook's
+own planning, then the full configured gate (no earlier record exists there). Its craftsmanship check is a ratchet
+(`"scope": "added"`), the policy of CI's own craftsmanship job: every file a change adds must comply, legacy files
+are reported by CI's informational sweep, not blocked. Round 5 of the review measured that without the ratchet and
+the allowlist no tree of this repository could ever pass its gate.
 
 ## The Stop hook: the todo
 
@@ -358,23 +399,27 @@ A repository declares its gate with this file (version 1). Without it the declar
 | `version` | must be 1 |
 | `off` | true: the repository is not gated (HEAD's value decides) |
 | `full_on` | globs; a change to a matching path runs every check over every file and the whole suite. `.zetetic/gate.json` is always in the list: a change to the rules is judged by all of the rules |
-| `checks[]` | `name`, `argv`, optional `paths` |
+| `checks[]` | `name`, `argv`, optional `paths`, optional `"scope": "added"`: a ratchet, whose `{files}` are only the files the change ADDS, in full mode too (it runs only when one matches its `paths`); legacy files are left to CI's informational sweep |
 | `tests` | optional; `argv` must contain the element `{tests}` |
-| `env` | extra environment for the checks; values may use `{top}` (the checkout) and `{common}` (the git common dir) |
-| `link` | repository-relative paths that are not tracked (`node_modules`) and are symlinked into the private checkout from the checkout when present |
+| `env` | extra environment for the checks, added to the runner's allowlist; values may use `{top}` (the private checkout of the tree) and `{common}` (the git common dir) |
 
-Placeholders are whole argv elements: `{python}` the resolved interpreter, `{files}` the changed files this
-check applies to, `{tests}` the selected test paths.
+`link` is refused (a config that has it is invalid): it brought an untracked working-copy directory into the
+checkout, so a shim there decided the verdict. Install dependencies with a check instead (`npm ci`, as the npm
+stack default does from the tree's lock).
+
+Placeholders are whole argv elements: `{python}` the interpreter the runner names, `{files}` the changed files
+this check applies to, `{tests}` the selected test paths.
 
 The selection rule, which is the only rule (`gate_config.plan`):
 
 - Input: the paths that differ between the tree being verified and its base (deletions included). The base is
   HEAD's tree for a commit, the parent's tree for a push or an amend, the empty tree for a first commit.
-- **The base has no green record of this kind under these rules** (see Kind, and the cache key): every check
-  over every file and the whole suite, whatever changed.
+- **The base has no green record on the same basis** (see Kind, and the cache key): every check over every file
+  (a ratchet check over the added files) and the whole suite, whatever changed.
 - No changed path: no step.
 - A check runs when a changed file that still exists matches one of its `paths` globs (no `paths`: whenever
-  something changed). `{files}` expands to those files.
+  something changed). `{files}` expands to those files. A ratchet check (`"scope": "added"`) considers only the
+  files the change adds.
 - Tests are the union of: the `tests` of each `map` entry whose `paths` match a changed path, the
   `same_name` test of each changed file (`{stem}` is its name without extension, `-` read as `_`) when that
   file exists, and each changed file that itself matches `files`. A glob in `tests` expands against the tree.
@@ -390,7 +435,7 @@ instead.
 ## What an affected-only gate does and does not prove
 
 A verification of tree T selected by the diff from its base proves that the checks which cover that diff pass
-on T, and only when the base itself has a green record of the same kind under the same rules; otherwise the
+on T, and only when the base itself has a green record under the same rules and runner; otherwise the
 full configured gate runs. CI runs the whole suite on the pull request and is the check that does not rely on
 any of this. The map in `.zetetic/gate.json` is only as good as its author: `tests/test_gate_repo_config.py` pins
 the mappings that once missed a dependency (the files copied into `plugins/zetetic-gates`, the documented counts).

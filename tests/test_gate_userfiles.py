@@ -126,8 +126,8 @@ def test_a_superset_is_not_a_weakening():
 
 
 def test_a_stack_is_compared_as_the_rules_it_generates():
-    stack = rs("stack", {"version": 1, "checks": [{"name": "test", "argv": ["{python}", "-m", "pytest", "-q"]}], "env": {}, "link": []})
-    keeps = rs("config", {"version": 1, "checks": [{"name": "t", "argv": ["{python}", "-m", "pytest", "-q"]}], "env": {}, "link": []})
+    stack = rs("stack", {"version": 1, "checks": [{"name": "test", "argv": ["{python}", "-m", "pytest", "-q"]}], "env": {}})
+    keeps = rs("config", {"version": 1, "checks": [{"name": "t", "argv": ["{python}", "-m", "pytest", "-q"]}], "env": {}})
     drops = rs("config", {"version": 1, "checks": [{"name": "t", "argv": ["true"]}]})
     assert superset.weakenings(stack, keeps) == []
     assert any("test" in w for w in superset.weakenings(stack, drops))

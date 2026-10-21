@@ -16,16 +16,19 @@ from task_support import tasks
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks" / "lib"))
 import gate_git as gitq  # noqa: E402
 import gate_rules as rules  # noqa: E402
+import gate_runner as runner_mod  # noqa: E402
 import gate_state as state  # noqa: E402
 
 TREE = "a" * 40
 DIGEST = "d" * 12
 TRUSTED = "e" * 40
 RULES = rules.Rules(TRUSTED, [rules.RuleSet("config", {"version": 1, "checks": []}, None)], DIGEST)
+RUNNER = runner_mod.Runner({}, None, "c" * 12)
+KEY = f"commit-{TREE}-{DIGEST}-{RUNNER.digest}"  # verb, tree, rules digest, runner digest
 
 
 def plan(verb: str = "commit", base: str | None = "b" * 40) -> state.Plan:
-    return state.Plan("/repo", verb, TREE, base, RULES)
+    return state.Plan("/repo", verb, TREE, base, RULES, RUNNER)
 
 
 def record(**over) -> dict:
@@ -45,7 +48,7 @@ def test_cached_green_allows():
 def test_failed_denies_with_cause_output_path_tail_and_the_requeue_command():
     verdict = judge("failed", state="failed", rc=3)
     assert verdict.allow is False
-    for part in (f"tree {TREE}", "commit; rc=3", "/o/gate.a1.out", "the failing line", "gate_task.py requeue --repo /repo --kind commit"):
+    for part in (f"tree {TREE}", "commit; rc=3", "/o/gate.a1.out", "the failing line", "gate_task.py requeue --repo /repo --id gate-"):
         assert part in verdict.message
     assert "signal 9" in judge("failed", state="failed", rc=-9, signal=9).message
     assert "worker died" in judge("failed", state="failed", rc=None, reason="worker died").message
@@ -56,7 +59,7 @@ def test_pending_denies_with_the_retry_message_and_the_status_command(dispositio
     verdict = judge(disposition, state="running", rc=None)
     assert verdict.allow is False
     assert f"verification {word} for tree {TREE}; retry the commit when it finishes" in verdict.message
-    assert f"tools/task.sh status gate-commit-{TREE}-{DIGEST} --repo /repo" in verdict.message
+    assert f"tools/task.sh status gate-{KEY} --repo /repo" in verdict.message
 
 
 def test_the_retry_message_names_the_verb():
@@ -79,7 +82,7 @@ def test_stale_requeues_once_and_orphaned_says_so(monkeypatch):
 
     monkeypatch.setattr(state.tasks, "requeue", fake_requeue)
     verdict = judge("stale", state="running")
-    assert calls == [("gate", f"commit-{TREE}-{DIGEST}", plan().argv, "/repo")]
+    assert calls == [("gate", KEY, plan().argv, "/repo")]
     assert "attempt 2" in verdict.message and "previous worker died" in verdict.message and not verdict.allow
     assert f"verification started for tree {TREE}" in verdict.message  # a fresh attempt has just been launched
     monkeypatch.setattr(state.tasks, "requeue", lambda *a: tasks.Started(record(state="failed"), "orphaned"))
@@ -87,15 +90,16 @@ def test_stale_requeues_once_and_orphaned_says_so(monkeypatch):
     assert "process group 7" in orphan.message and "orphaned" in orphan.message and not orphan.allow
 
 
-def test_the_task_key_is_verb_tree_and_rules():
-    assert state.task_key("push", TREE, DIGEST) == f"push-{TREE}-{DIGEST}"
-    assert plan("push").id == f"gate-push-{TREE}-{DIGEST}" != plan("commit").id
+def test_the_task_key_is_verb_tree_rules_and_runner():
+    assert state.task_key(state.Basis(DIGEST, RUNNER.digest, "commit"), TREE) == KEY
+    assert plan("push").id == f"gate-push-{TREE}-{DIGEST}-{RUNNER.digest}" != plan("commit").id
+    assert plan()._replace(runner=RUNNER._replace(digest="e" * 12)).id != plan().id  # another runner, another task
 
 
 def test_job_argv_names_the_worker_the_base_the_trusted_tree_and_the_rules():
     argv = plan("push", None).argv
     assert argv[2:] == [state.RUN, "run", "--repo", "/repo", "--tree", TREE, "--base", "-", "--kind", "push",
-                        "--trusted", TRUSTED, "--rules", DIGEST]
+                        "--trusted", TRUSTED, "--rules", DIGEST, "--runner", RUNNER.digest, "--env", "{}"]
     assert plan("commit").argv[argv.index("--base") + 1] == "b" * 40
 
 
@@ -168,19 +172,22 @@ def test_check_begin_and_peek_are_wired_to_the_task_layer(monkeypatch):
                     ("status", (plan().id, "/repo"))]
 
 
-def test_a_base_is_green_only_for_the_same_verb_and_the_same_rules(monkeypatch):
+def test_a_base_is_green_only_for_the_same_verb_the_same_rules_and_the_same_runner(monkeypatch):
     asked = []
+    green = {f"gate-commit-{'b' * 40}-{DIGEST}-{RUNNER.digest}"}
 
     def status(tid, cwd):
         asked.append(tid)
-        return record() if tid == f"gate-commit-{'b' * 40}-{DIGEST}" else None
+        return record() if tid in green else None
 
     monkeypatch.setattr(state.tasks, "status", status)
-    assert state.base_is_green("/repo", "commit", "b" * 40, DIGEST) is True
-    assert state.base_is_green("/repo", "push", "b" * 40, DIGEST) is False  # a commit's record is not a push's
-    assert state.base_is_green("/repo", "commit", "b" * 40, "f" * 12) is False  # other rules: not a proof
-    assert state.base_is_green("/repo", "commit", None, DIGEST) is False  # no base: nothing vouches for it
-    assert len(asked) == 3
+    basis = state.Basis(DIGEST, RUNNER.digest, "commit")
+    assert state.base_is_green("/repo", basis, "b" * 40) is True
+    assert state.base_is_green("/repo", basis._replace(kind="push"), "b" * 40) is False  # a commit's record is not a push's
+    assert state.base_is_green("/repo", basis._replace(rules="f" * 12), "b" * 40) is False  # other rules: not a proof
+    assert state.base_is_green("/repo", basis._replace(runner="f" * 12), "b" * 40) is False  # another runner either
+    assert state.base_is_green("/repo", basis, None) is False  # no base: nothing vouches for it
+    assert len(asked) == 4
 
 
 def test_waivers_survive_a_torn_line_and_foreign_rows(tmp_path, monkeypatch):
@@ -250,7 +257,8 @@ def test_prepare_returns_a_plan_for_a_gated_and_trusted_repository(tmp_path, mon
     found = state.prepare(str(repo), "push", head, None)
     assert isinstance(found, state.Plan)
     assert (found.top, found.verb, found.tree, found.base, found.rules.trusted) == (str(repo), "push", head, None, head)
-    assert found.id == f"gate-push-{head}-{found.rules.digest}" and found.key == f"push-{head}-{found.rules.digest}"
+    key = f"push-{head}-{found.rules.digest}-{found.runner.digest}"
+    assert found.id == f"gate-{key}" and found.key == key
 
 
 def test_prepare_allows_what_no_rules_gate(tmp_path, monkeypatch):

@@ -18,8 +18,11 @@ from gate_support import git, write_config
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks" / "lib"))
 import gate_rules  # noqa: E402
 import gate_run  # noqa: E402
+import gate_runner  # noqa: E402
 import gate_state  # noqa: E402
 import gate_trust  # noqa: E402
+
+RUN = Path(gate_run.__file__)
 
 
 @pytest.fixture
@@ -40,19 +43,29 @@ def repo(tmp_path, monkeypatch):
     return path
 
 
-def verify(repo: Path, base: str = "-", kind: str = "commit") -> int:
+def runner_of(repo: Path, rules: gate_rules.Rules) -> gate_runner.Runner:
+    """The runner the hook would key a verification by, in this process's environment."""
+    return gate_runner.resolve(str(repo), str(repo / ".git"), rules.sets)
+
+
+def args_of(repo: Path, base: str = "-", kind: str = "commit") -> list:
     """What the hook asks the worker for: the staged tree, under the rules of HEAD plus the staged tree."""
     tree = git(repo, "write-tree")
     rules = gate_rules.effective(str(repo), tree)
-    return gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", base, "--kind", kind,
-                          "--trusted", rules.trusted, "--rules", rules.digest])
+    return ["run", "--repo", str(repo), "--tree", tree, "--base", base, "--kind", kind,
+            "--trusted", rules.trusted, "--rules", rules.digest, "--runner", runner_of(repo, rules).digest,
+            "--env", json.dumps(runner_of(repo, rules).env)]
+
+
+def verify(repo: Path, base: str = "-", kind: str = "commit") -> int:
+    return gate_run.main(args_of(repo, base, kind))
 
 
 def mark_green(repo: Path, tree: str, kind: str = "commit") -> None:
     """A green task record for ``tree`` under the rules a verification of the current index would use: the
     state the gate reaches after a verified commit (written directly; the record is the whole contract)."""
     rules = gate_rules.effective(str(repo), tree)
-    tid = gate_state.Plan(str(repo), kind, tree, None, rules).id
+    tid = gate_state.Plan(str(repo), kind, tree, None, rules, runner_of(repo, rules)).id
     directory = gate_state.task_store.tasks_dir(str(repo))
     gate_state.task_store.atomic_write(gate_state.task_store.record_path(directory, tid),
                                        {"id": tid, "state": "done", "rc": 0})
@@ -112,22 +125,67 @@ def test_only_checks_affected_by_the_change_run(repo, capsys):
     assert "txt-ran" in out and "py-ran" not in out and "1 changed path(s)" in out
 
 
-def test_untracked_dependencies_are_linked_and_env_is_resolved(repo, tmp_path):
-    (repo / "deps").mkdir()
-    (repo / "deps" / "lib.txt").write_text("dependency\n")  # untracked: not in the tree, so not in the checkout
-    stage_config(repo, [sh('test -f deps/lib.txt && test "$GATE_TOP" = "' + str(repo) + '" && test -n "$GATE_COMMON"')],
-                 link=["deps"], env={"GATE_TOP": "{top}", "GATE_COMMON": "{common}"})
+def test_an_untracked_directory_never_reaches_the_checks_and_top_is_the_private_checkout(repo):
+    (repo / "node_modules" / ".bin").mkdir(parents=True)  # untracked: not in the tree, so not in the checkout
+    stage_config(repo, [sh('test ! -e node_modules && test "$GATE_TOP" = "$PWD" && test "$GATE_TOP" != "' + str(repo)
+                           + '" && test -n "$GATE_COMMON"')], env={"GATE_TOP": "{top}", "GATE_COMMON": "{common}"})
     assert verify(repo) == 0
 
 
-def test_a_missing_link_source_is_skipped_not_invented(repo):
-    stage_config(repo, [sh("test ! -L nothing && test ! -e nothing")], link=["nothing"])  # no dangling symlink either
+@pytest.mark.parametrize("name, value", [("PYTEST_ADDOPTS", "--collect-only"), ("CLAUDE_PLUGIN_ROOT", "/plugin"),
+                                         ("PYTHONPATH", "/elsewhere"), ("NODE_OPTIONS", "--require=/x.js")])
+def test_the_callers_environment_outside_the_allowlist_does_not_reach_the_checks(repo, monkeypatch, name, value):
+    stage_config(repo, [sh(f'test -z "${{{name}+set}}"')])
+    monkeypatch.setenv(name, value)  # the hook's session environment, as Claude Code or a project setting exports it
     assert verify(repo) == 0
 
 
-def test_a_link_never_replaces_a_tracked_path(repo):
-    stage_config(repo, [sh("test ! -L a.txt && grep -qx one a.txt")], link=["a.txt"])
-    assert verify(repo) == 0
+def test_a_path_entry_inside_the_repository_does_not_reach_the_checks(repo, monkeypatch):
+    shims = repo / "node_modules" / ".bin"
+    shims.mkdir(parents=True)
+    (shims / "mytest").write_text("#!/bin/sh\nexit 0\n")
+    (shims / "mytest").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shims}{os.pathsep}.{os.pathsep}{os.environ['PATH']}")
+    stage_config(repo, [sh("mytest")])
+    assert verify(repo) == 127  # the working copy's shim is not a runner
+
+
+def test_python_is_never_the_repositorys_venv(repo):
+    venv = repo / ".venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "python").write_text("#!/bin/sh\nexit 0\n")  # a shim that would pass anything
+    (venv / "python").chmod(0o755)
+    stage_config(repo, [{"name": "py", "argv": ["{python}", "-c", "import sys; sys.exit(3)"]}])
+    assert verify(repo) == 3
+
+
+@pytest.mark.parametrize("given,said", [("{not json", "not JSON"), ('["PATH"]', "object of string values"),
+                                         ('{"PATH": 1}', "object of string values")])
+def test_a_worker_given_an_environment_that_is_not_a_map_of_strings_fails(repo, capsys, given, said):
+    stage_config(repo, [sh("exit 0")])
+    argv = args_of(repo)
+    argv[argv.index("--env") + 1] = given
+    assert gate_run.main(argv) == 1 and said in capsys.readouterr().out
+
+
+def test_a_worker_started_with_a_variable_outside_the_allowlist_refuses(repo, capsys):
+    """The recorded environment is filtered again: a hand-made --env with PYTEST_ADDOPTS is another runner."""
+    stage_config(repo, [sh("exit 0")])
+    argv = args_of(repo)
+    env = json.loads(argv[argv.index("--env") + 1])
+    argv[argv.index("--env") + 1] = json.dumps({**env, "PYTEST_ADDOPTS": "--collect-only"})
+    assert gate_run.main(argv) == 0  # dropped by the allowlist: the same runner, and the variable never reaches a check
+    argv[argv.index("--env") + 1] = json.dumps({**env, "LANG": "xx_YY"})
+    assert gate_run.main(argv) == 1 and "runner changed" in capsys.readouterr().out
+
+
+def test_a_worker_asked_for_another_runner_refuses(repo, tmp_path, capsys):
+    stage_config(repo, [sh(f"echo ran > {tmp_path / 'ran'}")])
+    argv = args_of(repo)
+    argv[argv.index("--runner") + 1] = "e" * 12
+    assert gate_run.main(argv) == 1
+    out = capsys.readouterr().out
+    assert "runner changed" in out and "e" * 12 in out and not (tmp_path / "ran").exists()
 
 
 def test_no_change_runs_nothing_when_the_base_is_verified(repo, capsys):
@@ -144,7 +202,7 @@ def test_no_change_still_runs_the_full_gate_when_nothing_vouches_for_the_base(re
     git(repo, "commit", "-q", "-m", "cfg")
     head = git(repo, "rev-parse", "HEAD^{tree}")
     assert verify(repo, head) == 9  # no green record for the base: affected-only selection is not valid
-    assert "no green commit record for base" in capsys.readouterr().out
+    assert "no green record for base" in capsys.readouterr().out
 
 
 def test_a_green_record_of_another_kind_does_not_vouch_for_the_base(repo, capsys):
@@ -162,7 +220,7 @@ def test_invalid_config_in_the_tree_fails_the_task(repo, capsys):
     tree, head = git(repo, "write-tree"), git(repo, "rev-parse", "HEAD^{tree}")
     # the hook refuses an invalid config before any task exists; a worker started by hand still fails closed
     assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit",
-                          "--trusted", head, "--rules", "0" * 12]) == 1
+                          "--trusted", head, "--rules", "0" * 12, "--runner", "0" * 12, "--env", "{}"]) == 1
     assert "version" in capsys.readouterr().out
 
 
@@ -239,34 +297,37 @@ def test_stack_default_runs_the_whole_suite_when_something_changed(repo, tmp_pat
     npm.chmod(0o755)
     monkeypatch.setenv("PATH", f"{npm.parent}{os.pathsep}{os.environ['PATH']}")
     assert verify(repo) == 0
-    assert "[gate:test] npm test --silent" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "[gate:test] npm test --silent" in out and "npm ci" not in out  # no lock in the tree: nothing to install
 
 
-def test_python_placeholder_resolves_to_the_checkouts_venv_then_ours(repo, tmp_path):
-    common = str(repo / ".git")
-    assert gate_run.resolve_python(str(repo), common) == sys.executable
-    venv = repo / ".venv" / "bin"
-    venv.mkdir(parents=True)
-    (venv / "python").write_text("#!/bin/sh\n")
-    (venv / "python").chmod(0o755)
-    assert gate_run.resolve_python(str(repo), common) == str(venv / "python")
+def test_stack_default_installs_npm_dependencies_from_the_trees_lock_first(repo, tmp_path, capsys, monkeypatch):
+    (repo / "package.json").write_text(json.dumps({"scripts": {"test": "echo stack-suite-ran"}}))
+    (repo / "package-lock.json").write_text("{}")
+    git(repo, "add", "package.json", "package-lock.json")
+    npm = tmp_path / "bin" / "npm"
+    npm.parent.mkdir()
+    npm.write_text("#!/bin/sh\necho npm-stub \"$@\"\n")
+    npm.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{npm.parent}{os.pathsep}{os.environ['PATH']}")
+    assert verify(repo) == 0
+    out = capsys.readouterr().out
+    assert out.index("[gate:install] npm ci --no-audit --no-fund") < out.index("[gate:test] npm test --silent")
 
 
 def test_bad_arguments_are_a_usage_error(repo):
     with pytest.raises(SystemExit):
         gate_run.main(["run", "--repo", str(repo), "--tree", "nothex", "--base", "-", "--kind", "commit",
-                       "--trusted", "b" * 40, "--rules", "0" * 12])
+                       "--trusted", "b" * 40, "--rules", "0" * 12, "--runner", "0" * 12, "--env", "{}"])
 
 
 def test_the_callers_git_environment_reaches_neither_the_checkout_nor_the_checks(repo, monkeypatch):
     stage_config(repo, [sh('test -z "$GIT_NAMESPACE" && test -z "$GIT_INDEX_FILE"')])
-    tree = git(repo, "write-tree")
-    rules = gate_rules.effective(str(repo), tree)
+    argv = args_of(repo)
     monkeypatch.setenv("GIT_NAMESPACE", "leaked")
     monkeypatch.setenv("GIT_INDEX_FILE", "/nonexistent/index")  # would break read-tree if it reached the private index
     monkeypatch.setenv("GIT_OBJECT_DIRECTORY", "/nonexistent/objects")  # would hide every object from the plumbing
-    assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit",
-                          "--trusted", rules.trusted, "--rules", rules.digest]) == 0
+    assert gate_run.main(argv) == 0
 
 
 def test_a_tree_that_declares_no_gate_has_nothing_to_verify(repo, capsys):
@@ -283,28 +344,23 @@ def test_a_check_killed_by_a_signal_fails_the_task(repo, capsys):
     assert "FAILED rc=-9" in capsys.readouterr().out
 
 
-def test_a_non_executable_venv_python_is_not_used(repo):
-    venv = repo / ".venv" / "bin"
-    venv.mkdir(parents=True)
-    (venv / "python").write_text("#!/bin/sh\n")
-    (venv / "python").chmod(0o644)
-    assert gate_run.resolve_python(str(repo), str(repo / ".git")) == sys.executable
-
-
 def test_a_directory_that_is_not_a_repository_is_a_failure(tmp_path, capsys):
     assert gate_run.main(["run", "--repo", str(tmp_path), "--tree", "a" * 40, "--base", "-", "--kind", "commit",
-                          "--trusted", "b" * 40, "--rules", "0" * 12]) == 1
+                          "--trusted", "b" * 40, "--rules", "0" * 12, "--runner", "0" * 12, "--env", "{}"]) == 1
     assert "not a git repository" in capsys.readouterr().out
 
 
-def test_the_private_checkout_is_named_by_tree_and_repository_and_replaces_a_leftover(tmp_path, monkeypatch):
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    first = gate_run._snapshot_dir("a" * 40, "/one/.git")
-    (Path(first) / "leftover").write_text("from a SIGKILLed attempt")
-    again = gate_run._snapshot_dir("a" * 40, "/one/.git")
-    assert again == first and os.listdir(again) == []  # replaced, empty
-    assert gate_run._snapshot_dir("a" * 40, "/two/.git") != first  # another repository: another directory
-    assert gate_run._snapshot_dir("b" * 40, "/one/.git") != first  # another tree: another directory
+def test_a_second_verification_of_the_same_tree_leaves_the_first_ones_checkout_alone(repo, tmp_path):
+    """Two verifications of one tree run at once when their keys differ (another runner, another worktree's
+    rules). The check of the first starts a second worker for the same tree and repository, then looks at its
+    own checkout: a worker that removes a directory it did not create would have deleted it (review round 5, B3)."""
+    once = tmp_path / "nested-once"
+    second = [sys.executable, "-B", str(RUN), "run", "--repo", str(repo), "--tree", "$T", "--base", "-",
+              "--kind", "push", "--trusted", "$T", "--rules", "0" * 12, "--runner", "0" * 12, "--env", "{}"]
+    script = (f'T=$(git -C "{repo}" write-tree); if mkdir "{once}" 2>/dev/null; then '
+              + " ".join(f'"{w}"' if w != "$T" else '"$T"' for w in second) + ' >/dev/null; fi; test -f a.txt')
+    stage_config(repo, [sh(script)])
+    assert verify(repo) == 0 and once.is_dir()
 
 
 def test_nothing_is_left_behind_in_the_temp_directory(repo, tmp_path, monkeypatch):
@@ -345,15 +401,16 @@ def test_a_worker_asked_for_other_rules_than_the_ones_in_force_refuses(repo, tmp
     tree = git(repo, "write-tree")
     trusted = gate_rules.effective(str(repo), tree).trusted
     assert gate_run.main(["run", "--repo", str(repo), "--tree", tree, "--base", "-", "--kind", "commit",
-                          "--trusted", trusted, "--rules", "f" * 12]) == 1
+                          "--trusted", trusted, "--rules", "f" * 12, "--runner", "0" * 12, "--env", "{}"]) == 1
     out = capsys.readouterr().out
     assert "effective rules changed" in out and "f" * 12 in out and not (tmp_path / "ran").exists()
 
 
-@pytest.mark.parametrize("missing", ["--repo", "--tree", "--base", "--kind", "--trusted", "--rules"])
+@pytest.mark.parametrize("missing", ["--repo", "--tree", "--base", "--kind", "--trusted", "--rules", "--runner", "--env"])
 def test_every_argument_of_the_worker_is_required(repo, missing):
     tree = git(repo, "write-tree")
-    given = {"--repo": str(repo), "--tree": tree, "--base": "-", "--kind": "commit", "--trusted": tree, "--rules": "0" * 12}
+    given = {"--repo": str(repo), "--tree": tree, "--base": "-", "--kind": "commit", "--trusted": tree, "--rules": "0" * 12,
+             "--runner": "0" * 12, "--env": "{}"}
     argv = ["run"] + [x for k, v in given.items() if k != missing for x in (k, v)]
     with pytest.raises(SystemExit):
         gate_run.main(argv)
@@ -405,7 +462,8 @@ def test_a_verification_appends_its_verdict_to_the_ledger(repo):
     assert verify(repo) == 0
     rules = gate_rules.effective(str(repo), tree)
     (row,) = ledger_rows(repo)
-    assert (row["verb"], row["tree"], row["rc"]) == ("commit", tree, 0) and row["key"] == f"commit-{tree}-{rules.digest}"
+    key = f"commit-{tree}-{rules.digest}-{runner_of(repo, rules).digest}"  # verb, tree, rules, runner
+    assert (row["verb"], row["tree"], row["rc"]) == ("commit", tree, 0) and row["key"] == key
     write_config(repo, [sh("exit 6")])
     git(repo, "add", ".zetetic/gate.json")
     assert verify(repo, kind="push") == 6
@@ -417,5 +475,5 @@ def test_a_directory_that_is_not_a_repository_records_nothing_and_creates_no_sta
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.delenv("ZETETIC_TASKS_DIR", raising=False)
     assert gate_run.main(["run", "--repo", str(tmp_path), "--tree", "a" * 40, "--base", "-", "--kind", "commit",
-                          "--trusted", "b" * 40, "--rules", "0" * 12]) == 1
+                          "--trusted", "b" * 40, "--rules", "0" * 12, "--runner", "0" * 12, "--env", "{}"]) == 1
     assert not home.exists()  # the fallback state directory under ~/.claude/fleet/tasks was not created

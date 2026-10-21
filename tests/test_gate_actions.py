@@ -103,6 +103,7 @@ def test_lexer_resolves_quotes_heredocs_and_redirections():
     'out="$(git commit -m "capture form" 2>&1)"; echo "$out"', 'echo "$(git commit -m \\"x\\")"',
     "x=`git commit -m y`", 'x="`git commit -m y`"', "cat <(git commit -m x)", 'echo "${x:-$(git commit -m y)}"',
     'echo "$(echo "$(git commit -m deep)")"', "echo $(git commit -m x) --amend",
+    "x=`echo \\`git commit -m nested\\``", 'x="`echo \\"\\$(git commit -m q)\\"`"',
 ])
 def test_a_command_substitution_is_an_invocation_wherever_it_is_written(command):
     """Review round 5, B4: inside double quotes a `$(...)` or backtick pair is still run by bash."""

@@ -279,7 +279,7 @@ def test_a_worker_started_by_hand_refuses_an_unlisted_repository_too(tmp_path, m
         tree = g.stage("two\n")
         rules = gate_rules.effective(str(g.repo), tree)
         argv = ["run", "--repo", str(g.repo), "--tree", tree, "--base", "-", "--kind", "commit",
-                "--trusted", rules.trusted, "--rules", rules.digest]
+                "--trusted", rules.trusted, "--rules", rules.digest, "--runner", "0" * 12, "--env", "{}"]
         assert gate_run.main(argv) == 1 and g.runs() == 0
         assert "not in your trusted list" in capsys.readouterr().out
     finally:
@@ -386,7 +386,7 @@ def test_the_key_is_verb_tree_and_a_digest_of_the_effective_rules(gate):
     assert gate.gate(COMMIT)[0] == 2
     first = tasks.latest("gate", None, str(gate.repo))
     digest = gate_rules.effective(str(gate.repo), tree).digest
-    assert first["key"] == f"commit-{tree}-{digest}"
+    assert re.fullmatch(f"commit-{tree}-{digest}-[0-9a-f]{{12}}", first["key"])  # verb, tree, rules, runner
     commit_rules(gate, [FAIL_IF_BAD, {"name": "more", "argv": ["true"]}])  # other rules, same tree contents for a.txt
     other = gate_rules.effective(str(gate.repo), gate.stage("two\n")).digest
     assert other != digest

@@ -95,8 +95,8 @@ def test_a_check_without_paths_runs_even_for_a_deletion_only_change(tmp_path):
     {"version": 1, "checks": [{"name": "", "argv": ["x"]}]}, {"version": 1, "checks": [{"name": 5, "argv": ["x"]}]},
     {"version": 1, "tests": []}, {"version": 1, "tests": {"argv": ["{tests}"], "zzz": 1}},
     {"version": 1, "tests": {"files": []}}, {"version": 1, "tests": {"argv": ["{tests}"], "same_name": 3}},
-    {"version": 1, "checks": [LINT], "full_on": "x"}, {"version": 1, "checks": [LINT], "env": {"A": 1}}, {"version": 1, "checks": [LINT], "link": ["../x"]},
-    {"version": 1, "checks": [LINT], "link": ["/abs"]}, {"version": 1, "checks": [LINT], "env": []},
+    {"version": 1, "checks": [LINT], "full_on": "x"}, {"version": 1, "checks": [LINT], "env": {"A": 1}}, {"version": 1, "checks": [LINT], "link": ["node_modules"]},
+    {"version": 1, "checks": [{**LINT, "scope": "modified"}]}, {"version": 1, "checks": [LINT], "env": []},
     {"version": 2, "checks": [LINT]}, {"version": 1}, {"version": 1, "checks": "x"},
     {"version": 1, "checks": [{"name": "x"}]}, {"version": 1, "checks": [{"name": "x", "argv": []}]},
     {"version": 1, "tests": {"argv": ["pytest"]}}, {"version": 1, "checks": [LINT], "extra": 1},
@@ -141,10 +141,15 @@ def test_stack_defaults_are_the_documented_whole_suites(tmp_path):
     (tmp_path / "package.json").write_text(json.dumps({"scripts": {"lint": "x", "test": "y"}}))
     stack = cfg.stack_config(str(tmp_path))
     assert [c["name"] for c in stack["checks"]] == ["fmt", "clippy", "test", "lint", "test", "vet", "test"]
-    assert cfg.setup_for(stack, "/top", "/top/.git") == ({"CARGO_TARGET_DIR": "/top/.git/zetetic-gate-target"}, ["node_modules"])
+    assert cfg.check_env(stack, "/private/tree", "/top/.git") == {"CARGO_TARGET_DIR": "/top/.git/zetetic-gate-target"}
+    assert "link" not in stack  # dependencies never come from the working copy
+    (tmp_path / "package-lock.json").write_text("{}")
+    locked = cfg.stack_config(str(tmp_path))
+    assert [c["name"] for c in locked["checks"]] == ["fmt", "clippy", "test", "install", "lint", "test", "vet", "test"]
+    assert locked["checks"][3]["argv"] == ["npm", "ci", "--no-audit", "--no-fund"]  # from the tree's lock, first
     (tmp_path / "package.json").write_text(json.dumps({"scripts": {"test": "echo no test specified"}}))
     after = cfg.stack_config(str(tmp_path))
-    assert "lint" not in [c["name"] for c in after["checks"]] and after["link"] == []
+    assert [c["name"] for c in after["checks"]] == ["fmt", "clippy", "test", "vet", "test"]  # nothing to run: nothing to install
     assert cfg.validate(after) is after  # the default is itself a valid config
 
 
@@ -267,14 +272,15 @@ def test_the_probed_paths_of_a_tree_cost_one_git_call_not_one_per_path(tmp_path,
     assert source.entry("never-probed") is None and len(calls) == 2  # a path outside the probe costs its own call
 
 
-@pytest.mark.parametrize("bad", ["", "/abs/path", "../outside", "a/../b"])
-def test_link_entries_must_be_paths_inside_the_repository(bad):
-    with pytest.raises(cfg.ConfigError, match="link entries"):
-        cfg.validate({"version": 1, "checks": [LINT], "link": [bad]})
+@pytest.mark.parametrize("entries", [["node_modules"], [], ["a/b"]])
+def test_link_is_refused_because_a_check_never_sees_the_working_copy(entries):
+    with pytest.raises(cfg.ConfigError, match="working copy"):
+        cfg.validate({"version": 1, "checks": [LINT], "link": entries})
 
 
-def test_good_link_entries_and_env_are_accepted():
-    assert cfg.validate({"version": 1, "checks": [LINT], "link": ["node_modules", "a/b"], "env": {"K": "v"}})["link"] == ["node_modules", "a/b"]
+def test_env_and_the_added_scope_are_accepted():
+    assert cfg.validate({"version": 1, "checks": [LINT], "env": {"K": "v"}})["env"] == {"K": "v"}
+    assert cfg.validate({"version": 1, "checks": [{**LINT, "scope": "added"}]})["checks"][0]["scope"] == "added"
     with pytest.raises(cfg.ConfigError, match="env"):
         cfg.validate({"version": 1, "checks": [LINT], "env": {"K": 1}})
 

@@ -37,7 +37,7 @@ def test_every_weakening_form_is_named(form):
 def test_no_declaration_is_a_weakening_of_every_part_and_names_them_all():
     weakened = superset.weakenings(rule_set(BASE), None)
     text = "\n".join(weakened)
-    for part in ("gate.json", '"always"', '"scoped"', "tests were removed", "Makefile", "pyproject.toml", "env changed", "link changed"):
+    for part in ("gate.json", '"always"', '"scoped"', "tests were removed", "Makefile", "pyproject.toml", "env changed", '"ratchet"'):
         assert part in text, part
 
 
@@ -85,7 +85,7 @@ def test_the_empty_fast_list_of_the_old_rules_may_not_become_a_list():
 def test_the_sentence_says_whether_a_check_was_removed_or_replaced():
     replaced = copy.deepcopy(BASE)
     replaced["checks"][0]["argv"] = ["other"]
-    assert superset.weakenings(rule_set(BASE), rule_set(replaced)) == ['check "always" was replaced (argv or paths differ)']
+    assert superset.weakenings(rule_set(BASE), rule_set(replaced)) == ['check "always" was replaced (argv, paths or scope differ)']
     removed = copy.deepcopy(BASE)
     del removed["checks"][0]
     assert superset.weakenings(rule_set(BASE), rule_set(removed)) == ['check "always" was removed']

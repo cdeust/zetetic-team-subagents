@@ -13,7 +13,8 @@ spelling it cannot prove (a broader glob written another way) is reported, then 
 
   checks   each check of `old` has a check of `new` with the same argv whose path selection covers it:
            `old` pathless -> `new` pathless; otherwise `new` pathless, or `new` holds every pattern of `old`
-           literally, or `**`. Names do not matter. A check may be added; none may be removed or replaced.
+           literally, or `**`. A `new` scoped to added files (`"scope": "added"`) keeps only an `old` with the
+           same scope. Names do not matter. A check may be added; none may be removed, narrowed or replaced.
   tests    if `old` has a tests block: `new` has one; `argv`, `files` and `same_name` equal (a changed `files`
            or `same_name` changes which tests a change selects, and an empty selection falls back to the whole
            suite, so no change of either is provably a growth); `fast` equal, or both non-empty with `new` a
@@ -21,7 +22,6 @@ spelling it cannot prove (a broader glob written another way) is reported, then 
            ran (a pattern may gain tests; a new pattern would take paths away from the fallback, so it is not growth)
   full_on  `new` has every entry of `old`
   env      equal (an added variable can disarm a check: `PYTEST_ADDOPTS=--co`)
-  link     equal
   kinds    config and stack are compared as rules (a stack is the generated config of its whole suite). A legacy
            script is not comparable with rules: deleting it, making it non-executable, replacing it by another
            script or by rules is a weakening. The content of what a check RUNS (a script it calls) is not a rule
@@ -40,13 +40,21 @@ def _covers(new_paths: list | None, old_paths: list | None) -> bool:
     return old_paths is not None and ("**" in new_paths or set(old_paths) <= set(new_paths))
 
 
+def _keeps(new: dict, old: dict) -> bool:
+    """True when the check ``new`` runs the command of ``old`` on every file ``old`` runs it on. A check scoped to
+    the files a change adds (`"scope": "added"`, a ratchet) judges fewer files than an unscoped one: it keeps
+    only a check with the same scope."""
+    scope_kept = new.get("scope") is None or new.get("scope") == old.get("scope")
+    return new["argv"] == old["argv"] and scope_kept and _covers(new.get("paths"), old.get("paths"))
+
+
 def _checks(old: list, new: list) -> list:
     out = []
     for check in old:
-        if any(n["argv"] == check["argv"] and _covers(n.get("paths"), check.get("paths")) for n in new):
+        if any(_keeps(n, check) for n in new):
             continue
         kept = any(n["name"] == check["name"] for n in new)
-        out.append(f'check "{check["name"]}" was ' + ("replaced (argv or paths differ)" if kept else "removed"))
+        out.append(f'check "{check["name"]}" was ' + ("replaced (argv, paths or scope differ)" if kept else "removed"))
     return out
 
 
@@ -96,8 +104,6 @@ def _setup(old: dict, new: dict) -> list:
     out = [f'full_on entry "{p}" was removed' for p in sorted(set(old.get("full_on", [])) - set(new.get("full_on", [])))]
     if old.get("env", {}) != new.get("env", {}):
         out.append("env changed (a variable can disarm a check)")
-    if sorted(old.get("link", [])) != sorted(new.get("link", [])):
-        out.append("link changed")
     return out
 
 

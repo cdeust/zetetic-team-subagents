@@ -150,12 +150,15 @@ def test_garbage_payload_never_raises(gate):
     assert run_hook("stop-gate-ledger.py", "[1]", gate.repo, gate.env) == (0, "", "")
 
 
-def test_requeue_retries_a_failed_task_as_attempt_two(gate):
+def test_requeue_retries_a_failed_task_as_attempt_two_with_its_own_runner_from_any_shell(gate):
+    """The requeue command runs in the agent's shell, whose environment need not be the hook's. It relaunches the
+    recorded command, runner included, so the hook's next commit attempt finds the retried verification."""
     ok = gate.tmp / "ok"
     tree = failing(gate, f"test -f {ok}")
     ok.write_text("now it passes\n")
-    out = subprocess.run([sys.executable, str(HOOKS / "lib" / "gate_task.py"), "requeue", "--repo", str(gate.repo)],
-                         capture_output=True, text=True, env={**os.environ, **gate.env})
+    shell = {**os.environ, **gate.env, "TERM": "a-terminal-unlike-the-hooks", "LANG": "C"}
+    out = subprocess.run([sys.executable, str(HOOKS / "lib" / "gate_task.py"), "requeue", "--repo", str(gate.repo),
+                          "--id", gate.record_id(tree)], capture_output=True, text=True, env=shell)
     result = json.loads(out.stdout)
     assert (result["disposition"], result["attempt"]) == ("started", 2)
     assert result["id"] == gate.record_id(tree)

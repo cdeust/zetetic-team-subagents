@@ -2,8 +2,8 @@
 """PostToolUse (Bash): start verifying the staged tree as soon as `git add|rm|mv|...` has staged it.
 
 The head start is the point of the async gate: the verification of tree T runs while the agent writes the
-commit message, so `git commit` usually finds it done. Idempotent (task `gate-commit-<tree>-<rules>` is created once per
-tree, hooks/lib/gate_state.begin), returns at once, and NEVER blocks: PostToolUse cannot refuse anything
+commit message, so `git commit` usually finds it done. Idempotent (task `gate-commit-<tree>-<rules>-<runner>` is created
+once per key, hooks/lib/gate_state.begin), returns at once, and NEVER blocks: PostToolUse cannot refuse anything
 and the commit hook (gate-proof.py) starts the task itself if this one did not. A repository that is not in the
 user's trusted list (hooks/lib/gate_trust.py) gets no head start: nothing it declares runs. Any failure here is
 reported on stderr and costs only the head start.
