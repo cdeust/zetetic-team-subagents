@@ -8,6 +8,7 @@
 #
 # Usage:
 #   bash scripts/setup.sh [install|update|uninstall|configure] [--dry-run] [--verbose]
+#   bash scripts/setup.sh render-ci <target-repository>   # the single CI pipeline + ci.json
 
 set -euo pipefail
 
@@ -44,7 +45,7 @@ step() { echo ""; echo -e "${TEAL}───${NC} ${WHITE}${BOLD}$1${NC} ${TEAL}�
 # ── Sourced modules (lib/) ─────────────────────────────────────────────
 # Behavior-preserving split for coding-standards §4 (file/function size).
 # shellcheck source=/dev/null
-for _mod in overrides staging actions state; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
+for _mod in overrides staging actions state render-ci; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
 
 # ── Flag parsing ───────────────────────────────────────────────────────
 ACTION="install"
@@ -105,8 +106,9 @@ installed_version() {
 case "$ACTION" in
   uninstall)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_uninstall; exit 0 ;;
   configure)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_configure; exit 0 ;;
+  render-ci)  do_render_ci "${ARGS[1]:-}"; exit $? ;;
   install|update) ;;
-  *) echo "usage: $0 [install|update|uninstall|configure] [--dry-run] [--verbose]" >&2; exit 2 ;;
+  *) echo "usage: $0 [install|update|uninstall|configure|render-ci <target>] [--dry-run] [--verbose]" >&2; exit 2 ;;
 esac
 
 # ── Banner ─────────────────────────────────────────────────────────────

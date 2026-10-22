@@ -35,7 +35,7 @@ gate; the value in the last column was re-measured on 2026-10-21.
 | `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 33 |
 | `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 30 |
 | `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 68 |
-| `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 42 |
+| `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 43 |
 | `memory_suites` | memory tool suites | `ls scripts/test-memory-*.sh \| wc -l` | 6 |
 
 ## The judgement calls, and why
