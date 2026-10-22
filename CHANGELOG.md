@@ -23,6 +23,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `tools/ci_contract.py` validates a repository's `ci.json` before any test runs: exactly the keys `unit`, `regression`, `e2e`, `environment`, `install`, each a non-empty shell command, plus an optional `version_file` (default `.claude-plugin/plugin.json`) that must exist; one line per fault, exit 1 (design `docs/superpowers/specs/2026-10-22-single-ci-design.md`, plan `docs/superpowers/plans/2026-10-22-single-ci-plan.md`, task 1.1).
+- `tools/ci_coverage.py coverage.xml --min 90` reads the root `line-rate` of a Cobertura report as a percentage (Decimal, two places): exit 1 under the minimum (89.90 fails, 90.00 passes), exit 2 when the report is absent or malformed, never a silent pass (plan task 1.2).
 
 ### Security
 
