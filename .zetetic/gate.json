@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "full_on": ["pyproject.toml", "requirements-dev.lock", "tests/conftest.py", "tests/task_support.py", ".github/workflows/ci.yml"],
+  "full_on": ["pyproject.toml", "requirements-dev.lock", "tests/conftest.py", "tests/task_support.py", ".github/workflows/ci.yml", ".github/workflows/pipeline.yml"],
   "checks": [
     {"name": "py-compile", "paths": ["**/*.py"], "argv": ["{python}", "-m", "py_compile", "{files}"]},
     {"name": "sh-syntax", "paths": ["**/*.sh"], "argv": ["bash", "-c", "for f in \"$@\"; do bash -n \"$f\" || exit 1; done", "gate", "{files}"]},

@@ -75,6 +75,11 @@ cortex-know-when-to-stop-training-model (all under github.com/cdeust).
   red on that OS.
 - Coverage threshold: 90 % of lines, enforced in the unit step, same number
   for the eight repositories.
+- Mutation testing, where a repository runs it, is scoped to the files the
+  pull request changes (owner, 2026-10-22: "le mutation testing doit se
+  limiter aux changements de la PR, pas à une passe globale"). No whole-tree
+  mutation pass runs in the pipeline; the plugin's `tools/mutation_check.sh`
+  already works on changed files only.
 - Branch protection on main requires the pipeline's `merge` check and
   nothing else, identically on the eight repositories (decision 3 below).
   Auto-merge and delete-branch-on-merge are on everywhere (done
