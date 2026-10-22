@@ -461,6 +461,7 @@ jobs:
       - name: Arm the squash merge
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           if gh pr merge "$PR" --auto --squash; then
