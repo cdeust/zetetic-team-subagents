@@ -135,6 +135,16 @@ def test_the_merge_always_runs_and_goes_red_itself_when_a_job_is_not_green(workf
     assert "gh pr merge" in steps[-1]["run"] and "--auto --squash" in steps[-1]["run"]
 
 
+def test_the_merge_names_the_repository_for_gh_without_a_checkout(workflow):
+    # session-optimizer #65, run 39756969927 (2026-10-22): every stage green,
+    # merge failed with "fatal: not a git repository" because gh pr merge
+    # inferred the repository from a checkout the job does not have.
+    steps = workflow["jobs"]["merge"]["steps"]
+    arm = next(s for s in steps if s.get("name") == "Arm the squash merge")
+    assert arm["env"].get("GH_REPO") == "${{ github.repository }}"
+    assert arm["env"]["GH_TOKEN"] == "${{ github.token }}"
+
+
 def test_the_tag_runs_on_push_only_over_the_deploy_key(workflow):
     job = workflow["jobs"]["tag"]
     assert job["if"] == "github.event_name == 'push'"

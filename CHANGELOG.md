@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The `merge` job of `templates/ci/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
+
 ### Added
 
 - `tools/ci_contract.py` validates a repository's `ci.json` before any test runs: exactly the keys `unit`, `regression`, `e2e`, `environment`, `install`, each a non-empty shell command, plus an optional `version_file` (default `.claude-plugin/plugin.json`) that must exist; one line per fault, exit 1 (design `docs/superpowers/specs/2026-10-22-single-ci-design.md`, plan `docs/superpowers/plans/2026-10-22-single-ci-plan.md`, task 1.1).
