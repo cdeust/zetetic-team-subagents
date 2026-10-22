@@ -167,6 +167,10 @@ A push by the bot is a `synchronize` event: the pipeline runs again from
 does not run again (loop guard); `merge` arms auto-merge when jobs 2 to 6
 are green. Auto-merge then merges when the required check is green.
 
+The bot cannot edit files under `.github/workflows` (the App token has no
+`workflows` permission), so workflow changes are human or agent commits
+and get no bot review.
+
 The owner's rule: the five tests run again on the bot's commit, and only a
 green run merges.
 
@@ -243,6 +247,14 @@ credential.
    guard (bot-authored head), bot actor, `ci.yml` change. `merge` is
    written `if: always() && needs.review.result != 'failure' && …` with
    each skip reason explicit.
+   Corrected 2026-10-22 after claude-mods #38 and session-optimizer #73
+   auto-merged on a red pipeline: when that `if:` was not met the job was
+   skipped, and GitHub treats a skipped required check as satisfied.
+   `merge` now runs `if: always() && github.event_name == 'pull_request'
+   && !github.event.pull_request.draft && github.event.pull_request.head
+   .repo.full_name == github.repository`, checks out nothing, and its first
+   step fails explicitly, naming each of jobs 2 to 6 that did not succeed
+   or a failed `review`, so the required check is red, never absent.
 5. **Dependabot.** Out of the bot's scope: Dependabot PRs merge on green
    tests without review. No Dependabot secret is created (it would widen
    the attack surface, and the code-review command skips automated PRs

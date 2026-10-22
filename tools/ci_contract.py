@@ -9,7 +9,7 @@ that must exist, read by the ``tag`` job. A missing file, a missing key or an
 empty command fails the pipeline here, with one line per fault, so a step that
 has nothing to run never passes (the design's first anti-goal).
 
-This file is also embedded verbatim in ``templates/ci/ci.yml`` as an inline
+This file is also embedded verbatim in ``templates/ci/pipeline.yml`` as an inline
 ``python3 -`` step: standard library only, arguments through ``sys.argv``.
 
 Usage: ``python3 tools/ci_contract.py [repo-root]`` (default: the current
