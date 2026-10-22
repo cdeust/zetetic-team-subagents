@@ -48,6 +48,7 @@ bash scripts/setup.sh install
 | `update` | Re-apply agent models, pull new assets, prune orphans |
 | `configure` | Create `~/.claude/zetetic/agent-models.json` with calibrated defaults |
 | `uninstall` | Remove tracked files; keeps user-modified copies |
+| `render-ci <path>` | Write the single CI pipeline (`.github/workflows/pipeline.yml`) and a starter `ci.json` into a repository; idempotent |
 | `--dry-run` | Preview any of the above |
 
 ## Where the plugin writes
