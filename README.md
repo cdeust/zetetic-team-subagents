@@ -3,7 +3,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/suites-43-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-97-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-86-green" alt="Skills">
