@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `tools/ci_contract.py` validates a repository's `ci.json` before any test runs: exactly the keys `unit`, `regression`, `e2e`, `environment`, `install`, each a non-empty shell command, plus an optional `version_file` (default `.claude-plugin/plugin.json`) that must exist; one line per fault, exit 1 (design `docs/superpowers/specs/2026-10-22-single-ci-design.md`, plan `docs/superpowers/plans/2026-10-22-single-ci-plan.md`, task 1.1).
+
 ### Security
 
 - The Claude Code workflows follow the documented setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"; actions pinned by SHA). `.github/workflows/claude-review.yml`, on `pull_request` only, installs the `code-review@claude-code-plugins` plugin and runs its skill with `--comment` (`/code-review:code-review --comment <repo>/pull/<n>`), with read-only `contents`, `pull-requests` and `issues` permissions and `allowed_bots: "dependabot[bot]"` (the action refused Dependabot PRs as a non-human actor); it no longer applies findings or arms auto-merge. `.github/workflows/claude.yml` keeps only the `@claude` job. Neither checks out the PR head ref, which clears CodeQL `actions/untrusted-checkout/high`, `actions/untrusted-checkout-toctou/high` and `actions/untrusted-checkout/medium`.

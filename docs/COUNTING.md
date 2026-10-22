@@ -34,7 +34,7 @@ gate; the value in the last column was re-measured on 2026-10-21.
 | `hook_registrations` | lifecycle hook registrations | `jq '[.hooks[][].hooks[]] \| length' hooks/hooks.json` | 25 |
 | `hook_scripts` | hook scripts on disk | `ls hooks/*.sh hooks/*.py \| wc -l` | 33 |
 | `commands` | slash commands | `find commands -name '*.md' \| wc -l` | 30 |
-| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 66 |
+| `tools` | tool scripts | `ls tools/*.sh tools/*.py \| wc -l` | 67 |
 | `suites` | test suites | `bash tests/run-all.sh --list \| wc -l` | 41 |
 | `memory_suites` | memory tool suites | `ls scripts/test-memory-*.sh \| wc -l` | 6 |
 
