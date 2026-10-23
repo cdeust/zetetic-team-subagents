@@ -41,6 +41,9 @@ markers = [
 # the eight repositories (design 2026-10-22-single-ci, Constraints): red today
 # on purpose, so the pipeline exposes the gap rather than hiding it.
 [tool.coverage.run]
+# Measure the real Python CLIs spawned by integration tests; combine before report.
+# Source: https://coverage.readthedocs.io/en/7.15.2/config.html#run-patch
+patch = ["subprocess"]
 source = ["hooks", "tools"]
 branch = false
 
