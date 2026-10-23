@@ -67,3 +67,27 @@ coverage tests. Actionlint checks the template and rendered workflow; the
 render-ci suite checks byte parity, idempotency, and preservation of `ci.json`.
 These checks verify workflow behavior and structure. Hosted action execution and
 native bot review remain the publication acceptance checks.
+
+## Cargo compilation cache
+
+A root `Cargo.lock` enables caching only in unit, regression and E2E. Keys
+separate operating system, architecture, job, toolchain, Cargo configuration,
+`ci.json` and lockfile. The fallback retains every boundary except the lockfile,
+so Cargo can reuse unchanged dependencies after a dependency update. Cached
+paths are `target` and Cargo's registry index, package archives and Git database,
+following the [Cargo CI guidance](https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci).
+Environment and installation still run without this cache.
+
+The unit job uses the pinned cache action's separate
+[restore/save operations](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/save/README.md):
+a successful unit command saves its build before the independent 90 percent
+coverage gate. Failed commands do not save; coverage failures remain failures.
+Regression and E2E use the ordinary successful-job cache save. This change enables
+reuse; it makes no claim about warm-run duration before a hosted measurement.
+
+The template regression uses the `actionlint` executable installed alongside
+`PYTHON_BIN` by hash-locked `actionlint-py==1.7.12.25`. Its
+[build configuration](https://github.com/Mateusz-Grzelinski/actionlint-py/blob/v1.7.12.25/_custom_build/checksums.cfg)
+pins official `rhysd/actionlint` 1.7.12 release archives and their SHA256 hashes.
+This removes the assumption that a fresh regression runner already has `uvx`
+or a global linter; a missing binary still fails the check.
