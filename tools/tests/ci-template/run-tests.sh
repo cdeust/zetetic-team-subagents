@@ -45,10 +45,15 @@ if [[ -f "$TEMPLATE" ]]; then
   else ok "no reusable workflow, no reference to the template repository"; fi
 fi
 
-# T4
-if (cd "$REPO" && "$PYTHON_BIN" -m pytest -q tests/test_ci_template.py >/dev/null 2>&1); then
-  ok "tests/test_ci_template.py passes"
-else bad "tests/test_ci_template.py fails (run: $PYTHON_BIN -m pytest -q tests/test_ci_template.py)"; fi
+# T4 belongs to unit in the CI partition; standalone retains the full check.
+# Source: ci.json unit and tests/run-all.sh --group regression.
+if [[ "${RUN_ALL_GROUP:-all}" == regression ]]; then
+  echo "  Python template assertions are owned by the unit category."
+else
+  if (cd "$REPO" && "$PYTHON_BIN" -m pytest -q tests/test_ci_template.py >/dev/null 2>&1); then
+    ok "tests/test_ci_template.py passes"
+  else bad "tests/test_ci_template.py fails (run: $PYTHON_BIN -m pytest -q tests/test_ci_template.py)"; fi
+fi
 
 printf '\nci-template: %d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

@@ -13,6 +13,9 @@
 # Usage:
 #   bash tests/run-all.sh          run every suite, exit non-zero if any fails
 #   bash tests/run-all.sh --list   print the discovered suites, run nothing
+#   bash tests/run-all.sh --group regression  shell suites outside memory E2E
+#   bash tests/run-all.sh --group e2e         scripts/test-memory-*.sh suites
+# --list can accompany either group. Default still runs pytest and all shell suites.
 #
 # Exit: 0 only if every discovered suite passed. Fails closed — a suite that
 # cannot run (missing pytest, no suites discovered) is a failure, not a skip.
@@ -27,6 +30,21 @@ cd "$REPO_ROOT" || { echo "FATAL: cannot cd to repo root $REPO_ROOT" >&2; exit 1
 # whose default python3 lacks pytest can point at one that has it.
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
+# Source: ci.json category ownership, tasks/ci-suite-partition-20261024.md.
+group=all
+list_only=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --list) list_only=true; shift ;;
+    --group)
+      case "${2:-}" in
+        regression|e2e) group="$2"; shift 2 ;;
+        *) echo "usage: bash tests/run-all.sh [--list] [--group regression|e2e]" >&2; exit 2 ;;
+      esac ;;
+    *) echo "usage: bash tests/run-all.sh [--list] [--group regression|e2e]" >&2; exit 2 ;;
+  esac
+done
+
 list_shell_suites() {
   local s
   for s in tools/tests/*/run-tests.sh; do
@@ -35,6 +53,19 @@ list_shell_suites() {
   for s in scripts/test-*.sh; do
     [[ -f "$s" ]] && printf '%s\n' "$s"
   done
+}
+
+list_selected_suites() {
+  local suite category
+  while IFS= read -r suite; do
+    case "$suite" in
+      scripts/test-memory-*.sh) category=e2e ;;
+      *) category=regression ;;
+    esac
+    if [[ "$group" == all || "$group" == "$category" ]]; then
+      printf '%s\n' "$suite"
+    fi
+  done < <(list_shell_suites)
 }
 
 # Orphan detection (issue #93): list_shell_suites' glob only matches a
@@ -58,16 +89,16 @@ check_no_orphan_suites() {
   return 0
 }
 
-if [[ "${1:-}" == "--list" ]]; then
-  check_no_orphan_suites || exit 2
-  printf '%s\n' "$PYTHON_BIN -m pytest"
-  list_shell_suites
-  exit 0
-fi
-
-if [[ -n "${1:-}" ]]; then
-  echo "usage: bash tests/run-all.sh [--list]" >&2
+check_no_orphan_suites || exit 2
+selected_suites="$(list_selected_suites)"
+if [[ -z "$selected_suites" ]]; then
+  echo "FATAL: discovered 0 shell suites in group '$group'." >&2
   exit 2
+fi
+if [[ "$list_only" == true ]]; then
+  [[ "$group" != all ]] || printf '%s\n' "$PYTHON_BIN -m pytest"
+  printf '%s\n' "$selected_suites"
+  exit 0
 fi
 
 passed=0
@@ -92,37 +123,29 @@ run_suite() {
 }
 
 echo "============================================================"
-echo "ALL SUITES  (repo: $REPO_ROOT)"
+echo "SUITES: $group  (repo: $REPO_ROOT)"
 echo "============================================================"
-
-check_no_orphan_suites || exit 2
 
 # 1. Python suite. Absence of pytest is reported as a failure, not skipped:
 # a green run that silently omitted 334 tests is the failure mode this whole
 # script exists to prevent.
-if "$PYTHON_BIN" -c 'import pytest' 2>/dev/null; then
-  run_suite "pytest (tests/)" "$PYTHON_BIN" -m pytest -q
-else
-  failed=$(( failed + 1 ))
-  failed_names="${failed_names}
+if [[ "$group" == all ]]; then
+  if "$PYTHON_BIN" -c 'import pytest' 2>/dev/null; then
+    run_suite "pytest (tests/)" "$PYTHON_BIN" -m pytest -q
+  else
+    failed=$(( failed + 1 ))
+    failed_names="${failed_names}
   pytest (tests/) — pytest is not installed for '$PYTHON_BIN'"
-  printf '=== pytest (tests/)\n    FAILED: pytest is not installed for %s\n' "$PYTHON_BIN"
-  printf '    Install it (pip install pytest) or set PYTHON_BIN to an interpreter that has it.\n'
+    printf '=== pytest (tests/)\n    FAILED: pytest is not installed for %s\n' "$PYTHON_BIN"
+    printf '    Install it (pip install pytest) or set PYTHON_BIN to an interpreter that has it.\n'
+  fi
 fi
 
 # 2. Shell suites, discovered by glob.
-suite_count=0
 while IFS= read -r suite; do
   [[ -z "$suite" ]] && continue
-  suite_count=$(( suite_count + 1 ))
-  run_suite "$suite" bash "$suite"
-done < <(list_shell_suites)
-
-if [[ "$suite_count" -eq 0 ]]; then
-  echo "FATAL: discovered 0 shell suites under tools/tests/ and scripts/." >&2
-  echo "       Silence is not success: a runner that finds nothing to run has failed." >&2
-  exit 2
-fi
+  run_suite "$suite" env RUN_ALL_GROUP="$group" bash "$suite"
+done <<< "$selected_suites"
 
 echo ""
 echo "============================================================"
