@@ -5,6 +5,7 @@
 # source: docs/superpowers/specs/2026-10-22-single-ci-design.md, "ci.yml, generated from one template"
 
 CI_TEMPLATE="$PLUGIN_ROOT/templates/ci/pipeline.yml"
+CI_COMPLETION_TEMPLATE="$PLUGIN_ROOT/templates/ci/pipeline-after-merge.yml"
 CI_EXAMPLE="$PLUGIN_ROOT/templates/ci/ci.example.json"
 # The header names the template's blob id (git hash-object), so a drifted
 # copy shows in a diff against the template.
@@ -27,7 +28,7 @@ _render_write() {
 # <target>/.github/workflows/pipeline.yml = header + template; <target>/ci.json
 # from the example only when the repository has none.
 do_render_ci() {
-  local target="${1:-}" sha
+  local target="${1:-}" template sha name
   if [[ -z "$target" ]]; then
     echo "usage: $0 render-ci <target-repository> [--dry-run]" >&2
     return 2
@@ -35,10 +36,13 @@ do_render_ci() {
   [[ -d "$target" ]] || fail "render-ci: not a directory: $target"
   [[ -f "$CI_TEMPLATE" ]] || fail "render-ci: template missing: $CI_TEMPLATE"
   [[ -f "$CI_EXAMPLE" ]] || fail "render-ci: example missing: $CI_EXAMPLE"
-  sha="$(git hash-object "$CI_TEMPLATE")" || fail "render-ci: git hash-object failed"
-
-  { printf '%s%s\n' "$CI_HEADER_PREFIX" "$sha"; cat "$CI_TEMPLATE"; } \
-    | _render_write "$target/.github/workflows/pipeline.yml"
+  [[ -f "$CI_COMPLETION_TEMPLATE" ]] || fail "render-ci: template missing: $CI_COMPLETION_TEMPLATE"
+  for template in "$CI_TEMPLATE" "$CI_COMPLETION_TEMPLATE"; do
+    sha="$(git hash-object "$template")" || return
+    name="${template##*/}"
+    { printf '%s%s\n' "$CI_HEADER_PREFIX" "$sha"; cat "$template"; } \
+      | _render_write "$target/.github/workflows/$name" || return
+  done
 
   if [[ -f "$target/ci.json" ]]; then
     info "Kept the repository's own ci.json"

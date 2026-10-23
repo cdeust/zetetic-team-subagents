@@ -14,7 +14,12 @@ def workflow():
 
 def test_completion_trigger_ignores_main_and_cannot_recurse():
     on = workflow()[True]
-    assert on["workflow_run"] == {
+    assert "workflow_call" in on
+    assert "workflow_run" not in on
+    caller = yaml.safe_load(
+        (ROOT / "templates/ci/pipeline-after-merge.yml").read_text()
+    )
+    assert caller[True]["workflow_run"] == {
         "workflows": ["Pipeline"],
         "types": ["completed"],
         "branches-ignore": ["main"],

@@ -1,8 +1,8 @@
 # PR bot repair and merge checks
 
-Edit `templates/ci/pipeline.yml`, then run `bash scripts/setup.sh render-ci .`.
-The renderer copies the template with its Git blob identifier and preserves the
-repository's `ci.json`. Each consuming repository needs the newly rendered copy.
+Edit `templates/ci/pipeline.yml` and `templates/ci/pipeline-after-merge.yml`, then
+run `bash scripts/setup.sh render-ci .`. The renderer copies both templates with
+their Git blob identifiers and preserves the repository's `ci.json`.
 
 The five test categories, the 90 percent line-coverage gate, and the three bare
 runner environments remain the existing CI contract. The common Claude CLI pin
@@ -21,7 +21,7 @@ fix step if any of the five test jobs did not succeed. When those jobs are all
 green, it runs neither action. The guard refuses a checkout that has advanced
 beyond the event's head, and a Git diff failure fails the guard.
 
-Both mutating jobs (`review` and `merge`) use `always() && !cancelled()`: normal
+The repair job and read-only merge gate use `always() && !cancelled()`: normal
 test failures still reach repair and the explicit merge gate, but cancelling
 the workflow prevents further repair or merge work. GitHub re-evaluates job
 conditions during cancellation; `always()` alone keeps a job running
@@ -39,24 +39,39 @@ Dependabot exception. Failure, cancellation, timeout, and missing results block
 the merge. A skipped bot step inside a successful review job preserves the
 bootstrap and Claude-head behavior described above.
 
-Immediately before arming auto-merge, the workflow rereads the PR and refuses a
-closed or draft PR, the `hold` or `do-not-merge` label, a title containing
-`do not merge`, or a head differing from the tested event SHA. Labels and the
-title marker are matched without case sensitivity. The
-[--match-head-commit option](https://cli.github.com/manual/gh_pr_merge)
-also binds the merge request to that SHA, closing the head-change race between
-the read and the merge command. A failed merge command stays failed even if an
-auto-merge request was already armed. No administrator bypass is used.
+The PR merge job validates eligibility without mutating the PR. A separate
+`Pipeline after merge` workflow listens for successful PR Pipeline completion
+and calls the same local Pipeline through `workflow_call`. GitHub rejects a
+workflow listening to itself; source run40017492191 demonstrated that restriction.
+The [reusable-workflow context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context)
+preserves the caller's workflow_run event. Its permission union allows the called
+jobs to narrow permissions; the caller has no competing concurrency group.
 
-The release tag job explicitly depends on all five successful test jobs and the
-contract. Its deploy-key and existing-version behavior remains unchanged.
+The privileged resolve job rereads the source run and exact required job results,
+then rejects drafts, holds, closed unmerged PRs, wrong repositories and changed
+heads. It merges synchronously through the protected API with the tested head
+SHA. All five test categories and the tag use the returned merge SHA. Human main
+pushes retain their existing test path. No administrator bypass or polling is used.
+
+The completion caller must exist on the default branch before workflow_run can
+fire. Adding it in a draft PR proves its structure, not post-merge execution.
+The first rollout therefore requires the existing protected bootstrap path;
+subsequent completion runs can use the new caller.
+
+The tag job depends on all five successful test categories and the contract.
+The contract reads JSON root.version, or metadata.version only when root.version
+is absent, preserving session-optimizer's historical bundle release version.
+TOML uses project.version or package.version. Explicit release_packages declare
+independent monorepo tags. Existing tags remain unchanged; missing tags publish
+atomically through the existing SSH key path.
 
 ## Regression evidence
 
 `tests/test_ci_pr_safety.py` executes the template's shell guards with fixture
 Git and GitHub responses. It covers red Claude heads in every category, workflow
 bootstrap skips, stale checkout rejection, unsuccessful job states, live PR
-holds, exact merge arguments, and merge rejection. It performs no remote write.
+holds and eligibility rejection. Resolver tests cover exact API merge arguments
+and server rejection. They perform no remote write.
 Before the initial change, this suite reported 31 failures and 27 passes.
 The two added cancellation-source regressions failed before the cancellation
 veto was added and pass afterward; hosted cancellation remains a runtime

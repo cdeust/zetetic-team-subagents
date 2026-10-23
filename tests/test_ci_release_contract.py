@@ -252,3 +252,33 @@ def test_tomllib_absence_keeps_json_usable_and_explains_toml_requirement(
         if extension == "json"
         else ["version_file: TOML requires Python 3.11+ (stdlib tomllib)"]
     )
+
+
+def test_marketplace_declared_bundle_version_preserves_historical_tag(tmp_path):
+    # session-optimizer build-release-bundle.sh at 9145994 reads metadata.version.
+    body = '{"metadata":{"version":"2.3.1"},"plugins":[{"version":"0.1.2"}]}'
+    configure(tmp_path, version_file=manifest(tmp_path, "marketplace.json", body))
+    data, _ = ci_contract._load(tmp_path)
+    assert ci_contract.faults(tmp_path) == []
+    assert ci_contract.release_tags(data, tmp_path) == ["v2.3.1"]
+
+
+@pytest.mark.parametrize("version", [None, "", 3, "invalid version"])
+def test_invalid_root_version_cannot_fall_back_to_valid_metadata(tmp_path, version):
+    body = json.dumps({"version": version, "metadata": {"version": "2.3.1"}})
+    configure(tmp_path, version_file=manifest(tmp_path, content=body))
+    assert ci_contract.faults(tmp_path)
+
+
+def test_root_version_takes_precedence_over_metadata(tmp_path):
+    body = '{"version":"1.2.3","metadata":{"version":"2.3.1"}}'
+    configure(tmp_path, version_file=manifest(tmp_path, content=body))
+    data, _ = ci_contract._load(tmp_path)
+    assert ci_contract.release_tags(data, tmp_path) == ["v1.2.3"]
+
+
+@pytest.mark.parametrize("metadata", [None, [], "2.3.1", {}, {"version": None}])
+def test_invalid_metadata_version_fails_contract(tmp_path, metadata):
+    body = json.dumps({"metadata": metadata})
+    configure(tmp_path, version_file=manifest(tmp_path, content=body))
+    assert ci_contract.faults(tmp_path)

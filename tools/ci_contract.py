@@ -96,6 +96,10 @@ def _manifest_version(path: Path) -> str:
     body = path.read_text(encoding="utf-8")
     if path.suffix == ".json":
         doc = json.loads(body)
+        # Existing bundle contract: session-optimizer/tools/build-release-bundle.sh
+        # at 9145994e221d13693bb4a243a2a810c466fa077a reads metadata.version.
+        if isinstance(doc, dict) and "version" not in doc:
+            doc = doc.get("metadata")
     elif path.suffix == ".toml":
         # Stdlib parser added in 3.11: https://docs.python.org/3/library/tomllib.html.
         try:
