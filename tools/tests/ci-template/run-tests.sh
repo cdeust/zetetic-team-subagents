@@ -24,12 +24,14 @@ bad() { fail=$(( fail + 1 )); printf '  FAIL %s\n' "$1"; }
 # T1
 if [[ -f "$TEMPLATE" ]]; then ok "template exists"; else bad "template missing: $TEMPLATE"; fi
 
-# T2: actionlint through uvx (the pinned PyPI wrapper), the binary on PATH
-# as the fallback; neither present is a failure.
+# T2: use the same hash-locked test environment as pytest. actionlint-py
+# installs the official binary into Python's scripts directory, not a module.
 lint() {
-  if command -v uvx >/dev/null 2>&1; then uvx --from actionlint-py actionlint "$@"
+  local scripts_dir
+  scripts_dir="$("$PYTHON_BIN" -c 'import sysconfig; print(sysconfig.get_path("scripts"))')" || return
+  if [[ -x "$scripts_dir/actionlint" ]]; then "$scripts_dir/actionlint" "$@"
   elif command -v actionlint >/dev/null 2>&1; then actionlint "$@"
-  else echo "neither uvx nor actionlint found" >&2; return 2; fi
+  else echo "actionlint missing: install requirements-dev.lock with $PYTHON_BIN" >&2; return 2; fi
 }
 if [[ -f "$TEMPLATE" ]]; then
   out="$(lint "$TEMPLATE" 2>&1)"; rc=$?

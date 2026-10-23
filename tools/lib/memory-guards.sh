@@ -123,8 +123,15 @@ atomic_write() {
   local target="$1" content="$2"
   local tmp="$target.tmp.$$"
   printf '%s' "$content" > "$tmp"
-  # fsync file
-  if command -v sync >/dev/null 2>&1; then sync; fi
+  # Flush this file, not every filesystem while holding the scope lock.
+  # Source: https://docs.python.org/3/library/os.html#os.fsync
+  python3 - "$tmp" <<'PY'
+import os
+import sys
+
+with open(sys.argv[1], "r+b") as file:
+    os.fsync(file.fileno())
+PY
   mv -f -- "$tmp" "$target"
 }
 

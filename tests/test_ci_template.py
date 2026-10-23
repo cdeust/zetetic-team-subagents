@@ -21,8 +21,8 @@ PINS = {
     "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",
     "anthropics/claude-code-action": "a5a423f75c251dcbff8a74e99f83b2cb03c72bfa",
 }
-# source: plan task 1.3, "Pinned CLI version: @anthropic-ai/claude-code@2.1.296 (Cortex's measured pin)"
-CLI_PIN = "npm install -g @anthropic-ai/claude-code@2.1.296"
+# source: claude-mods PR45, unit job119805310369 passed with Claude 2.1.306.
+CLI_PIN = "npm install -g @anthropic-ai/claude-code@2.1.306"
 
 
 @pytest.fixture(scope="module")
@@ -66,9 +66,9 @@ def test_the_jobs_chain_in_dependency_order(workflow):
     chain = ["unit", "regression", "e2e", "environment", "install"]
     for previous, job in zip(chain, chain[1:]):
         assert jobs[job]["needs"] == ["contract", previous], job
-    assert jobs["review"]["needs"] == "install"
-    assert sorted(jobs["merge"]["needs"]) == sorted(["unit", "regression", "e2e", "environment", "install", "review"])
-    assert jobs["tag"]["needs"] == ["contract", "install"]
+    assert jobs["review"]["needs"] == chain
+    assert sorted(jobs["merge"]["needs"]) == sorted(["contract", "unit", "regression", "e2e", "environment", "install", "review"])
+    assert jobs["tag"]["needs"] == ["contract", *chain]
 
 
 def test_the_contract_step_is_the_validator_byte_for_byte(text):
@@ -102,26 +102,26 @@ def test_the_review_is_the_documented_code_review_invocation(workflow):
     assert review["with"]["plugin_marketplaces"] == "https://github.com/anthropics/claude-code.git"
     assert review["with"]["prompt"].startswith("/code-review:code-review --comment ")
     assert review["with"]["claude_args"] == '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
-    assert "allowed_bots" not in review["with"], "Dependabot is out of the bot's scope (decision 5)"
+    assert review["with"]["allowed_bots"] == "claude[bot],chatgpt-codex-connector[bot]"
 
 
-def test_the_review_skips_drafts_forks_dependabot_the_bot_and_pipeline_changes(workflow, text):
+def test_the_review_skips_drafts_forks_dependabot_and_duplicate_bot_review(workflow, text):
     cond = workflow["jobs"]["review"]["if"]
     for clause in ("github.event_name == 'pull_request'", "!github.event.pull_request.draft",
                    "github.event.pull_request.head.repo.full_name == github.repository",
                    "github.actor != 'dependabot[bot]'"):
         assert clause in cond, clause
-    assert "41898282+claude[bot]@users.noreply.github.com" in text
+    assert "+claude[bot]@users.noreply.github.com" in text
     assert ".github/workflows/pipeline.yml" in text
 
 
-def test_the_merge_always_runs_and_goes_red_itself_when_a_job_is_not_green(workflow):
+def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):
     # claude-mods #38 and session-optimizer #73 (2026-10-22) auto-merged on a
     # red pipeline: a skipped required check is satisfied, so the job's if:
     # carries no needs.* result and the first step fails explicitly.
     job = workflow["jobs"]["merge"]
     cond = job["if"]
-    assert cond.startswith("always() && ")
+    assert cond.startswith("always() && !cancelled() && ")
     assert "needs." not in cond
     for clause in ("github.event_name == 'pull_request'", "!github.event.pull_request.draft",
                    "github.event.pull_request.head.repo.full_name == github.repository"):

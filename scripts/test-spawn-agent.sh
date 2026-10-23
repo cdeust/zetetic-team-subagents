@@ -41,6 +41,9 @@ set -e
 TARGET="$TMP/target-repo"
 mkdir -p "$TARGET/agents/genius"
 git -C "$TARGET" init -q -b main
+# The fixture must commit on CI without a runner's global Git identity.
+git -C "$TARGET" config --local user.email "test@example.invalid"
+git -C "$TARGET" config --local user.name "Spawn Agent Test"
 cp "$REPO/agents/genius/curie.md" "$TARGET/agents/genius/curie.md"
 git -C "$TARGET" add -A
 git -C "$TARGET" commit -q -m init
