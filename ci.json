@@ -1,7 +1,7 @@
 {
   "unit": "python3 -m venv \"$RUNNER_TEMP/venv\" && \"$RUNNER_TEMP/venv/bin/python\" -m pip install --disable-pip-version-check --require-hashes -r requirements-dev.lock && export PATH=\"$RUNNER_TEMP/venv/bin:$PATH\" && \"$RUNNER_TEMP/venv/bin/python\" -m coverage run -m pytest -q && \"$RUNNER_TEMP/venv/bin/python\" -m coverage combine && \"$RUNNER_TEMP/venv/bin/python\" -m coverage xml",
-  "regression": "sudo apt-get update && sudo apt-get install -y ripgrep jq && python3 -m venv \"$RUNNER_TEMP/venv\" && \"$RUNNER_TEMP/venv/bin/python\" -m pip install --disable-pip-version-check --require-hashes -r requirements-dev.lock && PYTHON_BIN=\"$RUNNER_TEMP/venv/bin/python\" bash tests/run-all.sh",
-  "e2e": "sudo apt-get update && sudo apt-get install -y ripgrep jq && for suite in scripts/test-memory-*.sh; do echo \"== $suite\"; bash \"$suite\" || exit 1; done",
+  "regression": "sudo apt-get update && sudo apt-get install -y ripgrep jq && python3 -m venv \"$RUNNER_TEMP/venv\" && \"$RUNNER_TEMP/venv/bin/python\" -m pip install --disable-pip-version-check --require-hashes -r requirements-dev.lock && PYTHON_BIN=\"$RUNNER_TEMP/venv/bin/python\" bash tests/run-all.sh --group regression",
+  "e2e": "sudo apt-get update && sudo apt-get install -y ripgrep jq && bash tests/run-all.sh --group e2e",
   "environment": "mkdir -p \"$HOME/.claude\" && bash scripts/setup.sh install --dry-run && bash tools/plugin-version-check.sh --json",
   "install": "claude plugin marketplace add \"${GITHUB_WORKSPACE:-$PWD}\" && claude plugin install zetetic-team-subagents@zetetic-marketplace && claude plugin list && claude --init-only"
 }

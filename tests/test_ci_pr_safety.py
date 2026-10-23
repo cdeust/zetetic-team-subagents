@@ -29,7 +29,7 @@ git() {
 GH_STUB = r"""
 gh() {
   case "$1 $2" in
-    'pr view') printf '%s\n' "$FIXTURE_PR" ;;
+    'pr view') printf '%s\n' "$FIXTURE_PR"; return "${FIXTURE_VIEW_RC:-0}" ;;
     'pr merge') printf '%s\n' "$@" > "$FIXTURE_MERGE"; return "${FIXTURE_MERGE_RC:-0}" ;;
     *) return 91 ;;
   esac
@@ -176,12 +176,12 @@ def live_pr(**overrides):
 def arm(workflow, tmp_path, record, rc="0"):
     path = tmp_path / "merge-argv"
     result = execute(
-        step(workflow, "merge", "Arm the squash merge")["run"],
+        step(workflow, "merge", "Verify live PR eligibility")["run"],
         tmp_path,
         {
             "FIXTURE_PR": json.dumps(record),
             "FIXTURE_MERGE": str(path),
-            "FIXTURE_MERGE_RC": rc,
+            "FIXTURE_VIEW_RC": rc,
         },
         GH_STUB,
     )
@@ -207,21 +207,14 @@ def test_merge_refuses_ineligible_live_pr_before_mutation(workflow, tmp_path, re
     assert not path.exists()
 
 
-def test_merge_binds_the_checked_head_without_admin_or_force(workflow, tmp_path):
+def test_merge_gate_validates_head_without_mutation(workflow, tmp_path):
     result, path = arm(workflow, tmp_path, live_pr())
     assert result.returncode == 0, result.stderr
-    assert path.read_text().splitlines() == [
-        "pr",
-        "merge",
-        "42",
-        "--auto",
-        "--squash",
-        "--match-head-commit",
-        HEAD,
-    ]
+    assert not path.exists()
 
 
-def test_merge_conflict_is_not_reinterpreted_as_already_armed(workflow, tmp_path):
+
+def test_failed_live_pr_read_is_not_reinterpreted_as_eligible(workflow, tmp_path):
     result, _ = arm(
         workflow, tmp_path, live_pr(autoMergeRequest={"enabledAt": "today"}), "1"
     )
