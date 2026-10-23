@@ -17,13 +17,12 @@ jobs:
     if: >-
       github.event.workflow_run.event == 'pull_request'
       && github.event.workflow_run.conclusion == 'success'
-    # A caller grants every permission used by its reusable jobs, even skipped
-    # jobs. The callee narrows each job's permissions; no caller concurrency.
+    # Only the completion engine is callable. It has no PR review job or OAuth
+    # secret. Its jobs narrow these permissions; no caller concurrency.
     permissions:
       contents: write
       pull-requests: write
-      issues: write
-      id-token: write
       actions: read
-    uses: ./.github/workflows/pipeline.yml
-    secrets: inherit
+    uses: ./.github/workflows/pipeline-post-merge.yml
+    secrets:
+      RELEASE_TAG_SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
