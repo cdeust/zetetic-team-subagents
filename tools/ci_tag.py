@@ -7,6 +7,7 @@ Concurrent overlap is retried only after the pending set strictly shrinks.
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,8 +18,18 @@ def git(*args, check=True):
 
 
 def validate(tags, sha):
-    if git("rev-parse", "HEAD").stdout.strip() != sha:
-        raise ValueError("Release checkout differs from the tested SHA")
+    if not isinstance(sha, str) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise ValueError("Release target must be a full commit SHA")
+    if git("cat-file", "-t", sha).stdout.strip() != "commit":
+        raise ValueError("Release target must name a commit object")
+    trusted = git(
+        "rev-parse", "--verify", "refs/remotes/origin/main^{commit}"
+    ).stdout.strip()
+    if git("rev-parse", "HEAD").stdout.strip() != trusted:
+        raise ValueError("Release checkout differs from trusted main")
+    # Source: https://git-scm.com/docs/git-merge-base#Documentation/git-merge-base.txt---is-ancestor
+    # The privileged checkout is main; only the explicit tested ancestor is tagged.
+    git("merge-base", "--is-ancestor", sha, trusted)
     if (
         not isinstance(tags, list)
         or not tags

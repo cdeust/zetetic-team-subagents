@@ -26,7 +26,7 @@ def repositories(tmp_path):
     local, remote = tmp_path / "local", tmp_path / "remote.git"
     local.mkdir()
     remote.mkdir()
-    git(local, "init", "-q")
+    git(local, "init", "-q", "-b", "main")
     git(remote, "init", "-q", "--bare")
     git(local, "remote", "add", "origin", str(remote))
     git(
@@ -41,6 +41,7 @@ def repositories(tmp_path):
         "-m",
         "fixture",
     )
+    git(local, "push", "-q", "origin", "main")
     return local, remote, git(local, "rev-parse", "HEAD")
 
 
@@ -72,7 +73,7 @@ def test_publishes_distinct_package_versions_at_tested_sha_and_is_idempotent(
     original = git(remote, "show-ref", "--tags")
     for tag in tags:
         assert git(remote, "rev-parse", f"refs/tags/{tag}^{{}}") == sha
-    assert git(remote, "for-each-ref", "--format=%(refname)", "refs/heads") == ""
+    assert git(remote, "rev-parse", "refs/heads/main") == sha
     assert publish(repositories, tags).returncode == 0
     assert git(remote, "show-ref", "--tags") == original
     assert "Existing engine/v1.2.3: target preserved" in (local / "summary").read_text()
@@ -133,6 +134,7 @@ def test_preexisting_version_at_older_commit_remains_unchanged(repositories):
         "next fixture",
     )
     current = git(local, "rev-parse", "HEAD")
+    git(local, "push", "-q", "origin", "main")
     assert publish((local, remote, current), ["engine/v1", "other/v2"]).returncode == 0
     assert git(remote, "rev-parse", "refs/tags/engine/v1") == original
     assert git(remote, "rev-parse", "refs/tags/engine/v1^{}") == older
@@ -170,6 +172,7 @@ def test_overlapping_publishers_preserve_winner_and_finish_remaining_tags(
         "second publisher",
     )
     second_sha = git(second, "rev-parse", "HEAD")
+    git(second, "push", "-q", "origin", "main")
     install_overlap_hook(first, first_sha, second, tmp_path)
     result = publish((second, remote, second_sha), ["shared/v1", "second/v1"])
     assert result.returncode == 0, result.stderr
@@ -196,3 +199,96 @@ def install_overlap_hook(first, first_sha, second, tmp_path):
         f'  touch launched\n  "{sys.executable}" "{launch}" || exit 1\nfi\n'
     )
     hook.chmod(0o755)
+
+
+def test_trusted_main_checkout_can_tag_an_older_tested_ancestor(repositories):
+    local, remote, older = repositories
+    git(
+        local,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "advance trusted main",
+    )
+    git(local, "push", "-q", "origin", "main")
+    current = git(local, "rev-parse", "HEAD")
+    result = publish((local, remote, older), ["engine/v1"])
+    assert result.returncode == 0, result.stderr
+    assert git(local, "rev-parse", "HEAD") == current
+    assert git(remote, "rev-parse", "refs/tags/engine/v1^{}") == older
+
+
+def test_untrusted_checkout_cannot_publish_even_its_own_tested_sha(repositories):
+    local, remote, _ = repositories
+    git(local, "checkout", "-q", "-b", "unmerged")
+    git(
+        local,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "outside main",
+    )
+    untrusted = git(local, "rev-parse", "HEAD")
+    result = publish((local, remote, untrusted), ["engine/v1"])
+    assert result.returncode != 0
+    assert git(local, "tag", "--list") == git(remote, "tag", "--list") == ""
+
+
+def test_trusted_checkout_rejects_tested_commit_outside_main(repositories):
+    local, remote, _ = repositories
+    git(local, "checkout", "-q", "-b", "unmerged")
+    git(
+        local,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "outside main",
+    )
+    untrusted = git(local, "rev-parse", "HEAD")
+    git(local, "checkout", "-q", "main")
+    result = publish((local, remote, untrusted), ["engine/v1"])
+    assert result.returncode != 0
+    assert git(local, "tag", "--list") == git(remote, "tag", "--list") == ""
+
+
+def test_missing_trusted_main_ref_cannot_publish(repositories):
+    local, remote, _ = repositories
+    git(local, "update-ref", "-d", "refs/remotes/origin/main")
+    assert publish(repositories, ["engine/v1"]).returncode != 0
+    assert git(local, "tag", "--list") == git(remote, "tag", "--list") == ""
+
+
+def test_annotated_tag_object_is_not_an_explicit_tested_commit(repositories):
+    local, remote, _ = repositories
+    git(
+        local,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "tag",
+        "-a",
+        "source-tag",
+        "-m",
+        "fixture tag",
+    )
+    tag_object = git(local, "rev-parse", "refs/tags/source-tag")
+    result = publish((local, remote, tag_object), ["engine/v1"])
+    assert result.returncode != 0
+    assert git(remote, "tag", "--list") == ""
+    assert git(local, "tag", "--list") == "source-tag"

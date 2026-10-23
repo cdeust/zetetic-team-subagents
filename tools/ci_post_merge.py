@@ -258,21 +258,46 @@ def _merge_open_pr(pr, merge_path, head, api):
     return full_sha(result.get("sha"))
 
 
+def _confirm_main_merge(pr_path, original_pr, sha, api):
+    # REST merge constrains only head SHA, not base ref. Re-read after PUT;
+    # a retarget race must not authorize tests or release of a foreign merge.
+    # https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request
+    repository = original_pr["base"]["repo"]["full_name"]
+    pr = api.request("GET", pr_path)
+    _pr_identity(pr, repository, original_pr["head"]["sha"])
+    require(
+        pr.get("merged") is True and pr.get("merge_commit_sha") == sha,
+        "PR does not confirm the returned merge commit",
+    )
+    # BASE...HEAD reports behind/identical only when HEAD is in BASE history.
+    # https://docs.github.com/en/rest/commits/commits#compare-two-commits
+    comparison = api.request(
+        "GET", f"/repos/{repository}/compare/main...{full_sha(sha)}"
+    )
+    require(
+        comparison.get("status") in ("behind", "identical")
+        and comparison.get("merge_base_commit", {}).get("sha") == sha,
+        "Merged commit is not confirmed in main history",
+    )
+
+
 def resolve(event, repository: str, api: GitHub):
     run = _source_run(event, repository, api)
     number, pr = _pull_request(run, repository, api)
-    if pr.get("merged") is True:
+    pr_path = f"/repos/{repository}/pulls/{number}"
+    already_merged = pr.get("merged") is True
+    if already_merged:
         sha = full_sha(pr.get("merge_commit_sha"))
-        if _has_push_pipeline(repository, sha, api):
-            return {
-                "tested_sha": sha,
-                "run_tests": "false",
-                "pr_number": str(number),
-                "reason": "An exact-SHA main push Pipeline already exists",
-            }
     else:
-        merge_path = f"/repos/{repository}/pulls/{number}/merge"
-        sha = _merge_open_pr(pr, merge_path, run["head_sha"], api)
+        sha = _merge_open_pr(pr, pr_path + "/merge", run["head_sha"], api)
+    _confirm_main_merge(pr_path, pr, sha, api)
+    if already_merged and _has_push_pipeline(repository, sha, api):
+        return {
+            "tested_sha": sha,
+            "run_tests": "false",
+            "pr_number": str(number),
+            "reason": "An exact-SHA main push Pipeline already exists",
+        }
     return {
         "tested_sha": sha,
         "run_tests": "true",

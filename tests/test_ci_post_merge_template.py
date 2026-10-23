@@ -64,18 +64,33 @@ def test_contract_allows_normal_events_but_requires_successful_resolve_for_compl
     )
 
 
-def test_every_test_and_tag_checkout_uses_contract_sha():
+def test_tests_checkout_contract_sha_but_privileged_release_checks_out_main():
     jobs = workflow()["jobs"]
-    for name in (*CATEGORIES, "tag"):
+    for name in CATEGORIES:
         checkout = next(
             step
             for step in jobs[name]["steps"]
             if step.get("uses", "").startswith("actions/checkout@")
         )
         assert checkout["with"]["ref"] == "${{ needs.contract.outputs.tested_sha }}"
+    checkout = next(step for step in jobs["tag"]["steps"] if "uses" in step)
+    assert checkout["with"]["ref"] == "main"
+    assert checkout["with"]["fetch-depth"] == 0
+    assert checkout["with"]["ssh-key"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
     publish = next(step for step in jobs["tag"]["steps"] if step.get("id") == "publish")
     assert publish["env"]["TESTED_SHA"] == "${{ needs.contract.outputs.tested_sha }}"
     assert "$GITHUB_SHA" not in publish["run"]
+
+
+def test_review_checkout_explicitly_excludes_completion_events_and_forks():
+    review = workflow()["jobs"]["review"]
+    checkout = next(step for step in review["steps"] if "uses" in step)
+    for guard in (
+        "github.event_name == 'pull_request'",
+        "github.event.pull_request.head.repo.full_name == github.repository",
+    ):
+        assert guard in review["if"]
+        assert guard in checkout["if"]
 
 
 def test_merge_gate_does_not_arm_an_event_suppressing_async_merge():

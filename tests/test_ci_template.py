@@ -148,7 +148,7 @@ def test_the_merge_names_the_repository_for_gh_without_a_checkout(workflow):
 
 def test_the_tag_runs_on_push_or_resolved_merge_over_the_deploy_key(workflow):
     job = workflow["jobs"]["tag"]
-    assert "(github.event_name == 'push' || github.event_name == 'workflow_run')" in job["if"]
+    assert "((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_run')" in job["if"]
     assert "!cancelled()" in job["if"]
     assert job["concurrency"] == {"group": "release-tag-${{ needs.contract.outputs.release_group }}", "cancel-in-progress": False}
     checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))

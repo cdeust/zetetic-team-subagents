@@ -22,6 +22,7 @@ PREFIX = f"/repos/{REPO}"
 RUN_PATH = f"{PREFIX}/actions/runs/71"
 JOBS_PATH = RUN_PATH + "/jobs?per_page=100&page=1"
 PR_PATH = PREFIX + "/pulls/42"
+COMPARE_PATH = PREFIX + f"/compare/main...{MERGED}"
 PUSH_PATH = (
     PREFIX
     + f"/actions/workflows/pipeline.yml/runs?event=push&head_sha={MERGED}&per_page=100&page=1"
@@ -65,6 +66,10 @@ def scenario(monkeypatch):
         ("GET", PR_PATH): pr,
         ("PUT", PR_PATH + "/merge"): {"merged": True, "sha": MERGED},
         ("GET", PUSH_PATH): {"workflow_runs": []},
+        ("GET", COMPARE_PATH): {
+            "status": "identical",
+            "merge_base_commit": {"sha": MERGED},
+        },
     }
     requests = []
 
@@ -79,8 +84,12 @@ def scenario(monkeypatch):
             (request.method, path, json.loads(request.data) if request.data else None)
         )
         response = responses[(request.method, path)]
+        if callable(response):
+            response = response()
         if isinstance(response, Exception):
             raise response
+        if request.method == "PUT" and response.get("merged") is True:
+            pr.update(merged=True, state="closed", merge_commit_sha=response.get("sha"))
         return BytesIO(json.dumps(response).encode())
 
     monkeypatch.setattr(resolver, "urlopen", open_request)
@@ -101,11 +110,11 @@ def test_success_uses_tested_head_precondition_and_returns_merge_sha(scenario):
     assert result["tested_sha"] != HEAD
     assert result["run_tests"] == "true"
     assert result["pr_number"] == "42"
-    assert scenario[-1][-1] == (
+    assert (
         "PUT",
         PR_PATH + "/merge",
         {"sha": HEAD, "merge_method": "squash"},
-    )
+    ) in scenario[-1]
     assert sum(method == "PUT" for method, _, _ in scenario[-1]) == 1
 
 
@@ -326,6 +335,7 @@ def test_cli_writes_outputs_only_after_confirmed_merge(scenario, tmp_path, monke
     assert f"tested_sha={MERGED}\n" in output.read_text()
     assert "run_tests=true\n" in output.read_text()
     output.unlink()
+    scenario[2].update(merged=False, state="open")
     scenario[2]["draft"] = True
     assert resolver.main() == 1
     assert not output.exists()

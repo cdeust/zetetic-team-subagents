@@ -17,16 +17,23 @@ def dependencies(job):
     return [needs] if isinstance(needs, str) else needs
 
 
-def allows(job, results, event="pull_request", cancelled=False):
+def allows(job, results, **context):
     """Evaluate this fixture's conjunctions; hosted execution remains required."""
     expression = JOBS[job]["if"]
     expression = re.sub(
         r"needs\.(\w+)\.result", lambda m: repr(results[m[1]]), expression
     )
-    expression = expression.replace("github.event_name", repr(event))
-    expression = expression.replace("!cancelled()", repr(not cancelled))
+    expression = expression.replace(
+        "github.event_name", repr(context.get("event", "pull_request"))
+    )
+    expression = expression.replace(
+        "github.ref", repr(context.get("ref", "refs/heads/main"))
+    )
+    expression = expression.replace(
+        "!cancelled()", repr(not context.get("cancelled", False))
+    )
     expression = expression.replace("&&", " and ").replace("||", " or ")
-    assert re.fullmatch(r"[\s()'a-zA-Z_=]+", expression)
+    assert re.fullmatch(r"[\s()'a-zA-Z_=/]+", expression)
     return eval(expression.strip(), {"__builtins__": {}}, {})
 
 
@@ -70,3 +77,9 @@ def test_categories_run_after_successful_direct_dependencies_with_skipped_resolv
 def test_tag_only_publishes_supported_events_after_all_success(event, expected):
     results = {name: "success" for name in dependencies("tag")}
     assert allows("tag", results, event=event) is expected
+
+
+@pytest.mark.parametrize("ref", ["refs/heads/feature", "refs/tags/release"])
+def test_reusable_pipeline_cannot_publish_from_another_push_ref(ref):
+    results = {name: "success" for name in dependencies("tag")}
+    assert not allows("tag", results, event="push", ref=ref)
