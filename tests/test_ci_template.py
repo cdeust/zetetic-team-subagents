@@ -15,7 +15,7 @@ import yaml
 REPO = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO / "templates" / "ci" / "pipeline.yml"
 DESIGN = "docs/superpowers/specs/2026-10-22-single-ci-design.md"
-JOBS = ["contract", "unit", "regression", "e2e", "environment", "install", "review", "merge", "tag"]
+JOBS = ["resolve", "contract", "unit", "regression", "e2e", "environment", "install", "review", "merge", "tag"]
 PINS = {
     "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",
@@ -56,7 +56,7 @@ def test_the_workflow_is_named_pipeline_and_runs_on_pull_requests_and_main(workf
     assert on["push"]["branches"] == ["main"]
 
 
-def test_the_jobs_are_the_nine_of_the_design_in_order(workflow):
+def test_the_jobs_include_protected_resolution_before_the_test_categories(workflow):
     assert list(workflow["jobs"]) == JOBS
 
 
@@ -132,7 +132,8 @@ def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):
     for name in ("unit", "regression", "e2e", "environment", "install", "review"):
         assert f"${{{{ needs.{name}.result }}}}" in gate["env"].values(), name
     assert "exit 1" in gate["run"]
-    assert "gh pr merge" in steps[-1]["run"] and "--auto --squash" in steps[-1]["run"]
+    assert "gh pr merge" not in steps[-1]["run"]
+    assert "headRefOid" in steps[-1]["run"]
 
 
 def test_the_merge_names_the_repository_for_gh_without_a_checkout(workflow):
@@ -140,19 +141,20 @@ def test_the_merge_names_the_repository_for_gh_without_a_checkout(workflow):
     # merge failed with "fatal: not a git repository" because gh pr merge
     # inferred the repository from a checkout the job does not have.
     steps = workflow["jobs"]["merge"]["steps"]
-    arm = next(s for s in steps if s.get("name") == "Arm the squash merge")
+    arm = next(s for s in steps if s.get("name") == "Verify live PR eligibility")
     assert arm["env"].get("GH_REPO") == "${{ github.repository }}"
     assert arm["env"]["GH_TOKEN"] == "${{ github.token }}"
 
 
-def test_the_tag_runs_on_push_only_over_the_deploy_key(workflow):
+def test_the_tag_runs_on_push_or_resolved_merge_over_the_deploy_key(workflow):
     job = workflow["jobs"]["tag"]
-    assert job["if"] == "github.event_name == 'push'"
-    assert job["concurrency"] == {"group": "release-tag", "cancel-in-progress": False}
+    assert job["if"] == "github.event_name == 'push' || github.event_name == 'workflow_run'"
+    assert job["concurrency"] == {"group": "release-tag-${{ needs.contract.outputs.release_group }}", "cancel-in-progress": False}
     checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
     assert checkout["with"]["ssh-key"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
-    resolve = next(s for s in job["steps"] if s.get("id") == "tag_check")
-    assert resolve["env"]["VERSION_FILE"] == "${{ needs.contract.outputs.version_file }}"
+    publish = next(s for s in job["steps"] if s.get("name") == "Publish declared package tags")
+    assert publish["env"]["RELEASE_TAGS"] == "${{ needs.contract.outputs.release_tags }}"
+    assert heredoc(publish["run"], "python3 -") == (REPO / "tools/ci_tag.py").read_text()
 
 
 def test_comment_blocks_are_short_and_cite_the_design(text):
