@@ -635,6 +635,9 @@ jobs:
   # and fails the step under 90 % of lines (design, Constraints).
   unit:
     needs: contract
+    if: >-
+      !cancelled()
+      && needs.contract.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -760,6 +763,10 @@ jobs:
 
   regression:
     needs: [contract, unit]
+    if: >-
+      !cancelled()
+      && needs.contract.result == 'success'
+      && needs.unit.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -786,6 +793,10 @@ jobs:
 
   e2e:
     needs: [contract, regression]
+    if: >-
+      !cancelled()
+      && needs.contract.result == 'success'
+      && needs.regression.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -815,6 +826,10 @@ jobs:
   # two variables for the environment and install commands.
   environment:
     needs: [contract, e2e]
+    if: >-
+      !cancelled()
+      && needs.contract.result == 'success'
+      && needs.e2e.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -844,6 +859,10 @@ jobs:
   # command sees a machine that has never run Claude Code.
   install:
     needs: [contract, environment]
+    if: >-
+      !cancelled()
+      && needs.contract.result == 'success'
+      && needs.environment.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -1041,7 +1060,15 @@ jobs:
   # the deploy key so the tag-triggered release workflows fire.
   tag:
     needs: [contract, unit, regression, e2e, environment, install]
-    if: github.event_name == 'push' || github.event_name == 'workflow_run'
+    if: >-
+      !cancelled()
+      && (github.event_name == 'push' || github.event_name == 'workflow_run')
+      && needs.contract.result == 'success'
+      && needs.unit.result == 'success'
+      && needs.regression.result == 'success'
+      && needs.e2e.result == 'success'
+      && needs.environment.result == 'success'
+      && needs.install.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

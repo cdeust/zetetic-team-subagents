@@ -106,3 +106,11 @@ The template regression uses the `actionlint` executable installed alongside
 pins official `rhysd/actionlint` 1.7.12 release archives and their SHA256 hashes.
 This removes the assumption that a fresh regression runner already has `uvx`
 or a global linter; a missing binary still fails the check.
+
+Each category explicitly requires !cancelled() and successful results for every
+direct dependency. Tag publication explicitly requires contract and all five
+categories to succeed. These status functions avoid inheriting a skipped
+resolve ancestor on PR/push events while still refusing failed, cancelled or
+skipped test prerequisites. Source run40018808255 exposed the implicit skip;
+tests/test_ci_job_conditions.py covers the explicit conditions and their refusal
+cases. Hosted jobs must actually execute before a green run is accepted.

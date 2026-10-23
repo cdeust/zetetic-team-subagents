@@ -137,3 +137,30 @@ Pipeline template blob:08af4d5111296d78602a8ec5ddd9498fd355f6ed.
 Caller template blob:5f82f3e4ac1522937dc3943997deab54a1cad5be.
 Rendered Pipeline blob:726fd6e303f0297d596c68445973d3856cc7b0c4.
 Rendered caller blob:f76704764a44d42fb6173d506f924a8e55787aea.
+
+## Skipped-ancestor correction
+
+Hosted source40018808255 and Mods40018826671 returned global success but only
+contract ran. resolve was skipped on the PR event and every test category was
+skipped without steps. That global success is not acceptance evidence.
+
+Each test category now uses !cancelled() and explicit success checks for every
+direct declared dependency. The tag checks contract and all five categories,
+plus its existing push/workflow_run event restriction. A skipped resolve ancestor
+can no longer provide an implicit success() veto, while failure, skip and
+cancellation of a direct prerequisite remain refusals. No standalone always()
+condition was added. GitHub documents the default status function and explicit
+override: https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions
+
+New mutation tests reported57 failures and3 passes before correction, then60
+passes. They mutate every direct dependency to failure/skipped/cancelled/timed_out
+or missing result and test cancellation independently; tag event cases remain.
+After updating the old tag shape assertion, the affected suite passes145 tests
+in1.25s. Renderer7/7, ci-template4/4, actionlint6YAML, Ruff and craftsmanship pass.
+These local conditions tests do not simulate the hosted scheduler; actual hosted
+category execution remains required before propagation.
+
+Final Pipeline template49dd571641fa0cbe0f4c39a7d6241c5ed0283673 renders
+f1b4e964fe3f3a7ff8af1d238b2bd404ead9668f. Caller unchanged:
+template5f82f3e4ac1522937dc3943997deab54a1cad5be renders
+f76704764a44d42fb6173d506f924a8e55787aea.
