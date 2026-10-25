@@ -5,7 +5,7 @@
 
 #   T1  no target: usage on stderr, exit 2
 #   T2  renders .github/workflows/pipeline.yml and exits 0
-#   T3  the file is the header line plus the template, byte for byte
+#   T3  all three files match the checked-in canonical-derived workflow set
 #   T4  the header names the template's blob id (git hash-object)
 #   T5  ci.json is written from templates/ci/ci.example.json when absent
 #   T6  a second run changes no byte
@@ -42,10 +42,13 @@ RENDERED="$TARGET/.github/workflows/pipeline.yml"
 if [[ $rc -eq 0 && -f "$RENDERED" ]]; then ok "renders pipeline.yml (exit 0)"
 else bad "render rc=$rc, file present: $([[ -f "$RENDERED" ]] && echo yes || echo no)"; printf '%s\n' "$out" | sed 's/^/       | /'; fi
 
-# T3
-if [[ -f "$RENDERED" ]] && cmp -s <(tail -n +2 "$RENDERED") "$TEMPLATE"; then
-  ok "body is the template byte for byte"
-else bad "body differs from the template"; fi
+# T3: Python profile tests separately compare every common job to the canon.
+same=true
+for name in pipeline.yml pipeline-post-merge.yml pipeline-after-merge.yml; do
+  cmp -s "$TARGET/.github/workflows/$name" "$REPO/.github/workflows/$name" || same=false
+done
+if [[ "$same" == true ]]; then ok "all three workflows match the checked-in render"
+else bad "workflow set differs from the checked-in render"; fi
 
 # T4
 sha="$(git hash-object "$TEMPLATE")"

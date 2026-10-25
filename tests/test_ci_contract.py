@@ -64,14 +64,14 @@ def test_an_empty_or_non_string_command_names_the_key(repo, bad, reason):
 
 def test_an_extra_key_is_a_fault(repo):
     write(repo, {**VALID, "lint": "ruff"})
-    assert ci_contract.faults(repo) == ["lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file)"]
+    assert ci_contract.faults(repo) == ["lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file, release_packages)"]
 
 
 def test_every_fault_is_reported_at_once(repo):
     write(repo, {"unit": "", "lint": "x"})
     assert ci_contract.faults(repo) == [
         "unit: empty command", "regression: missing", "e2e: missing", "environment: missing",
-        "install: missing", "lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file)"]
+        "install: missing", "lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file, release_packages)"]
 
 
 def test_the_default_version_file_must_exist(tmp_path):
