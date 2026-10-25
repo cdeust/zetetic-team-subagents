@@ -213,7 +213,6 @@ def test_merge_gate_validates_head_without_mutation(workflow, tmp_path):
     assert not path.exists()
 
 
-
 def test_failed_live_pr_read_is_not_reinterpreted_as_eligible(workflow, tmp_path):
     result, _ = arm(
         workflow, tmp_path, live_pr(autoMergeRequest={"enabledAt": "today"}), "1"
@@ -248,3 +247,20 @@ def test_mutating_jobs_handle_failures_but_stop_on_workflow_cancellation(workflo
     assert condition.startswith("always() && !cancelled() && ")
     assert "needs." not in condition
     assert "success()" not in condition
+
+
+@pytest.mark.parametrize(
+    "path", ["templates/ci/pipeline.yml", ".github/workflows/pipeline.yml"]
+)
+@pytest.mark.parametrize("name", ["Review", "Fix"])
+def test_only_review_publishes_the_official_report_without_full_output(path, name):
+    # claude-code-action at the pinned SHA writes the redacted Step Summary
+    # even on failure; raw SDK output is a separate, broader opt-in.
+    workflow = yaml.safe_load((ROOT / path).read_text())
+    inputs = step(workflow, "review", name)["with"]
+    if name == "Review":
+        assert inputs.get("display_report") is True
+        assert inputs.get("show_full_output") is False
+    else:
+        assert inputs.get("display_report", False) is False
+        assert inputs.get("show_full_output", False) is False
