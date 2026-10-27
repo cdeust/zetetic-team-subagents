@@ -65,21 +65,32 @@
       "source": "https://docs.npmjs.com/cli/v11/commands/npm-ci",
       "registry_source": "https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.306",
       "reason": "Replace four rendered global CLI installations with integrity-locked dependencies, without changing the CLI version or the legacy profile."
+    },
+    "owner-model-selection": {
+      "from": "claude-opus-4-7",
+      "to": "claude-opus-5-5",
+      "selected_at": "2026-10-28",
+      "source": "https://platform.claude.com/docs/en/models/opus-5-5/overview",
+      "reason": "Explicit owner selection of Opus5.5 for CI. The official model ID is verified; local rendering does not establish hosted action compatibility."
     }
   },
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "227cbb1a29c47aa3c9e207926d1559f15a5de9d2bd9fdc2db96b9ddb24950387",
+      "sha256": "132ab256025ea3ba6ae2e10c6a25b78dbc300a1724a52db086cfef185761fa7c",
       "adaptation": [
         "strict-mcp-config",
-        "native-app-oidc"
+        "native-app-oidc",
+        "owner-model-selection"
       ]
     },
     ".github/workflows/claude.yml": {
       "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
-      "sha256": "8cd556c91f7aa01c90358771e6807f0da2b49a7b8770be4088034e531504e252",
-      "adaptation": "strict-mcp-config"
+      "sha256": "20f97602745660cf3f0daccd00fa23499aa57dfd6baee7a6f1c6f51b1380f810",
+      "adaptation": [
+        "strict-mcp-config",
+        "owner-model-selection"
+      ]
     }
   },
   "authored_assets": {

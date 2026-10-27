@@ -52,6 +52,12 @@ receive these secrets. The runner installs subprocess-isolation dependencies
 and retains environment scrubbing. `claude.yml` retains owner-authored mention
 handling.
 
+Both native Claude invocations request `claude-opus-5-5`, explicitly selected
+by the owner on 2026-10-28. The ID is documented in Anthropic's
+[Opus5.5 overview](https://platform.claude.com/docs/en/models/opus-5-5/overview).
+The official review command and five reviewer files remain verbatim and inherit
+the selected model.
+
 Both native Claude invocations pass `--strict-mcp-config`. The
 [CLI reference](https://code.claude.com/docs/en/cli-reference) documents that this
 limits MCP discovery to explicitly supplied configurations. The pinned action
@@ -87,7 +93,7 @@ The assets and native job blocks originate from
 [Cortex commit 8e7375bf](https://github.com/cdeust/Cortex/tree/8e7375bf2edfb33fb9c45809b9af6b428f0f4235).
 `templates/ci/native/source.json` records SHA256 digests for 12 unchanged assets
 and three unchanged native job blocks. The two Claude YAML assets also record
-original and adapted digests for `--strict-mcp-config`. The automatic review
+original and adapted digests for `--strict-mcp-config` and the owner-selected model. The automatic review
 YAML additionally records its native App correction: the official PR trigger,
 OIDC permission and removal of the explicit GitHub token override.
 The two authored private CLI manifest/lock assets have their own digests. All

@@ -55,3 +55,11 @@ A registered disposable installation of the exact private CLI lock completed
 on macOS arm64, using a private HOME and config directory. The receipt is
 `docs/verification/native-cli-integrity-20261028.json`. This establishes the local
 host installation; Linux and Windows remain hosted CI checks.
+
+On 2026-10-28 the owner selected Opus5.5 for both native Claude invocations.
+Their rendered `--model claude-opus-5-5` contracts failed on the prior4.7 assets
+before the change and passed after it. The source receipt records the official
+model overview URL and updated asset digests. All six command/reviewer files
+remain byte-for-byte unchanged. No model request was made for this update;
+local actionlint and renderer checks establish configuration, not hosted action
+compatibility.

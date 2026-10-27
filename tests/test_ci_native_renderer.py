@@ -81,6 +81,9 @@ def test_native_cli_preserves_configuration_and_unrelated_files(tmp_path):
 
 def original_claude_asset(delivered, relative):
     original = delivered.replace(b"            --strict-mcp-config\n", b"")
+    original = original.replace(
+        b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'
+    )
     if relative.endswith("/claude-review.yml"):
         original = original.replace(b"  pull_request:\n", b"  pull_request_target:\n")
         original = original.replace(b"      id-token: write\n", b"")
@@ -206,6 +209,7 @@ def test_native_claude_limits_mcp_to_the_actions_configuration(tmp_path, workflo
     )
     arguments = shlex.split(action["with"]["claude_args"])
     assert arguments.count("--strict-mcp-config") == 1
+    assert arguments[arguments.index("--model") + 1] == "claude-opus-5-5"
     assert "--mcp-config" not in arguments  # The pinned action supplies its own.
     assert files[tmp_path / ".claude/commands/review-pr.md"]
     reviewers = [
