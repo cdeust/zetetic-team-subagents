@@ -1,0 +1,100 @@
+{
+  "repository": "cdeust/Cortex",
+  "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
+  "assets": {
+    ".github/workflows/Codex.yml": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
+    "scripts/ci_codex_review_event.py": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
+    "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
+    "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
+    "scripts/ci_codex_review_runtime.py": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
+    "scripts/ci_codex_reviews.py": "394003b3569c517b15a1919f8d5c85ab90497972fa71d3565ae3499bfa486432",
+    ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
+    ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
+    ".claude/agents/documentation-accuracy-reviewer.md": "06c8126da7cf3b5e7340e88b6021fe369280d14cb656c6f68be322a1db31169d",
+    ".claude/agents/performance-reviewer.md": "a0f1cc183c9be8c53dc92c830e089f97a826dd3c31814ba62cf5983bea7216d9",
+    ".claude/agents/security-code-reviewer.md": "41732a89e6af707041d6d767f5d71c324d6fdab808b76c6cb10fff6664f5de5c",
+    ".claude/agents/test-coverage-reviewer.md": "1747fa00bc1cd3de9aec93d5a6181661393fd0df43202308132b5363a5aef192"
+  },
+  "jobs": {
+    "resolve": {
+      "path": ".github/workflows/pipeline-post-merge.yml",
+      "sha256": "f1ede573b7aeced03540e5f0995c198f7f740efff614c4c4bbab1a0bc34233af"
+    },
+    "review": {
+      "path": ".github/workflows/pipeline.yml",
+      "sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53"
+    },
+    "merge": {
+      "path": ".github/workflows/pipeline.yml",
+      "sha256": "ff29bf24068614e7695bd6dc4db49007c48ecb69f8a9cbaaa94a937cbbeb2e4a"
+    }
+  },
+  "adaptations": {
+    "setup-python": {
+      "from": "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
+      "to": "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0",
+      "reason": "Match Cortex8e7375bf and Spec616eb04 without downgrading consumer setup-python; legacy default unchanged."
+    },
+    "strict-mcp-config": {
+      "flag": "--strict-mcp-config",
+      "source": "https://code.claude.com/docs/en/cli-reference",
+      "action_mode_sources": [
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/modes/tag/index.ts#L192-L204",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/modes/agent/index.ts#L112-L122"
+      ],
+      "reason": "Use the action-provided GitHub MCP configuration without autoloading consumer .mcp.json application launchers. Settings, skills and reviewer definitions are unchanged."
+    },
+    "native-app-oidc": {
+      "event": "pull_request",
+      "permissions": {
+        "id-token": "write"
+      },
+      "github_token_override": false,
+      "checkout_ref": "main",
+      "reason": "Restore native Claude App attribution through OIDC exchange; retain same-repository/non-draft gate and restoring pinned action.",
+      "sources": [
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/.github/workflows/claude-review.yml",
+        "https://github.com/anthropics/claude-code-action/issues/396",
+        "https://docs.github.com/en/actions/reference/security/secure-use"
+      ]
+    },
+    "locked-cli": {
+      "version": "2.1.306",
+      "prefix": ".github/claude-cli",
+      "method": "npm ci --prefix and GITHUB_PATH for private node_modules/.bin",
+      "source": "https://docs.npmjs.com/cli/v11/commands/npm-ci",
+      "registry_source": "https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.306",
+      "reason": "Replace four rendered global CLI installations with integrity-locked dependencies, without changing the CLI version or the legacy profile."
+    },
+    "owner-model-selection": {
+      "from": "claude-opus-4-7",
+      "to": "claude-opus-5-5",
+      "selected_at": "2026-10-28",
+      "source": "https://platform.claude.com/docs/en/models/opus-5-5/overview",
+      "reason": "Explicit owner selection of Opus5.5 for CI. The official model ID is verified; local rendering does not establish hosted action compatibility."
+    }
+  },
+  "adapted_assets": {
+    ".github/workflows/claude-review.yml": {
+      "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
+      "sha256": "132ab256025ea3ba6ae2e10c6a25b78dbc300a1724a52db086cfef185761fa7c",
+      "adaptation": [
+        "strict-mcp-config",
+        "native-app-oidc",
+        "owner-model-selection"
+      ]
+    },
+    ".github/workflows/claude.yml": {
+      "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
+      "sha256": "20f97602745660cf3f0daccd00fa23499aa57dfd6baee7a6f1c6f51b1380f810",
+      "adaptation": [
+        "strict-mcp-config",
+        "owner-model-selection"
+      ]
+    }
+  },
+  "authored_assets": {
+    ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
+    ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82"
+  }
+}

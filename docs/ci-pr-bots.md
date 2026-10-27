@@ -1,5 +1,9 @@
 # PR bot repair and merge checks
 
+For native Codex plus Claude reviews, use the explicit
+[`--native-review` profile](ci-native-reviews.md). The behavior below describes
+the default renderer.
+
 Edit `templates/ci/pipeline.yml` and `templates/ci/pipeline-after-merge.yml`, then
 run `bash scripts/setup.sh render-ci .`. The renderer copies both templates with
 their Git blob identifiers and preserves the repository's `ci.json`.

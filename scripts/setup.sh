@@ -106,7 +106,7 @@ installed_version() {
 case "$ACTION" in
   uninstall)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_uninstall; exit 0 ;;
   configure)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_configure; exit 0 ;;
-  render-ci)  do_render_ci "${ARGS[1]:-}"; exit $? ;;
+  render-ci)  do_render_ci "${ARGS[@]:1}"; exit $? ;;
   install|update) ;;
   *) echo "usage: $0 [install|update|uninstall|configure|render-ci <target>] [--dry-run] [--verbose]" >&2; exit 2 ;;
 esac
