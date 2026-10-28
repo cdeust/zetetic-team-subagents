@@ -19,7 +19,8 @@ PyYAML==6.0.3
 # dev set anyway so CI exercises the SAME branch a developer does; otherwise the
 # two environments measure different lines and the coverage number drifts
 # between them for no reason anyone can see.
-certifi==2026.7.22
+# GHSA-6q48-6c7w-9gw2: 2026.10.19 preserves the unaffected emSign roots.
+certifi==2026.10.19
 
 # Test tooling.
 # Pin every direct requirement to the version whose hashes are committed in
