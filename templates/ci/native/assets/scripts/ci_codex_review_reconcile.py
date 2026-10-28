@@ -103,9 +103,12 @@ def discover(repo):
 
 
 def _trigger(flags):
-    if len(flags) != 4 or flags[0] != "--pr" or flags[2] != "--sha":
+    try:
+        pr_flag, number, sha_flag, sha = flags
+    except ValueError as exc:
+        raise EvidenceError("arguments") from exc
+    if (pr_flag, sha_flag) != ("--pr", "--sha"):
         raise EvidenceError("arguments")
-    number, sha = flags[1], flags[3]
     if not number.isascii() or not number.isdecimal() or number.startswith("0"):
         raise EvidenceError("arguments")
     if SHA_PATTERN.fullmatch(sha) is None:
