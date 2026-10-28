@@ -90,7 +90,7 @@
         "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule",
         "https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run#standard-github-hosted-runners-for-public-repositories"
       ],
-      "reason": "Review-thread resolution has no supported Actions event. A default-branch five-minute fallback discovers only completed pipelines whose authenticated existing resumption policy permits a gate rerun. Workers recheck current proof under the same per-PR concurrency group; no model invocation or additional gate."
+      "reason": "Review-thread resolution has no supported Actions event. A default-branch five-minute fallback prefilters paginated PR status rollups before existing authenticated resumption policy. Discovery is serialized per repository; API errors stop the scan. Per-PR protocol errors remain isolated. Full proof alone authorizes readiness repair or exact waiting gate reruns."
     }
   },
   "adapted_assets": {
@@ -137,7 +137,7 @@
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-      "sha256": "db5b3aa7b0ba336cc690332ae6a89e16b2a94900c65898925315029564b1c1fb",
+      "sha256": "618af59bff999194ff3950df13587eea8b8b1354aa059a971e9dfeb51078b6d1",
       "adaptation": [
         "scheduled-reconciliation"
       ]
@@ -154,8 +154,9 @@
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "1eafc10be2db306f5a65fb27d74bdc27429c41b038abff743c7dfbfd14639a11",
     "scripts/tests/test_ci_codex_review_reconcile.py": "b4214c4fbcb3d719af0e7deb632f62693e976fea9d0fb6633e6656fdc17ca49a",
     "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
-    "scripts/ci_codex_review_reconcile.py": "2ea7d95920ef289219ee1796ce7de38e68233464c81d74d3b8fa81fd2108a9a8",
-    "scripts/tests/test_ci_codex_review_schedule.py": "3f40e11a2386838e4c9a46b16e8150311d09114d73365f4ff16a2a0f856bb329"
+    "scripts/ci_codex_review_reconcile.py": "013cbb5510abd2999cff40102c12f93fbe95a6f8264295b2422be65a525e0029",
+    "scripts/tests/test_ci_codex_review_schedule.py": "5a76b931e09946cd1cc03d6a0f23a5ebfada121a4b5767833fdbd2eaa2321967",
+    "scripts/tests/test_ci_codex_review_schedule_cli.py": "396b3f03aec308ea60c24419862f1773acee6344e5d760cb67df44fe16d65809"
   },
   "adapted_jobs": {
     "review": {

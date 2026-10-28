@@ -70,3 +70,13 @@ Review: 59 canonical contracts; 50 renderer/native tests plus33 subtests; 78 Spe
 - [x] Obtain independent root review of helper and workflow.
 
 Review: see docs/verification/native-scheduled-reconciliation-20261028.md. Hosted scheduled acceptance requires publication to main.
+
+## Native discovery review corrections, 2026-10-28
+
+- [x] Verify actual native Claude findings and current canonical main.
+- [x] Add paginated GraphQL status-rollup prefilter and serialize discovery.
+- [x] Preserve existing policy readiness-repair authorization and remove duplicate PR read.
+- [x] Prove API-failure stop, CLI/output boundaries and RED/GREEN contracts.
+- [x] Verify 77 canonical, 52 renderer plus33 subtests, and 96 Codebase contracts.
+
+Review evidence: docs/verification/native-discovery-review-corrections-20261028.md. Root independently reviews final artifacts before publication.
