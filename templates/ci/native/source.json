@@ -6,7 +6,6 @@
     "scripts/ci_codex_review_event.py": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
     "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
-    "scripts/ci_codex_review_runtime.py": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
     "scripts/ci_codex_reviews.py": "394003b3569c517b15a1919f8d5c85ab90497972fa71d3565ae3499bfa486432",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
     ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
@@ -19,10 +18,6 @@
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
       "sha256": "f1ede573b7aeced03540e5f0995c198f7f740efff614c4c4bbab1a0bc34233af"
-    },
-    "review": {
-      "path": ".github/workflows/pipeline.yml",
-      "sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53"
     },
     "merge": {
       "path": ".github/workflows/pipeline.yml",
@@ -72,6 +67,10 @@
       "selected_at": "2026-10-28",
       "source": "https://platform.claude.com/docs/en/models/opus-5-5/overview",
       "reason": "Explicit owner selection of Opus5.5 for CI. The official model ID is verified; local rendering does not establish hosted action compatibility."
+    },
+    "current-security-findings": {
+      "source": "https://github.com/cdeust/ai-architect-mcp-codebase/pull/464#discussion_r4395405890",
+      "reason": "Require every finding announced by the current authenticated summary, but exclude historical thread IDs from its resolution verdict and receipt. Missing current identities and existing trust/protocol errors still fail closed."
     }
   },
   "adapted_assets": {
@@ -91,10 +90,27 @@
         "strict-mcp-config",
         "owner-model-selection"
       ]
+    },
+    "scripts/ci_codex_review_runtime.py": {
+      "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
+      "sha256": "dfaa509b48136801cfebf8bf6aacf7abf53fd2f537fa5a01cfd8eebaf1dd60bd",
+      "adaptation": [
+        "current-security-findings"
+      ]
     }
   },
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82"
+  },
+  "adapted_jobs": {
+    "review": {
+      "path": ".github/workflows/pipeline.yml",
+      "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
+      "sha256": "ca87246578303f5d73bcea23026d45bc54db45a96f17041648d37c3d9d53cebb",
+      "adaptation": [
+        "current-security-findings"
+      ]
+    }
   }
 }

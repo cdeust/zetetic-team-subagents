@@ -91,8 +91,14 @@ account authentication or hosted model execution.
 
 The assets and native job blocks originate from
 [Cortex commit 8e7375bf](https://github.com/cdeust/Cortex/tree/8e7375bf2edfb33fb9c45809b9af6b428f0f4235).
-`templates/ci/native/source.json` records SHA256 digests for 12 unchanged assets
-and three unchanged native job blocks. The two Claude YAML assets also record
+`templates/ci/native/source.json` records SHA256 digests for 11 unchanged assets
+and two unchanged native job blocks. The Codex runtime asset and review job
+record their original and adapted digests for current-finding resolution:
+all finding IDs announced by the current authenticated summary must exist,
+and only those findings determine its resolution verdict. Historical threads
+remain available without invalidating later reviews. Missing current IDs and
+the existing identity, owner-resolution and pagination checks still fail closed.
+The two Claude YAML assets also record
 original and adapted digests for `--strict-mcp-config` and the owner-selected model. The automatic review
 YAML additionally records its native App correction: the official PR trigger,
 OIDC permission and removal of the explicit GitHub token override.
