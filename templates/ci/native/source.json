@@ -100,6 +100,21 @@
         "https://github.com/cli/cli/discussions/8083"
       ],
       "reason": "Declare job-local Checks read access for the discovery GraphQL CheckRun fields. Keep workflow defaults and other jobs unchanged. This is an evidence-backed permission declaration, not an observed public-runner failure or hosted acceptance."
+    },
+    "structured-api-errors": {
+      "sources": [
+        "https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api",
+        "https://cli.github.com/manual/gh_api"
+      ],
+      "reason": "Preserve fixed not_found, forbidden, rate_limited or unknown transport category while str(error) remains api. Actual gh REST404 response includes status; --paginate --slurp wraps it in one array element. Never classify raw stderr or expose response bodies."
+    },
+    "proof-first-discovery": {
+      "source": "https://github.com/cdeust/Cortex/issues/comments/6459888424",
+      "reason": "Authenticate current-head GraphQL summaries before REST run/attempt discovery. Incomplete reviews and successful-review unresolved waits perform no REST work. Truncated gate contexts cannot veto an authorized readiness repair. Only known per-PR404 is isolated; quota/unknown transport and initial listing failures stop the scan."
+    },
+    "bounded-completion-jobs": {
+      "source": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes",
+      "reason": "Declared operational cap equals the existing five-minute schedule period for each non-model completion job; not an empirical service deadline. Observed Cortex run40626520816 identify9s and resume11s."
     }
   },
   "adapted_assets": {
@@ -122,34 +137,38 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "5aab93069cfc31d09648f27e504df763fad34632c708c682b720005ac0dcaf9e",
+      "sha256": "ab4956bfbbfd64c9b0c9774021120fefba90eaf0b0f919083537888ea776d74b",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
-        "comment-boundary-module"
+        "comment-boundary-module",
+        "structured-api-errors"
       ]
     },
     "scripts/ci_codex_reviews.py": {
       "source_sha256": "394003b3569c517b15a1919f8d5c85ab90497972fa71d3565ae3499bfa486432",
       "adaptation": [
         "summary-editor-authentication",
-        "comment-boundary-module"
+        "comment-boundary-module",
+        "structured-api-errors"
       ],
-      "sha256": "854c0361003a185dceb457a1cdeeaeb4b6db2e7cba81ce255ebda58ea9d83d1d"
+      "sha256": "76f0d79a4c2127ef43a2b0dc4523f21d3dc17cd1bb000d68ac446d8f96245d02"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
       "adaptation": [
-        "summary-editor-authentication"
+        "summary-editor-authentication",
+        "proof-first-discovery"
       ],
-      "sha256": "6492f9c318ee5c496305475c6ef00076002a31d6958e1cd980616defdad90e23"
+      "sha256": "2e5d17c6518eafbfb59bcf4d4e88e41c8720821509e9e926cbec7e3675345d61"
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-      "sha256": "dc9e1ff6042b94853605b0e28a577f5024ebb06154eeb3bc7fbf4bc1e1843d3c",
+      "sha256": "3f6c9d7a58570ce410d794367ac9dfcfddfe68413d539c0e8a20e130cf59a1f6",
       "adaptation": [
         "scheduled-reconciliation",
-        "reconciliation-checks-read"
+        "reconciliation-checks-read",
+        "bounded-completion-jobs"
       ]
     }
   },
@@ -164,19 +183,21 @@
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "1eafc10be2db306f5a65fb27d74bdc27429c41b038abff743c7dfbfd14639a11",
     "scripts/tests/test_ci_codex_review_reconcile.py": "b4214c4fbcb3d719af0e7deb632f62693e976fea9d0fb6633e6656fdc17ca49a",
     "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
-    "scripts/ci_codex_review_reconcile.py": "013cbb5510abd2999cff40102c12f93fbe95a6f8264295b2422be65a525e0029",
+    "scripts/ci_codex_review_reconcile.py": "77497df4ad82192074c68123e365e7a1f80430762c9840a5c0f3c61e1e015c21",
     "scripts/tests/test_ci_codex_review_schedule.py": "5a76b931e09946cd1cc03d6a0f23a5ebfada121a4b5767833fdbd2eaa2321967",
-    "scripts/tests/test_ci_codex_review_schedule_cli.py": "396b3f03aec308ea60c24419862f1773acee6344e5d760cb67df44fe16d65809"
+    "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
+    "scripts/tests/test_ci_codex_review_proof_first.py": "93c80c3c861982581c6aae156f1e631920d76796ac01e221156acf788849d749"
   },
   "adapted_jobs": {
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "56acadb451cb69cde4cfc28ba0869490305a8b703c25b6b9dce58b21c76104b0",
+      "sha256": "f50f96d2f88154ce8ea70fdb4a410623ca845571a934867007f68afa927c28ce",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
-        "comment-boundary-module"
+        "comment-boundary-module",
+        "structured-api-errors"
       ]
     }
   },

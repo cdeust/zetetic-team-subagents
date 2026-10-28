@@ -143,14 +143,18 @@ scheduled fallback and a manual dispatch for hosted acceptance. Discovery reads
 paginated GraphQL PR status rollups to exclude drafts, forks, holds and completed
 pipelines with no review wait before making per-PR REST calls. The rollup is only
 an optimization: existing authenticated full proof alone authorizes a rerun,
-including readiness repair when test jobs failed.
+including readiness repair when test jobs failed. Current-head GraphQL summaries
+are authenticated before REST run/attempt reads; incomplete reviews and successful
+reviews waiting on unresolved findings use no REST calls.
 Each selected PR worker rechecks its current head and full review proof before
 rerunning the exact waiting job, under the same per-PR concurrency group as the
 ordinary completion path. One PR's malformed evidence cannot authorize it or
-prevent discovery of other eligible PRs. API failures stop the scan immediately
-instead of issuing more requests against an unavailable or exhausted API.
+prevent discovery of other eligible PRs. Known per-PR missing resources are logged
+as api/not_found and skipped. Forbidden, rate-limited and unknown API failures
+stop the scan instead of issuing more requests against an unavailable API.
 Repository-level discovery concurrency avoids overlapping scans. Neither fallback
-job invokes a model.
+job invokes a model. All four completion jobs have a five-minute operational
+cap equal to one schedule period; it is not a service deadline.
 
 These jobs execute trusted default-branch helpers, so activation requires merging
 their code to main. GitHub may delay scheduled runs; inactive public repositories

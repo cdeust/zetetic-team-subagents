@@ -83,6 +83,18 @@ def test_native_cli_preserves_configuration_and_unrelated_files(tmp_path):
 
 def original_security_runtime(delivered):
     original = delivered.split(b"\n\n# Body and edit attribution", 1)[0]
+    original = original.replace(b"from http import HTTPStatus\n", b"")
+    first = original.index(b"class APIError(")
+    last = original.index(b"def _pairs(", first)
+    original = original[:first] + original[last:]
+    original = original.replace(
+        b"    except subprocess.CalledProcessError as exc:\n"
+        b"        raise APIError(_api_category(exc.stdout)) from exc\n"
+        b"    except (OSError, subprocess.SubprocessError) as exc:\n"
+        b"        raise APIError() from exc",
+        b"    except (OSError, subprocess.SubprocessError) as exc:\n"
+        b'        raise EvidenceError("api") from exc',
+    )
     original = original.replace(
         b"if not expected.issubset(states):", b"if states.keys() != expected:"
     ).replace(b'"finding_ids": sorted(expected),', b'"finding_ids": sorted(states),')
@@ -93,8 +105,23 @@ def original_security_runtime(delivered):
     )
 
 
+def original_reader_api(original):
+    first = original.index("class APIError(")
+    last = original.index("def _json(", first)
+    original = original[:first] + original[last:]
+    original = original.replace(
+        "    except runtime.APIError as exc:\n        raise APIError(exc.category) from exc\n",
+        "",
+    ).replace(
+        '        if isinstance(exc, runtime.APIError):\n            result["api_category"] = exc.category\n',
+        "",
+    )
+    return original
+
+
 def original_security_reader(delivered):
     original = delivered.decode()
+    original = original_reader_api(original)
     imported = (
         "from ci_codex_review_comments import _authenticate_editor, "
         "_bot_author, _canonical  # noqa: E402\n"
@@ -167,7 +194,10 @@ def original_review_job(delivered):
 
 def original_asset(delivered, relative):
     if relative == ".github/workflows/Codex.yml":
-        original = delivered.split(b"\n  reconcile-identify:\n", 1)[0]
+        original = delivered.replace(
+            b"    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.\n",
+            b"",
+        ).split(b"\n  reconcile-identify:\n", 1)[0]
         first = original.index(b"  # Supported fallback:")
         last = original.index(b"\npermissions:\n", first)
         return original[:first] + original[last:]
@@ -176,6 +206,11 @@ def original_asset(delivered, relative):
     if relative == "scripts/ci_codex_reviews.py":
         return original_security_reader(delivered)
     if relative == "scripts/ci_codex_review_event.py":
+        delivered = delivered.replace(
+            b'    return head_proof(repo, number, run["head_sha"])\n\n\n'
+            b"def head_proof(repo: str, number: int, sha: str) -> Record:",
+            b'    sha = run["head_sha"]',
+        )
         return delivered.replace(
             b"from ci_codex_reviews import summary_comments  # noqa: E402\n", b""
         ).replace(
