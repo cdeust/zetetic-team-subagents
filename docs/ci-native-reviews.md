@@ -129,3 +129,21 @@ Run `python3 -m pytest -q tests/test_ci_native_renderer.py` for native delivery,
 source digests, rollback and destination safety. The default renderer's existing
 regressions remain in `tests/test_ci_renderer.py` and
 `tools/tests/render-ci/run-tests.sh`.
+
+The native profile also delivers executable decision and coordinator contracts
+under `scripts/tests/`. Run `python3 -B -m unittest discover -s scripts/tests -p
+'test_ci_codex*.py'` from a consumer repository. These cover retained results from
+partial attempts, authenticated event identification, stale heads, unrelated
+failures and the exact rerun request emitted after a fresh proof.
+
+Resolving a review thread emits the GitHub `pull_request_review_thread` webhook,
+which is absent from GitHub's supported Actions event catalog. The completion
+workflow therefore does not register it. Existing controllers can reconcile an
+eligible PR through `ci_codex_review_event.resume(repo, trigger)`, where `trigger`
+contains the PR number, expected head SHA and optional run ID. That function
+rechecks the current PR, native summaries, owner-resolved threads, jobs and run
+attempt before emitting a rerun. The direct-call contracts exercise that path;
+this profile does not install a periodic controller or claim one is running.
+
+Sources: [supported Actions events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
+and [thread webhook](https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_thread).
