@@ -115,6 +115,10 @@
     "bounded-completion-jobs": {
       "source": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes",
       "reason": "Declared operational cap equals the existing five-minute schedule period for each non-model completion job; not an empirical service deadline. Observed Cortex run40626520816 identify9s and resume11s."
+    },
+    "gate-name-collisions": {
+      "source": "https://github.com/cdeust/ai-architect-mcp-spec/issues/comments/6460515146",
+      "reason": "Use CheckRun-only grouped names as a superset hint. Duplicate native gates and partial contexts proceed to current full proof; StatusContext cannot shadow checks. No prerequisite veto is added without authenticated workflow identity. Unchanged full plan handles real failed prerequisites and superseded matrix placeholders."
     }
   },
   "adapted_assets": {
@@ -183,10 +187,11 @@
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "1eafc10be2db306f5a65fb27d74bdc27429c41b038abff743c7dfbfd14639a11",
     "scripts/tests/test_ci_codex_review_reconcile.py": "b4214c4fbcb3d719af0e7deb632f62693e976fea9d0fb6633e6656fdc17ca49a",
     "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
-    "scripts/ci_codex_review_reconcile.py": "77497df4ad82192074c68123e365e7a1f80430762c9840a5c0f3c61e1e015c21",
+    "scripts/ci_codex_review_reconcile.py": "a1e484a9e674f51971ecbaca87d99ca6dda94da2aa69569c513efedfa0077d16",
     "scripts/tests/test_ci_codex_review_schedule.py": "5a76b931e09946cd1cc03d6a0f23a5ebfada121a4b5767833fdbd2eaa2321967",
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
-    "scripts/tests/test_ci_codex_review_proof_first.py": "93c80c3c861982581c6aae156f1e631920d76796ac01e221156acf788849d749"
+    "scripts/tests/test_ci_codex_review_proof_first.py": "93c80c3c861982581c6aae156f1e631920d76796ac01e221156acf788849d749",
+    "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6"
   },
   "adapted_jobs": {
     "review": {
