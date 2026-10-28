@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 
@@ -79,7 +80,20 @@ def test_native_cli_preserves_configuration_and_unrelated_files(tmp_path):
     assert (tmp_path / ".github/workflows/Codex.yml").is_file()
 
 
-def original_claude_asset(delivered, relative):
+def original_security_runtime(delivered):
+    original = delivered.replace(
+        b"if not expected.issubset(states):", b"if states.keys() != expected:"
+    ).replace(b'"finding_ids": sorted(expected),', b'"finding_ids": sorted(states),')
+    return re.sub(
+        rb'"state": \(\n *"success" if all\(states\[identity\] for identity in expected\) else "unresolved"\n *\),',
+        b'"state": "success" if all(states.values()) else "unresolved",',
+        original,
+    )
+
+
+def original_asset(delivered, relative):
+    if relative == "scripts/ci_codex_review_runtime.py":
+        return original_security_runtime(delivered)
     original = delivered.replace(b"            --strict-mcp-config\n", b"")
     original = original.replace(
         b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'
@@ -104,13 +118,13 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     assert receipt["commit"] == "8e7375bf2edfb33fb9c45809b9af6b428f0f4235"
     for relative, digest in receipt["assets"].items():
         assert hashlib.sha256(files[tmp_path / relative]).hexdigest() == digest
-    assert len(receipt["assets"]) == 12
+    assert len(receipt["assets"]) == 11
     for relative, source in receipt["adapted_assets"].items():
         delivered = files[tmp_path / relative]
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
-        original = original_claude_asset(delivered, relative)
+        original = original_asset(delivered, relative)
         assert hashlib.sha256(original).hexdigest() == source["source_sha256"]
-    assert len(receipt["adapted_assets"]) == 2
+    assert len(receipt["adapted_assets"]) == 3
     for relative, digest in receipt["authored_assets"].items():
         assert hashlib.sha256(files[tmp_path / relative]).hexdigest() == digest
     assert (
@@ -121,6 +135,13 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     jobs = renderer.split_jobs((NATIVE / "pipeline.yml").read_text())[1]
     for name, source in receipt["jobs"].items():
         assert hashlib.sha256(jobs[name].encode()).hexdigest() == source["sha256"]
+    for name, source in receipt["adapted_jobs"].items():
+        delivered = jobs[name].encode()
+        assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
+        assert (
+            hashlib.sha256(original_security_runtime(delivered)).hexdigest()
+            == source["source_sha256"]
+        )
 
 
 def test_native_delivery_rolls_back_workflows_and_assets(tmp_path, monkeypatch):
