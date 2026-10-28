@@ -52,36 +52,41 @@ query($owner: String!, $name: String!, $endCursor: String) {
 """
 
 
+def _page_nodes(page, repo, expected_more, cursors):
+    try:
+        repository = page["data"]["repository"]
+        connection = repository["pullRequests"]
+        nodes, info = connection["nodes"], connection["pageInfo"]
+        more = info["hasNextPage"]
+        cursor = info["endCursor"]
+        valid = (
+            not page.get("errors")
+            and repository["nameWithOwner"].casefold() == repo.casefold()
+            and isinstance(nodes, list)
+            and type(more) is bool
+            and more == expected_more
+        )
+        if more:
+            valid = (
+                valid
+                and isinstance(cursor, str)
+                and bool(cursor)
+                and cursor not in cursors
+            )
+            cursors.add(cursor)
+        if not valid:
+            raise EvidenceError("protocol")
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise EvidenceError("protocol") from exc
+    return nodes
+
+
 def _rows(pages, repo):
     if not isinstance(pages, list) or not pages:
         raise EvidenceError("protocol")
     unique, rejected, cursors = {}, set(), set()
     for index, page in enumerate(pages):
-        try:
-            repository = page["data"]["repository"]
-            connection = repository["pullRequests"]
-            nodes, info = connection["nodes"], connection["pageInfo"]
-            more = info["hasNextPage"]
-            cursor = info["endCursor"]
-            valid = (
-                not page.get("errors")
-                and repository["nameWithOwner"].casefold() == repo.casefold()
-                and isinstance(nodes, list)
-                and type(more) is bool
-                and more == (index < len(pages) - 1)
-            )
-            if more:
-                valid = (
-                    valid
-                    and isinstance(cursor, str)
-                    and bool(cursor)
-                    and cursor not in cursors
-                )
-                cursors.add(cursor)
-            if not valid:
-                raise EvidenceError("protocol")
-        except (KeyError, TypeError, AttributeError) as exc:
-            raise EvidenceError("protocol") from exc
+        nodes = _page_nodes(page, repo, index < len(pages) - 1, cursors)
         for row in nodes:
             try:
                 number = events.source.positive(row.get("number"))
