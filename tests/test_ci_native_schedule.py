@@ -22,6 +22,10 @@ def test_only_discovery_selects_matrix_and_all_helpers_come_from_main():
     discover = workflow["jobs"]["reconcile-identify"]
     worker = workflow["jobs"]["reconcile"]
     assert discover["permissions"]["actions"] == "read"
+    assert discover["concurrency"] == {
+        "group": "codex-review-discovery-${{ github.repository }}",
+        "cancel-in-progress": False,
+    }
     assert worker["permissions"]["actions"] == "write"
     assert (
         worker["strategy"]["matrix"]["include"]

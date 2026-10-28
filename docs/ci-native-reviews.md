@@ -140,12 +140,17 @@ Resolving a review thread emits the GitHub `pull_request_review_thread` webhook,
 which is absent from GitHub's supported Actions event catalog. The completion
 workflow therefore does not register it. `Codex.yml` includes a five-minute
 scheduled fallback and a manual dispatch for hosted acceptance. Discovery reads
-every open PR page and selects same-repository, non-draft PRs only when prerequisite
-jobs completed successfully and the existing authenticated policy permits a rerun.
+paginated GraphQL PR status rollups to exclude drafts, forks, holds and completed
+pipelines with no review wait before making per-PR REST calls. The rollup is only
+an optimization: existing authenticated full proof alone authorizes a rerun,
+including readiness repair when test jobs failed.
 Each selected PR worker rechecks its current head and full review proof before
 rerunning the exact waiting job, under the same per-PR concurrency group as the
 ordinary completion path. One PR's malformed evidence cannot authorize it or
-prevent discovery of other eligible PRs. Neither fallback job invokes a model.
+prevent discovery of other eligible PRs. API failures stop the scan immediately
+instead of issuing more requests against an unavailable or exhausted API.
+Repository-level discovery concurrency avoids overlapping scans. Neither fallback
+job invokes a model.
 
 These jobs execute trusted default-branch helpers, so activation requires merging
 their code to main. GitHub may delay scheduled runs; inactive public repositories

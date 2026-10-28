@@ -36,6 +36,7 @@ NATIVE_ASSETS = (
     "scripts/tests/test_ci_codex_review_event_cli.py",
     "scripts/tests/test_ci_codex_review_reconcile.py",
     "scripts/tests/test_ci_codex_review_schedule.py",
+    "scripts/tests/test_ci_codex_review_schedule_cli.py",
     ".claude/commands/review-pr.md",
     ".claude/agents/code-quality-reviewer.md",
     ".claude/agents/documentation-accuracy-reviewer.md",
