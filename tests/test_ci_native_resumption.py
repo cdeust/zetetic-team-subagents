@@ -20,6 +20,7 @@ CONTRACTS = (
     "test_ci_codex_review_event_attempts.py",
     "test_ci_codex_review_event_cli.py",
     "test_ci_codex_review_reconcile.py",
+    "test_ci_codex_review_schedule.py",
 )
 
 

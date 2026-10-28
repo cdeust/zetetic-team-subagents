@@ -2,7 +2,6 @@
   "repository": "cdeust/Cortex",
   "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
   "assets": {
-    ".github/workflows/Codex.yml": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
     "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
@@ -84,6 +83,14 @@
       "repository": "cdeust/Cortex",
       "commit": "f4831d159c181b5e170c984f703ed733819f188e",
       "reason": "Deliver the existing observable decision/coordinator contracts plus direct full-proof reconciliation cases; production review helpers and supported event triggers are unchanged."
+    },
+    "scheduled-reconciliation": {
+      "source": "https://github.com/cdeust/ai-architect-mcp-spec/pull/159#discussion_r4395992283",
+      "sources": [
+        "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule",
+        "https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run#standard-github-hosted-runners-for-public-repositories"
+      ],
+      "reason": "Review-thread resolution has no supported Actions event. A default-branch five-minute fallback discovers only completed pipelines whose authenticated existing resumption policy permits a gate rerun. Workers recheck current proof under the same per-PR concurrency group; no model invocation or additional gate."
     }
   },
   "adapted_assets": {
@@ -127,6 +134,13 @@
         "summary-editor-authentication"
       ],
       "sha256": "6492f9c318ee5c496305475c6ef00076002a31d6958e1cd980616defdad90e23"
+    },
+    ".github/workflows/Codex.yml": {
+      "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
+      "sha256": "db5b3aa7b0ba336cc690332ae6a89e16b2a94900c65898925315029564b1c1fb",
+      "adaptation": [
+        "scheduled-reconciliation"
+      ]
     }
   },
   "authored_assets": {
@@ -139,7 +153,9 @@
     "scripts/tests/test_ci_codex_review_event_cli.py": "046e5dc369508d0b4641148b4e6dbf20bba8690af66247b601286cbf440c9f43",
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "1eafc10be2db306f5a65fb27d74bdc27429c41b038abff743c7dfbfd14639a11",
     "scripts/tests/test_ci_codex_review_reconcile.py": "b4214c4fbcb3d719af0e7deb632f62693e976fea9d0fb6633e6656fdc17ca49a",
-    "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183"
+    "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
+    "scripts/ci_codex_review_reconcile.py": "2ea7d95920ef289219ee1796ce7de38e68233464c81d74d3b8fa81fd2108a9a8",
+    "scripts/tests/test_ci_codex_review_schedule.py": "3f40e11a2386838e4c9a46b16e8150311d09114d73365f4ff16a2a0f856bb329"
   },
   "adapted_jobs": {
     "review": {

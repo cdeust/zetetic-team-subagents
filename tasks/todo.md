@@ -59,3 +59,14 @@ See [implementation and validation](shared-host-gates.md). Native hook trust rem
 Thread resolution is webhook-only, not an Actions event. Keep the unsupported trigger absent; controller reconciliation is owned by root.
 
 Review: 59 canonical contracts; 50 renderer/native tests plus33 subtests; 78 Spec Python CI contracts. See docs/verification/native-resumption-contracts-20261028.md.
+
+## Native scheduled reconciliation, 2026-10-28
+
+- [x] Verify supported schedule events and public runner billing in GitHub documentation.
+- [x] Reproduce missing fallback helper with ten failing contracts.
+- [x] Implement paginated discovery and exact existing-policy resumption.
+- [x] Add trusted-main discovery and per-PR workers to Codex.yml.
+- [x] Validate 69 native contracts, 52 renderer contracts plus33 subtests, and 88 Spec CI contracts.
+- [x] Obtain independent root review of helper and workflow.
+
+Review: see docs/verification/native-scheduled-reconciliation-20261028.md. Hosted scheduled acceptance requires publication to main.

@@ -138,12 +138,21 @@ failures and the exact rerun request emitted after a fresh proof.
 
 Resolving a review thread emits the GitHub `pull_request_review_thread` webhook,
 which is absent from GitHub's supported Actions event catalog. The completion
-workflow therefore does not register it. Existing controllers can reconcile an
-eligible PR through `ci_codex_review_event.resume(repo, trigger)`, where `trigger`
-contains the PR number, expected head SHA and optional run ID. That function
-rechecks the current PR, native summaries, owner-resolved threads, jobs and run
-attempt before emitting a rerun. The direct-call contracts exercise that path;
-this profile does not install a periodic controller or claim one is running.
+workflow therefore does not register it. `Codex.yml` includes a five-minute
+scheduled fallback and a manual dispatch for hosted acceptance. Discovery reads
+every open PR page and selects same-repository, non-draft PRs only when prerequisite
+jobs completed successfully and the existing authenticated policy permits a rerun.
+Each selected PR worker rechecks its current head and full review proof before
+rerunning the exact waiting job, under the same per-PR concurrency group as the
+ordinary completion path. One PR's malformed evidence cannot authorize it or
+prevent discovery of other eligible PRs. Neither fallback job invokes a model.
+
+These jobs execute trusted default-branch helpers, so activation requires merging
+their code to main. GitHub may delay scheduled runs; inactive public repositories
+can have schedules disabled after 60 days. Standard GitHub-hosted runners are free
+for public repositories. Private repositories must account for Actions usage.
 
 Sources: [supported Actions events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 and [thread webhook](https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_thread).
+See also [schedule constraints](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+and [public runner billing](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run#standard-github-hosted-runners-for-public-repositories).
