@@ -67,3 +67,11 @@ def test_rendered_workflow_limits_checks_read_to_discovery(tmp_path):
         for name, job in workflow["jobs"].items()
         if "checks" in job.get("permissions", {})
     } == {"reconcile-identify"}
+
+
+def test_all_completion_jobs_are_bounded_by_one_scheduled_period():
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    period = int(workflow[True]["schedule"][0]["cron"].split()[0].split("/")[1])
+    assert all(
+        job.get("timeout-minutes") == period for job in workflow["jobs"].values()
+    )
