@@ -192,6 +192,25 @@ def original_review_job(delivered):
     return original.encode()
 
 
+def original_merge_job(delivered):
+    # Inverse of source.json adaptation "merge-condition-diagnostics".
+    text = delivered.decode()
+    first = text.index("          # Name the failing condition:")
+    last = text.index("          if [ -n \"$cause\" ]; then\n", first)
+    last = text.index("          fi\n", last) + len("          fi\n")
+    original = (
+        '          if ! jq -e --arg sha "$HEAD_SHA" \'\n'
+        "            .state == \"OPEN\" and .isDraft == false and .headRefOid == $sha\n"
+        "            and (.title | ascii_downcase | contains(\"do not merge\") | not)\n"
+        '            and ([.labels[].name | ascii_downcase] | all(. != "hold" and . != "do-not-merge"))\n'
+        "          ' <<<\"$live\" >/dev/null; then\n"
+        '            echo "::error::PR is closed, draft, held, or no longer at the tested head."\n'
+        "            exit 1\n"
+        "          fi\n"
+    )
+    return (text[:first] + original + text[last:]).encode()
+
+
 def original_asset(delivered, relative):
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
@@ -261,10 +280,8 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     for name, source in receipt["adapted_jobs"].items():
         delivered = jobs[name].encode()
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
-        assert (
-            hashlib.sha256(original_review_job(delivered)).hexdigest()
-            == source["source_sha256"]
-        )
+        original = {"review": original_review_job, "merge": original_merge_job}[name]
+        assert hashlib.sha256(original(delivered)).hexdigest() == source["source_sha256"]
 
 
 def test_native_delivery_rolls_back_workflows_and_assets(tmp_path, monkeypatch):

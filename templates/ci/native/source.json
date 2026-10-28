@@ -15,10 +15,6 @@
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
       "sha256": "f1ede573b7aeced03540e5f0995c198f7f740efff614c4c4bbab1a0bc34233af"
-    },
-    "merge": {
-      "path": ".github/workflows/pipeline.yml",
-      "sha256": "ff29bf24068614e7695bd6dc4db49007c48ecb69f8a9cbaaa94a937cbbeb2e4a"
     }
   },
   "adaptations": {
@@ -119,6 +115,13 @@
     "gate-name-collisions": {
       "source": "https://github.com/cdeust/ai-architect-mcp-spec/issues/comments/6460515146",
       "reason": "Use CheckRun-only grouped names as a superset hint. Duplicate native gates and partial contexts proceed to current full proof; StatusContext cannot shadow checks. No prerequisite veto is added without authenticated workflow identity. Unchanged full plan handles real failed prerequisites and superseded matrix placeholders."
+    },
+    "merge-condition-diagnostics": {
+      "sources": [
+        "https://github.com/cdeust/Cortex/actions/runs/40583904933",
+        "https://github.com/cdeust/Cortex/actions/runs/40548981339"
+      ],
+      "reason": "The live-eligibility step reported closed, draft, held and moved head with one sentence. Cortex run40583904933 failed on a deliberate 'do not merge' title and read as a moved head; run40548981339 failed on an already merged PR. Name the first failing condition. Which conditions fail is unchanged, so no gate decision moves."
     }
   },
   "adapted_assets": {
@@ -203,6 +206,14 @@
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors"
+      ]
+    },
+    "merge": {
+      "path": ".github/workflows/pipeline.yml",
+      "source_sha256": "ff29bf24068614e7695bd6dc4db49007c48ecb69f8a9cbaaa94a937cbbeb2e4a",
+      "sha256": "c0790436e94c5dc92d8161c834c9afc9e623d0adb49d64055e43e9295bfd642b",
+      "adaptation": [
+        "merge-condition-diagnostics"
       ]
     }
   },

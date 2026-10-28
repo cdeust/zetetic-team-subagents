@@ -22,6 +22,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The `merge` job of `templates/ci/native/pipeline.yml` names the failed condition in its "Verify live PR eligibility" step (not open with its state, draft, head moved with both SHAs, held by title, held by label) instead of one sentence for all four. The set of failing conditions is unchanged. The 43 failed Pipeline runs of 2026-10-27/28 are attributed to their code paths in `docs/verification/native-gate-patience-20261029.md` (#206).
 - The `merge` job of `templates/ci/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
 
 ### Added
