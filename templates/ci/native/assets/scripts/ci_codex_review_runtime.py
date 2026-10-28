@@ -213,8 +213,108 @@ def resolve_security(target, body, review, metadata):
         raise EvidenceError("protocol")
     return {
         "state": (
-            "success" if all(states[identity] for identity in expected) else "unresolved"
+            "success"
+            if all(states[identity] for identity in expected)
+            else "unresolved"
         ),
         "source": "github_review_threads",
         "finding_ids": sorted(expected),
     }
+
+
+# Body and edit attribution must come from the same authenticated API node.
+# https://docs.github.com/en/graphql/reference/issues#issuecomment
+COMMENTS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      number headRefOid
+      comments(first:100, after:$endCursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          databaseId body updatedAt lastEditedAt
+          author { login __typename ... on Bot { id } ... on User { id } }
+          editor { login __typename ... on Bot { id } ... on User { id } }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def _comment_row(node: Any) -> Record:
+    if not isinstance(node, dict) or any(
+        key not in node
+        for key in (
+            "databaseId",
+            "body",
+            "updatedAt",
+            "author",
+            "editor",
+            "lastEditedAt",
+        )
+    ):
+        raise EvidenceError("protocol")
+    identity = node["databaseId"]
+    if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
+        raise EvidenceError("protocol")
+    author = node["author"] or {}
+    if not isinstance(author, dict):
+        raise EvidenceError("protocol")
+    login, kind = author.get("login"), author.get("__typename")
+    if login == "chatgpt-codex-connector" and kind == "Bot":
+        login = "chatgpt-codex-connector[bot]"
+    return {
+        "id": identity,
+        "body": node["body"],
+        "updated_at": node["updatedAt"],
+        "user": {"login": login, "type": kind, "node_id": author.get("id")},
+        "editor": node["editor"],
+        "lastEditedAt": node["lastEditedAt"],
+    }
+
+
+def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+    if not isinstance(pages, list) or not pages:
+        raise EvidenceError("protocol")
+    rows, identities, cursors = [], set(), set()
+    try:
+        for index, page in enumerate(pages):
+            if page.get("errors"):
+                raise EvidenceError("protocol")
+            pull = page["data"]["repository"]["pullRequest"]
+            if pull["headRefOid"] != sha:
+                raise EvidenceError("head_moved")
+            if type(pull["number"]) is not int or pull["number"] != pr:
+                raise EvidenceError("protocol")
+            connection = pull["comments"]
+            more, cursor = (
+                connection["pageInfo"][key] for key in ("hasNextPage", "endCursor")
+            )
+            if type(more) is not bool or more != (index < len(pages) - 1):
+                raise EvidenceError("protocol")
+            if cursor is not None and (not isinstance(cursor, str) or not cursor):
+                raise EvidenceError("protocol")
+            if more and (cursor is None or cursor in cursors):
+                raise EvidenceError("protocol")
+            cursors.add(cursor)
+            if not isinstance(connection["nodes"], list):
+                raise EvidenceError("protocol")
+            current = [_comment_row(node) for node in connection["nodes"]]
+            current_ids = [row["id"] for row in current]
+            if len(set(current_ids)) != len(current_ids) or identities.intersection(
+                current_ids
+            ):
+                raise EvidenceError("protocol")
+            identities.update(current_ids)
+            rows.extend(current)
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise EvidenceError("protocol") from exc
+    return rows
+
+
+def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+    owner, name = repo.split("/")
+    fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
+    return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)

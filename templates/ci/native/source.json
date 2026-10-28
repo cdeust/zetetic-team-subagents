@@ -3,10 +3,8 @@
   "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
   "assets": {
     ".github/workflows/Codex.yml": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-    "scripts/ci_codex_review_event.py": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
     "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
-    "scripts/ci_codex_reviews.py": "394003b3569c517b15a1919f8d5c85ab90497972fa71d3565ae3499bfa486432",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
     ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
     ".claude/agents/documentation-accuracy-reviewer.md": "06c8126da7cf3b5e7340e88b6021fe369280d14cb656c6f68be322a1db31169d",
@@ -71,6 +69,11 @@
     "current-security-findings": {
       "source": "https://github.com/cdeust/ai-architect-mcp-codebase/pull/464#discussion_r4395405890",
       "reason": "Require every finding announced by the current authenticated summary, but exclude historical thread IDs from its resolution verdict and receipt. Missing current identities and existing trust/protocol errors still fail closed."
+    },
+    "summary-editor-authentication": {
+      "source": "https://github.com/cdeust/ai-architect-mcp-codebase/pull/464#discussion_r4395607291",
+      "api_source": "https://docs.github.com/en/graphql/reference/issues#issuecomment",
+      "reason": "Read body and immutable last-editor attribution from the same GraphQL node. Require pristine null/null metadata or the original native Bot as editor, bound by stable Actor ID. Authenticate later original-Bot comments even when their summary marker was removed."
     }
   },
   "adapted_assets": {
@@ -93,10 +96,25 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "dfaa509b48136801cfebf8bf6aacf7abf53fd2f537fa5a01cfd8eebaf1dd60bd",
+      "sha256": "5e391798ded9ba8b3c0eca06eaed7021b938a4539896317828e7d9457e71bf4e",
       "adaptation": [
-        "current-security-findings"
+        "current-security-findings",
+        "summary-editor-authentication"
       ]
+    },
+    "scripts/ci_codex_reviews.py": {
+      "source_sha256": "394003b3569c517b15a1919f8d5c85ab90497972fa71d3565ae3499bfa486432",
+      "adaptation": [
+        "summary-editor-authentication"
+      ],
+      "sha256": "5449540c56c8709fd01cbd9078fbaedf932560298c659c0ac70bde499da03737"
+    },
+    "scripts/ci_codex_review_event.py": {
+      "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
+      "adaptation": [
+        "summary-editor-authentication"
+      ],
+      "sha256": "6492f9c318ee5c496305475c6ef00076002a31d6958e1cd980616defdad90e23"
     }
   },
   "authored_assets": {
@@ -107,9 +125,10 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "ca87246578303f5d73bcea23026d45bc54db45a96f17041648d37c3d9d53cebb",
+      "sha256": "32d612e8f2eca3f761662302d6a7407c5231e343bb0d5ec43b5957fbf0eb339c",
       "adaptation": [
-        "current-security-findings"
+        "current-security-findings",
+        "summary-editor-authentication"
       ]
     }
   }
