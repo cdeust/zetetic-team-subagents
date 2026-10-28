@@ -109,7 +109,11 @@ The two Claude YAML assets also record
 original and adapted digests for `--strict-mcp-config` and the owner-selected model. The automatic review
 YAML additionally records its native App correction: the official PR trigger,
 OIDC permission and removal of the explicit GitHub token override.
-The two authored private CLI manifest/lock assets have their own digests. All
+The authored private CLI manifest/lock assets have their own digests. The shared
+comment-boundary module is also recorded as an authored asset: its functions
+were extracted unchanged from the adapted runtime and reader to satisfy the
+Cortex source-size cap. The isolated review job preloads runtime, comment
+boundary and reader in that order; their exception type remains shared. All
 six command/reviewer files remain verbatim. Provenance comments
 in copied code may refer to Cortex's original findings. The review logic obtains
 the repository and owner from GitHub context; it contains no fixed Cortex target.

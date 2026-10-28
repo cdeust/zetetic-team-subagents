@@ -74,6 +74,10 @@
       "source": "https://github.com/cdeust/ai-architect-mcp-codebase/pull/464#discussion_r4395607291",
       "api_source": "https://docs.github.com/en/graphql/reference/issues#issuecomment",
       "reason": "Read body and immutable last-editor attribution from the same GraphQL node. Require pristine null/null metadata or the original native Bot as editor, bound by stable Actor ID. Authenticate later original-Bot comments even when their summary marker was removed."
+    },
+    "comment-boundary-module": {
+      "source": "https://github.com/cdeust/Cortex/blob/8e7375bf2edfb33fb9c45809b9af6b428f0f4235/scripts/craftsmanship_rules.py",
+      "reason": "Preserve editor authentication behavior while satisfying the Cortex 300-line module cap. Extract cohesive comment API/authentication helpers, retain runtime compatibility callbacks, and preload the third trusted module before the reader."
     }
   },
   "adapted_assets": {
@@ -96,18 +100,20 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "5e391798ded9ba8b3c0eca06eaed7021b938a4539896317828e7d9457e71bf4e",
+      "sha256": "5aab93069cfc31d09648f27e504df763fad34632c708c682b720005ac0dcaf9e",
       "adaptation": [
         "current-security-findings",
-        "summary-editor-authentication"
+        "summary-editor-authentication",
+        "comment-boundary-module"
       ]
     },
     "scripts/ci_codex_reviews.py": {
       "source_sha256": "394003b3569c517b15a1919f8d5c85ab90497972fa71d3565ae3499bfa486432",
       "adaptation": [
-        "summary-editor-authentication"
+        "summary-editor-authentication",
+        "comment-boundary-module"
       ],
-      "sha256": "5449540c56c8709fd01cbd9078fbaedf932560298c659c0ac70bde499da03737"
+      "sha256": "854c0361003a185dceb457a1cdeeaeb4b6db2e7cba81ce255ebda58ea9d83d1d"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -119,16 +125,18 @@
   },
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
-    ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82"
+    ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
+    "scripts/ci_codex_review_comments.py": "a416d2dbda7d18f10f92809fd66c09bbc14e2deb2dc518579aa21ed584c14145"
   },
   "adapted_jobs": {
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "32d612e8f2eca3f761662302d6a7407c5231e343bb0d5ec43b5957fbf0eb339c",
+      "sha256": "56acadb451cb69cde4cfc28ba0869490305a8b703c25b6b9dce58b21c76104b0",
       "adaptation": [
         "current-security-findings",
-        "summary-editor-authentication"
+        "summary-editor-authentication",
+        "comment-boundary-module"
       ]
     }
   }

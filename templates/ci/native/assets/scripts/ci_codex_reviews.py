@@ -24,6 +24,7 @@ if "ci_codex_review_runtime" not in sys.modules:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_runtime as runtime  # noqa: E402
 from ci_codex_review_runtime import _outputs  # noqa: E402
+from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 
 Record = dict[str, Any]
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
@@ -76,55 +77,6 @@ def _result(sha: str) -> Record:
             "has_unresolved_findings": None,
         }
     return result
-
-
-def _canonical(comment: Any) -> bool:
-    if not isinstance(comment, dict):
-        return False
-    user, body = comment.get("user"), comment.get("body")
-    return (
-        isinstance(user, dict)
-        and user.get("login") == BOT
-        and user.get("type") == "Bot"
-        and isinstance(body, str)
-        and body.startswith(SUMMARY)
-    )
-
-
-def _bot_author(comment: Record) -> bool:
-    user = comment.get("user")
-    return (
-        isinstance(user, dict)
-        and user.get("login") == BOT
-        and user.get("type") == "Bot"
-    )
-
-
-def _authenticate_editor(comment: Record) -> None:
-    # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
-    if "editor" not in comment or "lastEditedAt" not in comment:
-        raise EvidenceError("editor")
-    identity = comment.get("user", {}).get("node_id")
-    if not isinstance(identity, str) or not identity:
-        raise EvidenceError("editor")
-    editor, edited = comment["editor"], comment["lastEditedAt"]
-    if edited is None:
-        if editor is not None:
-            raise EvidenceError("editor")
-        return
-    if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
-        raise EvidenceError("editor")
-    try:
-        datetime.fromisoformat(edited.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise EvidenceError("editor") from exc
-    if (
-        not isinstance(editor, dict)
-        or editor.get("__typename") != "Bot"
-        or editor.get("login") != "chatgpt-codex-connector"
-        or editor.get("id") != identity
-    ):
-        raise EvidenceError("editor")
 
 
 def _order(comment: Record) -> tuple[datetime, int]:

@@ -1212,6 +1212,90 @@ jobs:
               }
 
 
+          # Body and edit attribution live in the shared comment boundary.
+          def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+              from ci_codex_review_comments import _comment_pages as normalize  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
+
+              return normalize(pages, sha, pr)
+
+
+          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+              from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
+
+              return fetch(repo, pr, sha, request)
+          '''
+
+          COMMENTS_SOURCE = r'''
+          """Authenticated GitHub comment metadata and native Bot edit attribution.
+
+          Sources: IssueComment.editor/lastEditedAt and Bot.id, returned with the body.
+          https://docs.github.com/en/graphql/reference/issues#issuecomment
+          """
+
+          from __future__ import annotations
+
+          from datetime import datetime
+          import re
+          from typing import Any
+
+          from ci_codex_review_runtime import EvidenceError
+
+          Record = dict[str, Any]
+          # Source: native Codex summary6456275844 on2026-10-28.
+          BOT = "chatgpt-codex-connector[bot]"
+          SUMMARY = "<!-- codex-pull-request-review-summary -->"
+          STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+          def _canonical(comment: Any) -> bool:
+              if not isinstance(comment, dict):
+                  return False
+              user, body = comment.get("user"), comment.get("body")
+              return (
+                  isinstance(user, dict)
+                  and user.get("login") == BOT
+                  and user.get("type") == "Bot"
+                  and isinstance(body, str)
+                  and body.startswith(SUMMARY)
+              )
+
+
+          def _bot_author(comment: Record) -> bool:
+              user = comment.get("user")
+              return (
+                  isinstance(user, dict)
+                  and user.get("login") == BOT
+                  and user.get("type") == "Bot"
+              )
+
+
+          def _authenticate_editor(comment: Record) -> None:
+              # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
+              if "editor" not in comment or "lastEditedAt" not in comment:
+                  raise EvidenceError("editor")
+              identity = comment.get("user", {}).get("node_id")
+              if not isinstance(identity, str) or not identity:
+                  raise EvidenceError("editor")
+              editor, edited = comment["editor"], comment["lastEditedAt"]
+              if edited is None:
+                  if editor is not None:
+                      raise EvidenceError("editor")
+                  return
+              if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
+                  raise EvidenceError("editor")
+              try:
+                  datetime.fromisoformat(edited.replace("Z", "+00:00"))
+              except ValueError as exc:
+                  raise EvidenceError("editor") from exc
+              if (
+                  not isinstance(editor, dict)
+                  or editor.get("__typename") != "Bot"
+                  or editor.get("login") != "chatgpt-codex-connector"
+                  or editor.get("id") != identity
+              ):
+                  raise EvidenceError("editor")
+
+
           # Body and edit attribution must come from the same authenticated API node.
           # https://docs.github.com/en/graphql/reference/issues#issuecomment
           COMMENTS_QUERY = """
@@ -1337,6 +1421,7 @@ jobs:
               sys.path.insert(0, str(Path(__file__).resolve().parent))
           import ci_codex_review_runtime as runtime  # noqa: E402
           from ci_codex_review_runtime import _outputs  # noqa: E402
+          from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 
           Record = dict[str, Any]
           SUMMARY = "<!-- codex-pull-request-review-summary -->"
@@ -1389,55 +1474,6 @@ jobs:
                       "has_unresolved_findings": None,
                   }
               return result
-
-
-          def _canonical(comment: Any) -> bool:
-              if not isinstance(comment, dict):
-                  return False
-              user, body = comment.get("user"), comment.get("body")
-              return (
-                  isinstance(user, dict)
-                  and user.get("login") == BOT
-                  and user.get("type") == "Bot"
-                  and isinstance(body, str)
-                  and body.startswith(SUMMARY)
-              )
-
-
-          def _bot_author(comment: Record) -> bool:
-              user = comment.get("user")
-              return (
-                  isinstance(user, dict)
-                  and user.get("login") == BOT
-                  and user.get("type") == "Bot"
-              )
-
-
-          def _authenticate_editor(comment: Record) -> None:
-              # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
-              if "editor" not in comment or "lastEditedAt" not in comment:
-                  raise EvidenceError("editor")
-              identity = comment.get("user", {}).get("node_id")
-              if not isinstance(identity, str) or not identity:
-                  raise EvidenceError("editor")
-              editor, edited = comment["editor"], comment["lastEditedAt"]
-              if edited is None:
-                  if editor is not None:
-                      raise EvidenceError("editor")
-                  return
-              if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
-                  raise EvidenceError("editor")
-              try:
-                  datetime.fromisoformat(edited.replace("Z", "+00:00"))
-              except ValueError as exc:
-                  raise EvidenceError("editor") from exc
-              if (
-                  not isinstance(editor, dict)
-                  or editor.get("__typename") != "Bot"
-                  or editor.get("login") != "chatgpt-codex-connector"
-                  or editor.get("id") != identity
-              ):
-                  raise EvidenceError("editor")
 
 
           def _order(comment: Record) -> tuple[datetime, int]:
@@ -1651,6 +1687,9 @@ jobs:
           _runtime = ModuleType("ci_codex_review_runtime")
           exec(compile(RUNTIME_SOURCE, "ci_codex_review_runtime.py", "exec"), _runtime.__dict__)
           sys.modules[_runtime.__name__] = _runtime
+          _comments = ModuleType("ci_codex_review_comments")
+          exec(compile(COMMENTS_SOURCE, "ci_codex_review_comments.py", "exec"), _comments.__dict__)
+          sys.modules[_comments.__name__] = _comments
           exec(compile(READER_SOURCE, "ci_codex_reviews.py", "exec"))
           CODEX_REVIEW_PY
 
