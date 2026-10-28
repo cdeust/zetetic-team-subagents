@@ -95,7 +95,22 @@ def original_security_runtime(delivered):
 
 def original_security_reader(delivered):
     original = delivered.decode()
+    imported = (
+        "from ci_codex_review_comments import _authenticate_editor, "
+        "_bot_author, _canonical  # noqa: E402\n"
+    )
+    if imported in original:
+        original = original.replace(imported, "")
+        shared = (NATIVE / "assets/scripts/ci_codex_review_comments.py").read_text()
+        first = shared.index("def _canonical(")
+        last = shared.index("\n\ndef _bot_author(", first)
+        canonical = shared[first:last]
+        original = original.replace(
+            "\n\ndef _order(", "\n\n" + canonical + "\n\ndef _order("
+        )
     for start, end in (("_bot_author", "_order"), ("summary_comments", "_eligible")):
+        if "\n\ndef " + start + "(" not in original:
+            continue
         first = original.index("\n\ndef " + start + "(")
         last = original.index("\n\ndef " + end + "(", first)
         original = original[:first] + original[last:]
@@ -124,6 +139,17 @@ def original_security_reader(delivered):
 
 def original_review_job(delivered):
     original = delivered.decode()
+    marker = "          COMMENTS_SOURCE = r'''\n"
+    if marker in original:
+        first = original.index(marker)
+        last = original.index("          READER_SOURCE = r'''\n", first)
+        original = original[:first] + original[last:]
+        original = original.replace(
+            '          _comments = ModuleType("ci_codex_review_comments")\n'
+            '          exec(compile(COMMENTS_SOURCE, "ci_codex_review_comments.py", "exec"), _comments.__dict__)\n'
+            "          sys.modules[_comments.__name__] = _comments\n",
+            "",
+        )
     for variable, filename in (
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
         ("READER_SOURCE", "ci_codex_reviews.py"),
@@ -267,10 +293,42 @@ def test_native_inline_codex_readers_match_the_delivered_scripts(tmp_path):
     command = direct["jobs"]["review"]["steps"][0]["run"]
     for variable, filename in (
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
+        ("COMMENTS_SOURCE", "ci_codex_review_comments.py"),
         ("READER_SOURCE", "ci_codex_reviews.py"),
     ):
         embedded = command.split(variable + " = r'''\n", 1)[1].split("\n'''", 1)[0]
         assert embedded == files[tmp_path / "scripts" / filename].decode().rstrip()
+
+
+def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_path):
+    import sys
+    from types import ModuleType
+    from unittest.mock import patch
+    from test_ci_native_editor import comment, page, SHA, REPO, PR
+
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    loaded = {}
+    with patch.dict(sys.modules):
+        for name in (
+            "ci_codex_review_runtime",
+            "ci_codex_review_comments",
+            "ci_codex_reviews",
+        ):
+            module = ModuleType(name)
+            module.__file__ = "/untrusted-candidate/" + name + ".py"
+            source = files[tmp_path / "scripts" / (name + ".py")].decode()
+            # Source: Cortex craftsmanship_rules.FILE_LINE_LIMIT, ADR-0726.
+            assert len(source.splitlines()) <= 300
+            exec(compile(source, module.__file__, "exec"), module.__dict__)
+            sys.modules[name] = module
+            loaded[name] = module
+        runtime, comments, reader = loaded.values()
+        assert comments.EvidenceError is runtime.EvidenceError
+        assert reader.review_evidence([comment()], SHA, REPO, PR)["state"] == "success"
+        rows = runtime._comment_pages([page([comment()])], SHA, PR)
+        assert rows[0]["body"] == comment()["body"]
+        with pytest.raises(runtime.EvidenceError):
+            runtime._comment_pages([], SHA, PR)
 
 
 @pytest.mark.parametrize("workflow", ["claude-review.yml", "claude.yml"])

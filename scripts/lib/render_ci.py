@@ -25,6 +25,7 @@ NATIVE_ASSETS = (
     "scripts/ci_codex_review_event_source.py",
     "scripts/ci_codex_review_resume.py",
     "scripts/ci_codex_review_runtime.py",
+    "scripts/ci_codex_review_comments.py",
     "scripts/ci_codex_reviews.py",
     ".claude/commands/review-pr.md",
     ".claude/agents/code-quality-reviewer.md",
