@@ -91,3 +91,14 @@ Review evidence: docs/verification/native-discovery-review-corrections-20261028.
 - [x] Obtain explicit root production review approval; provenance and staged gates follow.
 
 Review evidence: docs/verification/native-proof-first-20261028.md.
+
+## Native gate-name groups, 2026-10-28
+
+- [x] Read real native Claude report and verify current canonical main.
+- [x] Reproduce gate-name collisions before the fix.
+- [x] Preserve a superset hint using CheckRun groups and full-policy authorization.
+- [x] Exercise normalized proof API categories through actual callbacks.
+- [x] Verify95 native contracts and54 source contracts plus33 subtests; actual Cortex gates pass.
+- [x] Obtain explicit independent root production approval.
+
+Evidence: docs/verification/native-gate-groups-20261028.md.
