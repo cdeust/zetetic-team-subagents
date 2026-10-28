@@ -46,3 +46,16 @@ reported, without miscounting them as three independent families.
 ## Shared Claude Code / Codex gates
 
 See [implementation and validation](shared-host-gates.md). Native hook trust remains an owner action.
+
+
+## Native resumption contracts, 2026-10-28
+
+- [x] Verify Spec159 findings and current canonical source.
+- [x] Reproduce absent delivered/executed contracts (two failures).
+- [x] Deliver the existing Cortex decision/coordinator contracts as native assets.
+- [x] Execute those contracts through Spec ci.json and verify renderer integrity.
+- [x] Obtain independent root diff review; publication and cleanup follow verification.
+
+Thread resolution is webhook-only, not an Actions event. Keep the unsupported trigger absent; controller reconciliation is owned by root.
+
+Review: 59 canonical contracts; 50 renderer/native tests plus33 subtests; 78 Spec Python CI contracts. See docs/verification/native-resumption-contracts-20261028.md.
