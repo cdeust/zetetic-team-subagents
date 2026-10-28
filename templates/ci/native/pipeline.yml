@@ -1814,12 +1814,19 @@ jobs:
           REVIEW_STATE: ${{ needs.review.outputs.state }}
         run: |
           live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)"
-          if ! jq -e --arg sha "$HEAD_SHA" '
-            .state == "OPEN" and .isDraft == false and .headRefOid == $sha
-            and (.title | ascii_downcase | contains("do not merge") | not)
-            and ([.labels[].name | ascii_downcase] | all(. != "hold" and . != "do-not-merge"))
-          ' <<<"$live" >/dev/null; then
-            echo "::error::PR is closed, draft, held, or no longer at the tested head."
+          # Name the failing condition: one shared message hid a deliberate
+          # "do not merge" hold behind "no longer at the tested head" (Cortex run
+          # 40583904933) and a merged PR behind the same words (run 40548981339).
+          cause="$(jq -r --arg sha "$HEAD_SHA" '
+            if .state != "OPEN" then "is not open (\(.state))"
+            elif .isDraft != false then "is a draft"
+            elif .headRefOid != $sha then "head moved: tested \($sha), live \(.headRefOid)"
+            elif (.title | ascii_downcase | contains("do not merge")) then "is held by title"
+            elif ([.labels[].name | ascii_downcase] | any(. == "hold" or . == "do-not-merge")) then "is held by label"
+            else "" end
+          ' <<<"$live")" || { echo "::error::PR state is unreadable."; exit 1; }
+          if [ -n "$cause" ]; then
+            echo "::error::PR $cause."
             exit 1
           fi
           if [ "$REVIEW_STATE" = pending ]; then
