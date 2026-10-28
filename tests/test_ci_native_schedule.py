@@ -4,6 +4,8 @@ from pathlib import Path
 
 import yaml
 
+from scripts.lib import render_ci as renderer
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / "templates/ci/native/assets/.github/workflows/Codex.yml"
 
@@ -44,3 +46,24 @@ def test_only_discovery_selects_matrix_and_all_helpers_come_from_main():
         assert "secrets." not in str(job)
     assert "--list" in discover["steps"][-1]["run"]
     assert '--pr "$EXPECTED_PR" --sha "$HEAD_SHA"' in worker["steps"][-1]["run"]
+
+
+def test_rendered_workflow_limits_checks_read_to_discovery(tmp_path):
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    workflow = yaml.safe_load(files[tmp_path / ".github/workflows/Codex.yml"])
+    base = {
+        "contents": "read",
+        "pull-requests": "read",
+        "issues": "read",
+        "actions": "read",
+    }
+    assert workflow["permissions"] == base
+    assert workflow["jobs"]["reconcile-identify"]["permissions"] == {
+        **base,
+        "checks": "read",
+    }
+    assert {
+        name
+        for name, job in workflow["jobs"].items()
+        if "checks" in job.get("permissions", {})
+    } == {"reconcile-identify"}

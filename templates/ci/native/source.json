@@ -91,6 +91,15 @@
         "https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run#standard-github-hosted-runners-for-public-repositories"
       ],
       "reason": "Review-thread resolution has no supported Actions event. A default-branch five-minute fallback prefilters paginated PR status rollups before existing authenticated resumption policy. Discovery is serialized per repository; API errors stop the scan. Per-PR protocol errors remain isolated. Full proof alone authorizes readiness repair or exact waiting gate reruns."
+    },
+    "reconciliation-checks-read": {
+      "sources": [
+        "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idpermissions",
+        "https://docs.github.com/en/actions/concepts/security/github_token",
+        "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app#choosing-permissions-for-graphql-api-access",
+        "https://github.com/cli/cli/discussions/8083"
+      ],
+      "reason": "Declare job-local Checks read access for the discovery GraphQL CheckRun fields. Keep workflow defaults and other jobs unchanged. This is an evidence-backed permission declaration, not an observed public-runner failure or hosted acceptance."
     }
   },
   "adapted_assets": {
@@ -137,9 +146,10 @@
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-      "sha256": "618af59bff999194ff3950df13587eea8b8b1354aa059a971e9dfeb51078b6d1",
+      "sha256": "dc9e1ff6042b94853605b0e28a577f5024ebb06154eeb3bc7fbf4bc1e1843d3c",
       "adaptation": [
-        "scheduled-reconciliation"
+        "scheduled-reconciliation",
+        "reconciliation-checks-read"
       ]
     }
   },
