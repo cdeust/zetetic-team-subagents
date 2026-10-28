@@ -82,6 +82,7 @@ jobs:
       pull-requests: read
       issues: read
       actions: read
+      checks: read
     outputs:
       prs: ${{ steps.queue.outputs.prs }}
     steps:
