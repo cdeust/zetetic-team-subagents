@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 import subprocess
+import textwrap
 
 import pytest
 import yaml
@@ -81,19 +82,75 @@ def test_native_cli_preserves_configuration_and_unrelated_files(tmp_path):
 
 
 def original_security_runtime(delivered):
-    original = delivered.replace(
+    original = delivered.split(b"\n\n# Body and edit attribution", 1)[0]
+    original = original.replace(
         b"if not expected.issubset(states):", b"if states.keys() != expected:"
     ).replace(b'"finding_ids": sorted(expected),', b'"finding_ids": sorted(states),')
     return re.sub(
-        rb'"state": \(\n *"success" if all\(states\[identity\] for identity in expected\) else "unresolved"\n *\),',
+        rb'"state": \(\s*"success"\s*if all\(states\[identity\] for identity in expected\)\s*else "unresolved"\s*\),',
         b'"state": "success" if all(states.values()) else "unresolved",',
         original,
     )
 
 
+def original_security_reader(delivered):
+    original = delivered.decode()
+    for start, end in (("_bot_author", "_order"), ("summary_comments", "_eligible")):
+        first = original.index("\n\ndef " + start + "(")
+        last = original.index("\n\ndef " + end + "(", first)
+        original = original[:first] + original[last:]
+    original = original.replace(
+        "def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None) -> Any:",
+        "def _api(endpoint: str, *, paginate: bool = False) -> Any:",
+    ).replace(
+        '        options = {"fields": fields} if fields is not None else {}\n'
+        "        return runtime._api(endpoint, paginate=paginate, **options)",
+        "        return runtime._api(endpoint, paginate=paginate)",
+    )
+    first = original.index("        latest_order = _order(latest)\n")
+    last = original.index('        if latest["body"].count(SUMMARY)', first)
+    original = original[:first] + original[last:]
+    return original.replace(
+        "    comments = summary_comments(args.repo, args.pr, args.sha, _api)\n"
+        "    result = review_evidence(comments, args.sha, args.repo, args.pr)",
+        '    pages = _api(f"repos/{args.repo}/issues/{args.pr}/comments", paginate=True)\n'
+        "    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):\n"
+        '        raise EvidenceError("protocol")\n'
+        "    result = review_evidence(\n"
+        "        [comment for page in pages for comment in page], args.sha, args.repo, args.pr\n"
+        "    )",
+    ).encode()
+
+
+def original_review_job(delivered):
+    original = delivered.decode()
+    for variable, filename in (
+        ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
+        ("READER_SOURCE", "ci_codex_reviews.py"),
+    ):
+        marker = "          " + variable + " = r'''\n"
+        first = original.index(marker) + len(marker)
+        last = original.index("\n          '''", first)
+        source = textwrap.dedent(original[first:last]).encode() + b"\n"
+        restored = original_asset(source, "scripts/" + filename).decode().rstrip()
+        original = (
+            original[:first] + textwrap.indent(restored, "          ") + original[last:]
+        )
+    return original.encode()
+
+
 def original_asset(delivered, relative):
     if relative == "scripts/ci_codex_review_runtime.py":
         return original_security_runtime(delivered)
+    if relative == "scripts/ci_codex_reviews.py":
+        return original_security_reader(delivered)
+    if relative == "scripts/ci_codex_review_event.py":
+        return delivered.replace(
+            b"from ci_codex_reviews import summary_comments  # noqa: E402\n", b""
+        ).replace(
+            b"rows = summary_comments(repo, number, sha, source._api)",
+            b'rows = source.records(f"repos/{repo}/issues/{number}/comments")',
+        )
     original = delivered.replace(b"            --strict-mcp-config\n", b"")
     original = original.replace(
         b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'
@@ -118,13 +175,13 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     assert receipt["commit"] == "8e7375bf2edfb33fb9c45809b9af6b428f0f4235"
     for relative, digest in receipt["assets"].items():
         assert hashlib.sha256(files[tmp_path / relative]).hexdigest() == digest
-    assert len(receipt["assets"]) == 11
+    assert len(receipt["assets"]) == 9
     for relative, source in receipt["adapted_assets"].items():
         delivered = files[tmp_path / relative]
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
         original = original_asset(delivered, relative)
         assert hashlib.sha256(original).hexdigest() == source["source_sha256"]
-    assert len(receipt["adapted_assets"]) == 3
+    assert len(receipt["adapted_assets"]) == 5
     for relative, digest in receipt["authored_assets"].items():
         assert hashlib.sha256(files[tmp_path / relative]).hexdigest() == digest
     assert (
@@ -139,7 +196,7 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
         delivered = jobs[name].encode()
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
         assert (
-            hashlib.sha256(original_security_runtime(delivered)).hexdigest()
+            hashlib.sha256(original_review_job(delivered)).hexdigest()
             == source["source_sha256"]
         )
 

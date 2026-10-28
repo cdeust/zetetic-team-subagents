@@ -91,13 +91,20 @@ account authentication or hosted model execution.
 
 The assets and native job blocks originate from
 [Cortex commit 8e7375bf](https://github.com/cdeust/Cortex/tree/8e7375bf2edfb33fb9c45809b9af6b428f0f4235).
-`templates/ci/native/source.json` records SHA256 digests for 11 unchanged assets
+`templates/ci/native/source.json` records SHA256 digests for nine unchanged assets
 and two unchanged native job blocks. The Codex runtime asset and review job
 record their original and adapted digests for current-finding resolution:
 all finding IDs announced by the current authenticated summary must exist,
 and only those findings determine its resolution verdict. Historical threads
 remain available without invalidating later reviews. Missing current IDs and
 the existing identity, owner-resolution and pagination checks still fail closed.
+The reader and completion handler also record their last-editor authentication
+adaptation. Summary bodies and their last editor come from the same GitHub
+GraphQL node. A pristine comment requires null edit metadata; edited content
+requires the original native Bot account, including matching immutable actor IDs.
+Newer Bot-authored comments with an untrusted editor block reuse of an older
+summary even if the editor removed its marker. Ordinary trusted Bot messages
+retain their existing behavior.
 The two Claude YAML assets also record
 original and adapted digests for `--strict-mcp-config` and the owner-selected model. The automatic review
 YAML additionally records its native App correction: the official PR trigger,

@@ -46,9 +46,10 @@ def _json(text: str) -> Any:
         raise EvidenceError(str(exc)) from exc
 
 
-def _api(endpoint: str, *, paginate: bool = False) -> Any:
+def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None) -> Any:
     try:
-        return runtime._api(endpoint, paginate=paginate)
+        options = {"fields": fields} if fields is not None else {}
+        return runtime._api(endpoint, paginate=paginate, **options)
     except runtime.EvidenceError as exc:
         raise EvidenceError(str(exc)) from exc
 
@@ -88,6 +89,42 @@ def _canonical(comment: Any) -> bool:
         and isinstance(body, str)
         and body.startswith(SUMMARY)
     )
+
+
+def _bot_author(comment: Record) -> bool:
+    user = comment.get("user")
+    return (
+        isinstance(user, dict)
+        and user.get("login") == BOT
+        and user.get("type") == "Bot"
+    )
+
+
+def _authenticate_editor(comment: Record) -> None:
+    # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
+    if "editor" not in comment or "lastEditedAt" not in comment:
+        raise EvidenceError("editor")
+    identity = comment.get("user", {}).get("node_id")
+    if not isinstance(identity, str) or not identity:
+        raise EvidenceError("editor")
+    editor, edited = comment["editor"], comment["lastEditedAt"]
+    if edited is None:
+        if editor is not None:
+            raise EvidenceError("editor")
+        return
+    if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
+        raise EvidenceError("editor")
+    try:
+        datetime.fromisoformat(edited.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise EvidenceError("editor") from exc
+    if (
+        not isinstance(editor, dict)
+        or editor.get("__typename") != "Bot"
+        or editor.get("login") != "chatgpt-codex-connector"
+        or editor.get("id") != identity
+    ):
+        raise EvidenceError("editor")
 
 
 def _order(comment: Record) -> tuple[datetime, int]:
@@ -188,6 +225,11 @@ def review_evidence(
             return result
         latest = max(candidates, key=_order)
         result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
+        latest_order = _order(latest)
+        # A human can remove the marker while retaining the original Bot author.
+        for item in comments:
+            if _bot_author(item) and _order(item) >= latest_order:
+                _authenticate_editor(item)
         if latest["body"].count(SUMMARY) != 1:
             raise EvidenceError("protocol")
         states, details = _reviews(latest, (expected_sha, repo, pr))
@@ -206,6 +248,13 @@ def review_evidence(
     except runtime.EvidenceError as exc:
         result.update(state="blocked", reason=str(exc), reviews_complete=False)
     return result
+
+
+def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+    try:
+        return runtime.summary_comments(repo, pr, sha, request)
+    except runtime.EvidenceError as exc:
+        raise EvidenceError(str(exc)) from exc
 
 
 def _eligible(pull: Any, repo: str, sha: str) -> None:
@@ -236,12 +285,8 @@ def _eligible(pull: Any, repo: str, sha: str) -> None:
 def _fetch(args: argparse.Namespace) -> Record:
     endpoint = f"repos/{args.repo}/pulls/{args.pr}"
     _eligible(_api(endpoint), args.repo, args.sha)
-    pages = _api(f"repos/{args.repo}/issues/{args.pr}/comments", paginate=True)
-    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
-        raise EvidenceError("protocol")
-    result = review_evidence(
-        [comment for page in pages for comment in page], args.sha, args.repo, args.pr
-    )
+    comments = summary_comments(args.repo, args.pr, args.sha, _api)
+    result = review_evidence(comments, args.sha, args.repo, args.pr)
     _eligible(_api(endpoint), args.repo, args.sha)
     return result
 
