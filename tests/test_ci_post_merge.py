@@ -14,7 +14,9 @@ from tools import ci_post_merge as resolver
 REPO = "cdeust/example"
 HEAD = "a" * 40
 MERGED = "b" * 40
-JOB_NAMES = ["contract", "unit", "regression", "e2e", "review", "merge"] + [
+# Owner rule 2026-10-29: the required jobs are the tests and their aggregate. The
+# review job may run and post; it is never required (see the review tests below).
+JOB_NAMES = ["contract", "unit", "regression", "e2e", "merge"] + [
     f"{category} ({runner})"
     for category in ("environment", "install")
     for runner in ("ubuntu-latest", "macos-latest", "windows-latest")
@@ -406,16 +408,55 @@ def test_run_attempt_requires_a_positive_integer(scenario, attempt):
     assert_no_merge(scenario)
 
 
-def test_dependabot_may_skip_review_only_after_all_tests_pass(scenario):
-    scenario[1]["actor"] = {"login": "dependabot[bot]"}
-    jobs = scenario[3][("GET", JOBS_PATH)]["jobs"]
-    next(job for job in jobs if job["name"] == "review")["conclusion"] = "skipped"
+def add_review(scenario, **fields):
+    scenario[3][("GET", JOBS_PATH)]["jobs"].append(
+        {"name": "review", "status": "completed", "conclusion": "success", **fields}
+    )
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"conclusion": "failure"},
+        {"conclusion": "cancelled"},
+        {"conclusion": "skipped"},
+        {"status": "in_progress", "conclusion": None},
+        {"status": "queued", "conclusion": None},
+    ],
+)
+@pytest.mark.parametrize("actor", ["owner", "dependabot[bot]"])
+def test_the_review_job_never_blocks_a_merge(scenario, fields, actor):
+    scenario[1]["actor"] = {"login": actor}
+    add_review(scenario, **fields)
     assert execute(scenario)["tested_sha"] == MERGED
-    scenario[-1].clear()
-    next(job for job in jobs if job["name"] == "unit")["conclusion"] = "skipped"
-    with pytest.raises(resolver.PostMergeError):
+    assert [m for m, _, _ in scenario[-1] if m == "PUT"] == ["PUT"]
+
+
+def test_a_run_without_any_review_job_merges(scenario):
+    names = [job["name"] for job in scenario[3][("GET", JOBS_PATH)]["jobs"]]
+    assert "review" not in names
+    assert execute(scenario)["run_tests"] == "true"
+
+
+def test_two_review_jobs_do_not_block_a_merge(scenario):
+    add_review(scenario)
+    add_review(scenario, conclusion="failure")
+    assert execute(scenario)["run_tests"] == "true"
+
+
+def test_a_test_job_still_blocks_when_the_review_is_green(scenario):
+    add_review(scenario)
+    next(
+        job for job in scenario[3][("GET", JOBS_PATH)]["jobs"] if job["name"] == "unit"
+    )["conclusion"] = "failure"
+    with pytest.raises(resolver.PostMergeError, match="completed unit"):
         execute(scenario)
     assert_no_merge(scenario)
+
+
+def test_the_resolver_names_no_review_job():
+    source = open(resolver.__file__).read()
+    assert '"review"' not in source and "'review'" not in source
 
 
 def test_extra_environment_variant_is_rejected(scenario):
@@ -437,42 +478,33 @@ def skip_jobs(scenario, *names):
             job["conclusion"] = "skipped"
 
 
-# Draft PR #219 runs 40864421520 and 40874010475 succeeded with review and
-# merge skipped; the resolver then failed main runs 40865808090 and 40875336583
-# with "source merge gate requires completed review".
+# Draft PR #219 runs 40864421520 and 40874010475 succeeded with the gate jobs
+# skipped; the resolver then failed main runs 40865808090 and 40875336583. The
+# merge aggregate is skipped on a draft; the review job is not part of the gate.
 def test_draft_pipeline_without_merge_request_declines_without_failing(scenario):
-    skip_jobs(scenario, "review", "merge")
+    skip_jobs(scenario, "merge")
     scenario[2]["draft"] = True
     result = execute(scenario)
     assert result == {
         "tested_sha": HEAD,
         "run_tests": "false",
         "pr_number": "42",
-        "reason": "Draft PR: its Pipeline skipped review and merge; nothing to merge",
+        "reason": "Draft PR: its Pipeline skipped merge; nothing to merge",
     }
     assert_no_merge(scenario)
     assert not any(path == COMPARE_PATH for _, path, _ in scenario[-1])
 
 
-def test_skipped_review_and_merge_on_a_ready_pr_still_fails(scenario):
-    skip_jobs(scenario, "review", "merge")
+def test_skipped_merge_on_a_ready_pr_still_fails(scenario):
+    skip_jobs(scenario, "merge")
     with pytest.raises(resolver.PostMergeError, match="not a draft"):
         execute(scenario)
     assert_no_merge(scenario)
 
 
-@pytest.mark.parametrize("skipped", ["review", "merge"])
-def test_draft_with_only_one_gate_job_skipped_still_fails(scenario, skipped):
-    skip_jobs(scenario, skipped)
-    scenario[2]["draft"] = True
-    with pytest.raises(resolver.PostMergeError, match="merge gate"):
-        execute(scenario)
-    assert_no_merge(scenario)
-
-
-@pytest.mark.parametrize("name", [n for n in JOB_NAMES if n not in ("review", "merge")])
+@pytest.mark.parametrize("name", [n for n in JOB_NAMES if n != "merge"])
 def test_draft_decline_still_requires_every_test_job(scenario, name):
-    skip_jobs(scenario, "review", "merge", name)
+    skip_jobs(scenario, "merge", name)
     scenario[2]["draft"] = True
     with pytest.raises(resolver.PostMergeError, match=re.escape(f"completed {name}")):
         execute(scenario)
@@ -480,7 +512,7 @@ def test_draft_decline_still_requires_every_test_job(scenario, name):
 
 
 def test_cli_draft_decline_exits_zero_without_tests(scenario, tmp_path, monkeypatch):
-    skip_jobs(scenario, "review", "merge")
+    skip_jobs(scenario, "merge")
     scenario[2]["draft"] = True
     event_file = tmp_path / "event.json"
     output = tmp_path / "output"

@@ -283,9 +283,21 @@ def original_security_reader(delivered):
     ).encode()
 
 
+def without_review_never_blocks(delivered):
+    # Inverse of source.json adaptation "review-never-blocks".
+    block = (
+        "    # Owner rule 2026-10-29: the review posts but never blocks. A failed job\n"
+        "    # fails the run, and the completion caller fires only on a successful run;\n"
+        "    # the required jobs are the tests and their aggregate `merge`.\n"
+        "    continue-on-error: true\n"
+    )
+    assert delivered.count(block) == 1
+    return delivered.replace(block, "")
+
+
 def original_review_job(delivered):
     original = without_agreement(
-        delivered.decode(), [("      causes: ${{ steps.evidence.outputs.causes }}\n", "")]
+        without_review_never_blocks(delivered.decode()), [("      causes: ${{ steps.evidence.outputs.causes }}\n", "")]
     )
     # Inverse of source.json adaptation "merge-is-the-test-aggregate": the merge job no
     # longer reuses the reader, so its YAML anchor is gone.
@@ -415,20 +427,64 @@ AGREEMENT_MERGE = (
 )
 
 
+RESOLVE_REVIEW_GATE = (
+    (
+        b"          def _validate_jobs(jobs):\n"
+        b"              # Owner rule 2026-10-29: the required jobs are the tests and their\n"
+        b"              # aggregate `merge`; the `review` job may run and post but is never\n"
+        b"              # read here. Overall success alone accepts skipped jobs.\n"
+        b'              required = ["contract", "unit", "regression", "e2e", "merge"]\n',
+        b"          def _validate_jobs(jobs, actor):\n"
+        b"              # Source: the owner's single-push contract requires every author\n"
+        b"              # to complete review. Overall success alone accepts skipped jobs.\n"
+        b'              required = ["contract", "unit", "regression", "e2e", "review", "merge"]\n'
+        b'              pending = not any(job.get("name") == "merge" for job in jobs) and any(\n'
+        b'                  job.get("name") == "merge pending review" for job in jobs\n'
+        b"              )\n"
+        b"              if pending:\n"
+        b'                  required[-1] = "merge pending review"\n',
+    ),
+    (
+        b'                      f"source merge gate requires completed {name}",\n'
+        b"                  )\n"
+        b"\n\n"
+        b"          def _pr_identity",
+        b'                      f"source merge gate requires completed {name}",\n'
+        b"                  )\n"
+        b"              return pending\n"
+        b"\n\n"
+        b"          def _pr_identity",
+    ),
+    (
+        b"              _validate_jobs(jobs)\n"
+        b"              return run\n",
+        b'              if _validate_jobs(jobs, run.get("actor", {}).get("login")):\n'
+        b'                  run["review_pending"] = True\n'
+        b"\n"
+        b"              return run\n",
+    ),
+    (
+        b"              number, pr = _pull_request(run, repository, api)\n"
+        b"              pr_path = f",
+        b"              number, pr = _pull_request(run, repository, api)\n"
+        b'              if run.get("review_pending"):\n'
+        b"                  return {\n"
+        b'                      "tested_sha": run["head_sha"],\n'
+        b'                      "run_tests": "false",\n'
+        b'                      "pr_number": str(number),\n'
+        b'                      "reason": "Tests passed; native Codex reviews pending",\n'
+        b"                  }\n"
+        b"              pr_path = f",
+    ),
+)
+
+
 def original_resolve_job(delivered):
-    delivered = without_agreement(delivered, AGREEMENT_RESOLVE)
-    # Inverse of source.json adaptation "post-merge-merge-alias".
-    folded = (
-        b"                  # The single merge job has two review-dependent display names;\n"
-        b"                  # fold them so a stale attempt cannot outvote the newest one.\n"
-        b"                  # Source: session-optimizer PR87 discussion_r4409903427.\n"
-        b'                  key = "merge" if name == "merge pending review" else name\n'
-        b"                  previous = indexed.get(key)\n"
-    )
-    assert delivered.count(folded) == 1
-    original = delivered.replace(folded, b"                  previous = indexed.get(name)\n")
-    assert original.count(b"indexed[key] = job") == 1
-    return original.replace(b"indexed[key] = job", b"indexed[name] = job")
+    # Inverse of source.json adaptation "review-never-blocks".
+    for new, old in RESOLVE_REVIEW_GATE:
+        assert delivered.count(new) == 1, new
+        delivered = delivered.replace(new, old)
+    return without_agreement(delivered, AGREEMENT_RESOLVE)
 
 
 def original_event_jobs(delivered):

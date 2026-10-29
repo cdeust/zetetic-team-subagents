@@ -100,6 +100,13 @@ def test_merge_gate_reads_nothing_but_the_test_jobs():
     assert "review" not in job["needs"]
 
 
+def test_the_review_job_posts_but_cannot_fail_the_pipeline():
+    # A failed job fails the run and the caller only fires on a successful run.
+    jobs = workflow()["jobs"]
+    assert jobs["review"]["continue-on-error"] is True
+    assert all("review" not in job.get("needs", []) for job in jobs.values())
+
+
 def test_completion_and_push_runs_cannot_replace_other_heads_pending_tests():
     group = workflow()["concurrency"]["group"]
     assert "github.event_name" in group

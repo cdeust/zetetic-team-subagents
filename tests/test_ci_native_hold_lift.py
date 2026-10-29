@@ -426,13 +426,3 @@ def test_change_during_the_lift_refuses_the_merge(jobs, tmp_path, change, messag
     with pytest.raises(module.PostMergeError, match=message):
         module._merge_open_pr(api.pr, MERGE_PATH, SHA, api)
     assert ("PUT", MERGE_PATH) not in api.calls
-
-
-def test_pending_review_keeps_the_hold(jobs, tmp_path):
-    from test_ci_native_gate import FakeGitHub, resolve
-
-    module = resolver(jobs, tmp_path)
-    api = FakeGitHub(SHA, SHA, "merge pending review")
-    api.pr["labels"] = [dict(name="hold")]
-    assert resolve(module, api)["run_tests"] == "false"
-    assert [call for call in api.calls if call[0] in ("DELETE", "PUT")] == []
