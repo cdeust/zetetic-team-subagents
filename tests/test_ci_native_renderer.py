@@ -86,8 +86,37 @@ def test_native_cli_preserves_configuration_and_unrelated_files(tmp_path):
     assert (tmp_path / ".github/workflows/Codex.yml").is_file()
 
 
+def original_owner_resolution(original, relative):
+    # Inverse of source.json adaptation "security-owner-resolution".
+    if relative == "scripts/ci_codex_reviews.py":
+        new = (
+            '        proof, attested = None, state == "success" and reviews[kind]["has_any_findings"] is True\n'
+            '        if kind == "security_review" and (state == "pending" or attested) and repo and pr:\n'
+        )
+        assert original.count(new) == 1
+        return original.replace(new, (
+            "        proof = None\n"
+            '        if kind == "security_review" and state == "pending" and repo and pr:\n'
+        ))
+    first = original.index("def resolve_security(target, body, review, metadata):\n")
+    last = original.index("    repo, pr, sha = target\n", first)
+    original = original[:first] + (
+        "def resolve_security(target, body, review, metadata):\n"
+        '    """Reconcile one unknown verdict with positive, authenticated finding proof.\n'
+        "\n"
+        "    Raw flags remain unchanged. Running/stale reviews and explicit verdicts\n"
+        "    never use this path. No findings, incomplete pages or missing identities\n"
+        "    cannot establish a resolved review.\n"
+        '    """\n'
+    ) + original[last:]
+    flag = '        or review.get("has_unresolved_findings") not in (None, False)\n'
+    assert original.count(flag) == 1
+    return original.replace(flag, '        or review.get("has_unresolved_findings") is not None\n')
+
+
 def original_security_runtime(delivered):
-    original = delivered.split(b"\n\n# Body and edit attribution", 1)[0]
+    original = original_owner_resolution(delivered.decode(), "scripts/ci_codex_review_runtime.py").encode()
+    original = original.split(b"\n\n# Body and edit attribution", 1)[0]
     original = original.replace(b"from http import HTTPStatus\n", b"")
     first = original.index(b"class APIError(")
     last = original.index(b"def _pairs(", first)
@@ -157,7 +186,7 @@ def original_security_receipt(original):
 
 
 def original_security_reader(delivered):
-    original = delivered.decode()
+    original = original_owner_resolution(delivered.decode(), "scripts/ci_codex_reviews.py")
     original = original_security_receipt(original_reader_api(original))
     imported = (
         "from ci_codex_review_comments import _authenticate_editor, "

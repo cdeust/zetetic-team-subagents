@@ -158,6 +158,10 @@
       ],
       "evidence": "cdeust/ci-autonome job 123331564638: git fetch origin --depth=20 <head> failed with could not read Username on a private repository; cdeust/Cortex job 123333637093 (public, same template) fetched anonymously.",
       "reason": "The pinned action fetches through origin before installing its App token. Keep persist-credentials false and give that fetch the job token as a local http extraheader, which the action unsets before Claude runs."
+    },
+    "security-owner-resolution": {
+      "source": "https://github.com/cdeust/session-optimizer/pull/87#discussion_r4412261213",
+      "reason": "An explicit clean security verdict over findings (has_any_findings true, has_unresolved_findings false) goes through resolve_security like an unknown verdict: only the trusted owner's resolvedBy resolves a finding, never the summary flag. Without that proof the review is unresolved (owner_resolution_unproven)."
     }
   },
   "adapted_assets": {
@@ -183,12 +187,13 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "ab4956bfbbfd64c9b0c9774021120fefba90eaf0b0f919083537888ea776d74b",
+      "sha256": "8a3d997790bb100611f71ba9bb28336e2bebe09b4fd1d2838632c61a7b9ad83f",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "security-owner-resolution"
       ]
     },
     "scripts/ci_codex_reviews.py": {
@@ -197,9 +202,10 @@
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors",
-        "security-receipt-proof"
+        "security-receipt-proof",
+        "security-owner-resolution"
       ],
-      "sha256": "60908be8ffc229db41db8f8e09cf8bdddb5460402f6947581d9c330b87f8aaf3"
+      "sha256": "61a280b29a4f8d433449de30ab4da49c21c52f6434bd546a299aa916b0c7ba4a"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -242,13 +248,14 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "055044ee85311bd182d2d1cb420f2faa5df26b1bc4eb3412d1ccb7849b11271c",
+      "sha256": "d5e0f7cf20efa8403a539b0e6f31ebc486e2b2ffaddf391342b43c12d7d34009",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors",
-        "security-receipt-proof"
+        "security-receipt-proof",
+        "security-owner-resolution"
       ]
     },
     "merge": {
