@@ -287,6 +287,11 @@ def original_review_job(delivered):
     original = without_agreement(
         delivered.decode(), [("      causes: ${{ steps.evidence.outputs.causes }}\n", "")]
     )
+    # Inverse of source.json adaptation "merge-is-the-test-aggregate": the merge job no
+    # longer reuses the reader, so its YAML anchor is gone.
+    anchored = "        run: |\n          set -euo pipefail\n          args=("
+    assert original.count(anchored) == 1
+    original = original.replace(anchored, anchored.replace("run: |", "run: &codex_review_reader |"))
     first = original.index("          AGREEMENT_SOURCE = r'''\n")
     last = original.index("          READER_SOURCE = r'''\n", first)
     original = without_agreement(original[:first] + original[last:], [(
@@ -424,27 +429,6 @@ def original_resolve_job(delivered):
     original = delivered.replace(folded, b"                  previous = indexed.get(name)\n")
     assert original.count(b"indexed[key] = job") == 1
     return original.replace(b"indexed[key] = job", b"indexed[name] = job")
-
-
-def original_merge_job(delivered):
-    text = without_agreement(delivered.decode(), AGREEMENT_MERGE)
-    # Inverse of source.json adaptation "merge-condition-diagnostics".
-    live = 'live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)" ||\n            { echo "::error::PR state is unreadable."; exit 1; }\n'
-    text = text.replace(live, live.split(" ||")[0] + "\n", 1)
-    first = text.index("          # Name the failing condition:")
-    last = text.index("          if [ \"$cause\" != eligible ]; then\n", first)
-    last = text.index("          fi\n", last) + len("          fi\n")
-    original = (
-        '          if ! jq -e --arg sha "$HEAD_SHA" \'\n'
-        "            .state == \"OPEN\" and .isDraft == false and .headRefOid == $sha\n"
-        "            and (.title | ascii_downcase | contains(\"do not merge\") | not)\n"
-        '            and ([.labels[].name | ascii_downcase] | all(. != "hold" and . != "do-not-merge"))\n'
-        "          ' <<<\"$live\" >/dev/null; then\n"
-        '            echo "::error::PR is closed, draft, held, or no longer at the tested head."\n'
-        "            exit 1\n"
-        "          fi\n"
-    )
-    return (text[:first] + original + text[last:]).encode()
 
 
 def original_event_jobs(delivered):
@@ -614,12 +598,13 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     jobs = renderer.split_jobs((NATIVE / "pipeline.yml").read_text())[1]
     for name, source in receipt["jobs"].items():
         assert hashlib.sha256(jobs[name].encode()).hexdigest() == source["sha256"]
+    for name, digest in receipt["authored_jobs"].items():
+        assert hashlib.sha256(jobs[name].encode()).hexdigest() == digest
     for name, source in receipt["adapted_jobs"].items():
         delivered = jobs[name].encode()
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
         original = {
             "review": original_review_job,
-            "merge": original_merge_job,
             "resolve": original_resolve_job,
         }[name]
         assert hashlib.sha256(original(delivered)).hexdigest() == source["source_sha256"]

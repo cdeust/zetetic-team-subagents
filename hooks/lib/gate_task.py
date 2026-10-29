@@ -8,7 +8,7 @@
 requeue and waive print one JSON document and never wait. A waiver never lets a commit through: only a green
 verification of the tree does.
 
-verify plans HEAD's tree exactly as the commit hook would (gate_state.prepare: the trusted list, the rule floor,
+verify plans HEAD's tree exactly as the commit hook would (gate_state.prepare: the trusted list,
 the rules and the runner of this environment) and runs the worker in the foreground, so its exit code is the
 verdict. CI runs it on every change to this repository with a hook-like environment: the repository's own gate
 must stay satisfiable on its own tree (.github/workflows/ci.yml, gate-self-verification).

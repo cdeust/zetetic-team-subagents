@@ -67,10 +67,6 @@ def scenario(monkeypatch):
         ("GET", PR_PATH): pr,
         ("PUT", PR_PATH + "/merge"): {"merged": True, "sha": MERGED},
         ("GET", PUSH_PATH): {"workflow_runs": []},
-        ("GET", COMPARE_PATH): {
-            "status": "identical",
-            "merge_base_commit": {"sha": MERGED},
-        },
     }
     requests = []
 

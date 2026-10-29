@@ -1,11 +1,7 @@
-"""Native merge gate: a red merge names the condition that made it red.
+"""Native post-merge resolver characterization.
 
-Source: Pipeline merge job of cdeust/Cortex run 40583904933 (a deliberate
-"do not merge" title), reported as "closed, draft, held, or no longer at the
-tested head". Attribution of every failed gate of 2026-10-27/28:
-docs/verification/native-gate-patience-20261029.md. The step runs under the
-shell GitHub uses (`bash --noprofile --norc -eo pipefail`) through the harness
-of test_ci_pr_safety, so an empty or failed `gh pr view` is exercised as in CI.
+The merge job is the aggregate of the test jobs of the run (owner rule 2026-10-29): it
+reads no live PR state, so the eligibility-step tests that lived here are gone.
 """
 
 import json
@@ -22,86 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "templates/ci/native"
 SHA = "a" * 40
 MOVED = "b" * 40
-STEP = "Verify live PR eligibility"
-
-
 @pytest.fixture(scope="module")
 def jobs():
     return yaml.safe_load((NATIVE / "pipeline.yml").read_text())["jobs"]
-
-
-def run_eligibility(jobs, tmp_path, payload, rc="0"):
-    """Run the merge job's eligibility step against a stubbed `gh pr view`."""
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    script = next(s["run"] for s in jobs["merge"]["steps"] if s.get("name") == STEP)
-    result = execute(
-        script,
-        tmp_path,
-        {"FIXTURE_PR": payload, "FIXTURE_VIEW_RC": rc, "HEAD_SHA": SHA, "REVIEW_STATE": "success"},
-        GH_STUB,
-    )
-    return result.returncode, result.stdout
-
-
-def pull(**changes):
-    live = {"state": "OPEN", "isDraft": False, "headRefOid": SHA, "title": "fix: x"}
-    return {**live, "labels": [], **changes}
-
-
-@pytest.mark.parametrize(
-    "changes, cause",
-    [
-        ({"state": "MERGED"}, "is not open (MERGED)"),
-        ({"state": "CLOSED"}, "is not open (CLOSED)"),
-        ({"isDraft": True}, "is a draft"),
-        ({"headRefOid": MOVED}, f"head moved: tested {SHA}, live {MOVED}"),
-        ({"title": "do not merge: probe"}, "is held by title"),
-        ({"title": "Fix: Do Not Merge yet"}, "is held by title"),
-        ({"labels": [{"name": "DO-NOT-MERGE"}]}, "is held by label"),
-        ({"labels": [{"name": "Hold"}, {"name": "do-not-merge"}]}, "is held by label"),
-    ],
-)
-def test_red_merge_names_the_condition_that_failed(jobs, tmp_path, changes, cause):
-    assert run_eligibility(jobs, tmp_path / "ok", json.dumps(pull()))[0] == 0  # control
-    code, out = run_eligibility(jobs, tmp_path / "red", json.dumps(pull(**changes)))
-    assert code == 1
-    assert f"::error::PR {cause}." in out
-
-
-@pytest.mark.parametrize(
-    "payload",
-    ["", "   ", "\n\t", "\ufeff", "\ufeff  \n"],
-    ids=["empty", "spaces", "blank", "bom", "bom-blank"],
-)
-def test_payload_without_a_value_is_refused_not_passed(jobs, tmp_path, payload):
-    # Fail-open before: jq prints nothing for these inputs (it skips a BOM), so
-    # no cause was found and the step passed with rc=0. The single-sentence form
-    # (`jq -e`, rc=4) failed here.
-    code, out = run_eligibility(jobs, tmp_path, payload)
-    assert code == 1
-    assert "::error::PR state is unreadable." in out
-
-
-# Characterization, green on e4c16fc by construction: a future `|| true` or
-# `2>/dev/null` around jq would break these.
-@pytest.mark.parametrize("payload", ["not json", "{"], ids=["text", "truncated"])
-def test_unparsable_payload_from_gh_is_refused(jobs, tmp_path, payload):
-    code, out = run_eligibility(jobs, tmp_path, payload)
-    assert code == 1
-    assert "::error::PR state is unreadable." in out
-
-
-@pytest.mark.parametrize("rc", ["1", "4"])
-def test_failed_gh_read_is_refused_and_named(jobs, tmp_path, rc):
-    # rc=4 failed on e4c16fc with rc=4 and no annotation.
-    code, out = run_eligibility(jobs, tmp_path, json.dumps(pull()), rc=rc)
-    assert code == 1
-    assert "::error::PR state is unreadable." in out
-
-
-def test_two_json_documents_are_refused(jobs, tmp_path):
-    two = json.dumps(pull()) + "\n" + json.dumps(pull())
-    assert run_eligibility(jobs, tmp_path, two)[0] == 1
 
 
 # Characterization of the native `resolve` job (pipeline-post-merge.yml). Green on

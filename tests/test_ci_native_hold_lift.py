@@ -325,63 +325,16 @@ def test_gate_outputs_name_the_causes(tmp_path, monkeypatch):
     assert "causes=codex_security_verdict_missing,claude_verdict_missing" in lines
 
 
-# The merge job's eligibility step under the shell GitHub uses (test_ci_native_gate).
-STEP = "Verify live PR eligibility"
-
-
 @pytest.fixture(scope="module")
 def jobs():
     return yaml.safe_load((NATIVE / "pipeline.yml").read_text())["jobs"]
 
 
-def eligibility(jobs, tmp_path, live, review):
-    """live: labels and optional title of the PR; review: (state, causes) outputs."""
-    from test_ci_pr_safety import GH_STUB, execute
-
-    live = dict(state="OPEN", isDraft=False, headRefOid=SHA, title=live.get("title", "fix: x"),
-                labels=[dict(name=name) for name in live["labels"]])
-    script = next(s["run"] for s in jobs["merge"]["steps"] if s.get("name") == STEP)
-    env = dict(FIXTURE_PR=json.dumps(live), HEAD_SHA=SHA, REVIEW_STATE=review[0],
-               REVIEW_CAUSES=review[1])
-    result = execute(script, tmp_path, env, GH_STUB)
-    summary = tmp_path / "summary"
-    return result.returncode, result.stdout, summary.read_text() if summary.exists() else ""
-
-
-def test_review_job_exposes_the_causes_to_the_merge_job(jobs):
+def test_the_merge_job_waits_for_no_review_and_reads_no_pull_request(jobs):
+    """Owner rule 2026-10-29: merge is the aggregate of the test jobs; review states stay with the review job."""
+    assert "review" not in jobs["merge"]["needs"]
     assert jobs["review"]["outputs"]["causes"] == "${{ steps.evidence.outputs.causes }}"
-    step = next(s for s in jobs["merge"]["steps"] if s.get("name") == STEP)
-    assert step["env"]["REVIEW_CAUSES"] == "${{ needs.review.outputs.causes }}"
-    assert jobs["merge"]["permissions"]["pull-requests"] == "read"  # no mutation here
-
-
-def test_agreed_review_hold_passes_and_names_the_lift(jobs, tmp_path):
-    live = dict(labels=["hold", "autopilot:hold"])
-    code, out, summary = eligibility(jobs, tmp_path, live, ("success", ""))
-    assert code == 0, out
-    assert "resolve lifts hold, autopilot:hold and merges" in summary
-
-
-def test_missing_reviewer_keeps_the_hold_and_names_it(jobs, tmp_path):
-    review = ("pending", "claude_verdict_missing")
-    code, out, summary = eligibility(jobs, tmp_path, dict(labels=["Hold"]), review)
-    assert code == 0, out  # "merge pending review": the required "merge" stays absent.
-    assert "Review hold kept (Hold): claude_verdict_missing." in summary
-    assert "human" not in summary.lower()
-
-
-@pytest.mark.parametrize(
-    "live, cause",
-    [
-        (dict(labels=["do-not-merge"]), "is held by label"),
-        (dict(labels=["hold", "DO-NOT-MERGE"]), "is held by label"),
-        (dict(labels=["hold"], title="Do Not Merge: probe"), "is held by title"),
-    ],
-)
-def test_owner_holds_stay_red(jobs, tmp_path, live, cause):
-    code, out, _ = eligibility(jobs, tmp_path, live, ("success", ""))
-    assert code == 1
-    assert f"::error::PR {cause}." in out
+    assert jobs["merge"]["permissions"] == {"contents": "read"}
 
 
 # The resolve job (workflow_run, main's definition, pull-requests: write).

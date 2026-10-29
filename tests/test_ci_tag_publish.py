@@ -201,7 +201,7 @@ def install_overlap_hook(first, first_sha, second, tmp_path):
     hook.chmod(0o755)
 
 
-def test_trusted_main_checkout_can_tag_an_older_tested_ancestor(repositories):
+def test_the_tag_goes_on_the_tested_commit_whatever_main_is(repositories):
     local, remote, older = repositories
     git(
         local,
@@ -213,7 +213,7 @@ def test_trusted_main_checkout_can_tag_an_older_tested_ancestor(repositories):
         "-q",
         "--allow-empty",
         "-m",
-        "advance trusted main",
+        "main moved on",
     )
     git(local, "push", "-q", "origin", "main")
     current = git(local, "rev-parse", "HEAD")
@@ -223,9 +223,10 @@ def test_trusted_main_checkout_can_tag_an_older_tested_ancestor(repositories):
     assert git(remote, "rev-parse", "refs/tags/engine/v1^{}") == older
 
 
-def test_untrusted_checkout_cannot_publish_even_its_own_tested_sha(repositories):
+def test_the_tag_goes_on_the_commit_the_checkout_built(repositories):
+    """The push event built this commit: it is tagged, with no comparison with main (owner rule 2026-10-29)."""
     local, remote, _ = repositories
-    git(local, "checkout", "-q", "-b", "unmerged")
+    git(local, "checkout", "-q", "-b", "built")
     git(
         local,
         "-c",
@@ -236,41 +237,20 @@ def test_untrusted_checkout_cannot_publish_even_its_own_tested_sha(repositories)
         "-q",
         "--allow-empty",
         "-m",
-        "outside main",
+        "built",
     )
-    untrusted = git(local, "rev-parse", "HEAD")
-    result = publish((local, remote, untrusted), ["engine/v1"])
-    assert result.returncode != 0
-    assert git(local, "tag", "--list") == git(remote, "tag", "--list") == ""
+    built = git(local, "rev-parse", "HEAD")
+    result = publish((local, remote, built), ["engine/v1"])
+    assert result.returncode == 0, result.stderr
+    assert git(remote, "rev-parse", "refs/tags/engine/v1^{}") == built
 
 
-def test_trusted_checkout_rejects_tested_commit_outside_main(repositories):
-    local, remote, _ = repositories
-    git(local, "checkout", "-q", "-b", "unmerged")
-    git(
-        local,
-        "-c",
-        "user.name=Fixture",
-        "-c",
-        "user.email=fixture@example.invalid",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "outside main",
-    )
-    untrusted = git(local, "rev-parse", "HEAD")
-    git(local, "checkout", "-q", "main")
-    result = publish((local, remote, untrusted), ["engine/v1"])
-    assert result.returncode != 0
-    assert git(local, "tag", "--list") == git(remote, "tag", "--list") == ""
-
-
-def test_missing_trusted_main_ref_cannot_publish(repositories):
+def test_publication_does_not_read_a_remote_tracking_main(repositories):
     local, remote, _ = repositories
     git(local, "update-ref", "-d", "refs/remotes/origin/main")
-    assert publish(repositories, ["engine/v1"]).returncode != 0
-    assert git(local, "tag", "--list") == git(remote, "tag", "--list") == ""
+    result = publish(repositories, ["engine/v1"])
+    assert result.returncode == 0, result.stderr
+    assert git(remote, "tag", "--list") == "engine/v1"
 
 
 def test_annotated_tag_object_is_not_an_explicit_tested_commit(repositories):

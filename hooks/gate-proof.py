@@ -22,11 +22,6 @@ runs (hooks/lib/gate_trust.py). Closed by default: an unreadable payload, an unr
 invalid gate config in a gated repo exits 2. Registered with onFailure "block" (hooks/hooks.json), so a hook
 that cannot finish refuses the call instead of letting it through (docs/gate.md, "A hook that is killed").
 
-Rule floor: rules may only grow without the owner, against HEAD's rules, the floor the user keeps for the
-repository outside it (hooks/lib/gate_floor.py) and, for a push, the rules of each destination ref. When every
-verdict of a call allows it, the rules it leaves in force are recorded in that floor (`raise`, or `set` when the
-owner acknowledged a lower state); when a call is denied, HEAD's rules, which are in force, are recorded.
-
 Commit: a call that stages in the same breath (`git add ... && git commit`) or commits with
 -a/--all/-i/-o/-p/explicit paths makes the index at hook time differ from the index that will be
 committed, so the tree cannot be judged -> denied.
@@ -40,7 +35,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 import gate_actions as actions  # noqa: E402
 import gate_config as config  # noqa: E402
-import gate_floor as floor  # noqa: E402
 import gate_git as gitq  # noqa: E402
 import gate_publish as publish  # noqa: E402
 import gate_state as state  # noqa: E402
@@ -81,27 +75,7 @@ def _verdicts(repo: gitq.Repo, act: dict) -> list:
         tips = publish.resolve(repo.top, act["publish"])
     except publish.Unresolvable as exc:
         raise _Deny(f"GATE-PROOF: cannot tell which commits this publishes ({exc}): refused (closed).") from exc
-    return [(f"[{tip.name}] ", state.judge(repo.top, "push", state.Change(tip.tree, tip.base, tip.dests))) for tip in tips]
-
-
-def _settle(repo: gitq.Repo, kind: str, verdicts: list) -> str:
-    """Record in the floor what the call leaves in force (all allowed) or what it observed (denied); "" when done.
-    Allowed and not recordable: raise _Deny (the floor would not hold what was let through). Denied: the reason
-    the observation could not be recorded, to append to the denial."""
-    concerned = [v for v in verdicts if v.ends]
-    heads = [v.head for v in concerned if v.head is not None]
-    allowed = all(v.allow for v in verdicts)
-    in_force = [s for v in concerned for s in v.ends] + (heads if kind == "push" else []) if allowed else heads
-    if not in_force:
-        return ""
-    try:
-        floor.record(repo.top, repo.common, in_force, allowed and any(v.acked for v in concerned))
-    except (floor.Unreadable, OSError) as exc:  # FAILS_ON: the floor file cannot be read or written
-        if allowed:
-            raise _Deny(f"GATE-PROOF: the rule floor of {repo.top} cannot be recorded ({exc}): refused (closed). "
-                        "See docs/gate.md (rule changes).") from exc
-        return f"\n(The rules in force could not be recorded in the floor: {exc}.)"
-    return ""
+    return [(f"[{tip.name}] ", state.judge(repo.top, "push", state.Change(tip.tree, tip.base))) for tip in tips]
 
 
 def _check(act: dict) -> None:
@@ -114,11 +88,10 @@ def _check(act: dict) -> None:
     try:
         verdicts = _verdicts(repo, act)
         denied = [label + v.message for label, v in verdicts if not v.allow]
-        note = _settle(repo, act["kind"], [v for _, v in verdicts])
     except gitq.Unavailable as exc:
         raise _Deny(f"GATE-PROOF: cannot judge the tree ({exc}) in {repo.top}: refused (closed).") from exc
     if denied:
-        raise _Deny(chr(10).join(denied) + note)
+        raise _Deny(chr(10).join(denied))
 
 
 def _run(event: object) -> None:
@@ -136,10 +109,9 @@ def _run(event: object) -> None:
 
 
 def _declared_above_safely(directory: str) -> bool:
-    """True when a gate is declared above ``directory`` or the user keeps a rule floor for its repository: then a
-    crash of this hook refuses the call (an orphan branch declares nothing, its floor still holds)."""
+    """True when a gate is declared above ``directory``: then a crash of this hook refuses the call."""
     try:
-        return config.declared_above(directory) or floor.kept_for(directory)
+        return config.declared_above(directory)
     except Exception:  # FAILS_ON: the declaration probe itself failed; then nothing is known to be declared
         return False
 

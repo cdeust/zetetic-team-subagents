@@ -1,4 +1,4 @@
-"""The user's files (trusted list, rule-change acknowledgements), and the relation "no weaker than", on data.
+"""The user's trusted-repositories list.
 
 HOME as a dotfiles repository (PR #169 round 3): at ea62083 a repository whose root contains
 `~/.claude/zetetic` could never be trusted, because the rule "a list inside the repository is the
@@ -17,26 +17,21 @@ import pytest
 from gate_support import git
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hooks" / "lib"))
-import gate_ack  # noqa: E402
 import gate_git  # noqa: E402
-import gate_rules as rules  # noqa: E402
-import gate_superset as superset  # noqa: E402
 import gate_trust  # noqa: E402
 
 
 @pytest.fixture
 def dotfiles(tmp_path, monkeypatch):
-    """A repository at HOME holding ~/.claude/zetetic/{gate-trusted-repos,gate-rule-changes} (the user's files)."""
+    """A repository at HOME holding ~/.claude/zetetic/gate-trusted-repos (the user's file)."""
     home = tmp_path / "home"
     (home / ".claude" / "zetetic").mkdir(parents=True)
     git(home, "init", "-q", "-b", "main")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.delenv(gate_trust.ENV_FILE, raising=False)
-    monkeypatch.delenv(gate_ack.ENV_FILE, raising=False)
     monkeypatch.setattr("pwd.getpwuid", lambda uid: types.SimpleNamespace(pw_dir=str(home)))  # the account's home is HOME
     top = os.path.realpath(home)
     (home / ".claude" / "zetetic" / "gate-trusted-repos").write_text(top + "\n")
-    (home / ".claude" / "zetetic" / "gate-rule-changes").write_text(f"{top} {'a' * 32}\n")
     return home, top, gate_git.locate(str(home)).common
 
 
@@ -45,22 +40,12 @@ def test_a_repository_that_contains_the_default_trust_file_can_be_trusted(dotfil
     assert gate_trust.is_trusted(top, common)
 
 
-def test_a_repository_that_contains_the_default_acknowledgement_file_can_be_acknowledged(dotfiles):
-    _, top, common = dotfiles
-    assert gate_ack.acknowledged(top, common, "a" * 32)
-    assert not gate_ack.acknowledged(top, common, "b" * 32)
-
-
 def test_an_override_inside_the_dotfiles_repository_is_still_the_repositorys_own_claim(dotfiles, monkeypatch):
     home, top, common = dotfiles
     own = home / "evil-list"
     own.write_text(top + "\n")
     monkeypatch.setenv(gate_trust.ENV_FILE, str(own))
     assert not gate_trust.is_trusted(top, common)
-    ack = home / "evil-acks"
-    ack.write_text(f"{top} {'b' * 32}\n")
-    monkeypatch.setenv(gate_ack.ENV_FILE, str(ack))
-    assert not gate_ack.acknowledged(top, common, "b" * 32)
 
 
 def test_a_home_redirected_into_the_repository_is_not_the_users_home(dotfiles, monkeypatch, tmp_path):
@@ -69,7 +54,6 @@ def test_a_home_redirected_into_the_repository_is_not_the_users_home(dotfiles, m
     home, top, common = dotfiles
     monkeypatch.setattr("pwd.getpwuid", lambda uid: types.SimpleNamespace(pw_dir=str(tmp_path / "real-home")))
     assert not gate_trust.is_trusted(top, common)
-    assert not gate_ack.acknowledged(top, common, "a" * 32)
 
 
 def test_a_repository_below_home_is_trusted_by_the_default_file(tmp_path, monkeypatch):
@@ -85,97 +69,6 @@ def test_a_repository_below_home_is_trusted_by_the_default_file(tmp_path, monkey
     assert gate_trust.is_trusted(os.path.realpath(repo), gate_git.locate(str(repo)).common)
 
 
-def test_the_acknowledgement_file_is_parsed_strictly(tmp_path, monkeypatch):
-    listing = tmp_path / "acks"
-    real = tmp_path / "real"
-    real.mkdir()
-    link = tmp_path / "link"
-    link.symlink_to(real)
-    listing.write_text(f"# a note\n\n   {link}   {'1' * 32}  \nrelative/path {'2' * 32}\n{real} {'3' * 32} extra\n{real}\n")
-    monkeypatch.setenv(gate_ack.ENV_FILE, str(listing))
-    assert gate_ack._entries() == {(os.path.realpath(real), "1" * 32)}  # symlinks resolved; relative, 3-field, 1-field lines name nothing
-    monkeypatch.setenv(gate_ack.ENV_FILE, str(tmp_path / "missing"))
-    assert gate_ack._entries() == set()
-
-
-def test_the_refusal_names_every_weakened_rule_and_the_exact_line(tmp_path, monkeypatch):
-    monkeypatch.setenv(gate_ack.ENV_FILE, str(tmp_path / "acks"))
-    text = gate_ack.refusal(("/w/repo", "/w/repo/.git"), "f" * 32, ["check \"a\" was removed", "env changed"], "commit")
-    assert "  - check \"a\" was removed\n  - env changed\n" in text and f"\n{os.path.realpath('/w/repo')} {'f' * 32}\n" in text
-    assert str(tmp_path / "acks") in text and "Nothing was run" in text
-    assert not (tmp_path / "acks").exists()  # building the refusal writes nothing
-
-
-# ------------------------------------------------------------------ the relation, on data
-
-
-def cfg(**extra):
-    return {"version": 1, "checks": [{"name": "a", "argv": ["x"]}], **extra}
-
-
-def rs(kind="config", config=None, script=None):
-    return rules.RuleSet(kind, config, None, script)
-
-
-def test_a_superset_is_not_a_weakening():
-    old = rs(config=cfg(full_on=["a"], tests={"argv": ["t", "{tests}"], "map": [{"paths": ["p"], "tests": ["t1"]}], "fast": ["f"]}))
-    new = rs(config=cfg(full_on=["a", "b"], checks=[{"name": "z", "argv": ["x"]}, {"name": "b", "argv": ["y"], "paths": ["a"]}],
-                        tests={"argv": ["t", "{tests}"], "map": [{"paths": ["p"], "tests": ["t1", "t2"]}], "fast": ["f", "g"]}))
-    assert superset.weakenings(old, new) == [] and superset.weakenings(old, old) == [] and superset.weakenings(None, new) == []
-    assert superset.weakenings(None, None) == []
-
-
-def test_a_stack_is_compared_as_the_rules_it_generates():
-    stack = rs("stack", {"version": 1, "checks": [{"name": "test", "argv": ["{python}", "-m", "pytest", "-q"]}], "env": {}})
-    keeps = rs("config", {"version": 1, "checks": [{"name": "t", "argv": ["{python}", "-m", "pytest", "-q"]}], "env": {}})
-    drops = rs("config", {"version": 1, "checks": [{"name": "t", "argv": ["true"]}]})
-    assert superset.weakenings(stack, keeps) == []
-    assert any("test" in w for w in superset.weakenings(stack, drops))
-
-
-def test_a_legacy_script_is_not_comparable_with_anything_but_itself():
-    legacy = rs("legacy", None, "a" * 40)
-    assert superset.weakenings(legacy, rs("legacy", None, "a" * 40)) == []
-    assert superset.weakenings(legacy, rs("legacy", None, "b" * 40))
-    assert superset.weakenings(legacy, None) and superset.weakenings(legacy, rs(config=cfg()))
-    assert superset.weakenings(rs(config=cfg()), legacy)
-    assert superset.weakenings(None, legacy) == []
-
-
-def test_the_state_hash_names_one_state():
-    assert rules.state_hash(rs(config=cfg())) == rules.state_hash(rs(config=cfg()))
-    assert rules.state_hash(rs(config=cfg())) != rules.state_hash(rs(config=cfg(env={"A": "1"})))
-    assert rules.state_hash(None) != rules.state_hash(rs(config=cfg()))
-    assert len(rules.state_hash(None)) == 32 and rules.state_hash(rs("legacy", None, "a" * 40)) != rules.state_hash(rs("legacy", None, "b" * 40))
-
-
-def test_a_worktree_is_acknowledged_through_the_checkout_it_belongs_to_and_not_the_other_way_round(tmp_path, monkeypatch):
-    main = tmp_path / "main"
-    main.mkdir()
-    git(main, "init", "-q", "-b", "main")
-    (main / "a").write_text("1\n")
-    git(main, "add", "a")
-    git(main, "commit", "-q", "-m", "c")
-    work = tmp_path / "work"
-    git(main, "worktree", "add", "-q", str(work), "-b", "side")
-    top_main, top_work = os.path.realpath(main), os.path.realpath(work)
-    common = gate_git.locate(str(work)).common
-    listing = tmp_path / "acks"
-    monkeypatch.setenv(gate_ack.ENV_FILE, str(listing))
-    state = "c" * 32
-    listing.write_text(f"{top_main} {state}\n")
-    assert gate_ack.acknowledged(top_work, common, state)  # the main checkout covers its worktrees
-    listing.write_text(f"{top_work} {state}\n")
-    assert gate_ack.acknowledged(top_work, common, state)  # a worktree covers itself
-    assert not gate_ack.acknowledged(top_main, gate_git.locate(str(main)).common, state)  # and not the main checkout
-
-
 @pytest.mark.parametrize("common,expected", [("/w/main/.git", "/w/main"), ("/srv/r.git", "/w/top"), ("/w/main/.git/", "/w/top")])
 def test_the_checkout_that_owns_a_git_directory(common, expected):
     assert gate_trust.repo_root("/w/top", common) == expected  # only a directory named .git has a parent that is a checkout
-
-
-def test_the_state_hash_does_not_depend_on_the_order_of_keys():
-    one = rules.RuleSet("config", {"version": 1, "checks": [{"name": "a", "argv": ["x"]}]}, None)
-    two = rules.RuleSet("config", {"checks": [{"argv": ["x"], "name": "a"}], "version": 1}, None)
-    assert rules.state_hash(one) == rules.state_hash(two)

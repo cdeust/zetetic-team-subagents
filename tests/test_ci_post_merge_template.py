@@ -64,7 +64,7 @@ def test_contract_allows_normal_events_but_requires_successful_resolve_for_compl
     )
 
 
-def test_tests_checkout_contract_sha_but_privileged_release_checks_out_main():
+def test_every_checkout_is_the_contract_sha_and_the_release_tags_that_commit():
     jobs = workflow()["jobs"]
     for name in CATEGORIES:
         checkout = next(
@@ -74,7 +74,7 @@ def test_tests_checkout_contract_sha_but_privileged_release_checks_out_main():
         )
         assert checkout["with"]["ref"] == "${{ needs.contract.outputs.tested_sha }}"
     checkout = next(step for step in jobs["tag"]["steps"] if "uses" in step)
-    assert checkout["with"]["ref"] == "main"
+    assert checkout["with"]["ref"] == "${{ needs.contract.outputs.tested_sha }}"
     assert checkout["with"]["fetch-depth"] == 0
     assert checkout["with"]["ssh-key"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
     publish = next(step for step in jobs["tag"]["steps"] if step.get("id") == "publish")
@@ -93,12 +93,11 @@ def test_review_checkout_explicitly_excludes_completion_events_and_forks():
         assert guard in checkout["if"]
 
 
-def test_merge_gate_does_not_arm_an_event_suppressing_async_merge():
+def test_merge_gate_reads_nothing_but_the_test_jobs():
     job = workflow()["jobs"]["merge"]
     body = "\n".join(step.get("run", "") for step in job["steps"])
-    assert "gh pr merge" not in body
-    assert "headRefOid" in body
-    assert "hold" in body and "do-not-merge" in body
+    assert "gh " not in body and "headRefOid" not in body
+    assert "review" not in job["needs"]
 
 
 def test_completion_and_push_runs_cannot_replace_other_heads_pending_tests():
