@@ -120,7 +120,7 @@
       "sources": [
         "https://github.com/cdeust/Cortex/actions/runs/40583904933"
       ],
-      "reason": "The live-eligibility step reported closed, draft, held and moved head with one sentence. Cortex run40583904933 failed on a deliberate 'do not merge' title and read as a moved head. Name the first failing condition and refuse an empty `gh pr view` read (the unnamed form failed closed on it). Which conditions fail is unchanged, so no gate decision moves."
+      "reason": "The live-eligibility step reported closed, draft, held and moved head with one sentence. Cortex run40583904933 failed on a deliberate 'do not merge' title and read as a moved head. Name the first failing condition and pass only on the value `eligible`: a failed `gh pr view`, an empty, blank or BOM-only read and any other jq result are refused as unreadable. The conditions that fail are those of the single-sentence form plus multiple jq results."
     }
   },
   "adapted_assets": {
@@ -210,7 +210,7 @@
     "merge": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "ff29bf24068614e7695bd6dc4db49007c48ecb69f8a9cbaaa94a937cbbeb2e4a",
-      "sha256": "fb5a3adc3702e160943eca565b2852aed61cfe30f52b5c547dd3a2764204e3af",
+      "sha256": "e4de70f3cd8347f7a4b39a8980417cf4f9b8e3eda9017dc5c1f9eaf4d2ec885b",
       "adaptation": [
         "merge-condition-diagnostics"
       ]
