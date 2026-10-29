@@ -184,8 +184,8 @@ its Python from `tools/dev-python.sh`: `PYTHON_BIN` if set, else a `.venv` in th
 worktree or the main checkout. When neither exists it creates the main checkout's
 `.venv` from `requirements-dev.lock` (`pip install --require-hashes`, which needs
 the network). `DEV_PYTHON_CREATE=0 bash tests/run-all.sh` turns that off: the
-script prints the command to create the venv yourself and the runner falls back
-to `python3`. To use your own interpreter:
+script prints the command to create the venv yourself and the runner stops with exit 1.
+To use your own interpreter:
 `PYTHON_BIN=/usr/bin/python3 bash tests/run-all.sh`. A missing `pytest` is
 reported as a failure, not skipped: a green run that silently omitted 334 tests
 is worse than a red one.

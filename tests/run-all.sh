@@ -46,7 +46,7 @@ done
 # missing (source: ADR-9849). The regression and e2e groups run shell suites
 # only (tasks/ci-suite-partition-20261024.md), so they resolve no Python and
 # never create a venv.
-if [[ "$group" == all ]]; then
+if [[ "$group" == all && "$list_only" != true ]]; then
   PYTHON_BIN="$(tools/dev-python.sh)" || { echo "FATAL: tools/dev-python.sh found no Python with pytest and yaml (its diagnostic is above)" >&2; exit 1; }
   export PYTHON_BIN
 fi
@@ -102,7 +102,7 @@ if [[ -z "$selected_suites" ]]; then
   exit 2
 fi
 if [[ "$list_only" == true ]]; then
-  [[ "$group" != all ]] || printf '%s\n' "$PYTHON_BIN -m pytest"
+  [[ "$group" != all ]] || printf '%s\n' "${PYTHON_BIN:-python3} -m pytest"
   printf '%s\n' "$selected_suites"
   exit 0
 fi
