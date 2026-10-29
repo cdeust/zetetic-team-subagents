@@ -55,8 +55,8 @@ jobs:
     timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
     permissions:
       contents: read
-      pull-requests: read
-      issues: write
+      pull-requests: write
+      issues: read
       actions: write
     # Coalesce events for the same PR, without dropping another PR's event.
     concurrency:
@@ -110,8 +110,8 @@ jobs:
     timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
     permissions:
       contents: read
-      pull-requests: read
-      issues: write
+      pull-requests: write
+      issues: read
       actions: write
     concurrency:
       group: codex-review-completion-${{ github.repository }}-${{ matrix.number }}

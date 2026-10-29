@@ -3,7 +3,6 @@
 import copy
 import json
 import os
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -12,11 +11,12 @@ from test_ci_codex_review_event_fixtures import REPO, PULL, Server, event, load
 import test_ci_codex_review_schedule as schedule
 
 
-def unknown(server):
-    data = state()
-    data["security_review"].update(has_any_findings=None, has_unresolved_findings=None)
-    server.data["comments"] = [comment(data, comment_id=9)]
-    return server
+from codex_outbox_fixtures import EXACT, OutboxHarness, control_body, unknown
+
+
+def submitted():
+    harness = OutboxHarness()
+    return [harness.row(control_body("submitted", 92), 91), harness.row(EXACT, 92)]
 
 
 def receipt(sha=SHA, login="github-actions[bot]", edited=False, kind="security_review"):
@@ -33,20 +33,21 @@ def receipt(sha=SHA, login="github-actions[bot]", edited=False, kind="security_r
 
 def invoke(server, *, failure=False, dry_run=False):
     target = load()
-    response = SimpleNamespace(stdout='{"id":91}')
+    harness = OutboxHarness(server)
+    if failure:
+        harness.failure = "control_before"
     with (
         patch.dict(os.environ, {"EXPECTED_PR": "797"}),
         patch.object(target.source, "_api", side_effect=server),
-        patch.object(target.subprocess, "run", return_value=response) as post,
+        patch.object(target.subprocess, "run", side_effect=harness.write) as post,
     ):
-        if failure:
-            import subprocess
-            post.side_effect = subprocess.CalledProcessError(1, ["gh"])
         result = (
             target.resume(REPO, dict(number=797, sha=SHA, run_id=None), dry_run=True)
             if dry_run else target.coordinate("issue_comment", event(), REPO)
         )
-    return result, post.call_args_list
+    provider = [call for call in post.call_args_list if "input" not in call.kwargs
+                or json.loads(call.kwargs["input"])["body"].startswith("@codex")]
+    return result, provider
 
 
 class ReviewRecoveryTests(unittest.TestCase):
@@ -109,14 +110,12 @@ class ReviewRecoveryTests(unittest.TestCase):
 
     def test_completed_unknown_security_requests_review_instead_of_stalling(self):
         result, posts = invoke(unknown(Server()))
-        self.assertEqual(result, dict(action="request", kind="security_review", comment_id=91))
+        self.assertEqual(result, dict(action="request", kind="security_review", comment_id=92, control_id=91))
         self.assertEqual(len(posts), 1)
         command = posts[0].args[0]
         self.assertEqual(command, ["gh", "api", "--method", "POST", f"repos/{REPO}/issues/797/comments", "--input", "-"])
         body = json.loads(posts[0].kwargs["input"])["body"]
-        self.assertTrue(body.startswith("@codex security review\n"))
-        self.assertIn(SHA, body)
-        self.assertIn("codex-review-request:v1", body)
+        self.assertEqual(body, EXACT)
         self.assertNotIn("/rerun", " ".join(command))
 
     def test_dry_run_checks_actual_proof_without_posting(self):
@@ -128,18 +127,18 @@ class ReviewRecoveryTests(unittest.TestCase):
         server = unknown(Server())
         initial = copy.deepcopy(server.data["comments"])
         server.overrides["graphql"] = lambda count: summary_pages([
-            initial if count < 3 else [*initial, receipt()]
+            initial if count < 3 else [*initial, *submitted()]
         ])
         result, posts = invoke(server)
-        self.assertEqual(result, dict(action="none", reason="review_request_inflight"))
+        self.assertEqual(result, dict(action="none", reason="review_request_inflight", control_id=91))
         self.assertEqual(posts, [])
 
     def test_provider_unknown_after_request_is_diagnosed_without_repeated_mentions(self):
         server = unknown(Server())
         server.data["comments"][0]["updated_at"] = "2026-10-29T12:00:00Z"
-        server.data["comments"].append(receipt())
+        server.data["comments"].extend(submitted())
         result, posts = invoke(server)
-        self.assertEqual(result, dict(action="none", reason="provider_unknown_after_request"))
+        self.assertEqual(result, dict(action="none", reason="provider_unknown_after_request", control_id=91))
         self.assertEqual(posts, [])
 
     def test_unknown_summary_with_human_editor_never_requests_or_reruns(self):
@@ -152,9 +151,9 @@ class ReviewRecoveryTests(unittest.TestCase):
 
     def test_authenticated_existing_request_is_not_duplicated(self):
         server = unknown(Server())
-        server.data["comments"].append(receipt())
+        server.data["comments"].extend(submitted())
         result, posts = invoke(server)
-        self.assertEqual(result, dict(action="none", reason="review_request_inflight"))
+        self.assertEqual(result, dict(action="none", reason="review_request_inflight", control_id=91))
         self.assertEqual(posts, [])
 
     def test_old_head_and_untrusted_marker_cannot_suppress_recovery(self):

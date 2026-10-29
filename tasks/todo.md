@@ -143,3 +143,23 @@ Review: [source evidence](../docs/verification/native-rerun-merge-identity-20261
 - [ ] Root review/publication, hosted Bot acknowledgement, native correction/new-head CI, and registered cleanup.
 
 Review: docs/verification/native-review-recovery-20261029.md.
+
+## Positive native security receipt, 2026-10-29
+
+- [x] Verify actual native actor/editor, explicit clean body, companion full SHA and unique GitHub short-commit resolution.
+- [x] Reproduce missing positive proof, then add strict parsing with forged/stale/truncated/ambiguous negative contracts.
+- [x] Embed the same helper in canonical generated native CI and deliver its consumer contracts.
+- [x] Verify 139 native contracts, 40 focused integration checks plus 33 subtests, measured doc counts and actionlint.
+- [ ] Root integrate into current source219 and validate fresh-head hosted reviews/CI.
+
+Review: docs/verification/native-security-clean-receipt-20261029.md.
+
+## Exact native security transport, 2026-10-29
+
+- [x] Verify the actual marked-command/code-review mismatch and exact-only security completion.
+- [x] Send only the exact native security command, with separate authenticated outbox control and explicit partial states.
+- [x] Preserve accepted FIX body; cover replay, lost acknowledgements, head/proof races, actor/editor linkage and untrusted controls.
+- [x] Apply measured PR-write permission correction; preserve private no-schedule rendering.
+- [ ] Root publish the combined source, run full hosted CI and exercise the complete outbox against the blocked queue.
+
+Review: docs/verification/native-security-exact-transport-20261029.md.

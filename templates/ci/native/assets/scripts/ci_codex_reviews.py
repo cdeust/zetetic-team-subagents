@@ -23,6 +23,7 @@ from typing import Any
 if "ci_codex_review_runtime" not in sys.modules:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_runtime as runtime  # noqa: E402
+import ci_codex_review_receipts as receipts  # noqa: E402
 from ci_codex_review_runtime import _outputs  # noqa: E402
 from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 
@@ -147,7 +148,7 @@ def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
     return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 
 
-def _reviews(latest, target):
+def _reviews(latest, target, comments):
     expected_sha, repo, pr = target
     reviews = {}
     data = _marker(latest["body"], "codex-review-state", True)
@@ -160,6 +161,7 @@ def _reviews(latest, target):
             proof = runtime.resolve_security(
                 (repo, pr, expected_sha), latest["body"], reviews[kind], security
             )
+            proof = proof or receipts.clean_security((repo, pr, expected_sha), comments, (latest, reviews[kind], security), runtime._api)
         if proof is not None:
             state = proof.pop("state")
             reviews[kind]["resolution"] = proof
@@ -190,7 +192,7 @@ def review_evidence(
                 _authenticate_editor(item)
         if latest["body"].count(SUMMARY) != 1:
             raise EvidenceError("protocol")
-        states, details = _reviews(latest, (expected_sha, repo, pr))
+        states, details = _reviews(latest, (expected_sha, repo, pr), comments)
         result.update(details)
         result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
         result["state"] = (

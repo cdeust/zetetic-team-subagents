@@ -150,6 +150,18 @@
         "https://learn.chatgpt.com/docs/third-party/github#act-on-review-findings"
       ],
       "reason": "Request native security review for an authenticated completed unknown verdict, and native fix tasks for positive current-head findings or authenticated failed category jobs. Durable actor/editor-checked head/kind receipts and existing per-PR concurrency deduplicate requests. Keep null/findings fail-closed and exact-head merge authorization unchanged. Inventory-scoped once/dry-run controller shares the actual coordinator."
+    },
+    "positive-native-security-receipts": {
+      "source": "https://github.com/cdeust/zetetic-team-subagents/pull/219#issuecomment-6491639753",
+      "companion_summary": "https://github.com/cdeust/zetetic-team-subagents/pull/219#issuecomment-6491366848",
+      "reason": "Accept an explicit clean native security receipt only with stable native actor/editor authentication, exact current full-SHA companion metadata, strict versioned claim/report format, and GitHub unique commit-abbreviation resolution. Keep raw null flags unchanged and never override positive findings or stale/running evidence."
+    },
+    "exact-native-security-transport": {
+      "source": "https://github.com/cdeust/cortex-viz/pull/213#issuecomment-6492065732",
+      "counterexample": "https://github.com/cdeust/cortex-viz/pull/213#issuecomment-6492093354",
+      "positive_source": "https://github.com/cdeust/zetetic-team-subagents/pull/219#issuecomment-6491562935",
+      "reason": "Send exactly @codex security review with no metadata in its command comment. Keep authenticated head/kind state in a separate no-mention outbox control; persist posting before command emission and never resend uncertain outcomes. Native FIX body is unchanged. Hosted mutation workers use pull-requests:write and issues:read; the prior issues:write/pull-requests:read combination failed POST with403, while the minimal PR-write canary posted successfully and the native App acknowledged.",
+      "hosted_permission_proof": "https://github.com/cdeust/ci-autonome/actions/runs/40849421081"
     }
   },
   "adapted_assets": {
@@ -186,9 +198,10 @@
       "adaptation": [
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "positive-native-security-receipts"
       ],
-      "sha256": "76f0d79a4c2127ef43a2b0dc4523f21d3dc17cd1bb000d68ac446d8f96245d02"
+      "sha256": "80623f26cf0f8ec5bc28e4ded6ad972bf62491b0cbd43d7d07877725287e1b41"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -202,12 +215,13 @@
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-      "sha256": "ea7d907e1b4f6c610ca7c78d12f8dabf2532565e386271003eefaa965ebf9f9d",
+      "sha256": "a1c38fef2a30cb3da6a2f75c9d49affc0dafd3b46a26beabc2ca474195cd27ee",
       "adaptation": [
         "scheduled-reconciliation",
         "reconciliation-checks-read",
         "bounded-completion-jobs",
-        "automatic-security-review-recovery"
+        "automatic-security-review-recovery",
+        "exact-native-security-transport"
       ]
     }
   },
@@ -228,21 +242,27 @@
     "scripts/tests/test_ci_codex_review_proof_first.py": "d15b0a980fb3afa58a320aff162837f70dbc0999af788eb70397552b912438d4",
     "scripts/tests/test_ci_codex_review_gate_groups.py": "87f7d2b11429d7255eba8ab69415e5542d292890c56fd141fa8ab8280f108863",
     "scripts/tests/test_ci_workflow_authorization.py": "c93a4fe5ad8f9b9f57fe17a058d00f1a7723349af648a87a6589b260bb685cf1",
-    "scripts/ci_codex_review_request.py": "390473bab977362a820dfac4da039aadd83859d0be2593182108bffae6f1cf14",
+    "scripts/ci_codex_review_request.py": "3f4589b307082278c94f5a7f790f042a49da0a53cd6c3f6b5a84de9b3c6958f0",
     "scripts/ci_codex_review_controller.py": "8bfdad37ab17fb720aa356bb7c322d407aa6e6c9c23e35c6a311162639e2ab04",
-    "scripts/tests/test_ci_codex_review_recovery.py": "84ca65caca4a871ed7052a400c8ec61f85c811ff56355ac29fbdfb1397ee67c6",
-    "scripts/tests/test_ci_codex_review_controller.py": "843bfe8567bd4a9ea1e150d19018ab7fe247cff302230f7272c5508a31044dd7"
+    "scripts/tests/test_ci_codex_review_recovery.py": "e08e16e0fb42cf98b66e41df9fcacbdac5168ac8aa55aed426f8583ff73b49e5",
+    "scripts/tests/test_ci_codex_review_controller.py": "843bfe8567bd4a9ea1e150d19018ab7fe247cff302230f7272c5508a31044dd7",
+    "scripts/ci_codex_review_receipts.py": "b38726a891c7a5fad2eb4be207a639c44c658edce5019c79d02f8059e10305b9",
+    "scripts/tests/test_ci_codex_review_receipts.py": "6be39b0b1cde703d8c49d2026236253e9f1a50d11ced17c049017f7975acfb41",
+    "scripts/ci_codex_review_outbox.py": "e20c4f7acf4a1e6649d7e953edcd189093d19f0aa9cba32c9718073423952a4e",
+    "scripts/tests/test_ci_codex_review_outbox.py": "224eba0160d4af2c19a3b417cc26e896ecaa09055e73fa7a7100ee35f5da26e5",
+    "scripts/tests/codex_outbox_fixtures.py": "0ce6fd6758d0cd81ac1e8c169125b75169884d78a94f1d859c5a20e3007b6a28"
   },
   "adapted_jobs": {
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "f50f96d2f88154ce8ea70fdb4a410623ca845571a934867007f68afa927c28ce",
+      "sha256": "3899f3c0b4c167a2652d25f92e4ff471d043f980782ed2e039a3de9f4ad5acb5",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "positive-native-security-receipts"
       ]
     },
     "merge": {

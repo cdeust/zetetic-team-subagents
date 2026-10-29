@@ -124,9 +124,24 @@ def original_reader_api(original):
     return original
 
 
+def original_receipt_reader(original):
+    # Inverse of source.json adaptation "positive-native-security-receipts".
+    return original.replace(
+        "import ci_codex_review_receipts as receipts  # noqa: E402\n", "",
+    ).replace(
+        "def _reviews(latest, target, comments):", "def _reviews(latest, target):",
+    ).replace(
+        "            proof = proof or receipts.clean_security((repo, pr, expected_sha), comments, (latest, reviews[kind], security), runtime._api)\n", "",
+    ).replace(
+        "_reviews(latest, (expected_sha, repo, pr), comments)",
+        "_reviews(latest, (expected_sha, repo, pr))",
+    )
+
+
 def original_security_reader(delivered):
     original = delivered.decode()
     original = original_reader_api(original)
+    original = original_receipt_reader(original)
     imported = (
         "from ci_codex_review_comments import _authenticate_editor, "
         "_bot_author, _canonical  # noqa: E402\n"
@@ -182,6 +197,11 @@ def original_review_job(delivered):
             "          sys.modules[_comments.__name__] = _comments\n",
             "",
         )
+    original = original.replace(
+        '          _receipts = ModuleType("ci_codex_review_receipts")\n'
+        '          exec(compile(RECEIPTS_SOURCE, "ci_codex_review_receipts.py", "exec"), _receipts.__dict__)\n'
+        '          sys.modules[_receipts.__name__] = _receipts\n', "",
+    )
     for variable, filename in (
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
         ("READER_SOURCE", "ci_codex_reviews.py"),
@@ -272,7 +292,8 @@ def original_recovery_event(delivered):
 def original_asset(delivered, relative):
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
-            b"      issues: write\n      actions: write", b"      issues: read\n      actions: write",
+            b"      pull-requests: write\n      issues: read\n      actions: write",
+            b"      pull-requests: read\n      issues: read\n      actions: write",
         ).replace(
             b"    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.\n",
             b"",
@@ -413,6 +434,7 @@ def test_native_inline_codex_readers_match_the_delivered_scripts(tmp_path):
     for variable, filename in (
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
         ("COMMENTS_SOURCE", "ci_codex_review_comments.py"),
+        ("RECEIPTS_SOURCE", "ci_codex_review_receipts.py"),
         ("READER_SOURCE", "ci_codex_reviews.py"),
     ):
         embedded = command.split(variable + " = r'''\n", 1)[1].split("\n'''", 1)[0]
@@ -431,6 +453,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
         for name in (
             "ci_codex_review_runtime",
             "ci_codex_review_comments",
+            "ci_codex_review_receipts",
             "ci_codex_reviews",
         ):
             module = ModuleType(name)
@@ -441,7 +464,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
             exec(compile(source, module.__file__, "exec"), module.__dict__)
             sys.modules[name] = module
             loaded[name] = module
-        runtime, comments, reader = loaded.values()
+        runtime, comments, _, reader = loaded.values()
         assert comments.EvidenceError is runtime.EvidenceError
         assert reader.review_evidence([comment()], SHA, REPO, PR)["state"] == "success"
         rows = runtime._comment_pages([page([comment()])], SHA, PR)

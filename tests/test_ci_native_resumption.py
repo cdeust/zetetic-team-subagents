@@ -15,6 +15,8 @@ from scripts.lib import render_ci as renderer
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "templates/ci/native/assets"
 CONTRACTS = (
+    "test_ci_codex_review_outbox.py",
+    "test_ci_codex_review_receipts.py",
     "test_ci_codex_review_recovery.py",
     "test_ci_codex_review_controller.py",
     "test_ci_codex_review_resume.py",
@@ -34,6 +36,7 @@ def test_native_profile_delivers_executable_resumption_contracts(tmp_path):
     for name in (
         *CONTRACTS,
         "codex_resume_fixtures.py",
+        "codex_outbox_fixtures.py",
         "test_ci_codex_review_event_fixtures.py",
     ):
         assert files[tmp_path / "scripts/tests" / name]

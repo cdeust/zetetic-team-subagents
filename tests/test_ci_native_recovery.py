@@ -37,7 +37,8 @@ def test_native_request_workers_have_comment_write_and_shared_serialization(tmp_
     document = yaml.safe_load(files[tmp_path / ".github/workflows/Codex.yml"])
     for name in ("resume", "reconcile"):
         worker = document["jobs"][name]
-        assert worker["permissions"]["issues"] == "write"
+        assert worker["permissions"]["issues"] == "read"
+        assert worker["permissions"]["pull-requests"] == "write"
         assert worker["permissions"]["actions"] == "write"
         assert worker["concurrency"]["group"].startswith("codex-review-completion-")
         assert worker["concurrency"]["cancel-in-progress"] is False

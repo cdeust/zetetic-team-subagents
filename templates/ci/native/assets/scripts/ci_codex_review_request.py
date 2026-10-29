@@ -65,21 +65,26 @@ def needs_request(proof, jobs=()):
     return request_kind(proof, jobs) is not None
 
 
-def _trusted_actor(row, repo):
-    user = row.get("user", {})
+def _trusted_author(user, repo):
+    if not isinstance(user, dict):
+        return False
     identity = user.get("node_id")
-    trusted = (
+    return (
         (user.get("login") in ("github-actions", "github-actions[bot]")
          and user.get("type") == "Bot" and identity == ACTIONS_ACTOR)
         or (user.get("login") == repo.split("/")[0]
             and user.get("type") == "User" and isinstance(identity, str) and bool(identity))
     )
-    if not trusted or "editor" not in row or "lastEditedAt" not in row:
+
+
+def _trusted_actor(row, repo):
+    user = row.get("user", {})
+    if not _trusted_author(user, repo) or "editor" not in row or "lastEditedAt" not in row:
         return False
     editor = row["editor"]
     if row["lastEditedAt"] is None:
         return editor is None
-    return isinstance(editor, dict) and editor.get("id") == identity
+    return isinstance(editor, dict) and editor.get("id") == user["node_id"]
 
 
 def _requested(rows, target):
@@ -169,6 +174,9 @@ def recover(target, job_reader, dry_run=False):
         if kind is None:
             return NONE.copy()
         identity = {**target, "kind": kind}
+        if kind == "security_review":
+            import ci_codex_review_outbox as outbox
+            return outbox.dispatch(identity, snapshot, job_reader, dry_run)
         prior = _requested(snapshot[1], identity)
         if prior:
             return dict(action="none", reason=_inflight_reason(snapshot[0], prior, kind))

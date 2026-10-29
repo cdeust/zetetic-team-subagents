@@ -28,3 +28,5 @@
   does not make publishing the signed bearer token acceptable.
 
 - FIX request idempotency must not depend on a native summary existing: CI can fail before any review is posted. Branch on request kind before reading summary ordering metadata; only validated security-review recovery uses that ordering. Regression: test_fix_receipt_without_native_summary_is_idempotent.
+
+- A native summary's positive or incomplete security-finding section is evidence independent of nullable flags. An older same-head clean receipt must not override it. Before accepting clean receipts, reject current security/finding sections even when `_announced` cannot fully enumerate them; test both valid announced IDs and malformed/count-mismatched sections.
