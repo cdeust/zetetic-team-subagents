@@ -107,6 +107,8 @@ def _outputs(result: Record) -> None:
     text = (
         f"ready={str(result['state'] == 'success').lower()}\n"
         f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
+        # Fixed identifiers only: the merge job names why a head cannot merge yet.
+        f"reason={result['reason']}\ncauses={','.join(result.get('causes', [result['reason']]))}\n"
     )
     try:
         with Path(path).open("a", encoding="utf-8") as output:

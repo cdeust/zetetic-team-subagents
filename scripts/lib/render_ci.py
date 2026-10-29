@@ -28,6 +28,7 @@ NATIVE_ASSETS = (
     "scripts/ci_codex_review_reconcile.py",
     "scripts/ci_codex_review_runtime.py",
     "scripts/ci_codex_review_comments.py",
+    "scripts/ci_codex_review_agreement.py",
     "scripts/ci_codex_reviews.py",
     "scripts/tests/codex_resume_fixtures.py",
     "scripts/tests/test_ci_codex_review_resume.py",
