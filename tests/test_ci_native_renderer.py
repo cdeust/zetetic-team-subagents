@@ -298,6 +298,16 @@ def original_asset(delivered, relative):
         b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'
     )
     if relative.endswith("/claude-review.yml"):
+        original = original.replace(
+            b"    # A Dependabot-triggered run receives Dependabot secrets only, never the\n"
+            b"    # Actions OAuth token: skip it, as the legacy review job does. A push by a\n"
+            b"    # person to the same branch runs this review with the Actions secrets.\n",
+            b"",
+        ).replace(b"\n      && github.actor != 'dependabot[bot]'\n", b"\n")
+        original = original.replace(
+            b'allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"',
+            b'allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"',
+        )
         original = original.replace(b"  pull_request:\n", b"  pull_request_target:\n")
         original = original.replace(b"      id-token: write\n", b"")
         original = original.replace(
@@ -482,3 +492,16 @@ def test_native_claude_uses_app_oidc_and_a_main_checkout(tmp_path):
     assert job["steps"][0]["with"]["ref"] == "main"
     assert "head.repo.full_name == github.repository" in job["if"]
     assert "!github.event.pull_request.draft" in job["if"]
+
+
+def test_native_claude_review_skips_dependabot_runs_without_actions_secrets(tmp_path):
+    # source: cortex-viz run40819127887 (PR212) logged "Secret source: Dependabot",
+    # an empty CLAUDE_CODE_OAUTH_TOKEN and "Environment variable validation failed".
+    # GitHub: a workflow run triggered by Dependabot receives only Dependabot secrets.
+    # Same rule as the legacy review job (test_ci_template dependabot skip).
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    document = yaml.safe_load(files[tmp_path / ".github/workflows/claude-review.yml"])
+    job = document["jobs"]["review"]
+    assert "github.actor != 'dependabot[bot]'" in job["if"]
+    bots = job["steps"][-1]["with"]["allowed_bots"].split(",")
+    assert bots == ["claude[bot]", "chatgpt-codex-connector[bot]"]
