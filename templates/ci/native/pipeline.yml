@@ -159,15 +159,11 @@ jobs:
               full_sha(run.get("head_sha"))
 
 
-          def _validate_jobs(jobs, actor):
-              # Source: the owner's single-push contract requires every author
-              # to complete review. Overall success alone accepts skipped jobs.
-              required = ["contract", "unit", "regression", "e2e", "review", "merge"]
-              pending = not any(job.get("name") == "merge" for job in jobs) and any(
-                  job.get("name") == "merge pending review" for job in jobs
-              )
-              if pending:
-                  required[-1] = "merge pending review"
+          def _validate_jobs(jobs):
+              # Owner rule 2026-10-29: the required jobs are the tests and their
+              # aggregate `merge`; the `review` job may run and post but is never
+              # read here. Overall success alone accepts skipped jobs.
+              required = ["contract", "unit", "regression", "e2e", "merge"]
               for category in ("environment", "install"):
                   expected = {
                       f"{category} ({runner})"
@@ -194,7 +190,6 @@ jobs:
                       job.get("status") == "completed" and allowed,
                       f"source merge gate requires completed {name}",
                   )
-              return pending
 
 
           def _pr_identity(pr, repository, head):
@@ -224,15 +219,11 @@ jobs:
                           "job source identity differs")
                   require(isinstance(name, str), "invalid job name")
                   identities.add(identity)
-                  # The single merge job has two review-dependent display names;
-                  # fold them so a stale attempt cannot outvote the newest one.
-                  # Source: session-optimizer PR87 discussion_r4409903427.
-                  key = "merge" if name == "merge pending review" else name
-                  previous = indexed.get(key)
+                  previous = indexed.get(name)
                   require(previous is None or previous["run_attempt"] != attempt,
                           "duplicate job name in one attempt")
                   if previous is None or attempt > previous["run_attempt"]:
-                      indexed[key] = job
+                      indexed[name] = job
               return list(indexed.values())
 
 
@@ -261,9 +252,7 @@ jobs:
               jobs = _effective_jobs(
                   api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
               )
-              if _validate_jobs(jobs, run.get("actor", {}).get("login")):
-                  run["review_pending"] = True
-
+              _validate_jobs(jobs)
               return run
 
 
@@ -372,13 +361,6 @@ jobs:
           def resolve(event, repository: str, api: GitHub):
               run = _source_run(event, repository, api)
               number, pr = _pull_request(run, repository, api)
-              if run.get("review_pending"):
-                  return {
-                      "tested_sha": run["head_sha"],
-                      "run_tests": "false",
-                      "pr_number": str(number),
-                      "reason": "Tests passed; native Codex reviews pending",
-                  }
               pr_path = f"/repos/{repository}/pulls/{number}"
               already_merged = pr.get("merged") is True
               if already_merged:
@@ -971,6 +953,10 @@ jobs:
         run: bash -eo pipefail -c "$CI_COMMAND"
 
   review:
+    # Owner rule 2026-10-29: the review posts but never blocks. A failed job
+    # fails the run, and the completion caller fires only on a successful run;
+    # the required jobs are the tests and their aggregate `merge`.
+    continue-on-error: true
     needs: [unit, regression, e2e, environment, install]
     outputs:
       state: ${{ steps.evidence.outputs.state }}

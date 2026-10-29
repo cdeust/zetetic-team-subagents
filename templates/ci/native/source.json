@@ -153,10 +153,6 @@
       ],
       "reason": "Owner-authored requests inherit pinned tag workspace edit approval instead of overriding acceptEdits with auto; explicitly allow test and git tools. Reject fork or default-branch PR targets before running the action. Preserve action App git authentication, owner-only comment context, native read-only review and merge gates."
     },
-    "post-merge-merge-alias": {
-      "source": "https://github.com/cdeust/session-optimizer/pull/87#discussion_r4409903427",
-      "reason": "The completion resolver folds merge and merge pending review into one logical job before keeping the newest attempt, as rerun-merge-job-identity does for the event reader. A stale successful merge cannot authorize a rerun that now waits for reviews; both aliases in one attempt are rejected."
-    },
     "private-repo-fetch": {
       "sources": [
         "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/modes/tag/index.ts#L79-L135",
@@ -204,6 +200,9 @@
     },
     "merge-is-the-test-aggregate": {
       "reason": "Owner rule 2026-10-29: the merge job is the aggregate of the test jobs of the run. It waits for no review state and reads neither main nor the live pull request; the upstream live-eligibility, Codex reader and review-state steps are removed."
+    },
+    "review-never-blocks": {
+      "reason": "Owner rule 2026-10-29: the review is not a required job. The review job keeps running and posting but cannot fail the Pipeline (continue-on-error), because the completion caller fires only on a successful run. The completion resolver requires the tests and their aggregate merge, never the review job, and the merge-pending-review state is gone."
     }
   },
   "adapted_assets": {
@@ -303,7 +302,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "9e93653f5f047c220f64c4a5e44ffd2e71ea514d925787930d50cefa6cf79464",
+      "sha256": "c239bcb28bef2949dd9082e991356ff96eb923fd8f366c9e7e75fdf0404220d1",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
@@ -314,16 +313,17 @@
         "dependabot-claude-not-applicable",
         "codex-quota-wait",
         "security-owner-resolution",
-        "receipt-head-binding"
+        "receipt-head-binding",
+        "review-never-blocks"
       ]
     },
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
       "source_sha256": "a835d2c1f884c33896f4fd8a3f6b903385c50ed2ed36b22e98579592f6277209",
-      "sha256": "568ccf020cb78dc1026b2f8b301c22f59ce707043df80157ad02e16a5ed8a8aa",
+      "sha256": "2025302e78ce1c13ead888bbadb1710d1fef7d8dc0480eddd3ea5921a03554d2",
       "adaptation": [
-        "post-merge-merge-alias",
-        "reviewer-agreement-lifts-review-holds"
+        "reviewer-agreement-lifts-review-holds",
+        "review-never-blocks"
       ]
     }
   },

@@ -553,6 +553,10 @@ jobs:
   # Owner-authored workflow PRs are repairable; other workflow PRs keep bootstrap isolation.
   # Cancellation stops mutation; ordinary failed tests still reach repair.
   review:
+    # Owner rule 2026-10-29: the review posts but never blocks. A failed job
+    # fails the run, and the completion caller fires only on a successful run;
+    # the required jobs are the tests and their aggregate `merge`.
+    continue-on-error: true
     needs: [unit, regression, e2e, environment, install]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
