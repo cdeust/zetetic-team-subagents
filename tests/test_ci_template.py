@@ -71,7 +71,7 @@ def test_the_jobs_chain_in_dependency_order(workflow):
     for previous, job in zip(chain, chain[1:]):
         assert jobs[job]["needs"] == ["contract", previous], job
     assert jobs["review"]["needs"] == chain
-    assert sorted(jobs["merge"]["needs"]) == sorted(["contract", "unit", "regression", "e2e", "environment", "install", "review"])
+    assert sorted(jobs["merge"]["needs"]) == sorted(["contract", "unit", "regression", "e2e", "environment", "install"])
     assert jobs["tag"]["needs"] == ["contract", *chain]
 
 
@@ -251,21 +251,10 @@ def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):
     steps = job["steps"]
     assert not any(s.get("uses", "").startswith("actions/checkout") for s in steps), "merge checks out nothing"
     gate = steps[0]
-    for name in ("unit", "regression", "e2e", "environment", "install", "review"):
+    for name in ("unit", "regression", "e2e", "environment", "install"):
         assert f"${{{{ needs.{name}.result }}}}" in gate["env"].values(), name
     assert "exit 1" in gate["run"]
-    assert "gh pr merge" not in steps[-1]["run"]
-    assert "headRefOid" in steps[-1]["run"]
-
-
-def test_the_merge_names_the_repository_for_gh_without_a_checkout(workflow):
-    # session-optimizer #65, run 39756969927 (2026-10-22): every stage green,
-    # merge failed with "fatal: not a git repository" because gh pr merge
-    # inferred the repository from a checkout the job does not have.
-    steps = workflow["jobs"]["merge"]["steps"]
-    arm = next(s for s in steps if s.get("name") == "Verify live PR eligibility")
-    assert arm["env"].get("GH_REPO") == "${{ github.repository }}"
-    assert arm["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert len(steps) == 1 and "gh " not in gate["run"] and "headRefOid" not in gate["run"]
 
 
 def test_the_tag_runs_on_push_or_resolved_merge_over_the_deploy_key(workflow):

@@ -115,7 +115,7 @@
         "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#issuecomment-6491660443",
         "https://learn.chatgpt.com/docs/security/security-review"
       ],
-      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '· _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
+      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '\u00b7 _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
     },
     "receipt-event-resumption": {
       "sources": [
@@ -201,6 +201,9 @@
       "source": "https://github.com/cdeust/Cortex/pull/836#discussion_r4412420778",
       "api_source": "https://docs.github.com/en/rest/commits/commits#get-a-commit",
       "reason": "A security receipt names its commit by a 10-hex prefix (40 bits); a branch writer can precompute two commits sharing it. The receipt proves the head only by its full SHA: 40 hex compared exactly, or a shorter prefix the repository's commits API resolves to one commit equal to the head. A 404, an ambiguous prefix or any API failure rejects the receipt. Authored asset: scripts/ci_codex_review_comments.py (digest only, no upstream inverse)."
+    },
+    "merge-is-the-test-aggregate": {
+      "reason": "Owner rule 2026-10-29: the merge job is the aggregate of the test jobs of the run. It waits for no review state and reads neither main nor the live pull request; the upstream live-eligibility, Codex reader and review-state steps are removed."
     }
   },
   "adapted_assets": {
@@ -300,7 +303,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "c4d22bf3516c66ae0eb68d621cee00c69c4cd84031c454b6a0a292f645dcee8f",
+      "sha256": "9e93653f5f047c220f64c4a5e44ffd2e71ea514d925787930d50cefa6cf79464",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
@@ -312,15 +315,6 @@
         "codex-quota-wait",
         "security-owner-resolution",
         "receipt-head-binding"
-      ]
-    },
-    "merge": {
-      "path": ".github/workflows/pipeline.yml",
-      "source_sha256": "ff29bf24068614e7695bd6dc4db49007c48ecb69f8a9cbaaa94a937cbbeb2e4a",
-      "sha256": "21643edde1285cae55013eda7d4d050f10a19a9de600443dbe0879add6ce8323",
-      "adaptation": [
-        "merge-condition-diagnostics",
-        "reviewer-agreement-lifts-review-holds"
       ]
     },
     "resolve": {
@@ -372,5 +366,8 @@
       "effect": "Remove only the schedule trigger and its explanatory comment; preserve issue_comment, workflow_run, workflow_dispatch and all jobs. Default native assets remain byte-identical.",
       "source": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule"
     }
+  },
+  "authored_jobs": {
+    "merge": "50fed3df434f661c7b91cf3fe4ac1242782ff4f4716b28f96a2c4a5d1d87e19e"
   }
 }

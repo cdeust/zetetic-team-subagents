@@ -169,83 +169,29 @@ def test_guard_rejects_stale_checkout_or_unreadable_diff(workflow, tmp_path, ext
 
 
 def gate(workflow, tmp_path, **overrides):
-    env = {name.upper(): "success" for name in (*CATEGORIES, "review", "contract")}
+    env = {name.upper(): "success" for name in (*CATEGORIES, "contract")}
     env.update(overrides)
     return execute(workflow["jobs"]["merge"]["steps"][0]["run"], tmp_path, env)
 
 
-@pytest.mark.parametrize("job", (*CATEGORIES, "review", "contract"))
+@pytest.mark.parametrize("job", (*CATEGORIES, "contract"))
 @pytest.mark.parametrize("status", ["failure", "cancelled", "timed_out", "skipped", ""])
 def test_merge_rejects_every_incomplete_required_job(workflow, tmp_path, job, status):
     assert gate(workflow, tmp_path, **{job.upper(): status}).returncode != 0
 
 
-def test_merge_accepts_green_jobs_and_explicit_dependabot_review_skip(
-    workflow, tmp_path
-):
+def test_merge_accepts_green_test_jobs(workflow, tmp_path):
     assert gate(workflow, tmp_path).returncode == 0
-    assert (
-        gate(workflow, tmp_path, REVIEW="skipped", ACTOR="dependabot[bot]").returncode
-        == 0
-    )
 
 
-def live_pr(**overrides):
-    return {
-        "state": "OPEN",
-        "isDraft": False,
-        "headRefOid": HEAD,
-        "title": "Fix the product",
-        "labels": [],
-        **overrides,
-    }
-
-
-def arm(workflow, tmp_path, record, rc="0"):
-    path = tmp_path / "merge-argv"
-    result = execute(
-        step(workflow, "merge", "Verify live PR eligibility")["run"],
-        tmp_path,
-        {
-            "FIXTURE_PR": json.dumps(record),
-            "FIXTURE_MERGE": str(path),
-            "FIXTURE_VIEW_RC": rc,
-        },
-        GH_STUB,
-    )
-    return result, path
-
-
-@pytest.mark.parametrize(
-    "record",
-    [
-        live_pr(state="CLOSED"),
-        live_pr(state="MERGED"),
-        live_pr(isDraft=True),
-        live_pr(headRefOid="b" * 40),
-        live_pr(labels=[{"name": "hold"}]),
-        live_pr(labels=[{"name": "DO-NOT-MERGE"}]),
-        live_pr(title="DO NOT MERGE: investigation"),
-        {},
-    ],
-)
-def test_merge_refuses_ineligible_live_pr_before_mutation(workflow, tmp_path, record):
-    result, path = arm(workflow, tmp_path, record)
-    assert result.returncode != 0
-    assert not path.exists()
-
-
-def test_merge_gate_validates_head_without_mutation(workflow, tmp_path):
-    result, path = arm(workflow, tmp_path, live_pr())
-    assert result.returncode == 0, result.stderr
-    assert not path.exists()
-
-
-def test_failed_live_pr_read_is_not_reinterpreted_as_eligible(workflow, tmp_path):
-    result, _ = arm(
-        workflow, tmp_path, live_pr(autoMergeRequest={"enabledAt": "today"}), "1"
-    )
-    assert result.returncode != 0
+def test_merge_is_the_aggregate_of_the_test_jobs_of_the_run(workflow):
+    """Owner rule 2026-10-29: green pipeline, merge; nothing else is waited for or read."""
+    merge = workflow["jobs"]["merge"]
+    assert set(merge["needs"]) == {"contract", *CATEGORIES}
+    assert [s.get("name") for s in merge["steps"]] == ["Require the test jobs of this run"]
+    text = yaml.safe_dump(merge)
+    for forbidden in ("review", "gh pr view", "headRefOid", "main", "labels", "compare"):
+        assert forbidden not in text.replace("pull_request", ""), forbidden
 
 
 def test_action_permissions_and_fix_condition_preserve_bot_repairs(workflow):

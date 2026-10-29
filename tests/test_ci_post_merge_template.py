@@ -93,12 +93,11 @@ def test_review_checkout_explicitly_excludes_completion_events_and_forks():
         assert guard in checkout["if"]
 
 
-def test_merge_gate_does_not_arm_an_event_suppressing_async_merge():
+def test_merge_gate_reads_nothing_but_the_test_jobs():
     job = workflow()["jobs"]["merge"]
     body = "\n".join(step.get("run", "") for step in job["steps"])
-    assert "gh pr merge" not in body
-    assert "headRefOid" in body
-    assert "hold" in body and "do-not-merge" in body
+    assert "gh " not in body and "headRefOid" not in body
+    assert "review" not in job["needs"]
 
 
 def test_completion_and_push_runs_cannot_replace_other_heads_pending_tests():
