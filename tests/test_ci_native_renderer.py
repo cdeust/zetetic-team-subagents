@@ -237,6 +237,20 @@ def original_event_jobs(delivered):
     )
 
 
+def original_claude_owner(delivered):
+    first = delivered.index(b"      - name: Authorize owner fix target\n")
+    last = delivered.index(b"      - uses: actions/checkout@", first)
+    delivered = delivered[:first] + delivered[last:]
+    first = delivered.index(b"          include_comments_by_actor:")
+    last = delivered.index(b"          claude_args: |\n", first)
+    delivered = delivered[:first] + delivered[last:]
+    delivered = re.sub(
+        rb'            --allowedTools "[^\n]+\n',
+        b"            --permission-mode auto\n", delivered,
+    )
+    return re.sub(rb'            --append-system-prompt "[^\n]+\n', b"", delivered)
+
+
 def original_asset(delivered, relative):
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
@@ -262,6 +276,8 @@ def original_asset(delivered, relative):
             b"rows = summary_comments(repo, number, sha, source._api)",
             b'rows = source.records(f"repos/{repo}/issues/{number}/comments")',
         )
+    if relative.endswith("/claude.yml"):
+        delivered = original_claude_owner(delivered)
     original = delivered.replace(b"            --strict-mcp-config\n", b"")
     original = original.replace(
         b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'

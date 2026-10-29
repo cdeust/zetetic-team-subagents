@@ -30,6 +30,19 @@ jobs:
       id-token: write
       actions: read
     steps:
+      - name: Authorize owner fix target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Owner mentions cannot turn a fork or default-branch PR into a fix target.
+          if jq -e '.issue.pull_request != null' "$GITHUB_EVENT_PATH" >/dev/null; then
+            gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER" |
+              jq -e --arg repo "$GH_REPO" \
+                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' >/dev/null
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -49,7 +62,11 @@ jobs:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          include_comments_by_actor: ${{ github.repository_owner }}
+          # Inherit tag mode's acceptEdits: Edit/Write inside the workspace.
+          # Explicit validation tools run headlessly without a permission prompt.
           claude_args: |
             --strict-mcp-config
-            --permission-mode auto
+            --allowedTools "Task,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(cargo:*),Bash(bash:*)"
+            --append-system-prompt "For generated GitHub workflows, edit their canonical source and run render-ci; never hand-edit generated workflows. Commit only on the task branch, open or update a PR, and never push main or bypass review or merge gates."
             --model "claude-opus-5-5"
