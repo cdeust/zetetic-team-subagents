@@ -192,3 +192,42 @@ def test_pending_run_does_not_trigger_merge(jobs, tmp_path):
     api = FakeGitHub(SHA, SHA, "merge pending review")
     assert resolve(module, api)["run_tests"] == "false"
     assert api.merges() == []
+
+
+def rerun_jobs(head, attempts):
+    """One job record per (attempt, name); ids stay unique across attempts."""
+    rows = []
+    for attempt, names in enumerate(attempts, start=1):
+        for name in names:
+            rows.append({
+                "id": 100 * attempt + len(rows), "name": name, "run_attempt": attempt,
+                "run_id": 9, "head_sha": head, "status": "completed", "conclusion": "success",
+            })
+    return rows
+
+
+def test_stale_merge_attempt_cannot_authorize_a_pending_rerun(jobs, tmp_path):
+    # Source: Codex finding session-optimizer PR87 discussion_r4409903427.
+    # Attempt 1 passed `merge`; the partial rerun of review (attempt 2) now waits
+    # for reviews. Only the newest logical merge job may decide.
+    module = resolver(jobs, tmp_path)
+    api = FakeGitHub(SHA, SHA, "merge")
+    api.run["run_attempt"] = 2
+    api.jobs = rerun_jobs(SHA, [
+        ["contract", "unit", "regression", "e2e", "review", "merge", *MATRIX],
+        ["review", "merge pending review"],
+    ])
+    assert resolve(module, api)["run_tests"] == "false"
+    assert api.merges() == []
+
+
+def test_merge_aliases_in_one_attempt_are_rejected(jobs, tmp_path):
+    module = resolver(jobs, tmp_path)
+    api = FakeGitHub(SHA, SHA, "merge")
+    api.jobs = rerun_jobs(SHA, [
+        ["contract", "unit", "regression", "e2e", "review", "merge",
+         "merge pending review", *MATRIX],
+    ])
+    with pytest.raises(module.PostMergeError, match="duplicate job name in one attempt"):
+        resolve(module, api)
+    assert api.merges() == []
