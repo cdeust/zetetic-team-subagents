@@ -161,25 +161,37 @@
     "post-merge-merge-alias": {
       "source": "https://github.com/cdeust/session-optimizer/pull/87#discussion_r4409903427",
       "reason": "The completion resolver folds merge and merge pending review into one logical job before keeping the newest attempt, as rerun-merge-job-identity does for the event reader. A stale successful merge cannot authorize a rerun that now waits for reviews; both aliases in one attempt are rejected."
+    },
+    "private-repo-fetch": {
+      "sources": [
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/modes/tag/index.ts#L79-L135",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/branch.ts#L241",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/git-config.ts#L78-L81"
+      ],
+      "evidence": "cdeust/ci-autonome job 123331564638: git fetch origin --depth=20 <head> failed with could not read Username on a private repository; cdeust/Cortex job 123333637093 (public, same template) fetched anonymously.",
+      "reason": "The pinned action fetches through origin before installing its App token. Keep persist-credentials false and give that fetch the job token as a local http extraheader, which the action unsets before Claude runs."
     }
   },
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "132ab256025ea3ba6ae2e10c6a25b78dbc300a1724a52db086cfef185761fa7c",
+      "sha256": "39a843f9682902fd5131c59d66361af523f960747f1ee5ae2a76f27212ccca44",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
-        "owner-model-selection"
+        "owner-model-selection",
+        "private-repo-fetch"
       ]
     },
     ".github/workflows/claude.yml": {
       "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
-      "sha256": "dc4b350b28296c8aa6a0da9f3ebb34ef42daf18440e02921d436aec8c67b5738",
+      "sha256": "0d9e50551cb9aa2290e5c136797d0ae973551c46311fc3c11d16129a2d08ba48",
       "adaptation": [
         "strict-mcp-config",
         "owner-model-selection",
-        "owner-fix-permissions"
+        "owner-fix-permissions",
+        "private-repo-fetch",
+        "native-shell-classifier"
       ]
     },
     "scripts/ci_codex_review_runtime.py": {

@@ -281,7 +281,7 @@ def original_claude_owner(delivered):
     delivered = delivered[:first] + delivered[last:]
     delivered = re.sub(
         rb'            --allowedTools "[^\n]+\n',
-        b"            --permission-mode auto\n", delivered,
+        b"", delivered,
     )
     return re.sub(rb'            --append-system-prompt "[^\n]+\n', b"", delivered)
 
@@ -304,7 +304,15 @@ def original_recovery_event(delivered):
     )
 
 
+def without_fetch_authorization(delivered):
+    first = delivered.index(b"      # source: pinned action src/modes/tag/index.ts#L79")
+    last = delivered.index(b"      - name: Install subprocess isolation\n", first)
+    return delivered[:first] + delivered[last:]
+
+
 def original_asset(delivered, relative):
+    if relative.endswith(("/claude-review.yml", "/claude.yml")):
+        delivered = without_fetch_authorization(delivered)
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
             b"      pull-requests: write\n      issues: read\n      actions: write",

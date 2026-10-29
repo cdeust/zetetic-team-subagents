@@ -23,13 +23,12 @@ def test_owner_fix_inherits_workspace_edits_and_allows_validation(tmp_path):
     assert "github.event.issue.user.login == github.repository_owner" in job["if"]
     action = next(s for s in job["steps"] if "claude-code-action@" in s.get("uses", ""))
     args = shlex.split(action["with"]["claude_args"])
-    # Pinned tag mode supplies acceptEdits; auto overrides it (last value wins).
-    assert "--permission-mode" not in args
+    # Native Claude auto mode classifies shell commands; do not bypass it with
+    # interpreter or unrestricted git/gh allowances (Claude PR8 review6494974069).
+    assert args[args.index("--permission-mode") + 1] == "auto"
     assert "--dangerously-skip-permissions" not in args
     tools = set(args[args.index("--allowedTools") + 1].split(","))
-    assert {"Task", "Bash(git:*)", "Bash(gh:*)", "Bash(python3:*)", "Bash(pytest:*)", "Bash(npm:*)", "Bash(cargo:*)", "Bash(bash:*)"} <= tools
-    # Workspace edits come from acceptEdits, not global write approval.
-    assert not tools & {"Edit", "Write", "MultiEdit", "Bash"}
+    assert tools == {"Task"}
     assert action["with"]["include_comments_by_actor"] == "${{ github.repository_owner }}"
     assert "github_token" not in action["with"]
     prompt = args[args.index("--append-system-prompt") + 1]
