@@ -1,0 +1,2 @@
+ok                     C6 main-refuses variant        main=REFUSE             r3=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo "$(echo "<<EOF ")";\ngit commit -m x\necho $\'it\\\'s\'\nEOF'
+COUNTS {'ok': 1}

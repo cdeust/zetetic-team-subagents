@@ -22,8 +22,8 @@ DESIGN = "docs/superpowers/specs/2026-10-22-single-ci-design.md"
 JOBS = ["resolve", "contract", "unit", "regression", "e2e", "environment", "install", "review", "merge", "tag"]
 PINS = {
     "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-    "anthropics/claude-code-action": "a5a423f75c251dcbff8a74e99f83b2cb03c72bfa",
+    "actions/setup-python": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+    "anthropics/claude-code-action": "925afb53776cf1a2b738c6bdbed37b4d4000ef13",
 }
 # source: claude-mods PR45, unit job119805310369 passed with Claude 2.1.306.
 CLI_PIN = "npm install -g @anthropic-ai/claude-code@2.1.306"

@@ -1,0 +1,6 @@
+R3 which, cp, ./x                  WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=86
+    dirty main=0:pass r6=0:pass r7=0:pass
+R4 which, ln, ./x                  WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=82
+    dirty main=0:pass r6=0:pass r7=0:pass
+R5 which, cp, PATH, x              WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=106
+    dirty main=0:pass r6=0:pass r7=0:pass

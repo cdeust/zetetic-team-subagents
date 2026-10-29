@@ -1,0 +1,163 @@
+PR #174 round 9: where origin/main refused, a command name built at run time refuses
+=====================================================================================
+
+Finding (round-8 replay, REQUEST-CHANGES on f646e4e): one FAIL-OPEN-REGRESSION,
+WRAP=none, c_e2e_block row I2d:
+    : <<'Q'
+    it's git
+    Q
+    x=gi; ${x}t commit -m m
+origin/main refuses it (git followed by a blank in the data, and shlex cannot
+lex the apostrophe). 888312b and f646e4e return []: the only word git is
+here-document body data, which the round-7/8 rule keeps as data. bash, zsh
+and the Claude Code zsh all run git commit.
+
+Owner decision (round 9): never weaker than main.
+
+Class (not the one row)
+-----------------------
+"A command name the shell builds at run time." Where origin/main refused
+(_flat_targets is None), git_commands now also refuses when the rewritten
+text or a dropped non-heredoc span, quotes removed, holds such a name:
+
+  command position  start of text or line, after ; & | ( { ` ! and after the
+                    reserved words then do else elif if while until time;
+                    after ) too when the text holds the word case (a case
+                    pattern's ) is followed by a command; elsewhere ) would
+                    make $x in `echo $(date) $x` a command name);
+                    NAME=value assignment prefixes and redirections
+                    ([n]op word: >/dev/null ${x}t, 2>&1 ${x}t) are skipped;
+                    a redirection target holding $, a backtick or ( counts
+                    as built (process substitution <(...) runs a command).
+  built name        the word holds $ or a backtick (parameter, command and
+                    arithmetic expansion: ${x}t, $(printf gi)t, `echo gi`t,
+                    $'...'), a pathname-expansion character * ? [ (except the
+                    words [ and [[), or a brace expansion {a,b} / {a..b}.
+  prefix words      command env sudo doas exec builtin nohup nice time timeout
+                    stdbuf setsid eval coproc, and zsh's precommand modifiers
+                    noglob nocorrect -: every later word of the simple command
+                    counts (env -i PATH=.. ${x}t, exec ${x}t, eval "${x}t").
+                    The list is not exhaustive: any program that runs its
+                    arguments (chroot, flock, watch, ...) is outside it.
+  builders          xargs, parallel: they build the command line from input
+                    (echo gi | xargs -I@ @t commit), so they count as built.
+  sh -c '...'       quotes are removed first (shell_text.unquoted), so the
+                    string's ; and words are scanned like live text.
+
+Scope: only where origin/main refused, so it adds no refusal relative to
+origin/main. Return paths (git_commands docstring):
+  1 input > 128 KiB: refused when the word git is anywhere (round 8). That
+    holds wherever origin/main could refuse: its filter (git followed by a
+    blank) implies the word git, so no built-name check is reachable there.
+    (A built-name branch gated on git followed by a blank was written first,
+    found unreachable in review, and removed after the harness run; the
+    behaviour it measured is unchanged.)
+  2, 3 unreadable: unchanged (refused where origin/main refused).
+  4 origin/main refused: _refuse_if_git, then _refuse_if_built, on
+    rewritten + dropped.
+  5-8 follow: both rules ran first.
+
+Bound (knuth): builds_command_name is O(n) in the unquoted text.
+  - A text holding none of $ ` * ? [ { or the words xargs/parallel is spared
+    by one regex pass (_CANDIDATE): every built word or builder holds one.
+  - Otherwise one finditer over command positions; at each position not
+    inside text already examined, one word match (or, after a prefix word,
+    one match of the rest of the simple command). Positions inside examined
+    text are skipped, so the word and rest scans are disjoint:
+    test_each_character_is_examined_by_at_most_one_word_scan.
+  source: measured 2026-10-17, load ~290, 131 000 chars: ';'*n 0.002 s,
+  source: same run: ('A=1 time '*n) 0.002 s, ('{ '*n) 0.91 s, the slowest
+  shape found (shell_text.read on ';'*n: 1.9 s at the same load).
+
+Tests (tests/test_gate_targets.py)
+  test_where_origin_main_refused_a_built_command_name_refuses: I2d, N1-N11,
+    with git in body data before and after: 24 rows, all fail on f646e4e.
+  test_a_built_argument_is_not_a_built_command_name: 8 controls ([]).
+  test_the_input_cap_refuses_wherever_origin_main_could_refuse.
+  test_each_character_is_examined_by_at_most_one_word_scan.
+
+Corrections found by the probe (r9_probe_new_wrap_none.txt)
+  N10 {gi,}t commit expands to `git t commit` (verb t), and N11 runs no git
+  under the probe: both are refused (cost rows vs f646e4e, R7-REFUSE-COST,
+  main also refused), not demonstrations of a shell-run commit.
+  R1 and R2 (c_r9_residual.py) are refused, but only because `command` inside
+  $(...) is a prefix word: incidental, not the class.
+
+Residual (not closed; listed in the PR body): c_r9_residual_b.py, R3-R5
+  A static command name that resolves to a git copied or linked at run time:
+    p=$(printf gi)t; cp "$(which "$p")" ./x; ./x commit       (R3)
+    p=gi; ln -sf "$(which "${p}t")" ./x; ./x commit            (R4)
+    ... cp ... b/x; PATH=$PWD/b:$PATH x commit                 (R5)
+  The built word is an argument of which/cp/ln, not a command name. bash and
+  zsh run the commit (checked with a shim before the harness run);
+  origin/main refused all three (data git followed by a blank); the new head
+  returns []. These are FAIL-OPEN-REGRESSION rows against origin/main, outside
+  the round-9 class. No list of commands closes them: a static name can be
+  made to resolve to git by cp, ln, install, PATH, a write into a PATH
+  directory, an alias or hash. The rule that would close them: where
+  origin/main refused, spare only commands whose every command name is on an
+  allowlist of programs that run no other program (mkdir, cat, echo, ...),
+  and refuse otherwise. It costs nothing against origin/main but refuses
+  again much that f646e4e spares; it is an owner decision.
+
+Evidence in this directory
+  run.sh                 harness (round8/ probe7.py and e2e7.py, REVS
+                         main / f646e4e / WORKTREE; 784-row fixer list).
+  c_r9.py                I2d, N1-N8, N10-N13 and controls C1-C4.
+  c_r9_residual.py       R1, R2 (refused incidentally).
+  c_r9_residual_b.py, run_residual.sh   R3-R5 (the residual).
+  summarize.py, out_summary.txt         counts and full-hook differences.
+  allowlist_cost.py, out_allowlist_cost.txt   the allowlist measurement.
+  r9_probe_*.txt         probe7: columns main, r6 = f646e4e, r7 = new head.
+  r9_e2e_*.txt           full hook, exit codes per revision.
+  out_exit_tables.txt    exit tables (round8/table.py).
+  after-pytest.txt, run-all.txt   final tree.
+
+Results (run.sh r9 f646e4e WORKTREE; columns main / r6 = f646e4e / r7 = new)
+  (out_summary.txt from summarize.py; second run, on the fixed code)
+  probe7, counts vs main (new = c_sib + c_size + c_cost + c_e2e_block + c_r9
+  + c_r9_residual, 116 rows; prior = the 784-row fixer corpus):
+    none  new   ok67 FIXED23 PREEXIST24 NEW-REFUSE2 (S26, K26)
+          prior ok602 FIXED142 PREEXIST28 NEW-REFUSE12 (all already at f646e4e)
+    pre   new   ok96 FIXED3 PREEXIST17      prior ok733 FIXED40 PREEXIST11
+    suf   new   ok98 FIXED1 PREEXIST17      prior ok751 FIXED22 PREEXIST11
+    ansi  new   ok96 FIXED3 PREEXIST17      prior ok733 FIXED40 PREEXIST11
+    FAIL-OPEN-REGRESSION 0, HEAD-CRASH 0, R7-WEAKER 0 in every mode.
+  vs f646e4e: none new R7-REFUSE-FIX 17 (I2d twice, N1-N8, N12-N16, N18,
+    R2), R7-REFUSE-COST 3 (N10, N11, R1: no shell ran a commit in the
+    probe); prior none same 784; prior pre/suf/ansi R7-REFUSE-COST 4 each
+    (Z15, S3, S4, H5: backtick or arithmetic here-document shapes with git
+    commit only in body data; no shell runs git; origin/main refuses all).
+  Full hook (out_exit_tables.txt), dirty consumer, main/f646e4e/new:
+    plain  I2d (c_e2e_block and c_r9), N1-N8, N12-N16, N18, R1, R2: 2/0/2,
+           with bash, zsh and czsh running the commit or push (N16: bash;
+           zsh ran none with the shim); N10, N11: 2/0/2, no shell commit.
+    pre/suf/ansi: every c_r9 row 0/0/0: the wrapper adds a second
+           apostrophe, origin/main lexes, the rule does not apply (the
+           double-apostrophe boundary, as in round 8). The wrapped refusal
+           with git in body data is pinned by the unit tests (DATA_GIT
+           pre and suf, single apostrophe).
+    c_e2e_block wrapped and c_cost (none, pre, suf, ansi): every exit equal
+           to f646e4e; the only cost vs main is K26, as before.
+  Residual R3-R5 (run_residual.sh): plain 2/0/0 with all three shells
+    committing: FAIL-OPEN-REGRESSION vs main; wrapped 0/0/0 (preexisting).
+
+What an allowlist would cost on the corpus (out_allowlist_cost.txt): the
+  rows where origin/main refuses and the new head returns [] in plain mode
+  number 13 (prior corpus and new files, residual excluded; allowlist_cost.py);
+  their command names are cat 8, echo 5, : 5, mkdir 4, date 2, true 1, gh 1
+  and the for/do/done words. An allowlist holding those spares every one of them, so
+  on this corpus it would cost no refusal beyond f646e4e. The corpus is the
+  review corpus, not real traffic: the real cost is unknown.
+
+Self-review after the first harness run (zetetic:review on the code diff)
+  Missed, though zsh ran each (checked with a git function):
+    x=gi; >/dev/null ${x}t commit      redirection before the name
+    x=gi; case a in a) ${x}t commit    a case pattern's )
+    x=gi; noglob ${x}t commit, - ${x}t, coproc ${x}t   precommand words
+  Fixed (redirection skip, ) in case texts, prefixes), pinned as N14-N18 in
+  tests and c_r9.py, with the controls `echo "$(date) $x"` and
+  `echo a > "$f"`. The harness was run again on the fixed code; every number
+  in "Results" above is from that second run.
+  Timing after the fix, 131 000 characters at load ~300: '{ '*n 1.28 s,
+  ('case ) '*n)+'$' 0.84 s, ('2>&1 '*n)+'$' 0.39 s.

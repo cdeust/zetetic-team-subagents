@@ -1,0 +1,57 @@
+PR #174 round 6: size and time bounds, and the refusal contradiction.
+
+1. Intermediates as functions of the input length n and nesting depth d
+   (hooks/lib/shell_text.py, hooks/lib/gate_targets.py at this commit).
+
+   - input: n <= MAX_COMMAND = 131072, else refused when it may commit or push.
+   - rewritten text (shell_lines): each input character emits at most
+       3 for an unquoted newline (' ;\n'), 2 for a ( ('( '),
+       2 for a quote or backslash escaped inside $'...' or `...` (one level:
+       their inner text is raw, never already rewritten), 1 otherwise.
+     A unit nested in "..." is copied with quotes and backslashes removed,
+     so a nesting level adds nothing. Before round 6 each level re-escaped
+     the level inside it: about 4^d (3.3 MB at d=14 from 292 bytes).
+     Bound: len(rewritten) <= 4n + 4, independent of d. Pinned by
+     test_rewritten_text_is_at_most_four_times_the_input over BOUND_SHAPES
+     and every command string the test module uses. Backstop: rewritten
+     longer than MAX_COMMAND is refused when it may commit or push.
+   - shlex tokens: two passes, one over the input (flat reading, <= n) and
+     one over the rewritten text (<= MAX_COMMAND after the backstop). shlex
+     is quadratic in a single token's length, so the worst case is one token
+     of about MAX_COMMAND characters per pass.
+   - rewrite time: every span is cached for one shell_lines call (a nested
+     [ or ( span is its own cache entry), the esac look-back reads at most
+     256 characters, and the zsh brace scan raises at the first operator,
+     quote, $ or newline past bash's end. Measured: out_sizes.txt.
+
+2. Feasibility (Fermi): one shlex pass over a 128 KiB token took about 1.1 s
+   idle (216 KB took 3.2 s; quadratic), so two passes come to about 2-3 s idle
+   and some 5-10x that at load average 150-200. Estimate: under 30 s, against
+   the 150 s timeout of the standalone package and 600 s default elsewhere.
+   One measurement of the full PreToolUse hook at the cap, load average
+   140-175 (out_feasibility.txt): 13.8 s, 15.0 s and 13.9 s for one double-
+   quoted token, one plain token and many short words.
+
+3. The contradiction (owner decision: strict refusal). Refuse every hidden
+   commit, yet never refuse a legitimate one. The resource already in the
+   system is origin/main's own reading: where it lexes, its targets are
+   added (never fewer than main); where it cannot lex, origin/main refused,
+   and the gate refuses whenever the rewritten text may still commit or
+   push, whatever targets it found. The rewrite only decides what is left
+   of the text: here-document data and comments are dropped, so the
+   motivating prose (it's in a body with no commit after it) is not refused.
+   The class closed is "main refused, rewrite misses a form": decoys,
+   if/then, "$(...)", backtick, nohup, bash -c all share it.
+   Cost accepted by the owner: a command that main refused and that does
+   commit (cat <<'EOF' / don't / EOF / git commit) is refused, as on main.
+
+4. What is not by construction. Where origin/main cannot lex, the gate's
+   answer rests on the rewrite dropping only text no shell runs. Round 6
+   fixed three removal errors of that class: an unquoted body joins a
+   backslash-newline before the delimiter match (B1, B2); a ( right after a
+   word character is zsh's glob group, so no comment starts inside it (H3,
+   H4); a ${...} in a here-document word that zsh ends later is refused
+   (Y1). Where origin/main lexes but pairs quotes across lines wrongly (two
+   apostrophes in the command), it reads the decoy alone, the union equals
+   origin/main, and the forms the rewrite misses stay as open as on main
+   (out_r5_wrap_*.txt X1-X6 under a second wrapper).

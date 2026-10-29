@@ -1,0 +1,4 @@
+ok                     C4 dq-$() plain delim          main=['commit']         r2=[]                 head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo "$(echo "<<EOF ")";\ngit commit -m x\nEOF'
+ok                     C5 dq-$() push                 main=['push']           r2=[]                 head=['push']           bash=['push']           zsh=['push']           cmd='v="$(printf "%s" "<<EOF ")" && echo "$v";\ngit push origin main\nEOF'
+ok                     A3 a[1<<2] && form             main=['commit']         r2=[]                 head=REFUSE             bash=['commit']         zsh=[]                 cmd='a[1<<2]=x &&\ngit commit -m x\n2]=x'
+COUNTS {'ok': 3}

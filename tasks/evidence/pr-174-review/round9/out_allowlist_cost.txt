@@ -1,0 +1,11 @@
+rows main=REFUSE new=[]: 13
+    8 cat
+    5 echo
+    5 :
+    4 mkdir
+    2 date)
+    1 true
+    1 gh
+    1 for
+    1 done
+    1 do
