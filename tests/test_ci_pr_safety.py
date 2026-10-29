@@ -6,7 +6,6 @@ Sources: PR45's passing Claude 2.1.306 unit job; gh pr merge's documented
 
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -103,18 +102,22 @@ def results(**states):
     return json.dumps({name: {"result": states.get(name, "success")} for name in TESTS})
 
 
-def test_green_human_head_is_reviewed_and_not_fixed(workflow, tmp_path):
-    # Run 40862677865: every test job green, Fix ran anyway and pushed e1dcc25.
+def outputs(review, repair, test_failure, claude_head):
+    return {"review": review, "repair": repair, "test_failure": test_failure,
+            "claude_head": claude_head}
+
+
+def test_green_human_head_is_reviewed_with_no_test_failure(workflow, tmp_path):
     result, values = guard(workflow, tmp_path)
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "true", "fix": "false"}
+    assert values == outputs("true", "true", "false", "false")
 
 
 @pytest.mark.parametrize("failed", TESTS)
-def test_a_failed_test_job_on_a_human_head_runs_fix(workflow, tmp_path, failed):
+def test_a_failed_test_job_is_a_test_failure(workflow, tmp_path, failed):
     result, values = guard(workflow, tmp_path, TEST_RESULTS=results(**{failed: "failure"}))
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "true", "fix": "true"}
+    assert values == outputs("true", "true", "true", "false")
 
 
 @pytest.mark.parametrize(
@@ -122,25 +125,25 @@ def test_a_failed_test_job_on_a_human_head_runs_fix(workflow, tmp_path, failed):
     ["person@example.invalid", "41898282+claude[bot]@users.noreply.github.com"],
 )
 @pytest.mark.parametrize("state", ["cancelled", "skipped", "timed_out", ""])
-def test_only_a_failure_result_runs_fix(workflow, tmp_path, author, state):
+def test_only_a_failure_result_is_a_test_failure(workflow, tmp_path, author, state):
     # A cancelled or skipped job is no fault to repair: contract failing skips
-    # the five categories, and that run still reaches Fix through contract.
+    # the five categories, and that run still names a failure through contract.
     every = results(**{name: state for name in TESTS})
     result, values = guard(workflow, tmp_path, author, TEST_RESULTS=every)
     assert result.returncode == 0, result.stderr
-    assert values["fix"] == "false"
+    assert values["test_failure"] == "false"
 
 
-def test_green_claude_head_does_not_repeat_review_or_fix(workflow, tmp_path):
+def test_green_claude_head_does_not_repeat_review(workflow, tmp_path):
     result, values = guard(
         workflow, tmp_path, "41898282+claude[bot]@users.noreply.github.com"
     )
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "false"}
+    assert values == outputs("false", "true", "false", "true")
 
 
 @pytest.mark.parametrize("failed", TESTS)
-def test_red_claude_head_still_runs_fix(workflow, tmp_path, failed):
+def test_red_claude_head_still_names_its_test_failure(workflow, tmp_path, failed):
     result, values = guard(
         workflow,
         tmp_path,
@@ -148,27 +151,27 @@ def test_red_claude_head_still_runs_fix(workflow, tmp_path, failed):
         TEST_RESULTS=results(**{failed: "failure"}),
     )
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "true"}
+    assert values == outputs("false", "true", "true", "true")
 
 
 @pytest.mark.parametrize(
     "author",
     ["person@example.invalid", "41898282+claude[bot]@users.noreply.github.com"],
 )
-def test_workflow_bootstrap_skips_review_and_fix(workflow, tmp_path, author):
+def test_workflow_bootstrap_skips_review_and_repair(workflow, tmp_path, author):
     result, values = guard(workflow, tmp_path, author, ".github/workflows/pipeline.yml",
                            TEST_RESULTS=results(unit="failure"))
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "false"}
+    assert values["review"] == values["repair"] == "false"
 
 
-@pytest.mark.parametrize("unit,fix", [("failure", "true"), ("success", "false")])
-def test_owner_workflow_pr_runs_review_and_fixes_only_a_failure(workflow, tmp_path, unit, fix):
+@pytest.mark.parametrize("unit,failed", [("failure", "true"), ("success", "false")])
+def test_owner_workflow_pr_keeps_review_and_repair(workflow, tmp_path, unit, failed):
     # #218 (9242772): an owner-authored workflow PR keeps review and repair.
     result, values = guard(workflow, tmp_path, changed=".github/workflows/pipeline.yml",
                            PR_AUTHOR="owner", REPO_OWNER="owner", TEST_RESULTS=results(unit=unit))
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "true", "fix": fix}
+    assert values == outputs("true", "true", failed, "false")
 
 
 def test_owner_workflow_bot_head_still_repairs_failed_checks(workflow, tmp_path):
@@ -178,7 +181,7 @@ def test_owner_workflow_bot_head_still_repairs_failed_checks(workflow, tmp_path)
         TEST_RESULTS=json.dumps({"unit": {"result": "failure"}}),
     )
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "true"}
+    assert values == outputs("false", "true", "true", "true")
 
 
 @pytest.mark.parametrize("branch", ["main", ""])
@@ -278,13 +281,13 @@ def test_failed_live_pr_read_is_not_reinterpreted_as_eligible(workflow, tmp_path
 
 def test_action_permissions_and_fix_condition_preserve_bot_repairs(workflow):
     review = workflow["jobs"]["review"]
-    assert set(CATEGORIES) <= set(review["needs"])
+    assert review["needs"] == list(TESTS)
     actions = [
         s for s in review["steps"] if s.get("uses", "").startswith("anthropics/")
     ]
     assert [s["if"] for s in actions] == [
         "steps.guard.outputs.review == 'true'",
-        FIX_CONDITION,
+        "success() && !cancelled() && steps.cause.outputs.cause != ''",
     ]
     for action in actions:
         assert (
@@ -292,69 +295,6 @@ def test_action_permissions_and_fix_condition_preserve_bot_repairs(workflow):
         )
         assert '"Bash"' not in action["with"]["claude_args"]
     assert set(CATEGORIES) <= set(workflow["jobs"]["tag"]["needs"])
-
-
-FIX_CONDITION = "success() && !cancelled() && steps.guard.outputs.fix == 'true'"
-
-
-def fix_runs(workflow, guard_fix, *, cancelled=False, earlier_step_failed=False):
-    """Evaluate the Fix step's conjunction; hosted execution remains required.
-
-    success() is false once the run is cancelled or an earlier step failed
-    (docs.github.com, "Expressions", status check functions)."""
-    expression = step(workflow, "review", "Fix")["if"]
-    assert expression == FIX_CONDITION
-    expression = expression.replace(
-        "success()", repr(not cancelled and not earlier_step_failed)
-    ).replace("!cancelled()", repr(not cancelled))
-    expression = expression.replace("steps.guard.outputs.fix", repr(guard_fix))
-    expression = expression.replace("&&", " and ")
-    assert re.fullmatch(r"[\s()'a-zA-Z_=]+", expression)
-    return eval(expression, {"__builtins__": {}}, {})
-
-
-def guarded_fix(workflow, tmp_path, **states):
-    result, values = guard(workflow, tmp_path, TEST_RESULTS=results(**states))
-    assert result.returncode == 0, result.stderr
-    return values["fix"]
-
-
-def test_review_needs_every_test_job_of_the_run(workflow):
-    assert workflow["jobs"]["review"]["needs"] == list(TESTS)
-    guard_env = step(workflow, "review", "Review guard")["env"]
-    assert guard_env["TEST_RESULTS"] == "${{ toJSON(needs) }}"
-
-
-def test_fix_skips_a_cancelled_run_even_with_a_failed_test(workflow, tmp_path):
-    fix = guarded_fix(workflow, tmp_path, unit="failure")
-    assert fix == "true"
-    assert not fix_runs(workflow, fix, cancelled=True)
-
-
-def test_fix_skips_a_run_without_a_failed_test(workflow, tmp_path):
-    # Run 40862677865: ten test jobs green; Fix ran 11:16:50-11:18:06 and its
-    # push (Pipeline 40864319948 created 11:18:07) cancelled the run.
-    fix = guarded_fix(workflow, tmp_path)
-    assert fix == "false"
-    assert not fix_runs(workflow, fix)
-
-
-@pytest.mark.parametrize("failed", TESTS)
-def test_fix_runs_on_a_live_run_with_a_failed_test(workflow, tmp_path, failed):
-    fix = guarded_fix(workflow, tmp_path, **{failed: "failure"})
-    assert fix_runs(workflow, fix)
-
-
-def test_fix_skips_a_non_owner_workflow_change_even_with_a_failed_test(workflow, tmp_path):
-    result, values = guard(workflow, tmp_path, changed=".github/workflows/pipeline.yml",
-                           TEST_RESULTS=results(unit="failure"))
-    assert result.returncode == 0, result.stderr
-    assert not fix_runs(workflow, values["fix"])
-
-
-def test_fix_skips_after_a_failed_review_step(workflow, tmp_path):
-    fix = guarded_fix(workflow, tmp_path, unit="failure")
-    assert not fix_runs(workflow, fix, earlier_step_failed=True)
 
 
 @pytest.mark.parametrize("job", ["review", "merge"])

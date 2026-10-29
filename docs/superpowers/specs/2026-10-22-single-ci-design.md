@@ -175,12 +175,17 @@ OAuth token and `allowed_bots`:
    npm, npx, pnpm, cargo, bash). Checkout with `fetch-depth: 0` on the PR
    head (same-repo PRs only, as in the action's own
    `examples/ci-failure-auto-fix.yml`). Amended 2026-10-29: Fix runs only
-   when a test job of the run (`contract` and the five categories, all in
-   `review`'s `needs`) has the result `failure`, the run is not cancelled
-   and no earlier step failed; the bootstrap guard (workflow PR not authored
-   by the owner) still skips it. On run 40862677865 every test job was
-   green, Fix still applied a review finding and pushed e1dcc25, and that
-   push cancelled the run. Review findings on a green run stay as comments
+   for a named cause, on a run that is not cancelled and where no earlier
+   step failed. `test_failure`: a test job of the run (`contract` and the
+   five categories, all in `review`'s `needs`) has the result `failure`.
+   `review_findings`: the Codex summary reports unresolved findings for the
+   head, the Claude verdict marker says `merge:false` for the head, or a
+   review thread opened by Claude or Codex is unresolved and not outdated
+   (threads do not count on a Claude head, so a Fix push cannot re-trigger
+   itself on threads alone). The causes appear in the step output and the
+   job summary. The bootstrap guard (workflow PR not authored by the owner)
+   still skips it. On run 40862677865 every test job was green and Fix
+   pushed e1dcc25 for an open Codex P2 with no cause named
    (`docs/verification/native-review-tools-fix-guard-20261029.md`).
 
 A push by the bot is a `synchronize` event: the pipeline runs again from

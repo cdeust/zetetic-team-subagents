@@ -191,18 +191,24 @@
       ],
       "evidence": "25 native reviews read on 2026-10-29 (Cortex 9, cortex-viz 7, ai-architect-mcp-spec 5, ci-autonome 3, claude-mods 1) ran 9 to 29 turns in 58 to 392 s with 0 to 10 permission denials each (24 of 25 had at least one), and the Cortex PR834 summary lists the five reviewer agents as run; Cortex PR834 (run 40845641264): 'I read the code but did not run the tests: the sandbox does not allow pytest'; ci-autonome runs 40861917132, 40862246883, 40864021078 logged 'The github_ci MCP server requires actions: read permission'.",
       "reason": "Port of #211 to the native review: approve the test runners and read-only git, declare Agent for the five subagents (not gated by --allowedTools in CLI 2.1.312), grant actions: read so the action installs its github_ci tools for the Pipeline logs of the head, install requirements-dev.lock by hash (the main checkout's lock; the action checks out the head afterwards), require the whole diff, changed files, their tests and the Pipeline logs before a verdict, report no findings only when every step ran, pin show_full_output false and name a failed review by its result fields only. Nothing that edits or pushes is approved."
+    },
+    "claude-review-verdict-marker": {
+      "consumer": "https://github.com/cdeust/Cortex/pull/834",
+      "fixture": "https://github.com/cdeust/claude-mods/pull/51#issuecomment-6491944909",
+      "reason": "The final native Claude review comment ends with exactly one line <!-- claude-review-verdict:v1 {\"head\":\"<event head sha>\",\"merge\":true|false} -->, so the Cortex convergence planner reads the verdict for the reviewed head instead of reporting claude_verdict_unreadable. The head is the event's pull_request.head.sha, never model-chosen text."
     }
   },
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "3b6d9df71b397a1f875a2103764bad2811337f103aedfbeab3f996ec3ac29b50",
+      "sha256": "2216d97e2204b8782e2c6097db492d98215fd9f5415b46d3b5ca218bdd690da3",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
         "owner-model-selection",
         "private-repo-fetch",
-        "native-review-procedure-tools"
+        "native-review-procedure-tools",
+        "claude-review-verdict-marker"
       ]
     },
     ".github/workflows/claude.yml": {

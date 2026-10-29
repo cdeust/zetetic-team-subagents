@@ -82,30 +82,47 @@ pushes; and the `Name the review failure` step of #211, byte for byte.
 block and restores upstream's allowed tools: the result hashes to the recorded
 `source_sha256` `4b2455d3...`.
 
-## E2: Fix on a green run
+## E2: Fix runs for a named cause
 
 Run 40862677865 (PR #223, head `4c9258b`): contract, unit, regression, e2e,
 three environment and three install jobs all `success`. In `review`, the guard
 set `fix=true` (the default for a head not authored by Claude), "Collect the
 failed jobs of this run" returned an empty list, `Review` passed, and `Fix`
-ran from 11:16:50 to 11:18:06 and pushed e1dcc25 (a review finding applied to
-`ci_codex_review_event_source.py` and `source.json`). The Pipeline run of
-e1dcc25 (40864319948) was created at 11:18:07, and `cancel-in-progress` then
-cancelled 40862677865. The cancellation followed the push; the condition that
-would have stopped this run is the failure count, which was zero.
+ran from 11:16:50 to 11:18:06 and pushed e1dcc25, applying an open Codex P2
+(Codex summary comment 6494587147 on #223: `has_unresolved_findings: true`).
+The Pipeline run of e1dcc25 (40864319948) was created at 11:18:07, and
+`cancel-in-progress` then cancelled 40862677865: the cancellation followed the
+push. The owner rule of 2026-10-29 keeps review findings as a reason to change
+the branch; the fault was that nothing named why Fix ran.
 
 The change in `templates/ci/pipeline.yml`:
 
-- `review` needs `contract` too. A failed contract skips the five categories,
-  and the guard reads the results of every test job from `toJSON(needs)`.
-- The guard sets `fix` to `any(.[]; .result == "failure")` for every head. A
-  cancelled, skipped or timed-out job is no fault to repair. Claude heads keep
-  `review=false`. The bootstrap skip is unchanged: a PR that changes
-  `.github/workflows/pipeline.yml` and is not authored by the owner sets both
-  outputs false. The owner exception of #218 (9242772) stays; this change does
-  not widen the skip to every `.github/workflows/*` file, which would revert
-  that merged decision.
-- `Fix` runs if `success() && !cancelled() && steps.guard.outputs.fix == 'true'`.
+- `review` needs `contract` too. A failed contract skips the five categories.
+- The guard outputs `review`, `repair` (false only under the bootstrap skip),
+  `test_failure` (`any(.[]; .result == "failure")` over `toJSON(needs)`) and
+  `claude_head`. The bootstrap skip is unchanged: a PR that changes
+  `.github/workflows/pipeline.yml` and is not authored by the owner gets
+  `review=false` and `repair=false`; the owner exception of #218 (9242772)
+  stays.
+- A new step after `Review`, "Name the causes for Fix", outputs `cause` and
+  writes it to the job summary: `test_failure`, `review_findings`, both, or
+  empty. `review_findings` comes from the Codex summary of
+  `chatgpt-codex-connector[bot]` with `has_unresolved_findings: true` for this
+  head, a `claude[bot]` verdict marker (#221) with `merge:false` for this head,
+  or a review thread opened by Claude or Codex that is unresolved and not
+  outdated. Threads are not tied to a head, so they do not count on a Claude
+  head: a Fix push cannot make Fix run again on threads alone. An unreadable
+  API answer fails the step (fail closed).
+- `Fix` runs if `success() && !cancelled() && steps.cause.outputs.cause != ''`,
+  and its prompt names the causes.
+
+Tests: `tests/test_ci_fix_cause.py` executes the cause step against fixtures
+shaped like PR #223 (green run with an open Codex finding: Fix; green run
+without a finding: skip; cancelled run with a finding: skip; a failed test job:
+Fix; verdicts for another head or from a user: none; a Claude head with an
+open thread only: none) and evaluates the Fix condition. Red against the
+previous E2 template: 51 failed, 56 passed (`test_ci_fix_cause.py` and
+`test_ci_pr_safety.py`); green: 107 passed.
 
 ## E3: one owner mention at a time per thread
 

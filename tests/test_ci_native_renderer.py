@@ -398,17 +398,30 @@ def original_asset(delivered, relative):
         b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'
     )
     if relative.endswith("/claude-review.yml"):
-        original = original.replace(b"  pull_request:\n", b"  pull_request_target:\n")
-        original = original.replace(b"      id-token: write\n", b"")
-        original = original.replace(
-            b"          claude_code_oauth_token:",
-            b"          github_token: ${{ secrets.GITHUB_TOKEN }}\n          claude_code_oauth_token:",
-        )
-        original = original.replace(
-            b"# Native App OIDC auth on same-repository PRs; main checkout retained.",
-            b"# Trusted-base variant: upstream docs/security.md. Auth: upstream issue713.",
-        )
+        original = original_claude_review(original)
     return original
+
+
+def original_claude_review(original):
+    # Inverse of source.json adaptation "claude-review-verdict-marker".
+    marker = (
+        b"            End the completion summary with this exact last line, unchanged except"
+        b" `true` becomes `false` when any finding blocks the merge:\n"
+        b'            <!-- claude-review-verdict:v1 {"head":"${{ github.event.pull_request.head.sha }}","merge":true} -->\n'
+    )
+    assert original.count(marker) == 1
+    original = original.replace(marker, b"")
+    # Inverse of source.json adaptation "native-app-oidc".
+    original = original.replace(b"  pull_request:\n", b"  pull_request_target:\n")
+    original = original.replace(b"      id-token: write\n", b"")
+    original = original.replace(
+        b"          claude_code_oauth_token:",
+        b"          github_token: ${{ secrets.GITHUB_TOKEN }}\n          claude_code_oauth_token:",
+    )
+    return original.replace(
+        b"# Native App OIDC auth on same-repository PRs; main checkout retained.",
+        b"# Trusted-base variant: upstream docs/security.md. Auth: upstream issue713.",
+    )
 
 
 def test_native_assets_match_the_pinned_source_receipt(tmp_path):
