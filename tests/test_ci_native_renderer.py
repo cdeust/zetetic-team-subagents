@@ -138,10 +138,40 @@ def original_receipt_reader(original):
     )
 
 
+def original_security_receipt(original):
+    # Inverse of source.json adaptation "security-receipt-proof".
+    signature = "def _reviews(latest, target"
+    return (
+        original.replace(
+            "from ci_codex_review_comments import BLOCKED_REASONS, BLOCKING  # noqa: E402\n",
+            "",
+        )
+        .replace(
+            "if any(s in BLOCKING for s in states)",
+            'if any(s in ("failed", "unresolved") for s in states)',
+        )
+        .replace(
+            '"blocked": next((r for s, r in BLOCKED_REASONS if s in states), '
+            '"review_unresolved"),',
+            '"blocked": "review_failed" if "failed" in states else "review_unresolved",',
+        )
+        .replace(signature + ", comments):", signature + "):")
+        .replace(
+            "            ) or security_receipt(\n"
+            "                comments, (repo, pr, expected_sha), reviews[kind], security\n"
+            "            )\n",
+            "            )\n",
+        )
+        .replace(
+            "_reviews(latest, (expected_sha, repo, pr), comments)",
+            "_reviews(latest, (expected_sha, repo, pr))",
+        )
+    )
+
+
 def original_security_reader(delivered):
     original = delivered.decode()
-    original = original_reader_api(original)
-    original = original_receipt_reader(original)
+    original = original_security_receipt(original_receipt_reader(original_reader_api(original)))
     imported = (
         "from ci_codex_review_comments import _authenticate_editor, "
         "_bot_author, _canonical  # noqa: E402\n"

@@ -51,6 +51,17 @@ def invoke(server, *, failure=False, dry_run=False):
 
 
 class ReviewRecoveryTests(unittest.TestCase):
+    def test_named_missing_verdict_still_requests_recovery(self):
+        target = load()
+        proof = dict(state="blocked", reason="codex_security_verdict_missing", sha=SHA,
+                     security_review=dict(commit_sha=SHA, status="completed",
+                         has_any_findings=None, has_unresolved_findings=None,
+                         resolution=dict(source="codex_security_receipt", receipt_ids=[])))
+        self.assertEqual(target.requests.request_kind(proof), "security_review")
+        for reason in ("codex_security_receipt_unrecognized", "protocol", "editor"):
+            proof["reason"] = reason
+            self.assertIsNone(target.requests.request_kind(proof))
+
     def test_positive_current_findings_request_native_fix(self):
         server = Server()
         data = state()

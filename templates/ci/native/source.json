@@ -2,7 +2,7 @@
   "repository": "cdeust/Cortex",
   "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
   "assets": {
-    "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
+    "scripts/ci_codex_review_event_source.py": "c5fc0b31169e1b7de64e33b9d49040989082903ee0fd9e7f58e368d8c995a90c",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
     ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
@@ -98,6 +98,15 @@
         "https://cli.github.com/manual/gh_api"
       ],
       "reason": "Preserve fixed not_found, forbidden, rate_limited or unknown transport category while str(error) remains api. Actual gh REST404 response includes status; --paginate --slurp wraps it in one array element. Never classify raw stderr or expose response bodies."
+    },
+    "security-receipt-proof": {
+      "sources": [
+        "https://github.com/cdeust/cortex-viz/pull/213#issuecomment-6491350304",
+        "https://github.com/cdeust/Cortex/pull/829#issuecomment-6491478435",
+        "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#issuecomment-6491660443",
+        "https://learn.chatgpt.com/docs/security/security-review"
+      ],
+      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '\u00b7 _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
     },
     "proof-first-discovery": {
       "source": "https://github.com/cdeust/Cortex/issues/comments/6459888424",
@@ -212,9 +221,10 @@
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors",
-        "positive-native-security-receipts"
+        "positive-native-security-receipts",
+        "security-receipt-proof"
       ],
-      "sha256": "80623f26cf0f8ec5bc28e4ded6ad972bf62491b0cbd43d7d07877725287e1b41"
+      "sha256": "7151dbefaca70628a30f20b5a0e3d6197af5608cd0e237f0e31033f8f693710c"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -241,7 +251,7 @@
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "a416d2dbda7d18f10f92809fd66c09bbc14e2deb2dc518579aa21ed584c14145",
+    "scripts/ci_codex_review_comments.py": "16d13d662bad85c0a6860ad3a5cbf995eab75b4fa4b37386679c6493d4b72076",
     "scripts/tests/codex_resume_fixtures.py": "c1d6fec17d416696db4429cc948de981c7c0d147cf5910f9a0a81f97fcfd0a4b",
     "scripts/tests/test_ci_codex_review_event.py": "8568151679805e818bbe5062a9d96bf1b1daccac1f27d224390a4a191c44aba1",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "a52b374013b7eccb6cfcc7b34be192a4a2b00bb106199c22cbc621a900cde724",
@@ -255,12 +265,12 @@
     "scripts/tests/test_ci_codex_review_proof_first.py": "d15b0a980fb3afa58a320aff162837f70dbc0999af788eb70397552b912438d4",
     "scripts/tests/test_ci_codex_review_gate_groups.py": "87f7d2b11429d7255eba8ab69415e5542d292890c56fd141fa8ab8280f108863",
     "scripts/tests/test_ci_workflow_authorization.py": "25458f815169453287ecbeef51526758bf0ea9d0b71d5596cb98fd1c7ca59b75",
-    "scripts/ci_codex_review_request.py": "3f4589b307082278c94f5a7f790f042a49da0a53cd6c3f6b5a84de9b3c6958f0",
+    "scripts/ci_codex_review_request.py": "2dae6c58f35f8584365b1ff462c7ce72e28b06527a861a8dcfca7952fbfbc3a9",
     "scripts/ci_codex_review_controller.py": "8bfdad37ab17fb720aa356bb7c322d407aa6e6c9c23e35c6a311162639e2ab04",
-    "scripts/tests/test_ci_codex_review_recovery.py": "e08e16e0fb42cf98b66e41df9fcacbdac5168ac8aa55aed426f8583ff73b49e5",
+    "scripts/tests/test_ci_codex_review_recovery.py": "0a0a4854c4e4c4cb43d58c534526e367b246a7b5111bb5e84e9240bb06fdf6bb",
     "scripts/tests/test_ci_codex_review_controller.py": "843bfe8567bd4a9ea1e150d19018ab7fe247cff302230f7272c5508a31044dd7",
-    "scripts/ci_codex_review_receipts.py": "b38726a891c7a5fad2eb4be207a639c44c658edce5019c79d02f8059e10305b9",
-    "scripts/tests/test_ci_codex_review_receipts.py": "6be39b0b1cde703d8c49d2026236253e9f1a50d11ced17c049017f7975acfb41",
+    "scripts/ci_codex_review_receipts.py": "88f53275e36d4686b05ef0e4bf0c56caa750c668166da0c172ddded0a71c0a4d",
+    "scripts/tests/test_ci_codex_review_receipts.py": "3eca33d89051a2950c8814297c1f3efcfed62ca947f46ebb0271ab40d0893029",
     "scripts/ci_codex_review_outbox.py": "e20c4f7acf4a1e6649d7e953edcd189093d19f0aa9cba32c9718073423952a4e",
     "scripts/tests/test_ci_codex_review_outbox.py": "224eba0160d4af2c19a3b417cc26e896ecaa09055e73fa7a7100ee35f5da26e5",
     "scripts/tests/codex_outbox_fixtures.py": "0ce6fd6758d0cd81ac1e8c169125b75169884d78a94f1d859c5a20e3007b6a28"
@@ -269,13 +279,14 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "3899f3c0b4c167a2652d25f92e4ff471d043f980782ed2e039a3de9f4ad5acb5",
+      "sha256": "b754310d15e9495b1651931ddb68550a998d2a1de43633062e7325ca9cd50402",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors",
-        "positive-native-security-receipts"
+        "positive-native-security-receipts",
+        "security-receipt-proof"
       ]
     },
     "merge": {

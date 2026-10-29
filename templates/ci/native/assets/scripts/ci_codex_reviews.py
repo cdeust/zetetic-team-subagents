@@ -26,6 +26,7 @@ import ci_codex_review_runtime as runtime  # noqa: E402
 import ci_codex_review_receipts as receipts  # noqa: E402
 from ci_codex_review_runtime import _outputs  # noqa: E402
 from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
+from ci_codex_review_comments import BLOCKED_REASONS, BLOCKING  # noqa: E402
 
 Record = dict[str, Any]
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
@@ -197,11 +198,11 @@ def review_evidence(
         result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
         result["state"] = (
             "blocked"
-            if any(s in ("failed", "unresolved") for s in states)
+            if any(s in BLOCKING for s in states)
             else ("pending" if "pending" in states else "success")
         )
         result["reason"] = {
-            "blocked": "review_failed" if "failed" in states else "review_unresolved",
+            "blocked": next((r for s, r in BLOCKED_REASONS if s in states), "review_unresolved"),
             "pending": "review_pending",
             "success": "reviews_complete",
         }[result["state"]]

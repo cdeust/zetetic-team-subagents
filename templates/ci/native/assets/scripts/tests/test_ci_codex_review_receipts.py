@@ -75,7 +75,8 @@ class ExplicitCleanReceiptTests(unittest.TestCase):
 
     def test_stale_receipt_cannot_clear_current_head(self):
         result, calls = self.read([summary(), receipt(OTHER)])
-        self.assertEqual(result["state"], "pending")
+        self.assertEqual((result["state"], result["reason"]),
+                         ("blocked", "codex_security_verdict_missing"))
         self.assertEqual(calls, [])
 
     def test_companion_summary_metadata_must_bind_exact_repo_pr_and_sha(self):
@@ -126,7 +127,7 @@ class ExplicitCleanReceiptTests(unittest.TestCase):
         body = body.replace('"status": "completed"', '"status": "running"')
         row["body"] = body + "<!-- codex-security-review:v1 " + metadata
         result, calls = self.read([row, receipt()])
-        self.assertEqual(result["state"], "pending")
+        self.assertEqual((result["state"], result["reason"]), ("pending", "review_pending"))
         self.assertEqual(calls, [])
 
     def test_positive_findings_with_unknown_resolution_cannot_use_clean_receipt(self):
@@ -184,7 +185,7 @@ class ExplicitCleanReceiptTests(unittest.TestCase):
 
     def test_new_head_cannot_reuse_old_clean_receipt(self):
         result, calls = self.read(expected=OTHER)
-        self.assertEqual(result["state"], "pending")
+        self.assertEqual((result["state"], result["reason"]), ("pending", "review_pending"))
         self.assertEqual(calls, [])
 
 

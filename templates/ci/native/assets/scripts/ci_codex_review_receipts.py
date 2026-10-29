@@ -9,7 +9,7 @@ GitHub's unique commit resolution, never a prefix-only verdict.
 from datetime import datetime
 import re
 
-from ci_codex_review_comments import STAMP_PATTERN, _authenticate_editor, _bot_author
+from ci_codex_review_comments import STAMP_PATTERN, _authenticate_editor, _bot_author, security_receipt
 from ci_codex_review_runtime import EvidenceError
 
 # source: native GraphQL actor on receipt6491639753 and summary6491366848.
@@ -17,7 +17,6 @@ BOT_NODE_ID = "BOT_kgDOC98s_g"
 MARKER = "<!-- codex-review-receipt:v1 -->"
 HEADING = "### 🛡️ Codex Security Review"
 CLAIM = "Security review completed. No security issues were found in this pull request."
-PREFIX = MARKER + "\n\n" + HEADING + "\n\n" + CLAIM + "\n\n"
 NOTICE = "_Only the user who started this review can view the report in Codex._"
 
 
@@ -61,7 +60,8 @@ def _fields(body):
                 "https://chatgpt.com/codex/cloud/tasks/")
     if any(body.count(part) != 1 for part in required) or not body.rstrip().endswith("</details>"):
         raise EvidenceError("protocol")
-    pattern = (re.escape(PREFIX)
+    prefix = re.escape(MARKER + "\n\n" + HEADING) + r"(?: · _Automatically triggered_)?" + re.escape("\n\n" + CLAIM + "\n\n")
+    pattern = (prefix
                + r"\*\*Reviewed commit:\*\* `([0-9a-f]{10}|[0-9a-f]{40})`\n\n"
                + r"\[View security finding report\]\((https://chatgpt\.com/codex/cloud/tasks/task_e_[0-9a-f]{32})\)\n\n"
                + re.escape(NOTICE) + r"\n\n<details>")
@@ -74,6 +74,9 @@ def _fields(body):
 def clean_security(target, comments, current, request):
     if not _eligible(target, current):
         return None
+    candidate = security_receipt(comments, target, current[1], current[2])
+    if candidate and candidate["state"] != "success":
+        return candidate
     candidates = [row for row in comments if _bot_author(row)
                   and row.get("body", "").startswith(MARKER) and HEADING in row["body"]]
     if not candidates:

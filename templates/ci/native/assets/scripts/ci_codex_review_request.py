@@ -28,11 +28,12 @@ NONE = {"action": "none"}
 def _unknown_security(proof):
     security = proof.get("security_review", {})
     return (
-        proof.get("state") == "pending"
-        and proof.get("reason") == "review_pending"
+        (proof.get("state"), proof.get("reason")) in (
+            ("pending", "review_pending"), ("blocked", "codex_security_verdict_missing")
+        )
         and security.get("commit_sha") == proof.get("sha")
         and security.get("status") == "completed"
-        and not security.get("resolution")
+        and (not security.get("resolution") or proof.get("reason") == "codex_security_verdict_missing")
         and any(security.get(flag) is None for flag in (
             "has_any_findings", "has_unresolved_findings"
         ))
