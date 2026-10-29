@@ -111,6 +111,9 @@ def _validate_run(run, repository):
 def _validate_jobs(jobs, actor):
     # Source: templates/ci/pipeline.yml, five categories and the existing
     # Dependabot review exception. Overall success alone accepts skipped jobs.
+    # Returns True when review and merge were both skipped: on a validated
+    # same-repository pull_request run that succeeded, the only condition the
+    # two jobs share and can fail is `!github.event.pull_request.draft`.
     required = ["contract", "unit", "regression", "e2e", "review", "merge"]
     for category in ("environment", "install"):
         expected = {
@@ -127,21 +130,34 @@ def _validate_jobs(jobs, actor):
             f"source merge gate requires the exact {category} matrix",
         )
         required.extend(sorted(expected))
+    found = {}
     for name in required:
         matching = [job for job in jobs if job.get("name") == name]
         require(
             len(matching) == 1, f"source merge gate requires exactly one {name} job"
         )
-        job = matching[0]
-        allowed = job.get("conclusion") == "success" or (
-            name == "review"
-            and actor == "dependabot[bot]"
-            and job.get("conclusion") == "skipped"
+        found[name] = matching[0]
+    unrequested = all(
+        found[name].get("status") == "completed"
+        and found[name].get("conclusion") == "skipped"
+        for name in ("review", "merge")
+    )
+    for name in required:
+        job = found[name]
+        allowed = (
+            job.get("conclusion") == "success"
+            or (
+                name == "review"
+                and actor == "dependabot[bot]"
+                and job.get("conclusion") == "skipped"
+            )
+            or (unrequested and name in ("review", "merge"))
         )
         require(
             job.get("status") == "completed" and allowed,
             f"source merge gate requires completed {name}",
         )
+    return unrequested
 
 
 def _pr_identity(pr, repository, head):
@@ -180,7 +196,8 @@ def _source_run(event, repository, api):
         "source run has a newer attempt",
     )
     jobs = list(api.records(f"{prefix}/actions/runs/{run['id']}/jobs", "jobs"))
-    _validate_jobs(jobs, run.get("actor", {}).get("login"))
+    if _validate_jobs(jobs, run.get("actor", {}).get("login")):
+        run["merge_unrequested"] = True
 
     return run
 
@@ -284,6 +301,19 @@ def _confirm_main_merge(pr_path, original_pr, sha, api):
 def resolve(event, repository: str, api: GitHub):
     run = _source_run(event, repository, api)
     number, pr = _pull_request(run, repository, api)
+    if run.get("merge_unrequested"):
+        # A draft's Pipeline succeeds with review and merge skipped: it never
+        # asked for a merge, so declining one is not a failure. No API write.
+        require(
+            pr.get("draft") is True,
+            "source merge gate skipped review and merge on a PR that is not a draft",
+        )
+        return {
+            "tested_sha": run["head_sha"],
+            "run_tests": "false",
+            "pr_number": str(number),
+            "reason": "Draft PR: its Pipeline skipped review and merge; nothing to merge",
+        }
     pr_path = f"/repos/{repository}/pulls/{number}"
     already_merged = pr.get("merged") is True
     if already_merged:

@@ -57,8 +57,8 @@ def pull(**changes):
         ({"headRefOid": MOVED}, f"head moved: tested {SHA}, live {MOVED}"),
         ({"title": "do not merge: probe"}, "is held by title"),
         ({"title": "Fix: Do Not Merge yet"}, "is held by title"),
-        ({"labels": [{"name": "Hold"}]}, "is held by label"),
         ({"labels": [{"name": "DO-NOT-MERGE"}]}, "is held by label"),
+        ({"labels": [{"name": "Hold"}, {"name": "do-not-merge"}]}, "is held by label"),
     ],
 )
 def test_red_merge_names_the_condition_that_failed(jobs, tmp_path, changes, cause):

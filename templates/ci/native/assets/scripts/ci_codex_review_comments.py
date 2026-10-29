@@ -41,7 +41,7 @@ def _bot_author(comment: Record) -> bool:
     )
 
 
-def _authenticate_editor(comment: Record) -> None:
+def _authenticate_editor(comment: Record, login: str = "chatgpt-codex-connector") -> None:
     # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
     if "editor" not in comment or "lastEditedAt" not in comment:
         raise EvidenceError("editor")
@@ -62,7 +62,7 @@ def _authenticate_editor(comment: Record) -> None:
     if (
         not isinstance(editor, dict)
         or editor.get("__typename") != "Bot"
-        or editor.get("login") != "chatgpt-codex-connector"
+        or editor.get("login") != login
         or editor.get("id") != identity
     ):
         raise EvidenceError("editor")
@@ -76,10 +76,28 @@ RECEIPT = "<!-- codex-review-receipt:v1 -->\n"
 SECURITY_HEADING = re.compile(
     r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n"
 )
-NO_SECURITY_ISSUES = (
-    "\nSecurity review completed. No security issues were found in this pull request.\n"
-)
 RECEIPT_COMMIT = re.compile(r"\n\*\*Reviewed commit:\*\* `([0-9a-f]{10,40})`\n")
+# The whole no-issues receipt, byte-identical across the six captured ones up to
+# the commit prefix, task id and automatic suffix (Codex finding4411675624: the
+# verdict is the exact text, never a sentence found somewhere in the body).
+NO_ISSUES_RECEIPT = re.compile(
+    re.escape(RECEIPT)
+    + r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n\n"
+    r"Security review completed\. No security issues were found in this pull request\.\n\n"
+    r"\*\*Reviewed commit:\*\* `[0-9a-f]{10,40}`\n\n"
+    r"\[View security finding report\]"
+    r"\(https://chatgpt\.com/codex/cloud/tasks/task_e_[0-9a-f]+\)\n\n"
+    r"_Only the user who started this review can view the report in Codex\._\n\n"
+    + re.escape(
+        "<details> <summary>ℹ️ About Codex security reviews in GitHub</summary>\n<br/>\n\n"
+        "This is an experimental Codex feature. Security reviews are triggered when:\n"
+        '- You comment "@codex security review"\n'
+        '- A regular code review gets triggered (for example, "@codex review" or when a'
+        " PR is opened), and you’re opted in so security review runs alongside code review\n\n"
+        "Once complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n"
+        "</details>"
+    )
+)
 # A completed null verdict without a receipt, or a receipt whose wording no
 # observed receipt has, blocks under its own name (the gate never relaunches).
 MISSING, UNRECOGNIZED = "verdict_missing", "receipt_unrecognized"
@@ -120,7 +138,7 @@ def security_receipt(comments, target, review, metadata):
         if len(commits) != 1 or not sha.startswith(commits[0]):
             continue
         _authenticate_editor(comment)
-        if body.count(NO_SECURITY_ISSUES) != 1:
+        if NO_ISSUES_RECEIPT.fullmatch(body) is None:
             return {"state": UNRECOGNIZED, "source": "codex_security_receipt",
                     "receipt_ids": [comment["id"]]}
         receipts.append(comment["id"])
@@ -131,13 +149,23 @@ def security_receipt(comments, target, review, metadata):
     }
 
 
+# Rule D5, 2026-10-29: Claude skips Dependabot (no Actions secrets, PR #224), so an absent
+# marker agrees on a PR by GraphQL author dependabot/Bot on dependabot/* (prD evidence, PR212).
+DEPENDABOT = {"login": "dependabot", "__typename": "Bot"}
+
+
+class Comments(list):
+    """Comment rows of one PR, read with its author from the same GraphQL node."""
+    dependabot = False
+
+
 # Body and edit attribution must come from the same authenticated API node.
 # https://docs.github.com/en/graphql/reference/issues#issuecomment
 COMMENTS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      number headRefOid
+      number headRefOid headRefName author { login __typename }
       comments(first:100, after:$endCursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -153,17 +181,8 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
 
 
 def _comment_row(node: Any) -> Record:
-    if not isinstance(node, dict) or any(
-        key not in node
-        for key in (
-            "databaseId",
-            "body",
-            "updatedAt",
-            "author",
-            "editor",
-            "lastEditedAt",
-        )
-    ):
+    keys = ("databaseId", "body", "updatedAt", "author", "editor", "lastEditedAt")
+    if not isinstance(node, dict) or any(key not in node for key in keys):
         raise EvidenceError("protocol")
     identity = node["databaseId"]
     if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
@@ -172,8 +191,8 @@ def _comment_row(node: Any) -> Record:
     if not isinstance(author, dict):
         raise EvidenceError("protocol")
     login, kind = author.get("login"), author.get("__typename")
-    if login == "chatgpt-codex-connector" and kind == "Bot":
-        login = "chatgpt-codex-connector[bot]"
+    if login in ("chatgpt-codex-connector", "claude") and kind == "Bot":
+        login += "[bot]"  # REST form; GraphQL Bot logins omit it (prD evidence).
     return {
         "id": identity,
         "body": node["body"],
@@ -187,12 +206,15 @@ def _comment_row(node: Any) -> Record:
 def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
     if not isinstance(pages, list) or not pages:
         raise EvidenceError("protocol")
-    rows, identities, cursors = [], set(), set()
+    rows, identities, cursors = Comments(), set(), set()
     try:
         for index, page in enumerate(pages):
             if page.get("errors"):
                 raise EvidenceError("protocol")
             pull = page["data"]["repository"]["pullRequest"]
+            if index == 0:  # Same node as the comments; absent fields mean not Dependabot.
+                who, ref = pull.get("author"), str(pull.get("headRefName"))
+                rows.dependabot = who == DEPENDABOT and ref.startswith("dependabot/")
             if pull["headRefOid"] != sha:
                 raise EvidenceError("head_moved")
             if type(pull["number"]) is not int or pull["number"] != pr:

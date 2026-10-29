@@ -7,7 +7,7 @@ import copy
 import json
 import unittest
 
-from codex_resume_fixtures import OTHER, SHA, comment, state, summary_pages
+from codex_resume_fixtures import OTHER, SHA, comment, state, summary_pages, with_claude
 from test_ci_codex_review_event_fixtures import (
     PREFIX,
     REPO,
@@ -100,9 +100,9 @@ class ReconciliationTests(unittest.TestCase):
         server = self.server()
         replies = iter(
             [
-                summary_pages([server.data["comments"]]),
+                summary_pages([with_claude(server.data["comments"])]),
                 [threads()],
-                summary_pages([server.data["comments"]]),
+                summary_pages([with_claude(server.data["comments"])]),
                 [threads(resolved=False)],
             ]
         )

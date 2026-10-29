@@ -59,7 +59,33 @@ current-head security review whose metadata names this repository, PR and head,
 from the native Bot with an authenticated editor. Without it the gate blocks as
 `codex_security_verdict_missing`; a security receipt with other wording blocks
 as `codex_security_receipt_unrecognized`. The gate names the cause and never
-requests a review; once a receipt arrives, `Codex.yml` resume re-runs the gate.
+requests a review; a native receipt comment is itself a resumption event, so
+`Codex.yml` re-runs the gate when it arrives after the Pipeline. The receipt must
+match the observed no-issues receipt exactly, apart from the commit prefix, task
+id and automatic suffix; any other text for the head is unrecognized.
+
+A head merges only when both reviewers conclude for it (owner rule, 2026-10-29:
+"until the review of codex and claude (done autonomously) are there, it cannot
+merge, the hold should be removed after reviewers agree on merging"). Besides
+both Codex kinds, the gate reads the latest `claude-review-verdict:v1` marker that
+the Claude App posted for the head. Without it the gate stays pending as
+`claude_verdict_missing`; `merge:false` blocks as `claude_refused`; a marker edited
+by another account blocks as `claude_verdict_unreadable`. An open PR whose Claude
+review ran before the marker existed gets it on its next push or on a re-run of
+`claude-review`. The Claude review skips Dependabot (no Actions secrets): on a PR
+whose GraphQL author is the `dependabot` Bot and whose branch is `dependabot/*`,
+an absent marker reads `not_applicable_dependabot` and counts as agreement, so
+Codex and the test jobs decide. An explicit Claude verdict there still counts.
+When Codex marks a review failed and its latest comment is a usage-limit notice
+("reached its Codex usage limits" or "reached your Codex usage limits"), the gate
+stays pending as `codex_quota_exhausted` rather than `review_failed`, and resumes
+once Codex completes the review.
+
+`hold` and `autopilot:hold` mean "reviews incomplete". The `merge` job names them
+and the causes still missing; once Codex and Claude agree, the post-merge resolver
+(main's authorized definition) removes them, re-reads the PR and merges. The
+reconciliation reconsiders such PRs when a receipt or a verdict arrives.
+`do-not-merge` and a "do not merge" title are owner holds: never removed.
 
 Install the Claude GitHub app and configure `CLAUDE_CODE_OAUTH_TOKEN`. The pinned
 Anthropic action supports this OAuth input. Automatic review uses the official
@@ -95,7 +121,8 @@ reviewer definitions remain loaded.
 These copied workflows target a `main` default branch and same-repository,
 non-draft PRs. Partner contributors need repository branch access for this path;
 fork PRs do not receive this privileged automatic review or protected merge.
-Owner holds remain effective. Changing code does not clear a hold.
+Owner holds remain effective. Changing code does not clear a hold; only the
+review holds above are lifted, and only by reviewer agreement.
 
 Keep the required GitHub Actions `merge` check and existing security checks on
 `main`. Do not add a required Claude check during workflow installation; upstream
@@ -115,7 +142,7 @@ account authentication or hosted model execution.
 
 The assets and native job blocks originate from
 [Cortex commit 8e7375bf](https://github.com/cdeust/Cortex/tree/8e7375bf2edfb33fb9c45809b9af6b428f0f4235).
-`templates/ci/native/source.json` records SHA256 digests for nine unchanged assets
+`templates/ci/native/source.json` records SHA256 digests for seven unchanged assets
 and two unchanged native job blocks. The Codex runtime asset and review job
 record their original and adapted digests for current-finding resolution:
 all finding IDs announced by the current authenticated summary must exist,
