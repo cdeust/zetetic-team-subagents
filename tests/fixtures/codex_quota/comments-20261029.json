@@ -1,0 +1,42 @@
+{
+  "ai-architect-mcp-codebase-469-6497357065": {
+    "id": 6497357065,
+    "html_url": "https://github.com/cdeust/ai-architect-mcp-codebase/pull/469#issuecomment-6497357065",
+    "updated_at": "2026-10-29T13:00:09Z",
+    "user": {
+      "login": "chatgpt-codex-connector[bot]",
+      "type": "Bot"
+    },
+    "body": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage)."
+  },
+  "ai-architect-mcp-spec-164-6497379059": {
+    "id": 6497379059,
+    "html_url": "https://github.com/cdeust/ai-architect-mcp-spec/pull/164#issuecomment-6497379059",
+    "updated_at": "2026-10-29T13:01:08Z",
+    "user": {
+      "login": "chatgpt-codex-connector[bot]",
+      "type": "Bot"
+    },
+    "body": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage)."
+  },
+  "ci-autonome-9-6496243120": {
+    "id": 6496243120,
+    "html_url": "https://github.com/cdeust/ci-autonome/pull/9#issuecomment-6496243120",
+    "updated_at": "2026-10-29T13:03:15Z",
+    "user": {
+      "login": "chatgpt-codex-connector[bot]",
+      "type": "Bot"
+    },
+    "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"6c765807c0b93cf168ebe3b5d1eba708b843cbe6\",\"has_any_findings\":null,\"has_unresolved_findings\":null,\"status\":\"running\"},\"security_review\":{\"commit_sha\":\"6c765807c0b93cf168ebe3b5d1eba708b843cbe6\",\"has_any_findings\":true,\"has_unresolved_findings\":true,\"status\":\"failed\"}} -->\n<!-- codex-security-review:v1 {\"blockingSeverityThreshold\":\"P0\",\"headSha\":\"6c765807c0b93cf168ebe3b5d1eba708b843cbe6\",\"mergeGateEnabled\":false,\"pullRequestNumber\":9,\"repository\":\"cdeust/ci-autonome\",\"status\":\"completed\"} -->\n## Codex Review Summary\n\nThis comment shows the latest Codex review activity on this pull request.\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| 📝 **Code Review** | 🔄 **Running** since <relative-time datetime=\"2026-10-29T12:08:43.553965Z\">2026-10-29T12:08:43.553965Z</relative-time> | `6c76580` | PR opened |\n| 🔒 **Security Review** | ⚠️ **Failed** <relative-time datetime=\"2026-10-29T13:03:13.694993Z\">2026-10-29T13:03:13.694993Z</relative-time><br/>We couldn’t complete this review. Comment `@codex security review` to try again. | `6c76580` | Manual request |\n\n\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\" or \"@codex security review\".\n\nCodex reacts with 👀 while any review is running, comments if it has suggestions, and reacts with 👍 once all reviews finish with no findings.\n\n</details>"
+  },
+  "ci-autonome-9-6497426761": {
+    "id": 6497426761,
+    "html_url": "https://github.com/cdeust/ci-autonome/pull/9#issuecomment-6497426761",
+    "updated_at": "2026-10-29T13:03:17Z",
+    "user": {
+      "login": "chatgpt-codex-connector[bot]",
+      "type": "Bot"
+    },
+    "body": "The account paying for this security review has reached its Codex usage limits. The payer can check the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage). For personal accounts, using credits requires enabling “Use credits for security reviews” in [Code review settings](https://chatgpt.com/settings/code-review). If you do not manage the paying account, contact this repository's admins."
+  }
+}

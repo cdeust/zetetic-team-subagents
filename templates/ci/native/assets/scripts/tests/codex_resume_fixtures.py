@@ -14,6 +14,9 @@ STATE = "<!-- codex-review-state:v1 "
 
 BOT_NODE_ID = "BOT_kgDOC98s_g"
 
+# source: GraphQL author of claude-mods PR51 comment6494419619 (prD evidence).
+CLAUDE_NODE_ID = "BOT_kgDODIGtWg"
+
 
 def state(sha=SHA):
     review = {
@@ -47,6 +50,19 @@ def comment(data=None, comment_id=1, updated="2026-10-26T22:00:00Z"):
     }
 
 
+def claude_verdict(merge=True, sha=SHA, comment_id=900001, updated="2026-10-26T22:05:00Z"):
+    """The native Claude review's final comment, ending with its verdict marker."""
+    marker = json.dumps({"head": sha, "merge": merge}, separators=(",", ":"))
+    return {
+        "id": comment_id,
+        "updated_at": updated,
+        "user": {"login": "claude[bot]", "type": "Bot", "node_id": CLAUDE_NODE_ID},
+        "editor": None,
+        "lastEditedAt": None,
+        "body": "I found no blocking issue.\n\n<!-- claude-review-verdict:v1 " + marker + " -->\n",
+    }
+
+
 def _graphql_comment(row):
     author = copy.deepcopy(row["user"])
     if isinstance(author, dict):
@@ -64,6 +80,14 @@ def _graphql_comment(row):
         "editor": copy.deepcopy(row["editor"]),
         "lastEditedAt": row["lastEditedAt"],
     }
+
+
+def with_claude(rows, sha=SHA):
+    """The rows of a head on which Claude also concluded merge.
+
+    Owner rule 2026-10-29: Codex and Claude must both conclude for the head.
+    """
+    return [*rows, claude_verdict(sha=sha)]
 
 
 def summary_pages(pages, *, number=797, sha=SHA):
