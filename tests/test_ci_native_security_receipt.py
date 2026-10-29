@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 READER = (
     Path(__file__).resolve().parents[1]
@@ -270,7 +271,19 @@ class SecurityReceiptTests(unittest.TestCase):
         # Owner rule 2026-10-29: a mergeable head also carries Claude's verdict.
         from test_ci_native_hold_lift import claude_row
 
-        return reader().review_evidence([*rows, claude_row(sha)], sha, REPO, PR)
+        module = reader()
+        runtime = sys.modules["ci_codex_review_runtime"]
+
+        def commits(endpoint, **_):
+            # The repository's commits API: a receipt prefix resolves to its one known commit.
+            prefix = endpoint.rsplit("/", 1)[1]
+            found = {full for _, full in REAL if full.startswith(prefix)}
+            if len(found) != 1:
+                raise sys.modules["ci_codex_review_runtime"].APIError("not_found")
+            return {"sha": found.pop()}
+
+        with patch.object(runtime, "_api", side_effect=commits):
+            return module.review_evidence([*rows, claude_row(sha)], sha, REPO, PR)
 
     def assert_outcome(self, result, state, reason):
         self.assertEqual((result["state"], result["reason"]), (state, reason))

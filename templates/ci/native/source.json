@@ -218,6 +218,15 @@
         "https://github.com/cdeust/ai-architect-mcp-codebase/pull/469#issuecomment-6497357065"
       ],
       "reason": "Coordinator rule D6, 2026-10-29: from 13:00Z Codex marked reviews failed and posted a usage-limit notice ('has reached its Codex usage limits', 'You have reached your Codex usage limits for code reviews'). A failed kind whose latest Codex Bot comment is such a notice waits for quota: the gate stays pending as codex_quota_exhausted instead of blocking as review_failed, and resumes when Codex completes the review. A failed kind without that latest notice still blocks."
+    },
+    "security-owner-resolution": {
+      "source": "https://github.com/cdeust/session-optimizer/pull/87#discussion_r4412261213",
+      "reason": "An explicit clean security verdict over findings (has_any_findings true, has_unresolved_findings false) goes through resolve_security like an unknown verdict: only the trusted owner's resolvedBy resolves a finding, never the summary flag. Without that proof the review is unresolved (owner_resolution_unproven)."
+    },
+    "receipt-head-binding": {
+      "source": "https://github.com/cdeust/Cortex/pull/836#discussion_r4412420778",
+      "api_source": "https://docs.github.com/en/rest/commits/commits#get-a-commit",
+      "reason": "A security receipt names its commit by a 10-hex prefix (40 bits); a branch writer can precompute two commits sharing it. The receipt proves the head only by its full SHA: 40 hex compared exactly, or a shorter prefix the repository's commits API resolves to one commit equal to the head. A 404, an ambiguous prefix or any API failure rejects the receipt. Authored asset: scripts/ci_codex_review_comments.py (digest only, no upstream inverse)."
     }
   },
   "adapted_assets": {
@@ -246,13 +255,14 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "971d7d9a6b4c3032df5e5a4d05d885fc0417595a1b6209f745e37cfff629caa2",
+      "sha256": "8aac5f9613bab0d4b23b00af418593171bf2211071e0d96104dc74a03116dd7c",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors",
-        "reviewer-agreement-lifts-review-holds"
+        "reviewer-agreement-lifts-review-holds",
+        "security-owner-resolution"
       ]
     },
     "scripts/ci_codex_reviews.py": {
@@ -262,9 +272,10 @@
         "comment-boundary-module",
         "structured-api-errors",
         "security-receipt-proof",
-        "reviewer-agreement-lifts-review-holds"
+        "reviewer-agreement-lifts-review-holds",
+        "security-owner-resolution"
       ],
-      "sha256": "2f292ab262540262c010e969d68456a17a196cfcdcef8e25505b3c00af0982f1"
+      "sha256": "585d24751dfeef0b441d6589a32507a175900059c8251e9f5c3a03f6c3c4de11"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -296,12 +307,12 @@
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "f5f9259ebb9d2255c1c01d2f79d9824b3a1de63594025c6a6dc47e8aafa3f4c7",
+    "scripts/ci_codex_review_comments.py": "5b2a3e73a5aa7a29e51a89c348123fca87a0ba35e27e067020a3e39fe1675f9b",
     "scripts/tests/codex_resume_fixtures.py": "3259d5d6049f9a72e3e1adc4f72e7021a72c67c82a1fae842f6b8e4242f58ad3",
     "scripts/tests/test_ci_codex_review_event.py": "4f4fb694130571e4d570280c87becc8ad07ae02d11dcee1c90aaed35fc758c35",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
     "scripts/tests/test_ci_codex_review_event_cli.py": "046e5dc369508d0b4641148b4e6dbf20bba8690af66247b601286cbf440c9f43",
-    "scripts/tests/test_ci_codex_review_event_fixtures.py": "c4aa08dbe9c8aea218b01bf952196dfc68f2a11bc7793cd22f80d51ad3e05d9b",
+    "scripts/tests/test_ci_codex_review_event_fixtures.py": "c3db009959c5be8c6a886cc1692073d4ba53ce5ac13a6c63ebff08def0a7f149",
     "scripts/tests/test_ci_codex_review_reconcile.py": "34643fa26fa6e5bd1e87e868fa6c72e783a8043a877752849fb321a9a5a40d2e",
     "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
     "scripts/ci_codex_review_reconcile.py": "1608a34dab10e46bd952351deb96bba9f88234c3e1b7e770fc8427d349a4c0d9",
@@ -316,7 +327,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "095e51dad5b29fb225cd36167273da86e44005e246497ed7f55885bb176f47fb",
+      "sha256": "c4d22bf3516c66ae0eb68d621cee00c69c4cd84031c454b6a0a292f645dcee8f",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
@@ -325,7 +336,9 @@
         "security-receipt-proof",
         "reviewer-agreement-lifts-review-holds",
         "dependabot-claude-not-applicable",
-        "codex-quota-wait"
+        "codex-quota-wait",
+        "security-owner-resolution",
+        "receipt-head-binding"
       ]
     },
     "merge": {

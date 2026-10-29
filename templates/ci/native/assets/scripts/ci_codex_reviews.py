@@ -157,8 +157,8 @@ def _reviews(latest, target, comments):
     states = []
     for kind in KINDS:
         state, reviews[kind] = _review(data.get(kind), expected_sha)
-        proof = None
-        if kind == "security_review" and state == "pending" and repo and pr:
+        proof, attested = None, state == "success" and reviews[kind]["has_any_findings"] is True
+        if kind == "security_review" and (state == "pending" or attested) and repo and pr:
             proof = runtime.resolve_security(
                 (repo, pr, expected_sha), latest["body"], reviews[kind], security
             ) or security_receipt(

@@ -60,6 +60,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+from unittest.mock import patch
 from urllib.parse import unquote
 
 import pytest
@@ -121,7 +122,10 @@ def evidence(rows, dependabot=False):
     module = reader()
     rows = sys.modules["ci_codex_review_comments"].Comments(rows)
     rows.dependabot = dependabot
-    return module.review_evidence(rows, SHA, REPO, PR)
+    # The repository's commits API resolves a receipt's prefix to the head (#227).
+    commits = {f"repos/{REPO}/commits/{SHA[:10]}": {"sha": SHA}}
+    with patch.object(sys.modules["ci_codex_review_runtime"], "_api", side_effect=commits.__getitem__):
+        return module.review_evidence(rows, SHA, REPO, PR)
 
 
 def null_security():

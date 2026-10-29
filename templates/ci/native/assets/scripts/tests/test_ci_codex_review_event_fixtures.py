@@ -143,6 +143,8 @@ class Server:
             ]
         elif endpoint == PREFIX + "/commits/" + SHA + "/pulls":
             result = [[self.data["pull"]]]
+        elif endpoint == PREFIX + "/commits/" + SHA[:10]:
+            result = {"sha": SHA}  # a security receipt's prefix, resolved (#227)
         else:
             raise AssertionError("unexpected API endpoint: " + endpoint)
         return copy.deepcopy(result)
@@ -161,9 +163,11 @@ class Server:
 
 def invoke(server, name="issue_comment", payload=None, expected=797):
     target = load()
+    runtime = sys.modules["ci_codex_review_runtime"]
     with (
         patch.dict(os.environ, {"EXPECTED_PR": str(expected)}),
         patch.object(target.source, "_api", side_effect=server),
+        patch.object(runtime, "_api", side_effect=server),
         patch.object(target.subprocess, "run") as post,
     ):
         result = target.coordinate(
