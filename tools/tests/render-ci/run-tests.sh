@@ -42,10 +42,17 @@ RENDERED="$TARGET/.github/workflows/pipeline.yml"
 if [[ $rc -eq 0 && -f "$RENDERED" ]]; then ok "renders pipeline.yml (exit 0)"
 else bad "render rc=$rc, file present: $([[ -f "$RENDERED" ]] && echo yes || echo no)"; printf '%s\n' "$out" | sed 's/^/       | /'; fi
 
-# T3: Python profile tests separately compare every common job to the canon.
+# T3: Compare the installed profile; T2/T4-T7 still exercise the legacy default.
+# Native selection is recorded by both independent reviewer entry points.
+PROFILE_TARGET="$TARGET"
+if [[ -f "$REPO/.github/workflows/Codex.yml" && -f "$REPO/.github/workflows/claude-review.yml" ]]; then
+  PROFILE_TARGET="$WORK/native-target"
+  mkdir -p "$PROFILE_TARGET"
+  render "$PROFILE_TARGET" --native-review >/dev/null 2>&1
+fi
 same=true
 for name in pipeline.yml pipeline-post-merge.yml pipeline-after-merge.yml; do
-  cmp -s "$TARGET/.github/workflows/$name" "$REPO/.github/workflows/$name" || same=false
+  cmp -s "$PROFILE_TARGET/.github/workflows/$name" "$REPO/.github/workflows/$name" || same=false
 done
 if [[ "$same" == true ]]; then ok "all three workflows match the checked-in render"
 else bad "workflow set differs from the checked-in render"; fi
