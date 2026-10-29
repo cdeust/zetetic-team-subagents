@@ -61,3 +61,42 @@ Native read-only review and merge verdicts remain intact. Non-owner legacy
 workflow PRs retain the bootstrap skip; owner PRs use the explicit branch/author
 authorization above. Automatic native review recovery belongs to its separate
 controller change.
+
+## Security correction for finding4409864800
+
+[The native P1 finding](https://github.com/cdeust/zetetic-team-subagents/pull/218#discussion_r4409864800)
+identified a public-comment injection path into automatic workflow repairs. Fix
+now consumes a JSON snapshot collected before the model starts. The collector
+lists issue comments, inline comments and reviews, then obtains each body with
+author/editor attribution from the same GraphQL node. It accepts the repository
+owner's immutable User identity or the exact native Claude/Codex Bot identity.
+Edited bodies require the original actor as editor. Missing provenance, API
+errors, wrong node identities and a head move fail closed before publication.
+
+The source is `tools/ci_claude_fix_context.py`, embedded byte-for-byte in the
+canonical pipeline and verified by an identity test. The Fix prompt no longer
+reads all public comments; its broad gh allowlist is replaced with scoped log,
+diff and publication commands. It explicitly excludes unfiltered feedback.
+
+Workflow-changing Claude commits now always run the separate read-only Review
+step, including on green bot heads. Only non-workflow Claude commits retain the
+old duplicate-review optimization. A new model review can repair findings on
+each changed workflow head without introducing a manual approval gate.
+
+Primary API evidence on 2026-10-29:
+
+- `GET /apps/claude`: registered public App grants Workflows write, Contents
+  write and Actions write. The pinned custom App manifest above does not describe
+  this registration. SSH is not indicated by that manifest omission.
+- `GET /users/claude[bot]`: `209825114`, `BOT_kgDODIGtWg`.
+- `GET /users/chatgpt-codex-connector[bot]`: `199175422`, `BOT_kgDOC98s_g`.
+- GraphQL schema introspection confirmed Actor IDs require User/Bot fragments;
+  all three feedback node types expose editor and lastEditedAt.
+- Read-only `snapshot(cdeust/zetetic-team-subagents,218,e220b510...)` completed
+  against GitHub: three authenticated feedback nodes, native Codex author.
+
+Before integration the two new workflow contracts failed: missing authenticated
+collector and skipped independent bot workflow review. After integration the
+focused suite passed 110 tests. Adversarial cases cover public/forged actors,
+another editor rewriting a native comment, missing editor metadata, mismatched
+GraphQL identities, head moves and green/red workflow bot commits.

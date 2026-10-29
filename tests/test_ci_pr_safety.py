@@ -150,7 +150,17 @@ def test_owner_workflow_bot_head_still_repairs_failed_checks(workflow, tmp_path)
         TEST_RESULTS=json.dumps({"unit": {"result": "failure"}}),
     )
     assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "true"}
+    assert values == {"review": "true", "fix": "true"}
+
+
+@pytest.mark.parametrize("path", [".github/workflows/pipeline.yml", ".github/workflows/other.yml"])
+def test_green_workflow_bot_head_requires_independent_review(workflow, tmp_path, path):
+    result, values = guard(
+        workflow, tmp_path, "41898282+claude[bot]@users.noreply.github.com",
+        path, PR_AUTHOR="owner", REPO_OWNER="owner",
+    )
+    assert result.returncode == 0, result.stderr
+    assert values == {"review": "true", "fix": "true"}
 
 
 @pytest.mark.parametrize("branch", ["main", ""])
