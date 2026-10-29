@@ -1,0 +1,96 @@
+P2 plain                         runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='[[ a == (a|b)#x ]]; git commit -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P2 pre                           runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\n[[ a == (a|b)#x ]]; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P2 suf                           runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="[[ a == (a|b)#x ]]; git commit -m x\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P2 ansi                          runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\n[[ a == (a|b)#x ]]; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P3 plain                         runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='case a in (a)#x) echo IN;; esac; git commit -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P3 pre                           runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncase a in (a)#x) echo IN;; esac; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P3 suf                           runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="case a in (a)#x) echo IN;; esac; git commit -m x\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P3 ansi                          runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\ncase a in (a)#x) echo IN;; esac; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P5 plain                         runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd='cat =(echo a)#x; git push'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P5 pre                           runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd=": <<'Q'\nit's\nQ\ncat =(echo a)#x; git push"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P5 suf                           runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd="cat =(echo a)#x; git push\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P5 ansi                          runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd="echo $'\\''\ncat =(echo a)#x; git push"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P10 plain                        runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='case b in a|(b)#x) echo IN;; esac; git commit -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P10 pre                          runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncase b in a|(b)#x) echo IN;; esac; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P10 suf                          runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="case b in a|(b)#x) echo IN;; esac; git commit -m x\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P10 ansi                         runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\ncase b in a|(b)#x) echo IN;; esac; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P11 plain                        runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='[[ a != (b)#x ]] && git commit -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P11 pre                          runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\n[[ a != (b)#x ]] && git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P11 suf                          runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="[[ a != (b)#x ]] && git commit -m x\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P11 ansi                         runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\n[[ a != (b)#x ]] && git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P12 plain                        runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd='diff =(echo a)#x =(echo a) ; git push'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P12 pre                          runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd=": <<'Q'\nit's\nQ\ndiff =(echo a)#x =(echo a) ; git push"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P12 suf                          runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd="diff =(echo a)#x =(echo a) ; git push\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P12 ansi                         runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd="echo $'\\''\ndiff =(echo a)#x =(echo a) ; git push"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I1 plain                         runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='git status; x=git; y=comm; $x ${y}it -m m'
+    main exit=0 :: {}
+    head exit=0 :: {}
+I1 pre                           runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ngit status; x=git; y=comm; $x ${y}it -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I1 suf                           runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="git status; x=git; y=comm; $x ${y}it -m m\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I1 ansi                          runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\ngit status; x=git; y=comm; $x ${y}it -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I4 plain                         runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='git status; $(printf gi)t $(printf com)mit -m m'
+    main exit=0 :: {}
+    head exit=0 :: {}
+I4 pre                           runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ngit status; $(printf gi)t $(printf com)mit -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I4 suf                           runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="git status; $(printf gi)t $(printf com)mit -m m\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I4 ansi                          runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\ngit status; $(printf gi)t $(printf com)mit -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}

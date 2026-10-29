@@ -8,6 +8,13 @@ version: 2
 # version comment in place, so pinning discipline is preserved automatically
 # instead of drifting until Scorecard flags a stale action.
 #
+# Except for the rendered files. pipeline.yml and pipeline-post-merge.yml are
+# generated from templates/ci/pipeline.yml (scripts/setup.sh render-ci), which
+# Dependabot does not scan: it bumps the rendered copy only, and
+# tests/test_ci_template.py::test_this_repository_runs_the_rendered_template
+# fails until the same bump is made in the template, its PINS updated, and the
+# files rendered again (PR #193, unit job 121991297176).
+#
 # No pip/npm ecosystem is declared: there is no installable package and no
 # pinned dependency manifest (pyproject.toml wires only pytest + mutmut tooling,
 # no runtime deps to update). Adding an ecosystem with nothing to update would

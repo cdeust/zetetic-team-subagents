@@ -1,0 +1,56 @@
+K1 heredoc commit body             WRAP=none runs: bash=commit zsh=commit czsh=commit  len=203
+    clean main=0:pass r6=0:pass r7=0:pass
+K2 heredoc commit body2            WRAP=none runs: bash=commit zsh=commit czsh=commit  len=102
+    clean main=0:pass r6=0:pass r7=0:pass
+K3 add && commit (#174)            WRAP=none runs: bash=commit zsh=commit czsh=commit  len=46
+    clean main=0:pass r6=0:pass r7=0:pass
+K4 cd && push -u                   WRAP=none runs: bash=push zsh=push czsh=push  len=112
+    clean main=0:pass r6=0:pass r7=0:pass
+K5 commit #123                     WRAP=none runs: bash=commit zsh=commit czsh=commit  len=27
+    clean main=0:pass r6=0:pass r7=0:pass
+K6 commit (scope)                  WRAP=none runs: bash=commit zsh=commit czsh=commit  len=34
+    clean main=0:pass r6=0:pass r7=0:pass
+K7 commit $VAR                     WRAP=none runs: bash=commit zsh=commit czsh=commit  len=32
+    clean main=0:pass r6=0:pass r7=0:pass
+K8 commit backticks                WRAP=none runs: bash=commit zsh=commit czsh=commit  len=30
+    clean main=0:pass r6=0:pass r7=0:pass
+K9 gh pr create body               WRAP=none runs: bash=- zsh=- czsh=-  len=141
+    clean main=0:pass r6=0:pass r7=0:pass
+K10 commit -F - unquoted heredoc   WRAP=none runs: bash=commit zsh=commit czsh=commit  len=58
+    clean main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+K11 add; commit; push              WRAP=none runs: bash=commit,push zsh=commit,push czsh=commit,push  len=42
+    clean main=0:pass r6=0:pass r7=0:pass
+K12 commit then comment            WRAP=none runs: bash=commit zsh=commit czsh=commit  len=35
+    clean main=0:pass r6=0:pass r7=0:pass
+K13 subshell push comment          WRAP=none runs: bash=push zsh=push czsh=push  len=109
+    clean main=0:pass r6=0:pass r7=0:pass
+K14 write then git add (apostrophe) WRAP=none runs: bash=- zsh=- czsh=-  len=61
+    clean main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+K15 write then git status          WRAP=none runs: bash=- zsh=- czsh=-  len=56
+    clean main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+K16 write then git diff            WRAP=none runs: bash=- zsh=- czsh=-  len=44
+    clean main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+K17 write then commit              WRAP=none runs: bash=commit zsh=commit czsh=commit  len=75
+    clean main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+K18 write prose only               WRAP=none runs: bash=- zsh=- czsh=-  len=58
+    clean main=2:REFUSED r6=0:pass r7=0:pass
+K19 commit amend no-edit           WRAP=none runs: bash=commit zsh=commit czsh=commit  len=28
+    clean main=0:pass r6=0:pass r7=0:pass
+K20 git -C push                    WRAP=none runs: bash=push zsh=push czsh=push  len=119
+    clean main=0:pass r6=0:pass r7=0:pass
+K21 commit -m multi                WRAP=none runs: bash=commit zsh=commit czsh=commit  len=55
+    clean main=0:pass r6=0:pass r7=0:pass
+K22 heredoc commit, subject with (#n) WRAP=none runs: bash=commit,push zsh=commit,push czsh=commit,push  len=97
+    clean main=0:pass r6=0:pass r7=0:pass
+K23 printf commit                  WRAP=none runs: bash=commit zsh=commit czsh=commit  len=39
+    clean main=0:pass r6=0:pass r7=0:pass
+K24 gh pr edit body-file           WRAP=none runs: bash=- zsh=- czsh=-  len=52
+    clean main=0:pass r6=0:pass r7=0:pass
+K25 commit after cd subshell       WRAP=none runs: bash=commit zsh=commit czsh=commit  len=127
+    clean main=0:pass r6=0:pass r7=0:pass
+K26 zsh glob flag add              WRAP=none runs: bash=- zsh=- czsh=-  len=38
+    clean main=0:pass r6=2:REFUSED r7=2:REFUSED
+K27 subshell)#comment              WRAP=none runs: bash=commit zsh=commit czsh=commit  len=35
+    clean main=0:pass r6=0:pass r7=0:pass
+K28 echo note then commit          WRAP=none runs: bash=commit zsh=commit czsh=commit  len=37
+    clean main=0:pass r6=0:pass r7=0:pass

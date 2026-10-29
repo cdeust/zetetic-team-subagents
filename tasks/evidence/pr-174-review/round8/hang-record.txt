@@ -1,0 +1,21 @@
+full pytest (pid 74958) stalled at 88% for over 20 minutes; recorded before acting:
+sam. 17 oct. 2026 14:51:05 CEST
+14:51  up 1 day,  1:50, 4 users, load averages: 197,15 211,14 224,84
+  PID  PPID     ELAPSED STAT COMMAND
+74958 51149       31:39 SN   /opt/homebrew/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m pytest -q
+latest pytest tmp: /var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/pytest-of-cdeust/pytest-268
+test_a_fresh_store_is_provisio0
+test_a_fresh_store_is_provisiocurrent
+test_a_configured_database_win0
+orphan from an earlier run: 21781   23:13 cat /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/pytest-of-cdeust/pytest-267/test_requeue_is_refused_while_0/orphan.hold
+
+open files of 74958 under pytest tmp:
+Python  74958 cdeust   12u    FIFO            0t32           483193635 /private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/pytest-of-cdeust/pytest-267/test_sections_overlap_and_keep0/go
+pytest-267 dirs (newest):
+test_requeue_is_refused_while_0
+test_requeue_is_refused_while_current
+test_a_requeuer_that_read_fail0
+test_a_requeuer_that_read_failcurrent
+
+Diagnosis: pytest is in tests/test_tasks_races.py::test_requeue_is_refused_while_the_killed_workers_command_still_runs (newest pytest-267 dir), waiting for its own blocked command, the orphan 'cat .../orphan.hold' (pid 21781, ppid 1). This PR does not touch tools/lib/task_worker.py or tests/test_tasks_races.py.
+Action 14:51:55: kill 21781 (the test's own blocker), then let pytest continue.

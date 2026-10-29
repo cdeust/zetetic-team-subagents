@@ -1,0 +1,44 @@
+S10 [[ <->#x ]]                    WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=44
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S11 case <1-9>#x                   WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=61
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S12 [[ (b|#x) ]]                   WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=45
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S13 case (b|#x)                    WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=59
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S16 ls <->#x                       WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=48
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S17 [[ (b| #x) ]]                  WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=46
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S19 [[ (<->|#x) ]]                 WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=47
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S21 x=<->#x                        WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=35
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S21p x=<->#x push                  WRAP=ansi runs: bash=- zsh=push czsh=push  len=28
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+S22 delimiter git                  WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=51
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+I2d git only in data, gi${x}t      WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=53
+    dirty main=0:pass r6=0:pass r7=0:pass
+Z1 rewrite over cap                WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=45052
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+Z2 input over cap                  WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=132055
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P1                                 WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=43
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P2                                 WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=46
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P3                                 WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=59
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P5                                 WRAP=ansi runs: bash=- zsh=push czsh=push  len=36
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P10                                WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=61
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P11                                WRAP=ansi runs: bash=- zsh=commit czsh=commit  len=46
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+P12                                WRAP=ansi runs: bash=- zsh=push czsh=push  len=48
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+I1                                 WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=52
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
+I4                                 WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=58
+    dirty main=2:REFUSED r6=2:REFUSED r7=2:REFUSED
