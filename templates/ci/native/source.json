@@ -127,6 +127,10 @@
       "reason": "Authenticate the executed definition through WorkflowRun.file, bound to exact live run and attempt. Allow installed main or canonical native export from protected shared source main. Read candidate definition as data only.",
       "api_source": "https://docs.github.com/en/graphql/reference/actions#workflowrunfile"
     },
+    "rerun-merge-job-identity": {
+      "source": "https://github.com/cdeust/cortex-vision/pull/5#discussion_r4408735600",
+      "reason": "Fold merge and merge pending review as one logical job across authenticated attempts; retain the newest original job payload and reject duplicate aliases in one attempt. Preserve unrelated historical failures."
+    },
     "portable-workflow-authorization-contract": {
       "source": "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#discussion_r4408715493",
       "reason": "Export committed stdlib tests that execute the actual generated post-merge resolver, and run them in the native contract job before configured unit commands. Production authorization logic is unchanged."
@@ -173,9 +177,10 @@
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
       "adaptation": [
         "summary-editor-authentication",
-        "proof-first-discovery"
+        "proof-first-discovery",
+        "rerun-merge-job-identity"
       ],
-      "sha256": "2e5d17c6518eafbfb59bcf4d4e88e41c8720821509e9e926cbec7e3675345d61"
+      "sha256": "5c895dff173ee50eb0adc5cfc75e5eba359e917708c27e551d427b37e94c7fee"
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
@@ -193,7 +198,7 @@
     "scripts/ci_codex_review_comments.py": "a416d2dbda7d18f10f92809fd66c09bbc14e2deb2dc518579aa21ed584c14145",
     "scripts/tests/codex_resume_fixtures.py": "c1d6fec17d416696db4429cc948de981c7c0d147cf5910f9a0a81f97fcfd0a4b",
     "scripts/tests/test_ci_codex_review_event.py": "cdd6794e8714d67a069ef69a559518971e629a77d9fbdc4b91f5c9201f665761",
-    "scripts/tests/test_ci_codex_review_event_attempts.py": "0181c9b8127d3ead02d8707c40ae59268a8d4daa7375f733d904e5bf769794fd",
+    "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
     "scripts/tests/test_ci_codex_review_event_cli.py": "046e5dc369508d0b4641148b4e6dbf20bba8690af66247b601286cbf440c9f43",
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "1eafc10be2db306f5a65fb27d74bdc27429c41b038abff743c7dfbfd14639a11",
     "scripts/tests/test_ci_codex_review_reconcile.py": "b4214c4fbcb3d719af0e7deb632f62693e976fea9d0fb6633e6656fdc17ca49a",

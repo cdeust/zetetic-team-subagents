@@ -115,10 +115,20 @@ Evidence: docs/verification/native-gate-groups-20261028.md.
 
 Review: docs/ci-workflow-proof.md records source contracts and hosted acceptance limits.
 
+## Native rerun merge identity, 2026-10-29
+
+- [x] Read cortex-vision PR5 finding4408735600 and canonical merge-name expression.
+- [x] Reproduce full-history failure against the same current graph without history.
+- [x] Fold both merge display names as one logical job, retaining the winning payload.
+- [x] Verify 101 native contracts, 28 rendering/delivery contracts, and 7 render-ci shell checks.
+- [ ] Root diff review, publication, hosted CI, and registered-worktree disposal.
+
+Review: [source evidence](../docs/verification/native-rerun-merge-identity-20261029.md).
+
 ## Portable native authorization contract export, 2026-10-29
 
 - [x] Read actual Spec P1 and baseline/source evidence; coordinate P2-owned paths.
 - [x] Demonstrate missing exported executable contract RED (2 failed, 1 passed).
 - [x] Export stdlib tests of actual generated resolver and invoke before configured unit jobs.
-- [x] Verify 82 source contracts, 12 generated consumer tests, mutation RED and actionlint.
+- [x] Verify combined 117 source contracts + 33 subtests, 113 generated consumer tests, mutation RED and actionlint.
 - [ ] Hand exact local source evidence to root for publication; no external writes here.

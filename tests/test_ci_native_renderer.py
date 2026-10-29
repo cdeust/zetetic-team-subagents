@@ -218,6 +218,25 @@ def original_merge_job(delivered):
     return (text[:first] + original + text[last:]).encode()
 
 
+def original_event_jobs(delivered):
+    # Inverse of source.json adaptation "rerun-merge-job-identity".
+    return delivered.replace(
+        b"Keep the newest logical job, including jobs untouched by partial reruns.",
+        b"Keep the newest result per name, including jobs untouched by partial reruns.",
+    ).replace(
+        b"            # pipeline.yml gives its single merge job two review-dependent names.\n"
+        b"            # Source: cortex-vision PR5 discussion_r4408735600.\n"
+        b'            name = "merge" if job["name"] == "merge pending review" else job["name"]\n',
+        b"",
+    ).replace(
+        b"if name in names or", b'if job["name"] in names or',
+    ).replace(
+        b"names.add(name)", b'names.add(job["name"])',
+    ).replace(
+        b"effective.setdefault(name, job)", b'effective.setdefault(job["name"], job)',
+    )
+
+
 def original_asset(delivered, relative):
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
@@ -232,7 +251,7 @@ def original_asset(delivered, relative):
     if relative == "scripts/ci_codex_reviews.py":
         return original_security_reader(delivered)
     if relative == "scripts/ci_codex_review_event.py":
-        delivered = delivered.replace(
+        delivered = original_event_jobs(delivered).replace(
             b'    return head_proof(repo, number, run["head_sha"])\n\n\n'
             b"def head_proof(repo: str, number: int, sha: str) -> Record:",
             b'    sha = run["head_sha"]',
