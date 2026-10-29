@@ -282,6 +282,56 @@ class ScheduledReconciliationTests(unittest.TestCase):
         worker = self.invoke(server, flags=["--pr", "797", "--sha", SHA])
         self.assertEqual(json.loads(worker[1]), dict(action="review", job_id=20))
 
+    def test_review_held_pr_is_queued_and_resumed(self):
+        # Owner rule 2026-10-29: only the owner's holds stay out of the queue.
+        server = Server()
+        server.data["pull"]["labels"] = [{"name": "hold"}, {"name": "autopilot:hold"}]
+        result = self.invoke(server)
+        self.assertEqual(json.loads(result[1]), [dict(number=797, sha=SHA)])
+        worker = self.invoke(server, flags=["--pr", "797", "--sha", SHA])
+        self.assertEqual(json.loads(worker[1]), dict(action="merge", job_id=21))
+
+    def test_claude_verdict_arrival_resumes_the_pending_gate(self):
+        # Codex completed; the gate waits ("merge pending review") for Claude.
+        server = Server()
+        server.data["pull"]["labels"] = [{"name": "hold"}]
+        server.data["source"]["conclusion"] = "success"
+        server.data["jobs"][-1].update(name="merge pending review", conclusion="success", steps=[])
+        server.data["claude"] = False
+        self.assertEqual(json.loads(self.invoke(server)[1]), [])
+        server.data["claude"] = True  # the claude-review-verdict:v1 marker for the head
+        self.assertEqual(json.loads(self.invoke(server)[1]), [dict(number=797, sha=SHA)])
+        worker = self.invoke(server, flags=["--pr", "797", "--sha", SHA])
+        self.assertEqual(json.loads(worker[1]), dict(action="review", job_id=20))
+
+    def test_quota_wait_is_reconsidered_when_codex_comments_again(self):
+        # Rule D6: a usage-limit notice keeps the gate pending, not failed.
+        # source: cdeust/ai-architect-mcp-spec PR164 comment6497379059, verbatim.
+        notice = comment(comment_id=7, updated="2026-10-26T22:30:00Z")
+        notice["body"] = (
+            "You have reached your Codex usage limits for code reviews. You can see your "
+            "limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage)."
+        )
+        failed = state()
+        failed["code_review"].update(status="failed", has_any_findings=None,
+                                     has_unresolved_findings=None)
+        server = Server()
+        server.data["source"]["conclusion"] = "success"
+        server.data["jobs"][-1].update(name="merge pending review", conclusion="success", steps=[])
+        server.data["comments"] = [comment(failed), notice]
+        self.assertEqual(json.loads(self.invoke(server)[1]), [])
+        server.data["comments"] = [comment(updated="2026-10-26T23:00:00Z"), notice]
+        self.assertEqual(json.loads(self.invoke(server)[1]), [dict(number=797, sha=SHA)])
+        worker = self.invoke(server, flags=["--pr", "797", "--sha", SHA])
+        self.assertEqual(json.loads(worker[1]), dict(action="review", job_id=20))
+
+    def test_owner_label_hold_is_never_queued(self):
+        server = Server()
+        server.data["pull"]["labels"] = [{"name": "hold"}, {"name": "do-not-merge"}]
+        result = self.invoke(server)
+        self.assertEqual(json.loads(result[1]), [])
+        self.assertEqual(server.calls, [("discovery", True)])
+
     def test_discovery_does_not_repeat_live_pr_read(self):
         server = Server()
         result = self.invoke(server)

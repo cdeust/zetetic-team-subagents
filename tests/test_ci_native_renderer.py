@@ -86,7 +86,56 @@ def test_native_cli_preserves_configuration_and_unrelated_files(tmp_path):
     assert (tmp_path / ".github/workflows/Codex.yml").is_file()
 
 
+# Inverse of source.json adaptation "reviewer-agreement-lifts-review-holds".
+AGREEMENT_OUTPUT = (
+    b"        # Fixed identifiers only: the merge job names why a head cannot merge yet.\n"
+    b"        f\"reason={result['reason']}\\ncauses={','.join(result.get('causes', [result['reason']]))}\\n\"\n"
+)
+AGREEMENT_READER = (
+    (
+        "from ci_codex_review_comments import security_receipt  # noqa: E402\n"
+        "from ci_codex_review_agreement import conclude  # noqa: E402\n",
+        "from ci_codex_review_comments import BLOCKED_REASONS, BLOCKING, security_receipt"
+        "  # noqa: E402\n",
+    ),
+    (
+        "            return {**result, **conclude(None, comments, expected_sha)}\n",
+        "            return result\n",
+    ),
+    (
+        "        result.update(conclude(states, comments, expected_sha))  # Codex, then Claude.\n",
+        '        result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)\n'
+        '        result["state"] = (\n'
+        '            "blocked"\n'
+        "            if any(s in BLOCKING for s in states)\n"
+        '            else ("pending" if "pending" in states else "success")\n'
+        "        )\n"
+        '        result["reason"] = {\n'
+        '            "blocked": next((r for s, r in BLOCKED_REASONS if s in states), "review_unresolved"),\n'
+        '            "pending": "review_pending",\n'
+        '            "success": "reviews_complete",\n'
+        '        }[result["state"]]\n',
+    ),
+)
+AGREEMENT_EVENT_SOURCE = (
+    b"    # Owner rule 2026-10-29: hold and autopilot:hold wait for both reviewers, and\n"
+    b"    # the gate lifts them; only the owner's holds end resumption here.\n"
+    b'    if "do not merge" in title.casefold() or any(\n'
+    b'        label["name"].casefold() == "do-not-merge" for label in labels\n',
+    b'    if "do not merge" in title.casefold() or any(\n'
+    b'        label["name"].casefold() in ("hold", "do-not-merge") for label in labels\n',
+)
+
+
+def without_agreement(text, pairs):
+    for delivered, original in pairs:
+        assert text.count(delivered) == 1, delivered
+        text = text.replace(delivered, original)
+    return text
+
+
 def original_security_runtime(delivered):
+    delivered = without_agreement(delivered, [(AGREEMENT_OUTPUT, b"")])
     original = delivered.split(b"\n\n# Body and edit attribution", 1)[0]
     original = original.replace(b"from http import HTTPStatus\n", b"")
     first = original.index(b"class APIError(")
@@ -157,7 +206,7 @@ def original_security_receipt(original):
 
 
 def original_security_reader(delivered):
-    original = delivered.decode()
+    original = without_agreement(delivered.decode(), AGREEMENT_READER)
     original = original_security_receipt(original_reader_api(original))
     imported = (
         "from ci_codex_review_comments import _authenticate_editor, "
@@ -202,7 +251,17 @@ def original_security_reader(delivered):
 
 
 def original_review_job(delivered):
-    original = delivered.decode()
+    original = without_agreement(
+        delivered.decode(), [("      causes: ${{ steps.evidence.outputs.causes }}\n", "")]
+    )
+    first = original.index("          AGREEMENT_SOURCE = r'''\n")
+    last = original.index("          READER_SOURCE = r'''\n", first)
+    original = without_agreement(original[:first] + original[last:], [(
+        '          _agreement = ModuleType("ci_codex_review_agreement")\n'
+        '          exec(compile(AGREEMENT_SOURCE, "ci_codex_review_agreement.py", "exec"),'
+        " _agreement.__dict__)\n"
+        "          sys.modules[_agreement.__name__] = _agreement\n", "",
+    )])
     marker = "          COMMENTS_SOURCE = r'''\n"
     if marker in original:
         first = original.index(marker)
@@ -229,7 +288,97 @@ def original_review_job(delivered):
     return original.encode()
 
 
+def _resolve_block(text):
+    """A resolve-job excerpt at its YAML indentation (kept shallow here, §4)."""
+    return textwrap.indent(text, " " * 10).encode()
+
+
+AGREEMENT_RESOLVE = (
+    (
+        b"          from urllib.error import HTTPError, URLError\n"
+        b"          from urllib.parse import quote\n",
+        b"          from urllib.error import HTTPError, URLError\n",
+    ),
+    (
+        _resolve_block(
+            """\
+# Owner rule 2026-10-29: hold and autopilot:hold mean "reviews incomplete";
+# the source merge job read Codex and Claude agreeing on this head, so the
+# gate lifts them. do-not-merge and a "do not merge" title stay the owner's.
+# source: docs.github.com/en/rest/authentication/permissions-required-for-
+# fine-grained-personal-access-tokens lists issues labels DELETE under Pull requests (write).
+REVIEW_HOLDS = ("hold", "autopilot:hold")
+
+
+def _review_holds(pr):
+    require(
+        pr.get("state") == "open" and pr.get("draft") is False,
+        "PR is closed or draft",
+    )
+    require("do not merge" not in pr.get("title", "").lower(), "PR title holds merge")
+    names = [label.get("name", "") for label in pr.get("labels", [])]
+    require("do-not-merge" not in map(str.lower, names), "PR label holds merge")
+    return [name for name in names if name.lower() in REVIEW_HOLDS]
+
+
+def _merge_open_pr(pr, merge_path, head, api):
+    held = _review_holds(pr)
+    if held:
+        pr_path = merge_path.removesuffix("/merge")
+        labels = pr_path.replace("/pulls/", "/issues/") + "/labels/"
+        for name in held:
+            api.request("DELETE", labels + quote(name, safe=""))
+        pr = api.request("GET", pr_path)
+        require(pr.get("head", {}).get("sha") == head, "PR head advanced after testing")
+        require(not _review_holds(pr), "PR label holds merge")
+"""
+        ),
+        _resolve_block(
+            """\
+def _merge_open_pr(pr, merge_path, head, api):
+    require(
+        pr.get("state") == "open" and pr.get("draft") is False,
+        "PR is closed or draft",
+    )
+    require("do not merge" not in pr.get("title", "").lower(), "PR title holds merge")
+    require(
+        not any(
+            label.get("name", "").lower() in ("hold", "do-not-merge")
+            for label in pr.get("labels", [])
+        ),
+        "PR label holds merge",
+    )
+"""
+        ),
+    ),
+)
+AGREEMENT_MERGE = (
+    ("          REVIEW_CAUSES: ${{ needs.review.outputs.causes }}\n", ""),
+    (
+        """          # Owner rule 2026-10-29: hold and autopilot:hold mean "reviews incomplete".
+          # They stay while a reviewer has no verdict for this head; once Codex and
+          # Claude agree, the resolve job lifts them and merges.
+          holds="$(jq -r '[.labels[].name | select(ascii_downcase == "hold" or ascii_downcase == "autopilot:hold")] | join(", ")' <<<"$live")"
+          if [ "$REVIEW_STATE" = pending ]; then
+            echo "## Tests passed; reviews pending for #$PR at $HEAD_SHA: ${REVIEW_CAUSES:-unnamed}" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$holds" ]; then echo "Review hold kept ($holds): ${REVIEW_CAUSES:-unnamed}." >> "$GITHUB_STEP_SUMMARY"; fi
+          else
+            echo "## Merge: gate passed for #$PR at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$holds" ]; then echo "Codex and Claude agree on this head; resolve lifts $holds and merges." >> "$GITHUB_STEP_SUMMARY"; fi
+          fi
+""",
+        """          if [ "$REVIEW_STATE" = pending ]; then
+            echo "## Tests passed; native Codex reviews pending for #$PR at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Merge: gate passed for #$PR at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          fi
+""",
+    ),
+)
+
+
 def original_resolve_job(delivered):
+    delivered = without_agreement(delivered, AGREEMENT_RESOLVE)
     # Inverse of source.json adaptation "post-merge-merge-alias".
     folded = (
         b"                  # The single merge job has two review-dependent display names;\n"
@@ -245,8 +394,8 @@ def original_resolve_job(delivered):
 
 
 def original_merge_job(delivered):
+    text = without_agreement(delivered.decode(), AGREEMENT_MERGE)
     # Inverse of source.json adaptation "merge-condition-diagnostics".
-    text = delivered.decode()
     live = 'live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)" ||\n            { echo "::error::PR state is unreadable."; exit 1; }\n'
     text = text.replace(live, live.split(" ||")[0] + "\n", 1)
     first = text.index("          # Name the failing condition:")
@@ -304,6 +453,16 @@ def without_fetch_authorization(delivered):
     return delivered[:first] + delivered[last:]
 
 
+def original_event_source(delivered):
+    delivered = without_agreement(delivered, [AGREEMENT_EVENT_SOURCE])
+    # Inverse of source.json adaptation "receipt-event-resumption".
+    return delivered.replace(
+        b"from ci_codex_review_comments import RECEIPT\n", b""
+    ).replace(
+        b'item["body"].startswith((SUMMARY, RECEIPT))', b'item["body"].startswith(SUMMARY)'
+    )
+
+
 def original_asset(delivered, relative):
     if relative.endswith(("/claude-review.yml", "/claude.yml")):
         delivered = without_fetch_authorization(delivered)
@@ -316,12 +475,7 @@ def original_asset(delivered, relative):
         last = original.index(b"\npermissions:\n", first)
         return original[:first] + original[last:]
     if relative == "scripts/ci_codex_review_event_source.py":
-        # Inverse of source.json adaptation "receipt-event-resumption".
-        return delivered.replace(
-            b"from ci_codex_review_comments import RECEIPT\n", b""
-        ).replace(
-            b'item["body"].startswith((SUMMARY, RECEIPT))', b'item["body"].startswith(SUMMARY)'
-        )
+        return original_event_source(delivered)
     if relative == "scripts/ci_codex_review_runtime.py":
         return original_security_runtime(delivered)
     if relative == "scripts/ci_codex_reviews.py":
@@ -467,6 +621,7 @@ def test_native_inline_codex_readers_match_the_delivered_scripts(tmp_path):
     for variable, filename in (
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
         ("COMMENTS_SOURCE", "ci_codex_review_comments.py"),
+        ("AGREEMENT_SOURCE", "ci_codex_review_agreement.py"),
         ("READER_SOURCE", "ci_codex_reviews.py"),
     ):
         embedded = command.split(variable + " = r'''\n", 1)[1].split("\n'''", 1)[0]
@@ -478,6 +633,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
     from types import ModuleType
     from unittest.mock import patch
     from test_ci_native_editor import comment, page, SHA, REPO, PR
+    from test_ci_native_hold_lift import claude_row
 
     files = renderer.prepare_files(tmp_path, native_review=True)
     loaded = {}
@@ -485,6 +641,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
         for name in (
             "ci_codex_review_runtime",
             "ci_codex_review_comments",
+            "ci_codex_review_agreement",
             "ci_codex_reviews",
         ):
             module = ModuleType(name)
@@ -495,9 +652,10 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
             exec(compile(source, module.__file__, "exec"), module.__dict__)
             sys.modules[name] = module
             loaded[name] = module
-        runtime, comments, reader = loaded.values()
+        runtime, comments, _, reader = loaded.values()
         assert comments.EvidenceError is runtime.EvidenceError
-        assert reader.review_evidence([comment()], SHA, REPO, PR)["state"] == "success"
+        rows = [comment(), claude_row(SHA)]  # Codex and Claude agree on the head.
+        assert reader.review_evidence(rows, SHA, REPO, PR)["state"] == "success"
         rows = runtime._comment_pages([page([comment()])], SHA, PR)
         assert rows[0]["body"] == comment()["body"]
         with pytest.raises(runtime.EvidenceError):

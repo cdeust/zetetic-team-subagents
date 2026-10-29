@@ -267,7 +267,10 @@ def row(identity, body, **fields):
 
 class SecurityReceiptTests(unittest.TestCase):
     def evidence(self, rows, sha=VIZ_SHA):
-        return reader().review_evidence(rows, sha, REPO, PR)
+        # Owner rule 2026-10-29: a mergeable head also carries Claude's verdict.
+        from test_ci_native_hold_lift import claude_row
+
+        return reader().review_evidence([*rows, claude_row(sha)], sha, REPO, PR)
 
     def assert_outcome(self, result, state, reason):
         self.assertEqual((result["state"], result["reason"]), (state, reason))

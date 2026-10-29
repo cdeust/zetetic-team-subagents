@@ -16,6 +16,7 @@ from codex_resume_fixtures import (
     comment,
     pull,
     summary_pages,
+    with_claude,
 )
 from test_ci_codex_review_resume import jobs
 
@@ -151,11 +152,11 @@ class Server:
             raise AssertionError("unexpected GraphQL query")
         if "reviewThreads(" in fields["query"]:
             return [self.data["threads"]]
-        return summary_pages(
-            [self.data["comments"]],
-            number=fields["number"],
-            sha=self.data["pull"]["head"]["sha"],
-        )
+        sha = self.data["pull"]["head"]["sha"]
+        rows = self.data["comments"]
+        if self.data.get("claude", True):
+            rows = with_claude(rows, sha)
+        return summary_pages([rows], number=fields["number"], sha=sha)
 
 
 def invoke(server, name="issue_comment", payload=None, expected=797):
