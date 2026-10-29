@@ -40,6 +40,16 @@
         "https://docs.github.com/en/actions/reference/security/secure-use"
       ]
     },
+    "dependabot-secret-scope": {
+      "condition": "github.actor != 'dependabot[bot]'",
+      "allowed_bots_removed": "dependabot[bot]",
+      "reason": "A Dependabot-triggered run receives Dependabot secrets only, so the review failed before any model call (cortex-viz run40819127887, PR212: Secret source Dependabot, empty CLAUDE_CODE_OAUTH_TOKEN, environment validation failed). Skip it as the legacy review job does; a person's push to the branch still runs the review.",
+      "sources": [
+        "https://docs.github.com/en/code-security/dependabot/troubleshooting-dependabot/troubleshooting-dependabot-on-github-actions",
+        "https://github.com/cdeust/cortex-viz/actions/runs/40819127887",
+        "docs/superpowers/specs/2026-10-22-single-ci-design.md decision 5: no Dependabot secret is created"
+      ]
+    },
     "locked-cli": {
       "version": "2.1.306",
       "prefix": ".github/claude-cli",
@@ -205,12 +215,13 @@
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "aebc2a9ce66e8dcee4ce34dc52a6bb6bf29900f082463bd48b726b30e7d90dd4",
+      "sha256": "7e1a27608bb8dd5ee1147f02fb1ec02d09e38ff5fe13f28cd52b405595fd5584",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
         "owner-model-selection",
         "private-repo-fetch",
+        "dependabot-secret-scope",
         "claude-review-verdict-marker"
       ]
     },

@@ -11,9 +11,13 @@ permissions: {}
 jobs:
   review:
     name: Claude review
+    # A Dependabot-triggered run receives Dependabot secrets only, never the
+    # Actions OAuth token: skip it, as the legacy review job does. A push by a
+    # person to the same branch runs this review with the Actions secrets.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.pull_request.draft
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,7 +59,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Native progress/final publication; pinned action restores base config.
           track_progress: true
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
           prompt: |
             /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}
             Complete all five reviews using foreground agents and wait for their actual reports.

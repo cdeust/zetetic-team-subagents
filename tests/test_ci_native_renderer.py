@@ -518,6 +518,39 @@ def original_event_source(delivered):
     )
 
 
+def original_claude_review(original):
+    """Inverse of every claude-review.yml adaptation after the shared ones."""
+    original = original.replace(
+        b"    # A Dependabot-triggered run receives Dependabot secrets only, never the\n"
+        b"    # Actions OAuth token: skip it, as the legacy review job does. A push by a\n"
+        b"    # person to the same branch runs this review with the Actions secrets.\n",
+        b"",
+    ).replace(b"\n      && github.actor != 'dependabot[bot]'\n", b"\n")
+    original = original.replace(
+        b'allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"',
+        b'allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"',
+    )
+    # Inverse of source.json adaptation "claude-review-verdict-marker".
+    marker = (
+        b"            End the completion summary with this exact last line, unchanged except"
+        b" `true` becomes `false` when any finding blocks the merge:\n"
+        b'            <!-- claude-review-verdict:v1 {"head":"${{ github.event.pull_request.head.sha }}","merge":true} -->\n'
+    )
+    assert original.count(marker) == 1
+    original = original.replace(marker, b"")
+    original = original.replace(b"  pull_request:\n", b"  pull_request_target:\n")
+    original = original.replace(b"      id-token: write\n", b"")
+    original = original.replace(
+        b"          claude_code_oauth_token:",
+        b"          github_token: ${{ secrets.GITHUB_TOKEN }}\n          claude_code_oauth_token:",
+    )
+    original = original.replace(
+        b"# Native App OIDC auth on same-repository PRs; main checkout retained.",
+        b"# Trusted-base variant: upstream docs/security.md. Auth: upstream issue713.",
+    )
+    return original
+
+
 def original_asset(delivered, relative):
     if relative.endswith(("/claude-review.yml", "/claude.yml")):
         delivered = without_fetch_authorization(delivered)
@@ -733,3 +766,16 @@ def test_native_claude_uses_app_oidc_and_a_main_checkout(tmp_path):
     assert job["steps"][0]["with"]["ref"] == "main"
     assert "head.repo.full_name == github.repository" in job["if"]
     assert "!github.event.pull_request.draft" in job["if"]
+
+
+def test_native_claude_review_skips_dependabot_runs_without_actions_secrets(tmp_path):
+    # source: cortex-viz run40819127887 (PR212) logged "Secret source: Dependabot",
+    # an empty CLAUDE_CODE_OAUTH_TOKEN and "Environment variable validation failed".
+    # GitHub: a workflow run triggered by Dependabot receives only Dependabot secrets.
+    # Same rule as the legacy review job (test_ci_template dependabot skip).
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    document = yaml.safe_load(files[tmp_path / ".github/workflows/claude-review.yml"])
+    job = document["jobs"]["review"]
+    assert "github.actor != 'dependabot[bot]'" in job["if"]
+    bots = job["steps"][-1]["with"]["allowed_bots"].split(",")
+    assert bots == ["claude[bot]", "chatgpt-codex-connector[bot]"]
