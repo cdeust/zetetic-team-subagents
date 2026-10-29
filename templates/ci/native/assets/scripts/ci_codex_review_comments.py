@@ -10,13 +10,28 @@ from datetime import datetime
 import re
 from typing import Any
 
-from ci_codex_review_runtime import EvidenceError, _api
-
 Record = dict[str, Any]
 # Source: native Codex summary6456275844 on2026-10-28.
 BOT = "chatgpt-codex-connector[bot]"
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
 STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+def _runtime():
+    """The runtime module, resolved on use: runtime imports this module lazily too."""
+    import ci_codex_review_runtime as runtime  # noqa: PLC0415 - keeps the import graph acyclic
+
+    return runtime
+
+
+def _api(*args: Any, **kwargs: Any) -> Any:
+    return _runtime()._api(*args, **kwargs)
+
+
+def __getattr__(name: str) -> Any:
+    if name == "EvidenceError":
+        return _runtime().EvidenceError
+    raise AttributeError(name)
 
 
 def _canonical(comment: Any) -> bool:
@@ -44,28 +59,28 @@ def _bot_author(comment: Record) -> bool:
 def _authenticate_editor(comment: Record) -> None:
     # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
     if "editor" not in comment or "lastEditedAt" not in comment:
-        raise EvidenceError("editor")
+        raise _runtime().EvidenceError("editor")
     identity = comment.get("user", {}).get("node_id")
     if not isinstance(identity, str) or not identity:
-        raise EvidenceError("editor")
+        raise _runtime().EvidenceError("editor")
     editor, edited = comment["editor"], comment["lastEditedAt"]
     if edited is None:
         if editor is not None:
-            raise EvidenceError("editor")
+            raise _runtime().EvidenceError("editor")
         return
     if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
-        raise EvidenceError("editor")
+        raise _runtime().EvidenceError("editor")
     try:
         datetime.fromisoformat(edited.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise EvidenceError("editor") from exc
+        raise _runtime().EvidenceError("editor") from exc
     if (
         not isinstance(editor, dict)
         or editor.get("__typename") != "Bot"
         or editor.get("login") != "chatgpt-codex-connector"
         or editor.get("id") != identity
     ):
-        raise EvidenceError("editor")
+        raise _runtime().EvidenceError("editor")
 
 
 # Source: native receipts6491350304 (cortex-viz PR213) and6491478435 (Cortex
@@ -122,7 +137,7 @@ def _receipt_head(repo: str, named: str) -> str | None:
         return named
     try:
         commit = _api(f"repos/{repo}/commits/{named}")
-    except EvidenceError:
+    except _runtime().EvidenceError:
         return None
     full = commit.get("sha") if isinstance(commit, dict) else None
     if not isinstance(full, str) or re.fullmatch(r"[0-9a-f]{40}", full) is None:
@@ -203,13 +218,13 @@ def _comment_row(node: Any) -> Record:
             "lastEditedAt",
         )
     ):
-        raise EvidenceError("protocol")
+        raise _runtime().EvidenceError("protocol")
     identity = node["databaseId"]
     if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
-        raise EvidenceError("protocol")
+        raise _runtime().EvidenceError("protocol")
     author = node["author"] or {}
     if not isinstance(author, dict):
-        raise EvidenceError("protocol")
+        raise _runtime().EvidenceError("protocol")
     login, kind = author.get("login"), author.get("__typename")
     if login == "chatgpt-codex-connector" and kind == "Bot":
         login = "chatgpt-codex-connector[bot]"
@@ -225,40 +240,40 @@ def _comment_row(node: Any) -> Record:
 
 def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
     if not isinstance(pages, list) or not pages:
-        raise EvidenceError("protocol")
+        raise _runtime().EvidenceError("protocol")
     rows, identities, cursors = [], set(), set()
     try:
         for index, page in enumerate(pages):
             if page.get("errors"):
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             pull = page["data"]["repository"]["pullRequest"]
             if pull["headRefOid"] != sha:
-                raise EvidenceError("head_moved")
+                raise _runtime().EvidenceError("head_moved")
             if type(pull["number"]) is not int or pull["number"] != pr:
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             connection = pull["comments"]
             more, cursor = (
                 connection["pageInfo"][key] for key in ("hasNextPage", "endCursor")
             )
             if type(more) is not bool or more != (index < len(pages) - 1):
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             if cursor is not None and (not isinstance(cursor, str) or not cursor):
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             if more and (cursor is None or cursor in cursors):
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             cursors.add(cursor)
             if not isinstance(connection["nodes"], list):
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             current = [_comment_row(node) for node in connection["nodes"]]
             current_ids = [row["id"] for row in current]
             if len(set(current_ids)) != len(current_ids) or identities.intersection(
                 current_ids
             ):
-                raise EvidenceError("protocol")
+                raise _runtime().EvidenceError("protocol")
             identities.update(current_ids)
             rows.extend(current)
     except (KeyError, TypeError, AttributeError) as exc:
-        raise EvidenceError("protocol") from exc
+        raise _runtime().EvidenceError("protocol") from exc
     return rows
 
 
