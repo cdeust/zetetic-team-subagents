@@ -37,7 +37,7 @@ def run_eligibility(jobs, tmp_path, payload, rc="0"):
     result = execute(
         script,
         tmp_path,
-        {"FIXTURE_PR": payload, "FIXTURE_VIEW_RC": rc, "REVIEW_STATE": "success"},
+        {"FIXTURE_PR": payload, "FIXTURE_VIEW_RC": rc, "HEAD_SHA": SHA, "REVIEW_STATE": "success"},
         GH_STUB,
     )
     return result.returncode, result.stdout
@@ -68,22 +68,40 @@ def test_red_merge_names_the_condition_that_failed(jobs, tmp_path, changes, caus
     assert f"::error::PR {cause}." in out
 
 
-@pytest.mark.parametrize("payload", ["", "   ", "\n\t"], ids=["empty", "spaces", "blank"])
-def test_empty_payload_from_gh_is_refused_not_passed(jobs, tmp_path, payload):
-    # Fail-open before: `jq -r` prints nothing for empty input, so no cause was
-    # found and the step passed with rc=0. The base template exited 1 here.
+@pytest.mark.parametrize(
+    "payload",
+    ["", "   ", "\n\t", "\ufeff", "\ufeff  \n"],
+    ids=["empty", "spaces", "blank", "bom", "bom-blank"],
+)
+def test_payload_without_a_value_is_refused_not_passed(jobs, tmp_path, payload):
+    # Fail-open before: jq prints nothing for these inputs (it skips a BOM), so
+    # no cause was found and the step passed with rc=0. The single-sentence form
+    # (`jq -e`, rc=4) failed here.
     code, out = run_eligibility(jobs, tmp_path, payload)
     assert code == 1
     assert "::error::PR state is unreadable." in out
 
 
+# Characterization, green on e4c16fc by construction: a future `|| true` or
+# `2>/dev/null` around jq would break these.
 @pytest.mark.parametrize("payload", ["not json", "{"], ids=["text", "truncated"])
 def test_unparsable_payload_from_gh_is_refused(jobs, tmp_path, payload):
-    assert run_eligibility(jobs, tmp_path, payload)[0] == 1
+    code, out = run_eligibility(jobs, tmp_path, payload)
+    assert code == 1
+    assert "::error::PR state is unreadable." in out
 
 
-def test_failed_gh_read_is_refused(jobs, tmp_path):
-    assert run_eligibility(jobs, tmp_path, json.dumps(pull()), rc="1")[0] == 1
+@pytest.mark.parametrize("rc", ["1", "4"])
+def test_failed_gh_read_is_refused_and_named(jobs, tmp_path, rc):
+    # rc=4 failed on e4c16fc with rc=4 and no annotation.
+    code, out = run_eligibility(jobs, tmp_path, json.dumps(pull()), rc=rc)
+    assert code == 1
+    assert "::error::PR state is unreadable." in out
+
+
+def test_two_json_documents_are_refused(jobs, tmp_path):
+    two = json.dumps(pull()) + "\n" + json.dumps(pull())
+    assert run_eligibility(jobs, tmp_path, two)[0] == 1
 
 
 # Characterization of the native `resolve` job (pipeline-post-merge.yml). Green on
@@ -96,7 +114,8 @@ MATRIX = [f"{kind} ({runner})" for kind in ("environment", "install") for runner
 
 def resolver(jobs, tmp_path):
     """The native resolve job's inline source, loaded as a module."""
-    command = jobs["resolve"]["steps"][0]["run"]
+    step = next(s for s in jobs["resolve"]["steps"] if s.get("name") == "Resolve protected merge")
+    command = step["run"]
     source = heredoc(command, "python3")
     module = ModuleType("native_resolve")
     module.__file__ = str(tmp_path / "native_resolve.py")

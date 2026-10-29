@@ -195,8 +195,10 @@ def original_review_job(delivered):
 def original_merge_job(delivered):
     # Inverse of source.json adaptation "merge-condition-diagnostics".
     text = delivered.decode()
+    live = 'live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)" ||\n            { echo "::error::PR state is unreadable."; exit 1; }\n'
+    text = text.replace(live, live.split(" ||")[0] + "\n", 1)
     first = text.index("          # Name the failing condition:")
-    last = text.index("          if [ -n \"$cause\" ]; then\n", first)
+    last = text.index("          if [ \"$cause\" != eligible ]; then\n", first)
     last = text.index("          fi\n", last) + len("          fi\n")
     original = (
         '          if ! jq -e --arg sha "$HEAD_SHA" \'\n'

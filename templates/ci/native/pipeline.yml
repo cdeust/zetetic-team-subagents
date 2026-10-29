@@ -1813,21 +1813,22 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REVIEW_STATE: ${{ needs.review.outputs.state }}
         run: |
-          live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)"
+          live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)" ||
+            { echo "::error::PR state is unreadable."; exit 1; }
           # Name the failing condition: one shared message hid a deliberate
           # "do not merge" hold behind "no longer at the tested head" (Cortex run
-          # 40583904933). An empty read is refused: jq prints nothing for it.
-          [ -n "${live//[[:space:]]/}" ] || { echo "::error::PR state is unreadable."; exit 1; }
-          cause="$(jq -r --arg sha "$HEAD_SHA" '
+          # 40583904933). Only the value "eligible" passes: an empty, blank or
+          # BOM-only read makes jq print nothing, which `-e` turns into a failure.
+          cause="$(jq -er --arg sha "$HEAD_SHA" '
             if .state != "OPEN" then "is not open (\(.state))"
             elif .isDraft != false then "is a draft"
             elif .headRefOid != $sha then "head moved: tested \($sha), live \(.headRefOid)"
             elif (.title | ascii_downcase | contains("do not merge")) then "is held by title"
             elif ([.labels[].name | ascii_downcase] | any(. == "hold" or . == "do-not-merge")) then "is held by label"
-            else "" end
+            else "eligible" end
           ' <<<"$live")" || { echo "::error::PR state is unreadable."; exit 1; }
-          if [ -n "$cause" ]; then
-            echo "::error::PR $cause."
+          if [ "$cause" != eligible ]; then
+            echo "::error::PR ${cause:-state is unreadable}."
             exit 1
           fi
           if [ "$REVIEW_STATE" = pending ]; then

@@ -49,8 +49,10 @@ Findings that matter:
 
 Changed: the merge job's "Verify live PR eligibility" step names the first failing
 condition (not open with its state, draft, head moved with both SHAs, held by
-title, held by label). The set of conditions that fail is identical, so no gate
-decision moves. Tests: `tests/test_ci_native_gate.py`. Receipt entry:
+title, held by label). The step passes only on the value `eligible`, and a failed `gh`
+read or a jq result that is empty (empty, blank or BOM-only payload) is refused as
+unreadable; the conditions that fail are those of the single-sentence form plus
+multiple jq results. Tests: `tests/test_ci_native_gate.py`. Receipt entry:
 `merge-condition-diagnostics` in `templates/ci/native/source.json`; `merge`
 moves from `jobs` to `adapted_jobs`.
 
