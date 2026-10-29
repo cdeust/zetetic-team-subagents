@@ -49,7 +49,8 @@ def test_native_keeps_common_jobs_and_separates_both_reviewers(tmp_path):
     assert "CODEX_COMPLETION_ONLY" in review
     claude = yaml.safe_load(files[tmp_path / ".github/workflows/claude-review.yml"])
     assert set(claude[True]) == {"pull_request"}
-    assert claude["jobs"]["review"]["steps"][-1]["with"]["track_progress"] is True
+    action = next(s for s in claude["jobs"]["review"]["steps"] if s.get("name") == "PR Review")
+    assert action["with"]["track_progress"] is True
     assert (
         "security-code-reviewer"
         in files[tmp_path / ".claude/commands/review-pr.md"].decode()
@@ -285,6 +286,12 @@ def original_event_jobs(delivered):
 
 
 def original_claude_owner(delivered):
+    # Inverse of source.json adaptation "owner-mention-concurrency".
+    delivered = cut_block(
+        delivered,
+        b"    # Run one owner request per thread at a time (Cortex #822). Without\n",
+        b"    runs-on: ubuntu-latest\n",
+    )
     first = delivered.index(b"      - name: Authorize owner fix target\n")
     last = delivered.index(b"      - uses: actions/checkout@", first)
     delivered = delivered[:first] + delivered[last:]
@@ -298,6 +305,45 @@ def original_claude_owner(delivered):
     return re.sub(rb'            --append-system-prompt "[^\n]+\n', b"", delivered)
 
 
+def cut_block(delivered, first, last):
+    """Remove the one block from `first` up to, not including, `last`."""
+    assert delivered.count(first) == 1, first
+    start = delivered.index(first)
+    end = delivered.index(last, start)
+    return delivered[:start] + delivered[end:]
+
+
+def without_review_procedure_tools(delivered):
+    # Inverse of source.json adaptation "native-review-procedure-tools".
+    delivered = cut_block(
+        delivered,
+        b"      # The pinned action installs its github_ci tools (Pipeline logs of this\n",
+        b"    steps:\n",
+    )
+    delivered = cut_block(
+        delivered,
+        b"      # The reviewer runs the tests that cover the change; a repository that\n",
+        b"      - name: PR Review\n",
+    )
+    delivered = cut_block(delivered, b"        id: claude_review\n", b"        uses: ")
+    delivered = cut_block(delivered, b"          show_full_output: false\n", b"          allowed_bots:")
+    delivered = cut_block(
+        delivered,
+        b"            Review head ${{ github.event.pull_request.head.sha }}",
+        b"            Complete all five reviews",
+    )
+    namer = b"      # show_full_output stays false (the output can quote the code under\n"
+    assert delivered.count(namer) == 1
+    delivered = delivered[: delivered.index(namer)]  # The namer step ends the file.
+    tools = re.findall(rb'            --allowedTools "[^\n]+\n', delivered)
+    assert len(tools) == 1
+    return delivered.replace(
+        tools[0],
+        b'            --allowedTools "mcp__github_inline_comment__create_inline_comment,'
+        b'Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"\n',
+    )
+
+
 def without_fetch_authorization(delivered):
     first = delivered.index(b"      # source: pinned action src/modes/tag/index.ts#L79")
     last = delivered.index(b"      - name: Install subprocess isolation\n", first)
@@ -305,6 +351,8 @@ def without_fetch_authorization(delivered):
 
 
 def original_asset(delivered, relative):
+    if relative.endswith("/claude-review.yml"):
+        delivered = without_review_procedure_tools(delivered)
     if relative.endswith(("/claude-review.yml", "/claude.yml")):
         delivered = without_fetch_authorization(delivered)
     if relative == ".github/workflows/Codex.yml":
@@ -518,7 +566,8 @@ def test_native_claude_uses_app_oidc_and_a_main_checkout(tmp_path):
     document = yaml.safe_load(files[tmp_path / ".github/workflows/claude-review.yml"])
     job = document["jobs"]["review"]
     assert job["permissions"].get("id-token") == "write"
-    assert "github_token" not in job["steps"][-1]["with"]
+    action = next(s for s in job["steps"] if s.get("name") == "PR Review")
+    assert "github_token" not in action["with"]
     assert job["steps"][0]["with"]["ref"] == "main"
     assert "head.repo.full_name == github.repository" in job["if"]
     assert "!github.event.pull_request.draft" in job["if"]

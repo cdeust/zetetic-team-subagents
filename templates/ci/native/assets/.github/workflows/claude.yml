@@ -22,6 +22,13 @@ jobs:
       || (github.event_name == 'issues'
        && github.event.issue.user.login == github.repository_owner
        && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))))
+    # Run one owner request per thread at a time (Cortex #822). Without
+    # `queue: max`, which the pinned actionlint 1.7.12 rejects, a thread keeps
+    # one pending request and a newer one replaces it.
+    # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+    concurrency:
+      group: claude-mentions-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write

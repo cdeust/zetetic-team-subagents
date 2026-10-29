@@ -174,7 +174,14 @@ OAuth token and `allowed_bots`:
    `Bash(gh:*)`, and the repository's test runners (python3, pytest, uv,
    npm, npx, pnpm, cargo, bash). Checkout with `fetch-depth: 0` on the PR
    head (same-repo PRs only, as in the action's own
-   `examples/ci-failure-auto-fix.yml`).
+   `examples/ci-failure-auto-fix.yml`). Amended 2026-10-29: Fix runs only
+   when a test job of the run (`contract` and the five categories, all in
+   `review`'s `needs`) has the result `failure`, the run is not cancelled
+   and no earlier step failed; the bootstrap guard (workflow PR not authored
+   by the owner) still skips it. On run 40862677865 every test job was
+   green, Fix still applied a review finding and pushed e1dcc25, and that
+   push cancelled the run. Review findings on a green run stay as comments
+   (`docs/verification/native-review-tools-fix-guard-20261029.md`).
 
 A push by the bot is a `synchronize` event: the pipeline runs again from
 `contract`. On that run the head commit's author is the bot, so `review`

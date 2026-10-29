@@ -158,27 +158,48 @@
       ],
       "evidence": "cdeust/ci-autonome job 123331564638: git fetch origin --depth=20 <head> failed with could not read Username on a private repository; cdeust/Cortex job 123333637093 (public, same template) fetched anonymously.",
       "reason": "The pinned action fetches through origin before installing its App token. Keep persist-credentials false and give that fetch the job token as a local http extraheader, which the action unsets before Claude runs."
+    },
+    "owner-mention-concurrency": {
+      "repository": "cdeust/Cortex",
+      "commit": "3aef5b590c839a0b2a46267a20477785490f691c",
+      "sources": [
+        "https://github.com/cdeust/Cortex/pull/822",
+        "https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency"
+      ],
+      "reason": "Cortex #822 serialized owner @claude requests per issue or PR (group claude-mentions-<issue number>, cancel-in-progress false) so two bot sessions never push one branch at once. The pinned source 8e7375bf predates #822, and owner-fix-permissions (#218) ported the permissions of #822 without this block. issue_comment and issues both carry github.event.issue.number. Cortex also sets queue: max; the pinned actionlint 1.7.12 rejects that key, so a thread keeps one pending request and a newer one replaces it. It does not stop pushes from outside the workflow."
+    },
+    "native-review-procedure-tools": {
+      "sources": [
+        "https://github.com/cdeust/zetetic-team-subagents/pull/211",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/mcp/install-mcp-server.ts#L170-L210",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/mcp/github-actions-server.ts",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/action.yml#L156-L175"
+      ],
+      "evidence": "25 native reviews read on 2026-10-29 (Cortex 9, cortex-viz 7, ai-architect-mcp-spec 5, ci-autonome 3, claude-mods 1) ran 9 to 29 turns in 58 to 392 s with 0 to 10 permission denials each (24 of 25 had at least one), and the Cortex PR834 summary lists the five reviewer agents as run; Cortex PR834 (run 40845641264): 'I read the code but did not run the tests: the sandbox does not allow pytest'; ci-autonome runs 40861917132, 40862246883, 40864021078 logged 'The github_ci MCP server requires actions: read permission'.",
+      "reason": "Port of #211 to the native review: approve the test runners and read-only git, declare Agent for the five subagents (not gated by --allowedTools in CLI 2.1.312), grant actions: read so the action installs its github_ci tools for the Pipeline logs of the head, install requirements-dev.lock by hash (the main checkout's lock; the action checks out the head afterwards), require the whole diff, changed files, their tests and the Pipeline logs before a verdict, report no findings only when every step ran, pin show_full_output false and name a failed review by its result fields only. Nothing that edits or pushes is approved."
     }
   },
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "39a843f9682902fd5131c59d66361af523f960747f1ee5ae2a76f27212ccca44",
+      "sha256": "3b6d9df71b397a1f875a2103764bad2811337f103aedfbeab3f996ec3ac29b50",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
         "owner-model-selection",
-        "private-repo-fetch"
+        "private-repo-fetch",
+        "native-review-procedure-tools"
       ]
     },
     ".github/workflows/claude.yml": {
       "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
-      "sha256": "a639c9c18b345025a0f3b956e4e02e2f58b089c82edeb224833cc38338ba51e6",
+      "sha256": "13a5d04c1d3d8410a59b255bd4232303793f9b2243df3cff1f6f6abfc1dfc011",
       "adaptation": [
         "strict-mcp-config",
         "owner-model-selection",
         "owner-fix-permissions",
-        "private-repo-fetch"
+        "private-repo-fetch",
+        "owner-mention-concurrency"
       ]
     },
     "scripts/ci_codex_review_runtime.py": {

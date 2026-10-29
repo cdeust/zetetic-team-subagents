@@ -78,7 +78,7 @@ def test_untrusted_review_gets_no_ssh_or_write_tools(tmp_path):
     assert job["permissions"]["contents"] == "read"
     assert "head.repo.full_name == github.repository" in job["if"]
     assert "CI_AGENT_SSH_KEY" not in str(workflow)
-    action = job["steps"][-1]
+    action = next(s for s in job["steps"] if s.get("name") == "PR Review")
     args = shlex.split(action["with"]["claude_args"])
     tools = set(args[args.index("--allowedTools") + 1].split(","))
     assert not tools & {"Edit", "Write", "MultiEdit", "Bash", "Bash(git:*)"}
@@ -96,3 +96,21 @@ def test_automatic_fix_has_workspace_permission_and_can_render_workflows():
     assert "render-ci" in prompt
     assert "canonical" in prompt
     assert "never push main" in prompt
+
+
+def test_owner_mentions_run_one_at_a_time_per_thread(tmp_path):
+    # Cortex #822 (3aef5b59) serialized owner @claude requests per issue or PR
+    # so two bot sessions never push the same branch at once; #218 ported its
+    # permissions without this block. issue_comment and issues both carry
+    # github.event.issue.number (a PR comment's issue is the PR). Cortex also
+    # sets queue: max, which the pinned actionlint 1.7.12 rejects.
+    # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+    workflow = owner_workflow(tmp_path)
+    assert set(workflow[True]) == {"issue_comment", "issues"}
+    job = workflow["jobs"]["claude"]
+    assert job["concurrency"] == {
+        "group": "claude-mentions-${{ github.event.issue.number }}",
+        "cancel-in-progress": False,
+    }
+    assert "concurrency" not in workflow
+    assert job["steps"][0]["name"] == "Authorize owner fix target"

@@ -70,7 +70,8 @@ def test_the_jobs_chain_in_dependency_order(workflow):
     chain = ["unit", "regression", "e2e", "environment", "install"]
     for previous, job in zip(chain, chain[1:]):
         assert jobs[job]["needs"] == ["contract", previous], job
-    assert jobs["review"]["needs"] == chain
+    # Fix repairs a failed contract too, so review reads its result (run 40862677865).
+    assert jobs["review"]["needs"] == ["contract", *chain]
     assert sorted(jobs["merge"]["needs"]) == sorted(["contract", "unit", "regression", "e2e", "environment", "install", "review"])
     assert jobs["tag"]["needs"] == ["contract", *chain]
 

@@ -19,6 +19,9 @@ jobs:
       contents: read
       pull-requests: write
       id-token: write
+      # The pinned action installs its github_ci tools (Pipeline logs of this
+      # head) only when the workflow token can read Actions.
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,7 +50,17 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           bwrap --version
+      # The reviewer runs the tests that cover the change; a repository that
+      # declares hashed dev dependencies gets them on PATH. This is the lock of
+      # the main checkout above; the action checks out the PR head afterwards.
+      - name: Install the test dependencies for the review
+        if: hashFiles('requirements-dev.lock') != ''
+        run: |
+          python3 -m venv "$RUNNER_TEMP/review-venv"
+          "$RUNNER_TEMP/review-venv/bin/python" -m pip install --disable-pip-version-check --require-hashes -r requirements-dev.lock
+          echo "$RUNNER_TEMP/review-venv/bin" >> "$GITHUB_PATH"
       - name: PR Review
+        id: claude_review
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
@@ -55,9 +68,13 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Native progress/final publication; pinned action restores base config.
           track_progress: true
+          show_full_output: false
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
             /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}
+            Review head ${{ github.event.pull_request.head.sha }}, checked out in the working directory. A Claude comment already on this pull request, if there is one, reviewed an earlier commit: it is no reason to stop.
+            Before any verdict: read the whole diff (gh pr diff), read every changed file in full and the tests that cover it, read the test job logs of the Pipeline run of this head (mcp__github_ci__get_ci_status, then get_workflow_run_details and download_job_log; if that run has not finished, say so), and run the tests that cover the changed code (python3 -m pytest, pytest, cargo test or npm test, whichever this repository uses).
+            The completion summary reports no findings only when every step ran; when a step could not run, it names that step and why instead.
             Complete all five reviews using foreground agents and wait for their actual reports.
             Use `gh pr comment` for top-level feedback and a completion summary, including when there are no findings.
             Only post GitHub comments - don't submit review text as messages.
@@ -65,5 +82,21 @@ jobs:
           claude_args: |
             --strict-mcp-config
             --permission-mode auto
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Agent,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep,LS,Bash(git diff:*),Bash(git log:*),Bash(git show:*),mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,Bash(python3 -m pytest:*),Bash(python -m pytest:*),Bash(pytest:*),Bash(cargo test:*),Bash(npm test:*)"
             --model "claude-opus-5-5"
+      # show_full_output stays false (the output can quote the code under
+      # review), so a failed review names only its error class: the result
+      # fields of the execution file the action writes even on failure
+      # (base-action/src/execution-file.ts), as in the legacy pipeline (#211).
+      - name: Name the review failure
+        if: failure() && steps.claude_review.outcome == 'failure'
+        env:
+          EXECUTION_FILE: ${{ steps.claude_review.outputs.execution_file }}
+        run: |
+          if [ -z "$EXECUTION_FILE" ] || [ ! -f "$EXECUTION_FILE" ]; then
+            echo "::error::Review: no execution file; the action failed before Claude returned a result"
+            exit 1
+          fi
+          jq -r 'map(select(.type == "result")) | last // {}
+            | "::error::Review result: subtype=\(.subtype) is_error=\(.is_error) api_error_status=\(.api_error_status) terminal_reason=\(.terminal_reason) stop_reason=\(.stop_reason) num_turns=\(.num_turns)"' "$EXECUTION_FILE"
+          exit 1
