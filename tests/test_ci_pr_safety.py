@@ -58,7 +58,7 @@ def execute(script, tmp_path, overrides=None, stub=""):
     )
     env.update(overrides or {})
     return subprocess.run(
-        ["bash", "-eo", "pipefail", "-c", stub + script],
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", stub + script],
         env=env,
         capture_output=True,
         text=True,
