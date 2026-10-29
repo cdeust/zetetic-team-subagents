@@ -266,7 +266,15 @@ def original_claude_owner(delivered):
     return re.sub(rb'            --append-system-prompt "[^\n]+\n', b"", delivered)
 
 
+def without_fetch_authorization(delivered):
+    first = delivered.index(b"      # source: pinned action src/modes/tag/index.ts#L79")
+    last = delivered.index(b"      - name: Install subprocess isolation\n", first)
+    return delivered[:first] + delivered[last:]
+
+
 def original_asset(delivered, relative):
+    if relative.endswith(("/claude-review.yml", "/claude.yml")):
+        delivered = without_fetch_authorization(delivered)
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
             b"    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.\n",
