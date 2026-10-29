@@ -1,0 +1,12 @@
+ok                     C4                             main=['commit']         r3=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo "$(echo "<<EOF ")";\ngit commit -m x\nEOF'
+ok                     C5                             main=['push']           r3=['push']           head=['push']           bash=['push']           zsh=['push']           cmd='v="$(printf "%s" "<<EOF ")" && echo "$v";\ngit push origin main\nEOF'
+ok                     C2                             main=['commit']         r3=['commit']         head=['commit']         bash=['commit']         zsh=[]                 cmd='echo "$(echo "<<X")";\ngit commit -m x\nX)'
+ok                     C6                             main=REFUSE             r3=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo "$(echo "<<EOF ")";\ngit commit -m x\necho $\'it\\\'s\'\nEOF'
+ok                     C1                             main=['commit']         r3=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd="echo $'\\' <<X ' \\';\ngit commit -m x\nX"
+ok                     B1                             main=['commit']         r3=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='cat <<$(echo);\n$(echo)\ngit commit -m x\n$'
+ok                     B2                             main=['commit']         r3=['commit']         head=['commit']         bash=['commit']         zsh=[]                 cmd='cat <<${a;b};\n${a;b}\ngit commit -m x\n${a'
+ok                     A1                             main=['commit']         r3=REFUSE             head=REFUSE             bash=['commit']         zsh=[]                 cmd='a[1<<2]=x;\ngit commit -m hi;\n2]=x'
+ok                     A2                             main=['push']           r3=REFUSE             head=REFUSE             bash=['push']           zsh=[]                 cmd='a[1<<2]=x;\ngit push;\n2]=x'
+ok                     A3                             main=['commit']         r3=REFUSE             head=REFUSE             bash=['commit']         zsh=[]                 cmd='a[1<<2]=x &&\ngit commit -m x\n2]=x'
+ok                     U8                             main=['commit']         r3=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='n="$(grep -c "<<EOF" /dev/null)"\ngit commit -m x'
+COUNTS {'ok': 11}

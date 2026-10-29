@@ -1,0 +1,18 @@
+A1 a[1<<2] terminated        main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+A1 a[1<<2] terminated        r2   exit=0 :: {}
+A1 a[1<<2] terminated        head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: << inside a subscript: bash and zsh read different commands
+B1 <<$(x) delim              main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+B1 <<$(x) delim              r2   exit=0 :: {}
+B1 <<$(x) delim              head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+C1 ansi-c desync             main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+C1 ansi-c desync             r2   exit=0 :: {}
+C1 ansi-c desync             head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+C2 dq-$() desync             main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+C2 dq-$() desync             r2   exit=0 :: {}
+C2 dq-$() desync             head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+C4 dq-$() plain delim        main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+C4 dq-$() plain delim        r2   exit=0 :: {}
+C4 dq-$() plain delim        head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+control plain commit         main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+control plain commit         r2   exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+control plain commit         head exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b

@@ -1,0 +1,44 @@
+I2d ${x}t                          WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=53
+    dirty main=0:pass r6=0:pass r7=0:pass
+N1 $(printf gi)t                   WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=55
+    dirty main=0:pass r6=0:pass r7=0:pass
+N2 `echo gi`t                      WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=52
+    dirty main=0:pass r6=0:pass r7=0:pass
+N3 exec ${x}t                      WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=58
+    dirty main=0:pass r6=0:pass r7=0:pass
+N4 && ${x}t                        WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=61
+    dirty main=0:pass r6=0:pass r7=0:pass
+N5 then ${x}t                      WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=71
+    dirty main=0:pass r6=0:pass r7=0:pass
+N6 A=1 ${x}t                       WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=57
+    dirty main=0:pass r6=0:pass r7=0:pass
+N7 env ${x}t                       WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=70
+    dirty main=0:pass r6=0:pass r7=0:pass
+N8 sh -c                           WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=61
+    dirty main=0:pass r6=0:pass r7=0:pass
+N10 {gi,}t                         WRAP=ansi runs: bash=- zsh=- czsh=-  len=48
+    dirty main=0:pass r6=0:pass r7=0:pass
+N11 xargs @t                       WRAP=ansi runs: bash=- zsh=- czsh=-  len=64
+    dirty main=0:pass r6=0:pass r7=0:pass
+N12 suffix data                    WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=53
+    dirty main=0:pass r6=0:pass r7=0:pass
+N13 push                           WRAP=ansi runs: bash=push zsh=push czsh=push  len=46
+    dirty main=0:pass r6=0:pass r7=0:pass
+N14 >f ${x}t                       WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=64
+    dirty main=0:pass r6=0:pass r7=0:pass
+N15 case a) ${x}t                  WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=73
+    dirty main=0:pass r6=0:pass r7=0:pass
+N16 noglob ${x}t                   WRAP=ansi runs: bash=commit zsh=- czsh=-  len=93
+    dirty main=0:pass r6=0:pass r7=0:pass
+N18 <(${x}t)                       WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=60
+    dirty main=0:pass r6=0:pass r7=0:pass
+C5 echo $(date) $x                 WRAP=ansi runs: bash=- zsh=- czsh=-  len=64
+    dirty main=0:pass r6=0:pass r7=0:pass
+C1 echo $x                         WRAP=ansi runs: bash=- zsh=- czsh=-  len=42
+    dirty main=0:pass r6=0:pass r7=0:pass
+C2 gh body $(cat)                  WRAP=ansi runs: bash=- zsh=- czsh=-  len=96
+    dirty main=0:pass r6=0:pass r7=0:pass
+C3 for *.py                        WRAP=ansi runs: bash=- zsh=- czsh=-  len=63
+    dirty main=0:pass r6=0:pass r7=0:pass
+C4 x=$(date)                       WRAP=ansi runs: bash=- zsh=- czsh=-  len=62
+    dirty main=0:pass r6=0:pass r7=0:pass

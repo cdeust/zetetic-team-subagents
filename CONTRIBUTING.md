@@ -179,8 +179,13 @@ Three families are discovered:
 To run a single suite while iterating, invoke it directly. The path is what
 `--list` printed, for example `bash tools/tests/zetetic-checker/run-tests.sh`.
 
-Suites require no network access and clean up after themselves. If your default
-`python3` has no `pytest`, point the runner at one that does:
+Suites require no network access and clean up after themselves. The runner gets
+its Python from `tools/dev-python.sh`: `PYTHON_BIN` if set, else a `.venv` in the
+worktree or the main checkout. When neither exists it creates the main checkout's
+`.venv` from `requirements-dev.lock` (`pip install --require-hashes`, which needs
+the network). `DEV_PYTHON_CREATE=0 bash tests/run-all.sh` turns that off: the
+script prints the command to create the venv yourself and the runner stops with exit 1.
+To use your own interpreter:
 `PYTHON_BIN=/usr/bin/python3 bash tests/run-all.sh`. A missing `pytest` is
 reported as a failure, not skipped: a green run that silently omitted 334 tests
 is worse than a red one.

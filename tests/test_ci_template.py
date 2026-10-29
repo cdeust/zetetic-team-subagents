@@ -4,6 +4,8 @@ docs/superpowers/specs/2026-10-22-single-ci-design.md, "ci.yml, generated from
 one template" and decisions 1 to 9."""
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 import textwrap
@@ -20,8 +22,8 @@ DESIGN = "docs/superpowers/specs/2026-10-22-single-ci-design.md"
 JOBS = ["resolve", "contract", "unit", "regression", "e2e", "environment", "install", "review", "merge", "tag"]
 PINS = {
     "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-    "anthropics/claude-code-action": "a5a423f75c251dcbff8a74e99f83b2cb03c72bfa",
+    "actions/setup-python": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+    "anthropics/claude-code-action": "8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
 }
 # source: claude-mods PR45, unit job119805310369 passed with Claude 2.1.306.
 CLI_PIN = "npm install -g @anthropic-ai/claude-code@2.1.306"
@@ -103,8 +105,108 @@ def test_the_review_is_the_documented_code_review_invocation(workflow):
     review = next(s for s in steps if s.get("with", {}).get("plugins") == "code-review@claude-code-plugins")
     assert review["with"]["plugin_marketplaces"] == "https://github.com/anthropics/claude-code.git"
     assert review["with"]["prompt"].startswith("/code-review:code-review --comment ")
-    assert review["with"]["claude_args"] == '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
     assert review["with"]["allowed_bots"] == "claude[bot],chatgpt-codex-connector[bot]"
+
+
+def review_step(workflow, name):
+    return next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == name)
+
+
+def allowed_tools(step) -> list[str]:
+    match = re.fullmatch(r'--allowedTools "([^"]+)"', step["with"]["claude_args"].strip())
+    assert match, step["with"]["claude_args"]
+    return match.group(1).split(",")
+
+
+def test_the_review_has_the_tools_its_procedure_uses_and_none_that_edit(workflow):
+    # PR #207: with the inline-comment tool alone the review ran 3 turns in 9 s,
+    # launched none of the skill's subagents, read no CLAUDE.md and still posted
+    # "No issues found" (reproduced: docs/verification/review-bot-tools-20261029.md).
+    tools = allowed_tools(review_step(workflow, "Review"))
+    # The plugin's commands/code-review.md: its allowed-tools, its subagents (Task).
+    procedure = {
+        "mcp__github_inline_comment__create_inline_comment", "Task",
+        "Bash(gh pr diff:*)", "Bash(gh pr view:*)", "Bash(gh pr comment:*)", "Bash(gh pr list:*)",
+        "Bash(gh issue view:*)", "Bash(gh issue list:*)", "Bash(gh search:*)",
+    }
+    reading = {"Read", "Glob", "Grep", "LS", "Bash(gh run view:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)"}
+    testing = {"Bash(python3 -m pytest:*)", "Bash(python -m pytest:*)", "Bash(pytest:*)", "Bash(cargo test:*)", "Bash(npm test:*)"}
+    assert set(tools) == procedure | reading | testing
+    assert len(tools) == len(set(tools))
+    for tool in tools:
+        assert tool not in {"Edit", "MultiEdit", "Write", "NotebookEdit", "Bash"}, tool
+        if tool.startswith("Bash(") and tool != "Bash(pytest:*)":
+            # A Bash rule names a command and its subcommand: no bare git, gh or bash.
+            assert len(tool[len("Bash("):-len(":*)")].split()) >= 2, tool
+
+
+def test_the_review_prompt_requires_the_whole_diff_the_tests_and_the_head(workflow):
+    prompt = review_step(workflow, "Review")["with"]["prompt"]
+    first, rest = prompt.split("\n", 1)
+    assert first == (
+        "/code-review:code-review --comment "
+        "${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+    )
+    for required in (
+        "${{ github.event.pull_request.head.sha }}",
+        "no reason to stop",
+        "read the whole diff (gh pr diff)",
+        "read every changed file in full and the tests that cover it",
+        "gh run view ${{ github.run_id }} --log",
+        "run the tests that cover the changed code",
+        "Launch the subagents the procedure names",
+        "only when every step ran",
+        "names that step and why",
+    ):
+        assert required in rest, required
+
+
+def test_the_reviewer_gets_the_hashed_dev_dependencies_when_the_repository_declares_them(workflow):
+    names = [s.get("name") for s in workflow["jobs"]["review"]["steps"]]
+    install = review_step(workflow, "Install the test dependencies for the review")
+    assert names.index(install["name"]) < names.index("Review")
+    assert install["if"] == "steps.guard.outputs.review == 'true' && hashFiles('requirements-dev.lock') != ''"
+    assert "--require-hashes -r requirements-dev.lock" in install["run"]
+    assert '>> "$GITHUB_PATH"' in install["run"]
+
+
+def run_failure_namer(workflow, tmp_path, execution_file: str):
+    step = review_step(workflow, "Name the review failure")
+    assert step["if"] == "failure() && steps.claude_review.outcome == 'failure'"
+    assert step["env"]["EXECUTION_FILE"] == "${{ steps.claude_review.outputs.execution_file }}"
+    script = tmp_path / "namer.sh"
+    script.write_text(step["run"])
+    env = {"PATH": os.environ["PATH"], "EXECUTION_FILE": execution_file}
+    return subprocess.run(["bash", "-e", str(script)], env=env, capture_output=True, text=True)
+
+
+def test_a_failed_review_names_its_error_class_and_not_its_text(workflow, tmp_path):
+    # Runs 40186210241 (#191) and 40201492297 (#192): is_error:true in 434 ms,
+    # cost 0, and no error class anywhere in the log (show_full_output: false).
+    review = review_step(workflow, "Review")
+    assert review["id"] == "claude_review"
+    assert review["with"]["show_full_output"] is False
+    execution = tmp_path / "claude-execution-output.json"
+    execution.write_text(json.dumps([
+        {"type": "system", "subtype": "init"},
+        {"type": "result", "subtype": "success", "is_error": True, "api_error_status": 401,
+         "terminal_reason": "api_error", "stop_reason": None, "num_turns": 1,
+         "result": "quoted code under review"},
+    ]))
+    done = run_failure_namer(workflow, tmp_path, str(execution))
+    assert done.returncode == 1
+    assert done.stdout.strip() == (
+        "::error::Review result: subtype=success is_error=true api_error_status=401 "
+        "terminal_reason=api_error stop_reason=null num_turns=1"
+    )
+    assert "quoted code" not in done.stdout + done.stderr
+
+
+def test_a_review_that_failed_before_any_result_says_so(workflow, tmp_path):
+    for missing in ("", str(tmp_path / "absent.json")):
+        done = run_failure_namer(workflow, tmp_path, missing)
+        assert done.returncode == 1
+        assert "no execution file" in done.stdout
 
 
 def test_the_review_skips_drafts_forks_dependabot_and_duplicate_bot_review(workflow, text):
@@ -115,6 +217,46 @@ def test_the_review_skips_drafts_forks_dependabot_and_duplicate_bot_review(workf
         assert clause in cond, clause
     assert "+claude[bot]@users.noreply.github.com" in text
     assert ".github/workflows/pipeline.yml" in text
+
+
+def test_the_fix_pushes_with_the_claude_app_token_so_the_pipeline_runs_on_it(workflow, text):
+    # PR #171, commit ae628d6 (2026-10-29): the Fix push went out as
+    # github-actions[bot] and its pull_request runs stayed action_required.
+    # A GITHUB_TOKEN push creates runs that wait for approval; an App token
+    # push runs them (docs.github.com, "Triggering a workflow from a workflow").
+    # checkout v7 keeps GITHUB_TOKEN in an includeIf file that the action does
+    # not clear (run 40820034691: "No existing authentication headers to
+    # remove"), so the checkout must not persist it.
+    steps = workflow["jobs"]["review"]["steps"]
+    checkout = next(s for s in steps if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout["with"].get("persist-credentials") is False
+    fix = next(s for s in steps if s.get("name") == "Fix")
+    assert "github_token" not in fix["with"], "the Fix push keeps the action's App token"
+    assert "Its push is a synchronize event; the five tests run again on it." not in text
+    # The installed profile picks the workflows that run the action (legacy:
+    # pipeline.yml review; native, PR #209: claude.yml and claude-review.yml);
+    # the rule holds for each job that runs it in this repository.
+    jobs = installed_jobs_using("anthropics/claude-code-action")
+    assert jobs, "no installed workflow runs anthropics/claude-code-action"
+    for label, steps in jobs:
+        for step in uses(steps, "actions/checkout"):
+            assert (step.get("with") or {}).get("persist-credentials") is False, label
+        for step in uses(steps, "anthropics/claude-code-action"):
+            assert "github_token" not in (step.get("with") or {}), label
+
+
+def uses(steps, action):
+    return [s for s in steps if s.get("uses", "").startswith(action)]
+
+
+def installed_jobs_using(action):
+    """(workflow:job, steps) for every job of this repository's installed
+    workflows with a step that uses ``action``."""
+    found = []
+    for path in sorted((REPO / ".github" / "workflows").glob("*.yml")):
+        jobs = yaml.safe_load(path.read_text(encoding="utf-8"))["jobs"]
+        found += [(f"{path.name}:{name}", job.get("steps") or []) for name, job in jobs.items()]
+    return [(label, steps) for label, steps in found if uses(steps, action)]
 
 
 def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):

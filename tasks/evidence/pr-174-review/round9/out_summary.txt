@@ -1,0 +1,54 @@
+new   none rows=116 vs-main={'ok': 67, 'FIXED': 23, 'FAIL-OPEN-PREEXISTING': 24, 'NEW-REFUSE': 2} vs-f646e4e={'same': 96, 'R7-REFUSE-FIX': 17, 'R7-REFUSE-COST': 3}
+      ok R7-REFUSE-COST c_r9:N10
+      ok R7-REFUSE-COST c_r9:N11
+      ok R7-REFUSE-COST c_r9_residual:R1
+new   pre  rows=116 vs-main={'ok': 96, 'FIXED': 3, 'FAIL-OPEN-PREEXISTING': 17} vs-f646e4e={'same': 116}
+new   suf  rows=116 vs-main={'ok': 98, 'FIXED': 1, 'FAIL-OPEN-PREEXISTING': 17} vs-f646e4e={'same': 116}
+new   ansi rows=116 vs-main={'ok': 96, 'FIXED': 3, 'FAIL-OPEN-PREEXISTING': 17} vs-f646e4e={'same': 116}
+prior none rows=784 vs-main={'ok': 602, 'FIXED': 142, 'FAIL-OPEN-PREEXISTING': 28, 'NEW-REFUSE': 12} vs-f646e4e={'same': 784}
+prior pre  rows=784 vs-main={'ok': 733, 'FIXED': 40, 'FAIL-OPEN-PREEXISTING': 11} vs-f646e4e={'same': 780, 'R7-REFUSE-COST': 4}
+      ok R7-REFUSE-COST c_r4hunt:Z15
+      ok R7-REFUSE-COST c_r5hunt:S3
+      ok R7-REFUSE-COST c_hunt4:S4
+      ok R7-REFUSE-COST c_r6hunt:H5
+prior suf  rows=784 vs-main={'ok': 751, 'FIXED': 22, 'FAIL-OPEN-PREEXISTING': 11} vs-f646e4e={'same': 780, 'R7-REFUSE-COST': 4}
+      ok R7-REFUSE-COST c_r4hunt:Z15
+      ok R7-REFUSE-COST c_r5hunt:S3
+      ok R7-REFUSE-COST c_hunt4:S4
+      ok R7-REFUSE-COST c_r6hunt:H5
+prior ansi rows=784 vs-main={'ok': 733, 'FIXED': 40, 'FAIL-OPEN-PREEXISTING': 11} vs-f646e4e={'same': 780, 'R7-REFUSE-COST': 4}
+      ok R7-REFUSE-COST c_r4hunt:Z15
+      ok R7-REFUSE-COST c_r5hunt:S3
+      ok R7-REFUSE-COST c_hunt4:S4
+      ok R7-REFUSE-COST c_r6hunt:H5
+resb  none rows=3 vs-main={'FAIL-OPEN-REGRESSION': 3} vs-f646e4e={'same': 3}
+      FAIL-OPEN-REGRESSION same c_r9_residual_b:R3
+      FAIL-OPEN-REGRESSION same c_r9_residual_b:R4
+      FAIL-OPEN-REGRESSION same c_r9_residual_b:R5
+resb  pre  rows=3 vs-main={'FAIL-OPEN-PREEXISTING': 3} vs-f646e4e={'same': 3}
+resb  suf  rows=3 vs-main={'FAIL-OPEN-PREEXISTING': 3} vs-f646e4e={'same': 3}
+resb  ansi rows=3 vs-main={'FAIL-OPEN-PREEXISTING': 3} vs-f646e4e={'same': 3}
+
+r9_e2e_block_wrap_none.txt       I2d git only in data, gi${x}t      dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          I2d ${x}t                          dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N1 $(printf gi)t                   dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N2 `echo gi`t                      dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N3 exec ${x}t                      dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N4 && ${x}t                        dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N5 then ${x}t                      dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N6 A=1 ${x}t                       dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N7 env ${x}t                       dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N8 sh -c                           dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N10 {gi,}t                         dirty main/f646e4e/new=2/0/2 bash=- zsh=- czsh=-
+r9_e2e_r9_wrap_none.txt          N11 xargs @t                       dirty main/f646e4e/new=2/0/2 bash=- zsh=- czsh=-
+r9_e2e_r9_wrap_none.txt          N12 suffix data                    dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N13 push                           dirty main/f646e4e/new=2/0/2 bash=push zsh=push czsh=push
+r9_e2e_r9_wrap_none.txt          N14 >f ${x}t                       dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N15 case a) ${x}t                  dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9_wrap_none.txt          N16 noglob ${x}t                   dirty main/f646e4e/new=2/0/2 bash=commit zsh=- czsh=-
+r9_e2e_r9_wrap_none.txt          N18 <(${x}t)                       dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9res_wrap_none.txt       R1 cp built git to ./x             dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_r9res_wrap_none.txt       R2 PATH and a static name          dirty main/f646e4e/new=2/0/2 bash=commit zsh=commit czsh=commit
+r9_e2e_resb_wrap_none.txt        R3 which, cp, ./x                  dirty main/f646e4e/new=2/0/0 bash=commit zsh=commit czsh=commit
+r9_e2e_resb_wrap_none.txt        R4 which, ln, ./x                  dirty main/f646e4e/new=2/0/0 bash=commit zsh=commit czsh=commit
+r9_e2e_resb_wrap_none.txt        R5 which, cp, PATH, x              dirty main/f646e4e/new=2/0/0 bash=commit zsh=commit czsh=commit

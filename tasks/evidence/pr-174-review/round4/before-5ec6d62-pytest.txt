@@ -1,0 +1,20 @@
+FAILED tests/test_gate_targets.py::test_unterminated_heredoc_is_refused_only_for_git[let x=1<<2 &&\ngit commit -m x\n2-commit]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[echo "$(echo &>/dev/null case)"; git commit -m x; echo ";esac)"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[echo "$(a=1 case)"; git commit -m x; echo ";esac)"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[echo "$(case x in x) echo;; es\\\nac)"; git commit -m x; echo ";esac)"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[v="$(echo &>/dev/null case)"; git push; echo ";esac)"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[echo "$(case x in esac)"; git commit -m x; echo ";esac)"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[echo "${x:-{}"; git commit -m x; echo "}"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[y="${x#{}"; git push; echo "}"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[echo "${x:-'}"; git commit -m x; echo "'}"]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[x="$(cat <<EOF)"\ncat <<Y\nEOF\ntrue; git commit -m x\nY]
+FAILED tests/test_gate_targets.py::test_round4_inputs_are_gated_or_refused[x=$(cat <<EOF)\ncat <<Y\nEOF\nls && git push origin main\nY]
+FAILED tests/test_gate_targets.py::test_a_shift_inside_arithmetic_in_a_subscript_is_gated
+FAILED tests/test_gate_targets.py::test_targets_are_a_superset_of_the_flat_reading
+FAILED tests/test_gate_heredoc_hook.py::test_commit_hidden_by_rewrite_reaches_commit_gate[full-echo "$(echo &>/dev/null case)"; git commit -m x; echo ";esac)"]
+FAILED tests/test_gate_heredoc_hook.py::test_commit_hidden_by_rewrite_reaches_commit_gate[full-echo "${x:-{}"; git commit -m x; echo "}"]
+FAILED tests/test_gate_heredoc_hook.py::test_commit_hidden_by_rewrite_reaches_commit_gate[standalone-echo "$(echo &>/dev/null case)"; git commit -m x; echo ";esac)"]
+FAILED tests/test_gate_heredoc_hook.py::test_commit_hidden_by_rewrite_reaches_commit_gate[standalone-echo "${x:-{}"; git commit -m x; echo "}"]
+FAILED tests/test_gate_heredoc_hook.py::test_heredoc_pending_at_the_end_of_a_substitution_is_refused[full]
+FAILED tests/test_gate_heredoc_hook.py::test_heredoc_pending_at_the_end_of_a_substitution_is_refused[standalone]
+19 failed, 160 passed in 17.01s

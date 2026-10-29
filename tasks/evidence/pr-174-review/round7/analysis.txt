@@ -1,0 +1,84 @@
+PR #174 round 7: refusal predicate, text-removal audit, look-back bound.
+Shells: GNU bash 5.3.15, zsh 5.9. Code: hooks/lib/shell_text.py, hooks/lib/gate_targets.py.
+
+1. Refusal rule (owner: never weaker than main)
+
+origin/main 811818b, gate_targets.git_commands:
+    if not _mentions_command(command, 'git'): return []      # \b(?:git)\s on the quote-stripped text
+    tokens = list(shlex ...)  -> ValueError -> refused
+So main refuses exactly the commands whose quote-stripped text matches \bgit\s and that shlex cannot
+lex. Here, _flat_targets returns None in exactly that case (same filter, same lexer), so "refused"
+implies "main refused".
+
+Round 6 refused, where main refused, only when may_commit_or_push(rewritten) (a literal commit or push
+after git), which lets I1 ($x ${y}it), I4 ($(printf com)mit) and A3 (-c alias.c=${y}it) through.
+
+Contradiction: refuse every command main refused that may still run git, yet do not refuse the PR's
+motivating command, whose only git is here-document prose. Resource already in the system: main's own
+predicate, which needs only the word git. Round 7, where refused:
+  - the rewrite raises (an unterminated quote or body): refuse. Nothing past it can be read; main refused.
+  - else refuse when \bgit\b matches the quote-stripped rewritten text.
+\bgit\b instead of main's \bgit\s also catches x=git; (I2) and git; and $(git). Cost: it fires only where
+main already refused, so it adds no refusal relative to origin/main. Relative to round 6 it adds back
+main's refusal of commands such as cat <<'EOF' / don't / EOF / git status (no commit; main refuses it too).
+What it spares: commands main refused whose every word git is here-document data or a comment.
+
+Boundary (not closed): I2 without any "git " in the raw text (x=git; y=comm; $x ${y}it plus an
+apostrophe) is not refused by main (its filter needs git followed by a blank), so "refused" is false and
+the gate gates what main gates: nothing. Same as main; listed under Still open.
+
+2. Where the rewrite drops text, and why no dropped span holds a command word
+
+The rewrite (shell_lines) copies its input except in these places:
+  a. A comment: # at a word start, to the end of the line.
+  b. Here-document data: a body with a quoted delimiter entirely; of a body with an unquoted delimiter,
+     everything but the commands of its $(...) and `...` (kept and rewritten).
+  c. The here-document operator and delimiter word (<<WORD), replaced by a blank.
+  d. A backslash-newline (removed, joining two lines; nothing is lost).
+  e. Inside "...", the quotes and backslashes of a nested unit (unquoted(); characters removed, words kept).
+Everything else is copied, possibly respaced: spans ${...}, $((...)), $[...] are copied whole; $'...' and
+`...` become a "..." word with their text kept.
+
+a. Comments. Measured in both shells (commands in out_comment_audit.txt):
+   # starts a comment after a blank, ;, |, &, a newline and ( at command start: comment in both.
+   After ( or ) the shells differ: zsh reads (a|b)#x, (a)#x) and =(cmd)#x as one word (round-6 P1-P12),
+   bash rejects those lines; both read ((1))#x and (echo a)#x as a comment; bash reads x=(a b)#c as a
+   word, zsh as a comment.
+   Round 7: a # right after ( or ) is never dropped. The rest of the line is kept as text, which makes
+   the rewrite read at least the commands the comment reading reads, so it can only gate or refuse more,
+   except where the kept text itself changes how later lines are read: a quote, $, `, a backslash, <
+   (a here-document or <( ), ( or ). When the rest of the line holds one of those, the command is
+   uninspectable (refused when it may commit or push). ((1))#a <<EOF / git commit / EOF shows why: kept,
+   <<EOF would swallow the commit both shells run.
+   After any other character (a word character, $, }, a quote) # is inside a word in both shells, and the
+   rewrite does not drop it (word_start is false there).
+b. Here-document data. A body's extent: from the line after the operator line to the delimiter line,
+   with an unquoted body's backslash-newlines joined first (round 6, B1/B2); a ${...} in the delimiter
+   word that zsh ends elsewhere is refused (Y1); a body still pending where a $(...) ends is refused;
+   a body that never ends is refused. Inside a quoted body nothing is expanded (POSIX 2.7.4), so no
+   command word runs from it. Inside an unquoted body only parameter expansion, command substitution and
+   arithmetic expansion happen; command substitutions are kept, and a $( ... ) inside ${...} or $((...))
+   is found by the same character scan.
+c. The delimiter word is not expanded by either shell (quote removal only, POSIX 2.7.4); a $(...) in it
+   runs nothing. Round-6 rows D1-D3 (cat <<$(git commit -m x) ...) are ok in the probe.
+d, e. Nothing is dropped that could hold a command word: d joins, e removes quote characters only.
+
+3. Look-back bound (Knuth)
+
+Round 6's _after_separator fell back to text[:index] whenever its 256-character window was all blanks,
+so k words esac each preceded by more than 256 blanks cost O(k n): quadratic. The analysis and PR text
+claiming "reads at most 256 characters" were false. Round 7's _previous_word walks back from index over
+blanks and backslash-newlines, then over the one previous word. Successive calls start at successive
+word starts, so the stretches they read are disjoint except for the word itself, which is read once as
+the "previous word" of the next call: over a whole text the characters scanned sum to at most 2n.
+Pinned by counting, not timing: test_esac_look_back_reads_each_character_at_most_twice (400 esac words
+each after 300 blanks: sum of characters scanned <= 2 * len(command)).
+
+4. Sibling probes (real git, out_realgit_shells.txt; gate, *_e2e_c_r7sib.txt)
+
+L1 git -c alias.c=commit c -m x and L2 git -c alias.c='commit -m x' c commit in bash, zsh and czsh.
+origin/main and this branch both read the verb as c and gate nothing: a preexisting gap (git aliases),
+shared with main, listed under Still open.
+L3 zsh alias -g c=commit, then git c -m x on the next line: no commit in bash, zsh or czsh (run=1,
+commits stayed at 1). zsh -c ran "git c" unexpanded ("git: 'c' is not a git command"): it parsed the
+whole -c string before the alias existed. bash has no alias -g. No gap shown.

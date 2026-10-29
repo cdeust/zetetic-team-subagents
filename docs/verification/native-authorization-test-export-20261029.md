@@ -55,3 +55,18 @@ common-job assertion accounts only for the new named contract test step; the
 new export test requires that exact step once in both workflows. Preserve P2
 source.json adaptation/asset hashes and distant native-renderer inverse helper
 when combining source PRs.
+
+
+Actual source215 dependency incorporated: 2d1f52d544986597d70ff4e4d4cec276f533d240.
+Both metadata sets and source215 event/attempt fixture hashes are preserved.
+Production resolve job remains byte-identical to that dependency.
+Combined final verification:
+
+    python3 -m pytest -q tests/test_ci_native*.py tests/test_ci_renderer.py tests/test_ci_post_merge_template.py
+    117 passed, 33 subtests passed in 4.02s
+    python3 -m unittest discover -s scripts/tests -p test_ci_*.py -v
+    Ran 113 tests in 0.283s
+    OK
+
+The 113 generated tests combine 101 source215 native cases and the 12 exported
+authorization contracts. All generated workflows pass actionlint.

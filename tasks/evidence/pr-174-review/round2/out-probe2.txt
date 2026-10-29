@@ -1,0 +1,35 @@
+ok         dparen-hash-quote            main=[]           e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd="((1))#it's\ngit commit -m x\necho 'b'"
+ok         dparen-hash-semi             main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='((1))#b; git commit -m x'
+ok         subshell-hash-semi           main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='(echo a)#b; git commit -m x'
+ok         subshell-hash-quote          main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd="(echo a)#it's\ngit commit -m x\necho 'b'"
+ok         redir-hash                   main=[]           e67=[]           new=[]           bash=[]           zsh=[]           cmd='echo a >#f; git commit -m x'
+EXTRA      redir-hash-quote             main=[]           e67=['commit']   new=['commit']   bash=[]           zsh=[]           cmd="echo a >#it's\ngit commit -m x\necho 'b'"
+ok         pipe-hash-quote              main=[]           e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd="echo a |#it's\ncat\ngit commit -m x\necho 'b'"
+EXTRA      brace-close-hash             main=[]           e67=['commit']   new=['commit']   bash=[]           zsh=[]           cmd='{ echo a; }#b; git commit -m x'
+NEW-REFUSE brace-close-hash-quote       main=['commit']   e67=REFUSE       new=REFUSE       bash=[]           zsh=[]           cmd="{ echo a; }#it's\ngit commit -m x\necho 'b'"
+EXTRA      herestring-hash              main=[]           e67=['commit']   new=['commit']   bash=[]           zsh=[]           cmd="cat <<<#it's\ngit commit -m x\necho 'b'"
+ok         heredoc-op-hash              main=[]           e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd="cat <<EOF #it's\nbody\nEOF\ngit commit -m x\necho 'b'"
+NEW-REFUSE span-hash-quote              main=['commit']   e67=REFUSE       new=REFUSE       bash=[]           zsh=[]           cmd="echo ${x}#it's\ngit commit -m x\necho 'b'"
+NEW-REFUSE subst-hash-quote             main=[]           e67=[]           new=REFUSE       bash=[]           zsh=[]           cmd="echo $(echo)#it's ; git commit -m x ; echo 'b'"
+NEW-REFUSE procsub-hash-quote           main=[]           e67=[]           new=REFUSE       bash=[]           zsh=[]           cmd="cat <(echo)#it's ; git commit -m x ; echo 'b'"
+ok         esc-space-hash               main=[]           e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='echo \\ #b; git commit -m x'
+ok         cr-hash                      main=[]           e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='echo a\r#b; git commit -m x'
+EXTRA      case-pattern-hash            main=['commit']   e67=['commit']   new=['commit']   bash=[]           zsh=[]           cmd='case x in a)#c\ngit commit -m x;; esac'
+EXTRA      case-word-in-subst           main=['commit']   e67=['commit']   new=['commit']   bash=[]           zsh=[]           cmd='cat <<EOF\n$(echo case) git commit\nEOF'
+ok         case-word-in-subst-prose     main=REFUSE       e67=REFUSE       new=REFUSE       bash=[]           zsh=[]           cmd="cat <<EOF\n$(echo case) won't git commit\nEOF"
+ok         procsub-heredoc              main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <(cat <<EOF\nx\nEOF\n) && git commit -m x'
+ok         dollar-subst-heredoc-then-line main=REFUSE       e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd="x=$(cat <<EOF\nit's\nEOF\n)\ngit commit -m x"
+ok         delim-dq-escape              main=REFUSE       e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <<"E\\"F"\nbody\nE"F\ngit commit -m x'
+ok         delim-bs-bs                  main=[]           e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <<E\\\\F\nbody\nE\\F\ngit commit -m x'
+ok         delim-ansi-escape            main=[]           e67=[]           new=REFUSE       bash=['commit']   zsh=['commit']   cmd="cat <<$'E\\x4fF'\nbody\nEOF\ngit commit -m x"
+ok         delim-ansi-escaped-quote     main=[]           e67=[]           new=REFUSE       bash=['commit']   zsh=['commit']   cmd="cat <<$'E\\'F'\nbody\nE'F\ngit commit -m x"
+NEW-REFUSE delim-bsnl-sq                main=[]           e67=[]           new=REFUSE       bash=[]           zsh=[]           cmd="cat <<'EO\\\nF'\nbody\nEOF\ngit commit -m x"
+ok         delim-bsnl-dq                main=[]           e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <<"EO\\\nF"\nbody\nEOF\ngit commit -m x'
+ok         heredoc-at-end-no-nl         main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='git commit -m x <<EOF'
+ok         bsnl-in-ws-before-delim      main=[]           e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat << \\\n EOF\nbody\nEOF\ngit commit -m x'
+ok         operators-semi-paren         main=[]           e67=[]           new=['push']     bash=['push']     zsh=['push']     cmd='true;(git push)'
+ok         operators-close-and          main=[]           e67=[]           new=['push']     bash=['push']     zsh=['push']     cmd='(true)&&git push'
+ok         dsemi-git                    main=['push']     e67=['push']     new=['push']     bash=['push']     zsh=['push']     cmd='case x in a) echo;;esac;git push'
+ok         pipe-amp                     main=[]           e67=[]           new=['push']     bash=['push']     zsh=['push']     cmd='echo |& git push'
+ok         multi-hd-body-case           main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <<A <<B\na\nA\n$(case x in b) echo;; esac; git commit -m x)\nB'
+new FAIL-OPEN vs bash: 0
