@@ -2,7 +2,7 @@
   "repository": "cdeust/Cortex",
   "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
   "assets": {
-    "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
+    "scripts/ci_codex_review_event_source.py": "c5fc0b31169e1b7de64e33b9d49040989082903ee0fd9e7f58e368d8c995a90c",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
     ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
