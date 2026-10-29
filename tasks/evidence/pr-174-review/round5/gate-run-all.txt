@@ -1,0 +1,111 @@
+============================================================
+ALL SUITES  (repo: /Users/cdeust/Developments/anthropic-partnership/zetetic-team-subagents/.claude/worktrees/fix-gate-heredoc)
+============================================================
+=== pytest (tests/)
+    FAILED (last 20 lines):
+    |         pid = None
+    |         try:
+    |             with open(fifos.group, "rb") as group:
+    |                 pid = int(group.readline())
+    |                 _assert_session_leader(pid)
+    |                 proc.send_signal(sig)
+    |                 out = proc.stdout.read().decode()  # EOF: the runner is gone
+    |                 assert proc.wait() == 0
+    |                 assert sig.name in out
+    |                 assert os.listdir(scratch) == [], "the runner leaked its temp directory"
+    | >               assert _survivors(fifos, group) == b"", "a section group outlived the signalled runner"
+    | E               AssertionError: a section group outlived the signalled runner
+    | E               assert b'survived\n' == b''
+    | E                 
+    | E                 Use -v to get more diff
+    | 
+    | tests/test_session_start_timebox.py:348: AssertionError
+    | =========================== short test summary info ============================
+    | FAILED tests/test_session_start_timebox.py::test_a_signal_kills_every_live_group_removes_the_scratch_dir_and_exits_zero[15]
+    | 1 failed, 2106 passed in 377.39s (0:06:17)
+=== tools/tests/acceptance-gate/run-tests.sh
+    ok
+=== tools/tests/adversarial-verify/run-tests.sh
+    ok
+=== tools/tests/agent-definition-auditor/run-tests.sh
+    ok
+=== tools/tests/changelog-commit-check/run-tests.sh
+    ok
+=== tools/tests/deletion-gate/run-tests.sh
+    ok
+=== tools/tests/dev-symlink-doctor/run-tests.sh
+    ok
+=== tools/tests/discoverability-baseline/run-tests.sh
+    ok
+=== tools/tests/doc-command-check/run-tests.sh
+    ok
+=== tools/tests/doc-count-check/run-tests.sh
+    ok
+=== tools/tests/fail-before/run-tests.sh
+    ok
+=== tools/tests/gates-plugin-sync/run-tests.sh
+    ok
+=== tools/tests/goa-fixture-freeze-gate/run-tests.sh
+    ok
+=== tools/tests/goa-no-raw-text-gate/run-tests.sh
+    ok
+=== tools/tests/hook-layer/run-tests.sh
+    ok
+=== tools/tests/manifest-gate/run-tests.sh
+    ok
+=== tools/tests/mutation-gate/run-tests.sh
+    ok
+=== tools/tests/mutation-sweep/run-tests.sh
+    ok
+=== tools/tests/plugin-version-check/run-tests.sh
+    ok
+=== tools/tests/pre-tool-redaction-gate/run-tests.sh
+    ok
+=== tools/tests/redaction-checker/run-tests.sh
+    ok
+=== tools/tests/release-verify/run-tests.sh
+    ok
+=== tools/tests/seed-reviewer-prefs/run-tests.sh
+    ok
+=== tools/tests/setup-plugin-served/run-tests.sh
+    ok
+=== tools/tests/skill-agent-model-matrix-drift/run-tests.sh
+    ok
+=== tools/tests/skill-model-tier-policy/run-tests.sh
+    ok
+=== tools/tests/skill-routing-table-drift/run-tests.sh
+    ok
+=== tools/tests/stop-redaction-gate/run-tests.sh
+    ok
+=== tools/tests/test-matrix/run-tests.sh
+    ok
+=== tools/tests/threshold-drift/run-tests.sh
+    ok
+=== tools/tests/zetetic-checker/run-tests.sh
+    ok
+=== scripts/test-agent-id-propagation.sh
+    ok
+=== scripts/test-memory-concurrency.sh
+    ok
+=== scripts/test-memory-e2e.sh
+    ok
+=== scripts/test-memory-mcp.sh
+    ok
+=== scripts/test-memory-pii-expanded.sh
+    ok
+=== scripts/test-memory-pii.sh
+    ok
+=== scripts/test-memory-stale-lock.sh
+    ok
+=== scripts/test-spawn-agent.sh
+    ok
+=== scripts/test-state-layout.sh
+    ok
+=== scripts/test-worktree-sweep-safety.sh
+    ok
+
+============================================================
+RESULT: 40 passed, 1 failed
+Failed suites:
+  pytest (tests/)
+exit=1

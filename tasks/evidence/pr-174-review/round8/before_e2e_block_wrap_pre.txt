@@ -1,0 +1,44 @@
+S10 [[ <->#x ]]                    WRAP=pre runs: bash= zsh=commit czsh=commit  len=48
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S11 case <1-9>#x                   WRAP=pre runs: bash= zsh=commit czsh=commit  len=65
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S12 [[ (b|#x) ]]                   WRAP=pre runs: bash= zsh=commit czsh=commit  len=49
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S13 case (b|#x)                    WRAP=pre runs: bash= zsh=commit czsh=commit  len=63
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S16 ls <->#x                       WRAP=pre runs: bash= zsh=commit czsh=commit  len=52
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S17 [[ (b| #x) ]]                  WRAP=pre runs: bash= zsh=commit czsh=commit  len=50
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S19 [[ (<->|#x) ]]                 WRAP=pre runs: bash= zsh=commit czsh=commit  len=51
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S21 x=<->#x                        WRAP=pre runs: bash= zsh=commit czsh=commit  len=39
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S21p x=<->#x push                  WRAP=pre runs: bash= zsh=push czsh=push  len=32
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+S22 delimiter git                  WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=55
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+I2d git only in data, gi${x}t      WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=57
+    dirty main=0:pass r6=0:pass r7=0:pass
+Z1 rewrite over cap                WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=45056
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+Z2 input over cap                  WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=132059
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+P1                                 WRAP=pre runs: bash= zsh=commit czsh=commit  len=47
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+P2                                 WRAP=pre runs: bash= zsh=commit czsh=commit  len=50
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+P3                                 WRAP=pre runs: bash= zsh=commit czsh=commit  len=63
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+P5                                 WRAP=pre runs: bash= zsh=push czsh=push  len=40
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+P10                                WRAP=pre runs: bash= zsh=commit czsh=commit  len=65
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+P11                                WRAP=pre runs: bash= zsh=commit czsh=commit  len=50
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+P12                                WRAP=pre runs: bash= zsh=push czsh=push  len=52
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+I1                                 WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=56
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+I4                                 WRAP=pre runs: bash=commit zsh=commit czsh=commit  len=62
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED

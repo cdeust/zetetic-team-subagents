@@ -1,0 +1,30 @@
+bash  echo a;#x|echo RAN                         -> a RAN 
+zsh   echo a;#x|echo RAN                         -> a RAN 
+bash  echo a|#x|cat|echo RAN                     -> a RAN 
+zsh   echo a|#x|cat|echo RAN                     -> a RAN 
+bash  (#x|echo RAN)                              -> RAN 
+zsh   (#x|echo RAN)                              -> RAN 
+bash  [[ a == #x ]] && echo IN|echo RAN          -> bash: -c: ligne 1: argument « newline » inattendu pour l'opé
+zsh   [[ a == #x ]] && echo IN|echo RAN          -> zsh:2: condition expected: a 
+bash  case a in #x|a) echo IN;; esac; echo RAN   -> IN RAN 
+zsh   case a in #x|a) echo IN;; esac; echo RAN   -> IN RAN 
+bash  echo a >#x; echo RAN                       -> bash: -c: ligne 1: erreur de syntaxe près du symbole inatten
+zsh   echo a >#x; echo RAN                       -> zsh:1: parse error near `\n' 
+bash  ((1))#x; echo RAN                          -> 
+zsh   ((1))#x; echo RAN                          -> 
+bash  (echo a)#x; echo RAN                       -> a 
+zsh   (echo a)#x; echo RAN                       -> a 
+bash  x=(a b)#c; echo RAN                        -> RAN 
+zsh   x=(a b)#c; echo RAN                        -> 
+bash  echo {#x; echo RAN                         -> {#x RAN 
+zsh   echo {#x; echo RAN                         -> {#x RAN 
+bash  echo $#x; echo RAN                         -> 0x RAN 
+zsh   echo $#x; echo RAN                         -> 0 RAN 
+bash  { echo a; }#x; echo RAN                    -> bash: -c: ligne 2: erreur de syntaxe : fin de fichier prémat
+zsh   { echo a; }#x; echo RAN                    -> zsh:1: parse error near `RAN' 
+bash  [[ a == (a|b)#x ]]; echo RAN               -> bash: -c: ligne 1: argument « ( » inattendu pour l'opérateur
+zsh   [[ a == (a|b)#x ]]; echo RAN               -> RAN 
+bash  case a in (a)#x) echo IN;; esac; echo RAN  -> bash: -c: ligne 2: erreur de syntaxe : fin de fichier prémat
+zsh   case a in (a)#x) echo IN;; esac; echo RAN  -> RAN 
+bash  cat =(echo a)#x; echo RAN                  -> bash: -c: ligne 1: erreur de syntaxe près du symbole inatten
+zsh   cat =(echo a)#x; echo RAN                  -> cat: /tmp/zshJlbdCF#x: No such file or directory RAN 

@@ -1,0 +1,5 @@
+ok         brace-group-semicolon        main=[]           e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='{ echo a; }; git commit -m x'
+ok         brace-group-and              main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='{ echo a; } && git commit -m x'
+ok         body-brace-case              main=[]           e67=[]           new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <<EOF\n$({ case x in a) echo;; esac; }; git commit -m x)\nEOF'
+ok         body-brace-case-spaced       main=['commit']   e67=['commit']   new=['commit']   bash=['commit']   zsh=['commit']   cmd='cat <<EOF\n$({ case x in a) echo;; esac; } ; git commit -m x)\nEOF'
+new FAIL-OPEN vs bash: 0

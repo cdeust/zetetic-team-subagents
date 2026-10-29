@@ -1,0 +1,81 @@
+888312bd488599ba6a569d137beb10355bebb39e
+ 5 files changed, 154 insertions(+), 24 deletions(-)
+14:19  up 1 day,  1:18, 4 users, load averages: 251,59 243,58 245,61
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+........................................................................ [ 74%]
+........................................F............................... [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 85%]
+........................................................................ [ 88%]
+........................................................................ [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+.......................................................                  [100%]
+=================================== FAILURES ===================================
+_________ test_a_second_signal_during_the_cleanup_does_not_reenter_it __________
+
+tmp_path = PosixPath('/private/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/pytest-of-cdeust/pytest-267/test_a_second_signal_during_th0')
+
+    def test_a_second_signal_during_the_cleanup_does_not_reenter_it(tmp_path):
+        # Event-synchronised: the second SIGTERM is sent while the cleanup of the
+        # first is provably running (it announced itself and waits for us).
+        lib = tmp_path / "sections.sh"
+        lib.write_text(HANG_SECTIONS)
+        fifos = Fifos(tmp_path)
+        cleanup, release = tmp_path / "cleanup", tmp_path / "release"
+        os.mkfifo(cleanup)
+        os.mkfifo(release)
+        wrapper = tmp_path / "gated_runner.py"
+        wrapper.write_text(GATED_RUNNER.format(lib=str(ROOT / "hooks" / "lib")))
+        env = {**os.environ, **fifos.env, "CLEANUP_FIFO": str(cleanup), "RELEASE_FIFO": str(release)}
+        proc = subprocess.Popen([sys.executable, str(wrapper), str(lib), str(LONG_BUDGET_S), "hang", "after"],
+                                stdout=subprocess.PIPE, env=env, preexec_fn=_default_sigint)
+        pid = None
+        go = os.open(release, os.O_RDWR)  # held open to the end: a closed, unread FIFO discards its data
+        try:
+            with open(fifos.group, "rb") as group:
+                pid = int(group.readline())
+                proc.send_signal(signal.SIGTERM)
+                with open(cleanup, "rb") as announced:
+                    assert announced.readline() == b"cleanup\n"
+                proc.send_signal(signal.SIGTERM)  # second signal, mid-cleanup
+                os.write(go, b"go\n")
+                out = proc.stdout.read().decode()
+                assert proc.wait() == 0, out
+                assert "SIGTERM" in out
+>               assert _survivors(fifos, group) == b"", "the re-entered cleanup left a section group alive"
+E               AssertionError: the re-entered cleanup left a section group alive
+E               assert b'survived\n' == b''
+E                 
+E                 Use -v to get more diff
+
+tests/test_session_start_timebox.py:403: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_session_start_timebox.py::test_a_second_signal_during_the_cleanup_does_not_reenter_it
+1 failed, 2430 passed in 2124.87s (0:35:24)
+exit=1
+14:54  up 1 day,  1:54, 4 users, load averages: 230,77 215,41 222,93
