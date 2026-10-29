@@ -37,7 +37,12 @@ def test_native_keeps_common_jobs_and_separates_both_reviewers(tmp_path):
     direct = yaml.safe_load(files[tmp_path / ".github/workflows/pipeline.yml"])
     legacy = native_common_jobs()
     for name in ("contract", *renderer.CATEGORIES, "tag"):
-        assert direct["jobs"][name] == legacy["jobs"][name]
+        actual = direct["jobs"][name]
+        if name == "contract":
+            omitted = "Test embedded workflow authorization"
+            steps = [step for step in actual["steps"] if step.get("name") != omitted]
+            actual = {**actual, "steps": steps}
+        assert actual == legacy["jobs"][name]
     review = str(direct["jobs"]["review"])
     assert "claude-code-action" not in review
     assert "Require completed Codex reviews" in review

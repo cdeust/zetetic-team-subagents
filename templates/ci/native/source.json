@@ -130,6 +130,10 @@
     "rerun-merge-job-identity": {
       "source": "https://github.com/cdeust/cortex-vision/pull/5#discussion_r4408735600",
       "reason": "Fold merge and merge pending review as one logical job across authenticated attempts; retain the newest original job payload and reject duplicate aliases in one attempt. Preserve unrelated historical failures."
+    },
+    "portable-workflow-authorization-contract": {
+      "source": "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#discussion_r4408715493",
+      "reason": "Export committed stdlib tests that execute the actual generated post-merge resolver, and run them in the native contract job before configured unit commands. Production authorization logic is unchanged."
     }
   },
   "adapted_assets": {
@@ -203,7 +207,8 @@
     "scripts/tests/test_ci_codex_review_schedule.py": "5a76b931e09946cd1cc03d6a0f23a5ebfada121a4b5767833fdbd2eaa2321967",
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
     "scripts/tests/test_ci_codex_review_proof_first.py": "1b046a129447084575e2260b7eac4175342bfdd4fa9ec339d81fc3fb48348403",
-    "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6"
+    "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6",
+    "scripts/tests/test_ci_workflow_authorization.py": "c93a4fe5ad8f9b9f57fe17a058d00f1a7723349af648a87a6589b260bb685cf1"
   },
   "adapted_jobs": {
     "review": {
