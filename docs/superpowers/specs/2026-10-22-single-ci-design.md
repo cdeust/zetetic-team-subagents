@@ -155,8 +155,17 @@ Two `claude-code-action` invocations in the `review` job, both with the
 OAuth token and `allowed_bots`:
 
 1. Review: the documented `code-review` plugin invocation with
-   `--comment`, read-only, `--allowedTools
-   "mcp__github_inline_comment__create_inline_comment"`.
+   `--comment`, read-only. Amended 2026-10-29: with
+   `--allowedTools "mcp__github_inline_comment__create_inline_comment"` alone
+   the skill launched none of its subagents and still posted "No issues
+   found" (PR #207, 3 turns in 9 s). Its tools are now the ones its procedure
+   uses (subagents, `gh pr diff`/`view`/`comment`, `gh issue`, `gh search`),
+   reading tools (Read, Glob, Grep, `gh run view`, `git diff`/`log`/`show`)
+   and the test runners (`python3 -m pytest`, `pytest`, `cargo test`,
+   `npm test`), nothing that edits. The prompt names the head SHA, requires
+   the whole diff, the changed files, the tests and the run's test logs
+   before a verdict, and a failed review names its error class
+   (`docs/verification/review-bot-tools-20261029.md`).
 2. Fix: a prompt that gives the bot the PR number, the branch, and the
    conclusion and log URLs of jobs 2 to 6, and tells it to apply every
    review finding and every test failure on the branch, run the touched
