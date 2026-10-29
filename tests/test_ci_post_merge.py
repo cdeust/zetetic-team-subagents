@@ -3,6 +3,7 @@
 from copy import deepcopy
 from io import BytesIO
 import json
+import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
@@ -431,4 +432,72 @@ def test_extra_environment_variant_is_rejected(scenario):
     )
     with pytest.raises(resolver.PostMergeError):
         execute(scenario)
+    assert_no_merge(scenario)
+
+
+def skip_jobs(scenario, *names):
+    for job in scenario[3][("GET", JOBS_PATH)]["jobs"]:
+        if job["name"] in names:
+            job["conclusion"] = "skipped"
+
+
+# Draft PR #219 runs 40864421520 and 40874010475 succeeded with review and
+# merge skipped; the resolver then failed main runs 40865808090 and 40875336583
+# with "source merge gate requires completed review".
+def test_draft_pipeline_without_merge_request_declines_without_failing(scenario):
+    skip_jobs(scenario, "review", "merge")
+    scenario[2]["draft"] = True
+    result = execute(scenario)
+    assert result == {
+        "tested_sha": HEAD,
+        "run_tests": "false",
+        "pr_number": "42",
+        "reason": "Draft PR: its Pipeline skipped review and merge; nothing to merge",
+    }
+    assert_no_merge(scenario)
+    assert not any(path == COMPARE_PATH for _, path, _ in scenario[-1])
+
+
+def test_skipped_review_and_merge_on_a_ready_pr_still_fails(scenario):
+    skip_jobs(scenario, "review", "merge")
+    with pytest.raises(resolver.PostMergeError, match="not a draft"):
+        execute(scenario)
+    assert_no_merge(scenario)
+
+
+@pytest.mark.parametrize("skipped", ["review", "merge"])
+def test_draft_with_only_one_gate_job_skipped_still_fails(scenario, skipped):
+    skip_jobs(scenario, skipped)
+    scenario[2]["draft"] = True
+    with pytest.raises(resolver.PostMergeError, match="merge gate"):
+        execute(scenario)
+    assert_no_merge(scenario)
+
+
+@pytest.mark.parametrize("name", [n for n in JOB_NAMES if n not in ("review", "merge")])
+def test_draft_decline_still_requires_every_test_job(scenario, name):
+    skip_jobs(scenario, "review", "merge", name)
+    scenario[2]["draft"] = True
+    with pytest.raises(resolver.PostMergeError, match=re.escape(f"completed {name}")):
+        execute(scenario)
+    assert_no_merge(scenario)
+
+
+def test_cli_draft_decline_exits_zero_without_tests(scenario, tmp_path, monkeypatch):
+    skip_jobs(scenario, "review", "merge")
+    scenario[2]["draft"] = True
+    event_file = tmp_path / "event.json"
+    output = tmp_path / "output"
+    event_file.write_text(json.dumps(scenario[0]))
+    for key, value in {
+        "GITHUB_EVENT_NAME": "workflow_run",
+        "GITHUB_EVENT_PATH": str(event_file),
+        "GITHUB_REPOSITORY": REPO,
+        "GH_TOKEN": "fixture-token",
+        "GITHUB_OUTPUT": str(output),
+    }.items():
+        monkeypatch.setenv(key, value)
+    assert resolver.main() == 0
+    assert "run_tests=false\n" in output.read_text()
+    assert f"tested_sha={HEAD}\n" in output.read_text()
     assert_no_merge(scenario)
