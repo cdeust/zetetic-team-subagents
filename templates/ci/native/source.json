@@ -141,16 +141,22 @@
         "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/git-config.ts"
       ],
       "reason": "Owner-authored requests inherit pinned tag workspace edit approval instead of overriding acceptEdits with auto; explicitly allow test and git tools. Reject fork or default-branch PR targets before running the action. Preserve action App git authentication, owner-only comment context, native read-only review and merge gates."
+    },
+    "claude-review-verdict-marker": {
+      "consumer": "https://github.com/cdeust/Cortex/pull/834",
+      "fixture": "https://github.com/cdeust/claude-mods/pull/51#issuecomment-6491944909",
+      "reason": "The final native Claude review comment ends with exactly one line <!-- claude-review-verdict:v1 {\"head\":\"<event head sha>\",\"merge\":true|false} -->, so the Cortex convergence planner reads the verdict for the reviewed head instead of reporting claude_verdict_unreadable. The head is the event's pull_request.head.sha, never model-chosen text."
     }
   },
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "132ab256025ea3ba6ae2e10c6a25b78dbc300a1724a52db086cfef185761fa7c",
+      "sha256": "047114ea11b2fcbb0cd7aca7820703057df51e99e4599119d662cd7a3614ebf1",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
-        "owner-model-selection"
+        "owner-model-selection",
+        "claude-review-verdict-marker"
       ]
     },
     ".github/workflows/claude.yml": {
