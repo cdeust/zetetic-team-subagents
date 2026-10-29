@@ -24,7 +24,11 @@ It is therefore the **first stop for verifying / auditing / scope-bounding a sci
 | Cross-file truth inside a code corpus | `ai-architect-mcp-codebase` MCP (`codebase-intelligence.md`) | `Grep`/`Glob`/`Read` | — |
 | Recall a prior decision / past finding | `cortex:recall` scoped to your `agent_topic` | `memory-tool.sh search` in your scope | — |
 
-**Calibration by agent class.** Research and epistemic agents (research-scientist, data-scientist, reviewer-academic, paper-writer, professor; and the epistemic genius patterns — popper, cochrane, feynman, peirce, fisher, semmelweis) treat `claude.ai Science` as **primary, first-recourse** for any verification/audit/bounding step. All other agents carry it as **awareness**: when a task acquires a scientific-claim component, route the evidence beat there first.
+**Calibration by agent class.** The epistemic genius patterns (popper, cochrane, feynman, peirce, fisher, semmelweis) treat `claude.ai Science` as **primary, first-recourse** for any verification/audit/bounding step. All other agents carry it as **awareness**: when a task acquires a scientific-claim component, route the evidence beat there first.
+
+## Free public APIs
+
+When a task needs a free or public API (prototype, test data) and no provider is named, follow `rules/public-apis-reference.md` (installed with the plugin rules): discover in the public-apis community list, then verify the API on its official docs, terms and one real request. The list is a discovery aid, never evidence about an API.
 
 ## Source discipline (binding at all stakes — coding-standards.md §8)
 
@@ -40,7 +44,7 @@ It is therefore the **first stop for verifying / auditing / scope-bounding a sci
 When the beta exposes an MCP server, bind it here, in this order of preference:
 
 1. **Project/user MCP config** — add the server to `.mcp.json` (project) or `~/.claude/settings.json` (user). This is the only step needed for agents whose `tools` list is `*` or already includes the server's namespace.
-2. **Per-agent `tools:` allowlist** — for team agents with an explicit `tools: [...]` frontmatter list, append the real `mcp__…` tool names once they are known. Genius agents (`All tools`) need no change.
+2. **Per-agent `tools:` allowlist** — for agents with an explicit `tools: [...]` frontmatter list, append the real `mcp__…` tool names once they are known. Genius agents (`All tools`) need no change.
 3. **This table** — promote `claude.ai Science` rows from "the app" to the concrete `mcp__…` tool name, and update the `<zetetic-spine>` evidence beat wording via `scripts/generate-spine.py` (single source — do not hand-edit the injected blocks).
 
 Until then: agents are *aware* of the resource and its priority; the binding is a documented, ready slot, not a fabricated capability.

@@ -5,8 +5,8 @@
 #   scripts/spawn-agent.sh --contract <path> <agent-name> [task-description]
 #
 # Examples:
-#   scripts/spawn-agent.sh --contract /tmp/c.json engineer "Fix the auth bug in login.py"
-#   scripts/spawn-agent.sh --contract /tmp/c.json architect             # interactive REPL
+#   scripts/spawn-agent.sh --contract /tmp/c.json curie "Find why the benchmark drifts"
+#   scripts/spawn-agent.sh --contract /tmp/c.json lamport               # interactive REPL
 #
 # What it does:
 #   0. Validates the delegation contract via tools/delegation_contract.py
@@ -15,7 +15,7 @@
 #      with a non-zero exit and NO worktree is created. This is the
 #      HC-ZETETIC-004 fail-closed precondition gate — see
 #      schemas/delegation-contract.schema.yaml for the contract shape.
-#   1. Resolves the agent file (agents/<name>.md) and strips YAML frontmatter.
+#   1. Resolves the genius agent file (agents/genius/<name>.md) and strips YAML frontmatter.
 #   2. Registers an active-contract lock (so a concurrent, overlapping
 #      delegation is denied by step 0 while this one runs) and creates a git
 #      worktree at <target-repo>/.claude/worktrees/<agent>-<timestamp> on a new
@@ -129,20 +129,14 @@ fi
 
 echo "→ contract accepted: agent=$CONTRACT_AGENT push_authority=$PUSH_AUTHORITY" >&2
 
-# Resolve agent file: check agents/<name>.md first, then agents/genius/<name>.md
-AGENT_FILE="$REPO_ROOT/agents/$AGENT.md"
-if [[ ! -f "$AGENT_FILE" ]]; then
-  AGENT_FILE="$REPO_ROOT/agents/genius/$AGENT.md"
-fi
+# Resolve the agent file. Only genius agents exist (owner decision 2026-10-21).
+AGENT_FILE="$REPO_ROOT/agents/genius/$AGENT.md"
 
 if [[ ! -f "$AGENT_FILE" ]]; then
   echo "error: agent not found: $AGENT" >&2
   echo "" >&2
-  echo "team agents:" >&2
-  ls "$REPO_ROOT/agents"/*.md 2>/dev/null | xargs -I{} basename {} .md | sed 's/^/  /' >&2
-  echo "" >&2
   echo "genius agents:" >&2
-  ls "$REPO_ROOT/agents/genius"/*.md 2>/dev/null | grep -v INDEX | xargs -I{} basename {} .md | sed 's/^/  genius\//' >&2
+  ls "$REPO_ROOT/agents/genius"/*.md 2>/dev/null | grep -v INDEX | xargs -I{} basename {} .md | sed 's/^/  /' >&2
   exit 1
 fi
 

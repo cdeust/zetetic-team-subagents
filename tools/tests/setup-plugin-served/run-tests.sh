@@ -20,15 +20,14 @@ check() { # <label> <expected-regex> <output>
 mkdir -p "$TMP/home1/.claude/plugins"
 echo '{"version":2,"plugins":{"zetetic-team-subagents@zetetic-marketplace":[{"scope":"user"}]}}' > "$TMP/home1/.claude/plugins/installed_plugins.json"
 out1="$(HOME="$TMP/home1" bash "$SETUP" install --dry-run 2>&1 || true)"
-check "plugin registered: agents and skills not staged" 'Staged: 0 team \+ 0 genius agents, 0 skills' "$out1"
+check "plugin registered: agents and skills not staged" 'Staged: 0 genius agents, 0 skills' "$out1"
 check "plugin registered: says so"                       'served by it' "$out1"
 check "plugin registered: commands still staged"        'Staged: .*, [1-9][0-9]* commands' "$out1"
 
 # Case 2: no plugin -> standalone install stages everything.
 mkdir -p "$TMP/home2/.claude"
 out2="$(HOME="$TMP/home2" bash "$SETUP" install --dry-run 2>&1 || true)"
-check "standalone: team agents staged"   'Staged: [1-9][0-9]* team \+' "$out2"
-check "standalone: genius agents staged" '\+ [1-9][0-9]* genius agents' "$out2"
+check "standalone: genius agents staged" 'Staged: [1-9][0-9]* genius agents' "$out2"
 check "standalone: skills staged"        'agents, [1-9][0-9]* skills' "$out2"
 
 # Case 3: with the plugin served, the tools must still find its agents and

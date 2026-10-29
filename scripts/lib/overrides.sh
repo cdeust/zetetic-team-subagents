@@ -7,9 +7,9 @@
 # Reads ~/.claude/zetetic/agent-models.json and resolves model + effort per agent.
 # Config schema (backward compatible):
 #   { "agents": {
-#       "engineer": "sonnet",                                 # shorthand: model only
-#       "architect": { "model": "opus", "effort": "high" },    # full: model + effort
-#       "refactorer": { "effort": "low" }                      # effort only (keeps frontmatter model)
+#       "curie": "sonnet",                                 # shorthand: model only
+#       "lamport": { "model": "opus", "effort": "high" },    # full: model + effort
+#       "ginzburg": { "effort": "low" }                      # effort only (keeps frontmatter model)
 #     },
 #     "patterns": [
 #       { "glob": "genius/*", "model": "sonnet" },             # shorthand

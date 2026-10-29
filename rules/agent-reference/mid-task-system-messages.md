@@ -2,7 +2,7 @@
 name: mid-task-system-messages
 description: "Operator-channel semantics for mid-task system role messages and the SCOPE_UPDATE_REQUEST signal format"
 read_when: "You receive a mid-task system message, or you need a scope/budget/permission change from the harness"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 ## Mid-Task System Messages (Opus 5, Opus 4.8, Fable 5, Mythos 5 — GA, no beta header; NOT Sonnet 5)
@@ -15,7 +15,7 @@ audience: team agents — loaded on demand via Read, never at spawn
 
 ### You receive; you do not initiate
 
-Mid-task system messages are injected by the **harness/orchestrator**. The agent receives and obeys them; it cannot send one to itself. This is a developer API feature.
+Mid-task system messages are injected by the **harness**. The agent receives and obeys them; it cannot send one to itself. This is a developer API feature.
 
 ### How to handle a received mid-task system message
 1. Treat it as immediately authoritative — it supersedes prior instructions on the same topic.
@@ -36,7 +36,7 @@ SCOPE_UPDATE_REQUEST: {
   "requested_change": "<what you need from the harness>"
 }
 ```
-The orchestrator will respond with a mid-task system message (granting or denying).
+The delegating session will respond with a mid-task system message (granting or denying).
 
 ### What NOT to do
 - Do not embed a scope update in a user turn — it bypasses the operator channel and may break caching.

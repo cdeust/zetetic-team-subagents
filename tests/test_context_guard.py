@@ -305,52 +305,66 @@ def test_git_returns_empty_on_any_failure(monkeypatch):
     assert guard._git("/repo", "status") == ""
 
 
-def test_write_stub_creates_per_session_and_latest(isolate_guard, monkeypatch):
+def _trig(sid="sess123", cwd="/work", ctx=150_000, *model_level):
+    """model_level: optional (model, level) positional pair."""
+    model = model_level[0] if model_level else "claude-opus-5"
+    level = model_level[1] if len(model_level) > 1 else "warn"
+    return guard.Trigger(sid, cwd, ctx, model, level)
+
+
+def test_write_checkpoint_creates_per_session_and_latest(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    path = guard._write_stub(guard.Trigger("sess123", "/work", 150_000, "claude-opus-5", "warn"))
+    path = guard._write_checkpoint(_trig(), None)
     assert path.endswith("sess123.md")
     body = Path(path).read_text()
     latest = Path(path).parent / "latest.md"
     assert latest.read_text() == body
 
 
-def test_stub_records_the_session_facts(isolate_guard, monkeypatch):
+def test_checkpoint_records_the_session_facts(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    path = guard._write_stub(guard.Trigger("sess123", "/work", 150_000, "claude-opus-5", "warn"))
-    body = Path(path).read_text()
+    body = Path(guard._write_checkpoint(_trig(), None)).read_text()
     assert "150,000" in body
     assert "claude-opus-5" in body
     assert "/work" in body
     assert "sess123" in body
 
 
-def test_stub_carries_the_letta_schema_sections(isolate_guard, monkeypatch):
+def test_checkpoint_carries_the_letta_schema_sections(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    body = Path(
-        guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn"))
-    ).read_text()
+    body = Path(guard._write_checkpoint(_trig("s", "/w", 1, "m"), None)).read_text()
     for section in ("### Goals", "### File references", "### Errors and fixes",
                     "### Current state", "### Next steps", "### Resume contract"):
         assert section in body
 
 
-def test_stub_seeds_file_references_from_git_status(isolate_guard, monkeypatch):
+def test_checkpoint_seeds_file_references_from_git_status(isolate_guard, monkeypatch):
     monkeypatch.setattr(
         guard, "_git",
         lambda cwd, *a: " M tools/x.sh" if a[0] == "status" else "branchy",
     )
-    body = Path(guard._write_stub(guard.Trigger("s", "/w", 1, "m", "hard"))).read_text()
-    assert "- M tools/x.sh" in body
+    body = Path(guard._write_checkpoint(_trig("s", "/w", 1, "m", "hard"), None)).read_text()
+    assert "M tools/x.sh" in body
     assert "branchy" in body
 
 
-def test_stub_says_so_when_the_tree_is_clean(isolate_guard, monkeypatch):
+def test_checkpoint_says_so_for_every_field_it_could_not_measure(isolate_guard, monkeypatch):
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
-    body = Path(guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn"))).read_text()
-    assert "(working tree clean)" in body
+    body = Path(guard._write_checkpoint(_trig("s", "/w", 1, "m"), None)).read_text()
+    assert body.count("(none found)") >= 5
+    assert "<to be filled" not in body, "nothing is left for a model to fill in"
 
 
-def test_write_stub_returns_empty_when_the_directory_cannot_be_made(
+def test_write_checkpoint_degrades_to_git_state_when_the_summariser_is_missing(
+    isolate_guard, monkeypatch
+):
+    monkeypatch.setattr(guard, "_git", lambda cwd, *a: "main")
+    monkeypatch.setattr(guard, "_load_tool", lambda name: None)
+    body = Path(guard._write_checkpoint(_trig(), None)).read_text()
+    assert "checkpoint_summary.py not found" in body and "main" in body
+
+
+def test_write_checkpoint_returns_empty_when_the_directory_cannot_be_made(
     isolate_guard, monkeypatch
 ):
     """Fail-open: an unwritable HOME must not break the hook."""
@@ -359,10 +373,10 @@ def test_write_stub_returns_empty_when_the_directory_cannot_be_made(
         raise OSError("read-only")
 
     monkeypatch.setattr(os, "makedirs", _raise)
-    assert guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn")) == ""
+    assert guard._write_checkpoint(_trig("s", "/w", 1, "m"), None) == ""
 
 
-def test_write_stub_returns_empty_when_the_file_cannot_be_written(
+def test_write_checkpoint_returns_empty_when_the_file_cannot_be_written(
     isolate_guard, monkeypatch
 ):
     import builtins
@@ -376,7 +390,7 @@ def test_write_stub_returns_empty_when_the_file_cannot_be_written(
 
     monkeypatch.setattr(guard, "_git", lambda cwd, *a: "")
     monkeypatch.setattr(builtins, "open", _open)
-    assert guard._write_stub(guard.Trigger("s", "/w", 1, "m", "warn")) == ""
+    assert guard._write_checkpoint(_trig("s", "/w", 1, "m"), None) == ""
 
 
 # ── state (level + telemetry) ────────────────────────────────────────────────
@@ -452,27 +466,26 @@ def test_load_scan_reports_a_missing_scanner_rather_than_failing_silently(
     assert "transcript_scan.py not found" in capsys.readouterr().err
 
 
-def test_warn_reason_is_actionable(isolate_guard):
-    reason = guard._warn_reason(185_000, "/stub.md", 180_000, 200_000)
-    assert "185,000" in reason and "180,000" in reason and "200,000" in reason
-    assert "memory-writer" in reason
-    assert "/stub.md" in reason
-    assert "NOT the end of the session" in reason
+def test_warn_notice_names_the_checkpoint_and_never_asks_for_delegation():
+    msg = guard._notice(guard.Trigger("s", "/w", 185_000, "m", "warn"),
+                        "/stub.md", 180_000, 200_000)["systemMessage"]
+    assert "185,000" in msg and "180,000" in msg and "200,000" in msg
+    assert "/stub.md" in msg
+    assert "subagent" not in msg.lower() and "spawn" not in msg.lower()
+    assert "memory-writer" not in msg
 
 
-def test_warn_reason_handles_a_missing_stub_path():
-    assert "n/a" in guard._warn_reason(1, "", 1, 2)
+def test_notice_handles_a_missing_checkpoint_path():
+    msg = guard._notice(guard.Trigger("s", "/w", 1, "m", "warn"), "", 1, 2)["systemMessage"]
+    assert "n/a" in msg
 
 
-def test_block_reason_states_the_cap_and_the_exit_protocol():
-    reason = guard._block_reason(205_000, "/stub.md", 200_000)
-    assert "205,000" in reason and "200,000" in reason
-    assert "CHECKPOINT — context cleared." in reason
-    assert "Do NOT start new substantive work" in reason
-
-
-def test_block_reason_handles_a_missing_stub_path():
-    assert "n/a" in guard._block_reason(1, "", 1)
+def test_hard_notice_states_the_cap_and_the_resume_protocol():
+    notice = guard._notice(guard.Trigger("s", "/w", 205_000, "m", "hard"),
+                           "/stub.md", 180_000, 200_000)
+    assert "205,000" in notice["systemMessage"] and "200,000" in notice["systemMessage"]
+    assert "/clear" in notice["systemMessage"]
+    assert "decision" not in notice, "the turn must not be blocked"
 
 
 # ── main: the decision ladder ────────────────────────────────────────────────
@@ -506,28 +519,27 @@ def test_main_is_silent_below_the_warn_threshold(monkeypatch, isolate_guard, cap
     assert capsys.readouterr().out == ""
 
 
-def test_main_emits_the_warn_decision_on_crossing_up(
+def test_main_emits_the_warn_notice_on_crossing_up(
     monkeypatch, isolate_guard, capsys
 ):
     payload = {"session_id": "s", "cwd": str(isolate_guard),
                "transcript_path": _jsonl(isolate_guard, _usage(185_000), _tool_use())}
     assert _run_main(monkeypatch, payload) == 0
-    decision = json.loads(capsys.readouterr().out)
-    assert decision["decision"] == "block"
-    assert "CHECKPOINT THRESHOLD" in decision["reason"]
-    assert "checkpoint threshold" in decision["systemMessage"]
+    out = json.loads(capsys.readouterr().out)
+    assert "decision" not in out, "the warn level must not block the turn"
+    assert "checkpoint threshold" in out["systemMessage"]
     assert guard._load_state("s")["level"] == "warn"
 
 
-def test_main_emits_the_hard_decision_above_the_cap(
+def test_main_emits_the_hard_notice_above_the_cap(
     monkeypatch, isolate_guard, capsys
 ):
     payload = {"session_id": "s", "cwd": str(isolate_guard),
                "transcript_path": _jsonl(isolate_guard, _usage(250_000), _tool_use())}
     _run_main(monkeypatch, payload)
-    decision = json.loads(capsys.readouterr().out)
-    assert "SOFT CAP REACHED" in decision["reason"]
-    assert "soft cap" in decision["systemMessage"]
+    out = json.loads(capsys.readouterr().out)
+    assert "decision" not in out
+    assert "soft cap" in out["systemMessage"]
     assert guard._load_state("s")["level"] == "hard"
 
 
@@ -537,7 +549,7 @@ def test_main_fires_each_level_only_once(monkeypatch, isolate_guard, capsys):
                "transcript_path": _jsonl(isolate_guard, _usage(185_000), _tool_use())}
     _run_main(monkeypatch, payload)
     first = json.loads(capsys.readouterr().out)
-    assert first["decision"] == "block"
+    assert "checkpoint threshold" in first["systemMessage"]
     assert _run_main(monkeypatch, payload) == 0
     assert capsys.readouterr().out == ""
 
@@ -552,7 +564,7 @@ def test_main_still_escalates_from_warn_to_hard(monkeypatch, isolate_guard, caps
     hard_path.write_text(json.dumps(_usage(250_000)) + "\n" + json.dumps(_tool_use()) + "\n")
     _run_main(monkeypatch, {"session_id": "s", "cwd": str(isolate_guard),
                             "transcript_path": str(hard_path)})
-    assert "SOFT CAP REACHED" in json.loads(capsys.readouterr().out)["reason"]
+    assert "soft cap" in json.loads(capsys.readouterr().out)["systemMessage"]
 
 
 def test_main_does_not_downgrade_from_hard_to_warn(monkeypatch, isolate_guard, capsys):
@@ -569,7 +581,7 @@ def test_main_uses_the_model_specific_band(monkeypatch, isolate_guard, capsys):
                "transcript_path": _jsonl(
                    isolate_guard, _usage(125_000, "claude-haiku-4-5-20251001"), _tool_use())}
     _run_main(monkeypatch, payload)
-    assert "CHECKPOINT THRESHOLD" in json.loads(capsys.readouterr().out)["reason"]
+    assert "checkpoint threshold" in json.loads(capsys.readouterr().out)["systemMessage"]
 
     guard._save_state("s2", {"level": "none"})
     payload2 = {"session_id": "s2", "cwd": str(isolate_guard),
@@ -586,7 +598,7 @@ def test_main_defaults_cwd_when_the_payload_omits_it(
     payload = {"session_id": "s",
                "transcript_path": _jsonl(isolate_guard, _usage(250_000), _tool_use())}
     _run_main(monkeypatch, payload)
-    assert json.loads(capsys.readouterr().out)["decision"] == "block"
+    assert "soft cap" in json.loads(capsys.readouterr().out)["systemMessage"]
 
 
 # ── activity gate ────────────────────────────────────────────────────────────
@@ -619,5 +631,5 @@ def test_main_fires_once_activity_appears_after_a_skipped_check(
         Path(path).read_text() + json.dumps(_tool_use()) + "\n" + json.dumps(_usage(186_000)) + "\n"
     )
     assert _run_main(monkeypatch, payload) == 0
-    decision = json.loads(capsys.readouterr().out)
-    assert decision["decision"] == "block"
+    out = json.loads(capsys.readouterr().out)
+    assert "checkpoint threshold" in out["systemMessage"]

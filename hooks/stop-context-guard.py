@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """stop-context-guard.py — Stop hook: enforce the token-budget checkpoint protocol.
 
-Contract (source of truth: agents/orchestrator.md <token-budget>):
+Token-budget contract (the table below is the source of truth; the per-model
+  values are loaded from ~/.claude/ctxguard-thresholds.json):
 
   | Model              | Checkpoint (warn) | Hard cap (block) | Why                                  |
   |--------------------|-------------------|------------------|--------------------------------------|
@@ -23,23 +24,19 @@ Contract (source of truth: agents/orchestrator.md <token-budget>):
                  session_id, transcript_path, cwd, stop_hook_active.
   Postcondition:
     - below WARN            -> exit 0, no output, no side effects.
-    - WARN <= ctx < HARD    -> write a free mechanical checkpoint stub (letta
-                               summary schema) AND block the stop exactly once:
-                               the model is instructed to spawn a budgeted
-                               memory-writer subagent (<=16K-token context) that
-                               persists the semantic checkpoint + cortex:remember
-                               entries while headroom remains, then RESUME the
-                               user's task in-session (reflection, not a stop).
-    - ctx >= HARD           -> write the stub AND block the stop exactly once,
-                               injecting the checkpoint-finalize procedure so the
-                               model persists a scoped semantic checkpoint and
-                               signals the user to clear + resume via recall.
-                               Because WARN already ran the reflection, the hard
-                               block is normally a formality, not a scramble.
+    - WARN <= ctx < HARD    -> the hook itself writes a filled checkpoint (see below)
+                               and emits a non-blocking systemMessage naming it. No
+                               subagent is spawned and the turn is not blocked.
+    - ctx >= HARD           -> same checkpoint, plus a systemMessage telling the user
+                               to /clear and resume from the file. Not blocking either:
+                               the checkpoint is already durable.
 
-  Checkpoint schema (letta-code summary schema): goals / file references
-  (paths + line ranges) / errors and fixes / current state / next steps,
-  <=500 words total, any quoted tool output clipped to 2,000 chars. Resume
+  Checkpoint (letta-code summary schema): goals / file references / errors and
+  fixes / current state / next steps. Owner decision 2026-10-21: no agent writes
+  it. tools/checkpoint_summary.py measures every field from the transcript named
+  in the hook input and from git (last user requests, files edited, commands
+  run, tool errors, last assistant message, open TODOs); a field it cannot
+  measure reads "(none found)". Quoted tool output is clipped. Resume
   contract: read the checkpoint + ONE targeted recall; do NOT re-read files
   or docs the checkpoint already summarizes.
 
@@ -53,6 +50,7 @@ Contract (source of truth: agents/orchestrator.md <token-budget>):
   this hook is the active enforcement layer.
 """
 
+import importlib
 import json
 import os
 import subprocess
@@ -132,7 +130,7 @@ LEVEL_ORDER = {"none": 0, "warn": 1, "hard": 2}
 
 class Trigger(NamedTuple):
     """The five facts that describe one firing: who, where, how much, on what
-    model, at which level. They are read together by the stub writer, the state
+    model, at which level. They are read together by the checkpoint writer, the state
     record and the block builder, so they travel as one value rather than as
     five parallel parameters."""
     session_id: str
@@ -155,13 +153,13 @@ def _exit(payload=None) -> NoReturn:
     sys.exit(0)
 
 
-def _load_scan():
-    """Import tools/transcript_scan.py from beside this hook or the plugin root.
+def _load_tool(module_name: str):
+    """Import tools/<module_name>.py from beside this hook or the plugin root.
 
     Same resolution order as stop-redaction-gate's _load_gate. Returns None
-    when no copy exists; the caller then exits 0, which is this hook's
-    standing contract for anything it cannot measure (see module docstring:
-    non-fatal by construction).
+    when no copy exists; the caller then degrades (exit 0 or an unfilled
+    checkpoint), which is this hook's standing contract for anything it cannot
+    measure (see module docstring: non-fatal by construction).
     """
     here = os.path.dirname(os.path.abspath(__file__))
     candidates = [os.path.join(here, "..", "tools")]
@@ -170,13 +168,17 @@ def _load_scan():
         candidates.append(os.path.join(plugin_root, "tools"))
     for c in candidates:
         c = os.path.normpath(c)
-        if os.path.isfile(os.path.join(c, "transcript_scan.py")):
+        if os.path.isfile(os.path.join(c, module_name + ".py")):
             sys.path.insert(0, c)
-            import transcript_scan  # noqa: E402  (path must be set first)
-            return transcript_scan
-    _note("tools/transcript_scan.py not found beside the hook; context not measured",
+            return importlib.import_module(module_name)  # path must be set first
+    _note(f"tools/{module_name}.py not found beside the hook; not measured",
           FileNotFoundError(candidates[0]))
     return None
+
+
+def _load_scan():
+    """The transcript scanner (context size, activity gate), or None."""
+    return _load_tool("transcript_scan")
 
 
 def _read_last_usage(transcript_path: str):
@@ -209,64 +211,45 @@ def _git(cwd: str, *args: str) -> str:
         return ""
 
 
-def _write_stub(trigger: Trigger) -> str:
-    """Capture mechanical session state for free. Returns the stub path (or '')."""
+def _checkpoint_text(trigger: Trigger, transcript_path, facts_module) -> str:
+    """The checkpoint markdown: measured transcript facts + git, no model."""
     session_id, cwd, ctx, model_id, level = trigger
+    facts = (facts_module.summarize(transcript_path) if facts_module else
+             {"user_requests": [], "files_touched": [], "commands": [], "errors": [],
+              "last_assistant": "", "open_todos": []})
+    session = {
+        "level": level, "ctx": ctx, "model": model_id, "cwd": cwd,
+        "session_id": session_id,
+        "iso": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "branch": (_git(cwd, "symbolic-ref", "--short", "HEAD")
+                   or _git(cwd, "rev-parse", "--short", "HEAD")),
+        "last_commit": _git(cwd, "log", "-1", "--oneline"),
+        "git_status": _git(cwd, "status", "--porcelain"),
+    }
+    if facts_module is None:
+        return (f"## Auto-checkpoint ({level}) — {session['iso']}\n\n"
+                f"tools/checkpoint_summary.py not found; only git state measured.\n"
+                f"- session_id: {session_id}\n- branch: {session['branch'] or '(unknown)'}\n"
+                f"- last commit: {session['last_commit'] or '(none)'}\n"
+                f"- git status:\n{session['git_status'] or '(clean)'}\n")
+    return facts_module.render(facts, session)
+
+
+def _write_checkpoint(trigger: Trigger, transcript_path) -> str:
+    """Write the filled checkpoint (per-session + latest). Returns its path or ''."""
     root = os.path.join(os.path.expanduser("~"), ".claude", "memories", "checkpoints")
     try:
         os.makedirs(root, exist_ok=True)
     except OSError:
         return ""
-
-    branch = _git(cwd, "symbolic-ref", "--short", "HEAD") or _git(cwd, "rev-parse", "--short", "HEAD")
-    last_commit = _git(cwd, "log", "-1", "--oneline")
-    modified = _git(cwd, "status", "--porcelain")
-    iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    stub = f"""---
-description: "Auto-checkpoint ({level}) at {ctx:,} tokens — session {session_id[:8]} on {branch or 'unknown branch'}"
----
-## Auto-checkpoint stub ({level}) — {iso}
-
-> Mechanical state captured for free by stop-context-guard at {ctx:,} context
-> tokens (model: {model_id or 'unknown'}). The semantic fields below follow the
-> letta summary schema. Budget: <=500 words total across all sections; clip any
-> quoted tool output to 2,000 chars.
-
-### Goals
-<to be filled: what this session is trying to achieve, in priority order>
-
-### File references
-(paths + line ranges the resumed session will need; seeded from git status —
-replace with the load-bearing files and add `path:start-end` line ranges)
-{os.linesep.join('- ' + l.strip() for l in modified.splitlines()) if modified else '- (working tree clean)'}
-
-### Errors and fixes
-<to be filled: each error hit this session and how it was fixed or worked around>
-
-### Current state
-- session_id: {session_id}
-- model: {model_id or 'unknown'} · context tokens at trigger: {ctx:,}
-- working dir: {cwd}
-- branch: {branch or '(unknown)'} · last commit: {last_commit or '(none)'}
-<to be filled: one paragraph — where the work stands right now>
-
-### Next steps
-<to be filled: exact ordered actions for the resumed session; first one must be
-executable without re-deriving anything>
-
-### Resume contract
-Read this checkpoint + ONE targeted, agent_topic-scoped cortex:recall. Do NOT
-re-read files or docs this checkpoint already summarizes — trust the file
-references above and verify with targeted Reads only when editing.
-"""
-    per_session = os.path.join(root, f"{session_id}.md")
+    text = _checkpoint_text(trigger, transcript_path, _load_tool("checkpoint_summary"))
+    per_session = os.path.join(root, f"{trigger.session_id}.md")
     latest = os.path.join(root, "latest.md")
     try:
         with open(per_session, "w", encoding="utf-8") as fh:
-            fh.write(stub)
+            fh.write(text)
         with open(latest, "w", encoding="utf-8") as fh:
-            fh.write(stub)
+            fh.write(text)
     except OSError:
         return ""
     return per_session
@@ -301,59 +284,6 @@ def _save_state(session_id: str, state: dict) -> None:
             json.dump(state, fh)
     except OSError as exc:
         _note("ctxguard level-state write failed; the guard may re-fire this session", exc)
-
-
-SCHEMA = (
-    "goals / file references (paths + line ranges) / errors and fixes / "
-    "current state / next steps — <=500 words total, quoted tool outputs "
-    "clipped to 2,000 chars"
-)
-
-
-def _warn_reason(ctx: int, stub_path: str, warn: int, hard: int) -> str:
-    return (
-        f"⚠ CHECKPOINT THRESHOLD — {ctx:,} input tokens "
-        f"(≥ {warn:,} for this model; hard stop at {hard:,}).\n"
-        f"This is a reflection pause, NOT the end of the session. While you still "
-        f"have headroom, persist the semantic checkpoint directly (cheapest path — "
-        f"a few hundred tokens), then resume the user's task:\n\n"
-        f"1. Distill the session into the letta summary schema ({SCHEMA}).\n"
-        f"2. Write it directly: MEMORY_AGENT_ID=<your-scope> tools/memory-tool.sh "
-        f"rethink /memories/<your-scope>/checkpoint.md \"<distilled summary>\", plus "
-        f"one cortex:remember call per WHY-level fact (agent_topic-scoped) — or, if "
-        f"no scoped store, fill the stub at {stub_path or 'n/a'} in place. Only "
-        f"spawn the memory-writer subagent (Agent tool, subagent_type "
-        f"\"memory-writer\") instead if you are yourself close to the hard cap and "
-        f"want to preserve your own remaining headroom, or if the direct write "
-        f"fails.\n"
-        f"3. CONTINUE the user's task in this session. The hard cap at {hard:,} "
-        f"still applies; thanks to this reflection it should be a formality."
-    )
-
-
-def _block_reason(ctx: int, stub_path: str, hard: int) -> str:
-    return (
-        f"⚠ CONTEXT SOFT CAP REACHED — {ctx:,} input tokens "
-        f"(≥ {hard:,} session budget for this model).\n"
-        f"Continuing in this session now risks context poisoning, quota burn, and "
-        f"escalating per-turn cost. Execute the checkpoint protocol before yielding:\n\n"
-        f"1. Write (or update) your scoped semantic checkpoint with the memory tool:\n"
-        f"   MEMORY_AGENT_ID=<your-scope> tools/memory-tool.sh create "
-        f"/memories/<your-scope>/checkpoint.md \"<{SCHEMA}>\"\n"
-        f"   (Mechanical state was already captured for free at: {stub_path or 'n/a'} — "
-        f"merge into its schema; if the WARN-time memory-writer already wrote the "
-        f"checkpoint, update only what changed since.)\n"
-        f"2. If important decisions are not yet durable, persist them now "
-        f"(cortex:remember, scoped to your agent_topic).\n"
-        f"3. End your response with exactly:\n"
-        f"   CHECKPOINT — context cleared.\n"
-        f"   Resume from: /memories/<your-scope>/checkpoint.md\n"
-        f"   Next action: <exact first thing to do on restart>\n"
-        f"Then instruct the user to run /clear and resume. Resume contract: the "
-        f"next session reads the checkpoint + ONE targeted recall — it must NOT "
-        f"re-read files or docs the checkpoint already summarizes.\n"
-        f"Do NOT start new substantive work in this session."
-    )
 
 
 def _read_payload():
@@ -453,26 +383,24 @@ def _record_fire(trigger: Trigger, data: dict, since_offset: int, state: dict) -
     })
 
 
-def _block(trigger: Trigger, stub_path: str, warn: int, hard: int) -> dict:
-    """The Stop payload for a firing. At "warn" this is a one-time reflection
-    block (persist memory while headroom remains, then continue); at "hard" it
-    forces the checkpoint before the session may go on."""
+def _notice(trigger: Trigger, path: str, warn: int, hard: int) -> dict:
+    """Non-blocking Stop output: tell the user where the checkpoint is. The turn
+    is never held and the model is never asked to delegate or write anything."""
+    where = path or "n/a (checkpoint directory not writable)"
+    model = trigger.model_id or "model"
     if trigger.level == "hard":
-        reason = _block_reason(trigger.ctx, stub_path, hard)
         message = (
-            f"[context-guard] {trigger.ctx:,} tokens ≥ {hard:,} soft cap "
-            f"({trigger.model_id or 'model'}) — forcing a checkpoint before the "
-            f"session continues."
+            f"[context-guard] {trigger.ctx:,} tokens >= {hard:,} soft cap ({model}). "
+            f"Checkpoint written by the hook: {where}. Run /clear, then resume "
+            f"from that file (one targeted recall, no re-reading)."
         )
     else:
-        reason = _warn_reason(trigger.ctx, stub_path, warn, hard)
         message = (
-            f"[context-guard] {trigger.ctx:,} tokens ≥ {warn:,} checkpoint threshold "
-            f"({trigger.model_id or 'model'}) — spawning a budgeted memory-writer to "
-            f"persist the semantic checkpoint, then the session continues. "
-            f"Mechanical stub: {stub_path or 'n/a'}. Hard stop at {hard:,}."
+            f"[context-guard] {trigger.ctx:,} tokens >= {warn:,} checkpoint threshold "
+            f"({model}). Checkpoint written by the hook: {where}. "
+            f"Nothing to do; hard stop at {hard:,}."
         )
-    return {"decision": "block", "reason": reason, "systemMessage": message}
+    return {"systemMessage": message}
 
 
 def main():
@@ -490,10 +418,10 @@ def main():
         _exit()
     trigger, warn, hard, since_offset, state = decision
 
-    stub_path = _write_stub(trigger)
+    path = _write_checkpoint(trigger, data.get("transcript_path"))
     _record_fire(trigger, data, since_offset, state)
 
-    _exit(_block(trigger, stub_path, warn, hard))
+    _exit(_notice(trigger, path, warn, hard))
 
 
 if __name__ == "__main__":

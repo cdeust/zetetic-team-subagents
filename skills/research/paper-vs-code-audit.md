@@ -27,7 +27,7 @@ composes: [verify-claim, literature-review]
 aliases: [paper-audit, code-audit, reproduction-check, paper-code-diff]
 hand_off:
   all_aligned: "(done) — implementation matches paper"
-  mismatches_found: "/implement — engineer fixes mismatches to match paper"
+  mismatches_found: "/implement — dijkstra fixes mismatches to match paper"
   paper_has_errors: "/deep-research — investigate whether the paper itself is wrong"
 ---
 

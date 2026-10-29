@@ -1,0 +1,9 @@
+# Native gate-name collision correction, 2026-10-28
+
+The actual five-review Claude report on cdeust/ai-architect-mcp-spec#160 identified that a dictionary keyed by check name silently discarded older/newer entries and let StatusContext collide with CheckRun. The prefilter now groups CheckRun nodes only. Duplicate native gate names and truncated contexts remain possible waits for full authenticated policy. StatusContext cannot shadow those gates. Failed prerequisites and superseded matrix placeholders are decided by the unchanged actual Pipeline history and resumption plan.
+
+A proposed red-prerequisite optimization was omitted: names alone do not authenticate workflow/run identity, so a cheaper hint cannot safely veto a repair. No new policy, API fields, timeout or model call was introduced. The existing discovery query already requests __typename; a real GitHub API response was checked and included CheckRun nodes.
+
+Regression coverage exercises duplicate review/merge states, StatusContext collisions, stale prerequisite names, superseded placeholders and normalized head-proof API categories (not_found, forbidden, rate_limited, unknown and missing-category fallback) through discover. The proof error is raised from the actual nullable GraphQL callback, with a positive call-count check. Three initial assertions failed before the correction; retained readiness controls passed. Final native contracts: 95 pass. Source renderer/native contracts: 54 pass plus 33 subtests. Actual Cortex Ruff and craftsmanship scanner, generic source/craft and strict provenance pass.
+
+Source: [native Claude report](https://github.com/cdeust/ai-architect-mcp-spec/issues/comments/6460515146). Root independently reviewed and explicitly approved production before publication. Only the authored helper, delivered regression contract, asset registration and receipts change; runtime/reader/event, pipeline payloads and Codex.yml remain unchanged.

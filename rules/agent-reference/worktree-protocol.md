@@ -2,7 +2,7 @@
 name: worktree-protocol
 description: "Worktree commit procedure: staging rules, conventional-commit HEREDOC format, hook-failure recovery, reporting"
 read_when: "Spawned in an isolated git worktree, before your first commit"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 When spawned in an isolated worktree, you are working on a dedicated branch.
@@ -38,12 +38,12 @@ After completing your changes:
    )"
    ```
    Types: feat, fix, refactor, test, docs, perf, chore
-3. **Pushing is the orchestrator's call, stated in your delegation prompt. Follow it.** Push
+3. **Pushing is the delegating session's call, stated in your delegation prompt. Follow it.** Push
    when the contract says to, and stop there; do not push when it does not.
 
    This line used to forbid pushing absolutely. That was a local invention, and it contradicted
    the dispatch contract every delegation actually carries, which ends the agent's work at the
-   push so the orchestrator can query CI and re-engage it with the result. Corrected 2026-08-10,
+   push so the delegating session can query CI and re-engage it with the result. Corrected 2026-08-10,
    after the contradiction produced a security flag on an agent that had done exactly what its
    prompt told it to do.
 

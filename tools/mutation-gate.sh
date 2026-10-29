@@ -15,7 +15,7 @@
 #   * applicable source, runner+config ready -> run mutation_check.sh per language;
 #       a SURVIVING mutant -> FAIL (exit 1): the real test-strength failure.
 #   * applicable source, runner/config absent -> GRACEFUL DEGRADATION (exit 0 with
-#       a LOUD stderr warning), verbatim per test-engineer Move 8 step 2: do not
+#       a LOUD stderr warning), per coding-standards.md §12: do not
 #       report a mutation result you did not execute, and do not silently block a
 #       tool-less environment. The authoritative external check remains the
 #       human/CI re-gate (autonomous-build-loop INV-2). Survivors are the only
@@ -35,7 +35,7 @@
 #
 # Exit codes (deterministic — this is a gate): 0 pass or degraded; 1 surviving
 # mutant on changed code. source: §12 (DeMillo–Lipton–Sayward 1978; Jia & Harman
-# 2011); test-engineer Move 8; product-safety §12.5 (blocking half = scoped run).
+# 2011); product-safety §12.5 (blocking half = scoped run).
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"

@@ -3,11 +3,11 @@
 # every agent-spawn call path.
 #
 # Tests:
-#   P1  Team agent path:    spawn-agent.sh engineer  → MEMORY_AGENT_ID=engineer
+#   P1  Genius agent path:  spawn-agent.sh curie     → MEMORY_AGENT_ID=curie
 #   P2  Genius agent path:  spawn-agent.sh feynman   → MEMORY_AGENT_ID=feynman
-#   P3  Orchestrator fans out to engineer:
-#         parent MEMORY_AGENT_ID=orchestrator, spawns engineer
-#         → child MEMORY_AGENT_ID=engineer (NOT orchestrator, NOT unknown)
+#   P3  Parent session fans out to curie:
+#         parent MEMORY_AGENT_ID=feynman, spawns curie
+#         → child MEMORY_AGENT_ID=curie (NOT feynman, NOT unknown)
 #
 # Invariants tested:
 #   - MEMORY_AGENT_ID must equal the agent slug (basename of agent file without .md)
@@ -84,16 +84,16 @@ EOF
   chmod +x "$shim_dir/claude"
 }
 
-# ── P1: Team agent (engineer) ─────────────────────────────────────────────────
-echo "P1: team agent path (engineer)"
-TARGET="$(make_target_repo team engineer)"
-CONTRACT="$(make_contract "$TARGET" engineer)"
+# ── P1: Genius agent (curie) ─────────────────────────────────────────────────
+echo "P1: genius agent path (curie)"
+TARGET="$(make_target_repo team curie)"
+CONTRACT="$(make_contract "$TARGET" curie)"
 SHIM="$TMP/shim-p1/bin"; ENV_REC="$TMP/shim-p1/env.txt"
 install_shim "$SHIM" "$ENV_REC"
-( cd "$TARGET"; PATH="$SHIM:$PATH" "$SPAWN" --contract "$CONTRACT" engineer "dummy task" >/dev/null )
+( cd "$TARGET"; PATH="$SHIM:$PATH" "$SPAWN" --contract "$CONTRACT" curie "dummy task" >/dev/null )
 RECORDED="$(cat "$ENV_REC" 2>/dev/null || echo '')"
-[[ "$RECORDED" == "engineer" ]]  && pass "MEMORY_AGENT_ID=engineer" \
-                                  || fail "expected 'engineer', got '$RECORDED'"
+[[ "$RECORDED" == "curie" ]]  && pass "MEMORY_AGENT_ID=curie" \
+                                  || fail "expected 'curie', got '$RECORDED'"
 [[ "$RECORDED" != "unknown" ]]   && pass "not 'unknown'" \
                                   || fail "MEMORY_AGENT_ID is 'unknown'"
 
@@ -110,20 +110,20 @@ RECORDED="$(cat "$ENV_REC" 2>/dev/null || echo '')"
 [[ "$RECORDED" != "unknown" ]]   && pass "not 'unknown'" \
                                   || fail "MEMORY_AGENT_ID is 'unknown'"
 
-# ── P3: Orchestrator fans out to engineer ────────────────────────────────────
-# Precondition: parent process has MEMORY_AGENT_ID=orchestrator.
-# Postcondition: the spawned engineer process sees MEMORY_AGENT_ID=engineer, NOT orchestrator.
-echo "P3: orchestrator fans out to engineer (parent id must not leak)"
-TARGET="$(make_target_repo fanout engineer)"
-CONTRACT="$(make_contract "$TARGET" engineer)"
+# ── P3: Parent session fans out to curie ────────────────────────────────────
+# Precondition: parent process has MEMORY_AGENT_ID=feynman.
+# Postcondition: the spawned curie process sees MEMORY_AGENT_ID=curie, NOT feynman.
+echo "P3: a parent agent fans out to curie (parent id must not leak)"
+TARGET="$(make_target_repo fanout curie)"
+CONTRACT="$(make_contract "$TARGET" curie)"
 SHIM="$TMP/shim-p3/bin"; ENV_REC="$TMP/shim-p3/env.txt"
 install_shim "$SHIM" "$ENV_REC"
-( cd "$TARGET"; export MEMORY_AGENT_ID="orchestrator"; PATH="$SHIM:$PATH" "$SPAWN" --contract "$CONTRACT" engineer "dummy task" >/dev/null )
+( cd "$TARGET"; export MEMORY_AGENT_ID="feynman"; PATH="$SHIM:$PATH" "$SPAWN" --contract "$CONTRACT" curie "dummy task" >/dev/null )
 RECORDED="$(cat "$ENV_REC" 2>/dev/null || echo '')"
-[[ "$RECORDED" == "engineer" ]]       && pass "MEMORY_AGENT_ID=engineer (overrides parent orchestrator)" \
-                                       || fail "expected 'engineer', got '$RECORDED'"
-[[ "$RECORDED" != "orchestrator" ]]   && pass "parent slug 'orchestrator' did not leak" \
-                                       || fail "child inherited parent's MEMORY_AGENT_ID=orchestrator"
+[[ "$RECORDED" == "curie" ]]       && pass "MEMORY_AGENT_ID=curie (overrides parent feynman)" \
+                                       || fail "expected 'curie', got '$RECORDED'"
+[[ "$RECORDED" != "feynman" ]]   && pass "parent slug 'feynman' did not leak" \
+                                       || fail "child inherited parent's MEMORY_AGENT_ID=feynman"
 [[ "$RECORDED" != "unknown" ]]        && pass "not 'unknown'" \
                                        || fail "MEMORY_AGENT_ID is 'unknown'"
 

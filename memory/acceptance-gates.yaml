@@ -58,8 +58,7 @@ gates:
     # just cover lines. tools/mutation-gate.sh wraps the scoped runner
     # (tools/mutation_check.sh) with proportional semantics — PASS when no
     # mutation-applicable source is staged; BLOCK only on a surviving mutant;
-    # degrade loudly (warn, pass) when no runner is configured (test-engineer
-    # Move 8 step 2). source: coding-standards.md §12.
+    # degrade loudly (warn, pass) when no runner is configured ). source: coding-standards.md §12.
     cmd: "bash tools/mutation-gate.sh --staged"
     mandatory: true
     origin: base

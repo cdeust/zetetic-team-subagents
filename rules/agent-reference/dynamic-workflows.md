@@ -2,7 +2,7 @@
 name: dynamic-workflows
 description: "Cost gates, preconditions, and preferred alternatives before any large parallel subagent fan-out"
 read_when: "Before proposing any fan-out of more than 5 subagents"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 ## Dynamic Workflows — Use Sparingly (Last Resort)
@@ -20,7 +20,7 @@ Claude Code dynamic workflows (research preview) run 10s–100s of parallel suba
 Before triggering a dynamic workflow, confirm ALL of these are true:
 1. The task genuinely cannot be decomposed into a small (≤5) set of targeted subtasks.
 2. Manual fan-out via the `Agent` tool would require >20 independent agents to be useful.
-3. The cost has been acknowledged by the user or the orchestrator has explicit budget authorization.
+3. The cost has been acknowledged by the user or the delegating session has explicit budget authorization.
 4. No simpler approach (grep, read, targeted search, sequential agents) can answer the question.
 
 If even one of these is false: **do not use dynamic workflows**.
@@ -34,7 +34,7 @@ If even one of these is false: **do not use dynamic workflows**.
 ### What to use instead (in order of preference)
 1. **Read + Grep + targeted search** — covers 90% of codebase exploration.
 2. **Agent tool with 2–5 focused subagents** — covers most parallel analysis needs.
-3. **Sequential specialist agents** — orchestrator → architect → engineer chain.
+3. **Sequential specialist agents** — chain of delegates (Simon decomposes, then a general-purpose delegate).
 4. **Dynamic workflows** — only when the above have been tried and are insufficient.
 
 ### Cost estimation before triggering

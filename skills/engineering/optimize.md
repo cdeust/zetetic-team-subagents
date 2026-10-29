@@ -10,7 +10,7 @@ trigger: >
   block necessary optimization of a known bottleneck.
 agents:
   - knuth
-  - engineer
+  - dijkstra
   - curie
 shapes: [profile-before-optimizing, premature-optimization-in-context]
 input: A slow system or component with (ideally) a performance target.
@@ -40,7 +40,7 @@ Knuth's full discipline: "We should forget about small efficiencies, say about 9
 2. **curie: measure baseline.** Instrument the system. Measure the current performance under controlled conditions. This is the "before."
 3. **knuth: profile.** Run the profiler (CPU, memory, I/O as appropriate). Identify the hot path — the 3% consuming most of the time.
 4. **knuth: propose fix.** For the hot path only. With complexity analysis of the proposed change.
-5. **engineer: implement.** Apply the fix to the hot path only. Do not touch the 97%.
+5. **dijkstra: implement.** Apply the fix to the hot path only. Do not touch the 97%.
 6. **curie: measure after.** Same conditions as baseline. Statistical comparison (not a single run).
 7. **Report.** Profile, hot path, fix, before/after with confidence interval.
 

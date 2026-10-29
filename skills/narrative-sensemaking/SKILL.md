@@ -39,8 +39,8 @@ and produces confident nonsense when forced.
    extracts the function sequence from what survives → bruner reads what the
    breach meant to the people in it. Run via
    `tools/genius-invoker.sh compose ibnkhaldun propp bruner -- "<problem>"`.
-5. If no shape above matches, do not force a genius — use a standard team agent
-   (INDEX.md routing rule).
+5. If no shape above matches, do not force a genius — use a built-in agent with the closest `GENIUS:` pattern
+   (`rules/agent-routes.json`, INDEX.md routing rule).
 
 ## Refuse when
 

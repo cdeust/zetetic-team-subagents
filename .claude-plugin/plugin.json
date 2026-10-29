@@ -22,33 +22,18 @@
     "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh install",
     "message": "Installing zetetic commands, hooks, tools and reference docs to ~/.claude/ (agents and skills are served by the plugin itself) ..."
   },
-  "agents": [
-    "./agents/advisor.md",
-    "./agents/architect.md",
-    "./agents/code-reviewer.md",
-    "./agents/data-scientist.md",
-    "./agents/dba.md",
-    "./agents/devops-engineer.md",
-    "./agents/engineer.md",
-    "./agents/experiment-runner.md",
-    "./agents/frontend-engineer.md",
-    "./agents/git-historian.md",
-    "./agents/latex-engineer.md",
-    "./agents/memory-writer.md",
-    "./agents/mlops.md",
-    "./agents/orchestrator.md",
-    "./agents/paper-writer.md",
-    "./agents/professor.md",
-    "./agents/refactorer.md",
-    "./agents/research-scientist.md",
-    "./agents/reviewer-academic.md",
-    "./agents/security-auditor.md",
-    "./agents/simplifier.md",
-    "./agents/test-engineer.md",
-    "./agents/ux-designer.md"
-  ],
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-agent-genius-gate.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "when": "command contains 'git push'",
@@ -79,6 +64,17 @@
           }
         ],
         "matcher": "Bash|Read|Grep|Edit|Write|NotebookEdit|exec_command|shell_command|apply_patch|mcp__.*"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-proof.py\"",
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -115,7 +111,7 @@
         ]
       },
       {
-        "matcher": "WebFetch|WebSearch",
+        "matcher": "WebFetch|WebSearch|mcp__crawl4ai__(search|scrape|extract|answer|batch|serp)",
         "hooks": [
           {
             "type": "command",
@@ -139,6 +135,16 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-cycle-open.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-start.py\"",
             "timeout": 10
           }
         ]
@@ -184,6 +190,15 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-python.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-gate-ledger.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "hooks": [
           {

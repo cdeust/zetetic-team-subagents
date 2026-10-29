@@ -63,7 +63,7 @@ make_flat_home() {
   mkdir -p "$root/hooks"; printf 'stale\n' > "$root/hooks/stale-from-old-install.sh"
   printf '{"version":"2.0.0","files":[]}\n' > "$root/.zetetic-manifest.json"
   printf '2.0.0\n' > "$root/.zetetic-version"
-  printf '{"agents":{"engineer":{"model":"haiku","effort":"low"}},"marker":"user-tuned-S1"}\n' > "$root/zetetic-agent-models.json"
+  printf '{"agents":{"curie":{"model":"haiku","effort":"low"}},"marker":"user-tuned-S1"}\n' > "$root/zetetic-agent-models.json"
   printf '2026-09-10T00:00:00Z\trepo=x\tpath=y\tbranch=z\tremoved\n' > "$root/worktree-sweep-audit.log"
   printf '/cache/plug/1.0.0|/dev/plug|tree\n' > "$root/dev-symlink.map"
   printf '/cache/plug|1.0.0\n' > "$root/dev-symlink.versions"

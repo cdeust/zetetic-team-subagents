@@ -157,7 +157,7 @@ When the question is "what does the totality of evidence say?" rather than "what
 6. **Pool the evidence.** Calculate the pooled effect using an appropriate model (fixed-effect if homogeneity is expected, random-effects if heterogeneity is expected).
 7. **Test for heterogeneity.** Report I², Q, and prediction intervals. If heterogeneous, investigate moderators.
 8. **Assess publication bias.** Funnel plot, Egger's test, trim-and-fill. Adjust the pooled estimate if bias is detected.
-9. **Grade the evidence.** Apply GRADE (or domain-appropriate equivalent) to rate overall certainty. Hand off: statistical methodology to Fisher; causal interpretation to Pearl; argument structure to Toulmin; implementation to engineer.
+9. **Grade the evidence.** Apply GRADE (or domain-appropriate equivalent) to rate overall certainty. Hand off: statistical methodology to Fisher; causal interpretation to Pearl; argument structure to Toulmin; implementation to a general-purpose delegate.
 
 ## Output format
 

@@ -40,8 +40,8 @@ intuitively obvious and formally unestablished.
    the space the new notation opens → lem pushes the surviving options to their
    extremes. Run via
    `tools/genius-invoker.sh compose euler borges lem -- "<problem>"`.
-5. If no shape above matches, do not force a genius — use a standard team agent
-   (INDEX.md routing rule).
+5. If no shape above matches, do not force a genius — use a built-in agent with the closest `GENIUS:` pattern
+   (`rules/agent-routes.json`, INDEX.md routing rule).
 
 ## Refuse when
 

@@ -1,13 +1,12 @@
 # List Available Agents
 
-List all zetetic agents with their types, roles, and trigger conditions.
+List the zetetic agents (genius reasoning patterns; the team-role agents were removed) with their roles and trigger conditions.
 
 ## Instructions
 
 1. Run the agent catalog tool to list agents. Apply filters if the user specified any:
    - All agents: `tools/agent-catalog.sh --all`
-   - Team only: `tools/agent-catalog.sh --team`
-   - Genius only: `tools/agent-catalog.sh --genius`
+   - Genius agents: `tools/agent-catalog.sh --genius`
    - By shape: `tools/agent-catalog.sh --genius --shape "$ARGUMENTS"`
    - By keyword: `tools/agent-catalog.sh --search "$ARGUMENTS"`
 

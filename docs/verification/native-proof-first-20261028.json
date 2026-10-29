@@ -1,0 +1,36 @@
+{
+  "baseline": "b6ec90455ce2a6172510ab31a37ef3091d6b0cb8",
+  "native_contracts": 88,
+  "source_contracts": 54,
+  "source_subtests": 33,
+  "cortex_ruff": "PASS with actual Cortex pyproject.toml",
+  "cortex_craftsmanship": "actual craftsmanship_rules.scan_source returned [] for four production modules and both changed test modules",
+  "red_before": "proof/API regression baseline: two assertion failures and three missing-type errors; missing timeout test failed separately",
+  "actual_error_evidence": {
+    "rest404": {
+      "status": "404",
+      "gh_exit": 1
+    },
+    "paginated_rest404": "single-element list containing the same error object",
+    "graphql_missing_types": [
+      "NOT_FOUND"
+    ]
+  },
+  "job_cap": {
+    "minutes": 5,
+    "basis": "declared operational bound equal to existing five-minute cron period, not an empirical SLA",
+    "observed_run": 40626520816,
+    "identify_seconds": 9,
+    "resume_seconds": 11
+  },
+  "sha256": {
+    "templates/ci/native/assets/scripts/ci_codex_review_runtime.py": "ab4956bfbbfd64c9b0c9774021120fefba90eaf0b0f919083537888ea776d74b",
+    "templates/ci/native/assets/scripts/ci_codex_reviews.py": "76f0d79a4c2127ef43a2b0dc4523f21d3dc17cd1bb000d68ac446d8f96245d02",
+    "templates/ci/native/assets/scripts/ci_codex_review_event.py": "2e5d17c6518eafbfb59bcf4d4e88e41c8720821509e9e926cbec7e3675345d61",
+    "templates/ci/native/assets/scripts/ci_codex_review_reconcile.py": "77497df4ad82192074c68123e365e7a1f80430762c9840a5c0f3c61e1e015c21",
+    "templates/ci/native/assets/.github/workflows/Codex.yml": "3f6c9d7a58570ce410d794367ac9dfcfddfe68413d539c0e8a20e130cf59a1f6",
+    "templates/ci/native/pipeline.yml": "03f48c27e5dc8113fb783855fef9d7401d5b9201dc36377252999d61209f5501",
+    "templates/ci/native/assets/scripts/tests/test_ci_codex_review_proof_first.py": "93c80c3c861982581c6aae156f1e631920d76796ac01e221156acf788849d749",
+    "templates/ci/native/assets/scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a"
+  }
+}

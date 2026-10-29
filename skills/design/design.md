@@ -10,7 +10,7 @@ trigger: >
   (WCAG 2.2 AA), restructuring information architecture, evaluating heuristic compliance,
   or extending a design system.
 agents:
-  - ux-designer
+  - jobs
 shapes: []
 input: A screen, flow, component, or existing markup/design to design or audit.
 output: >
@@ -27,8 +27,8 @@ aliases: [ux-audit, ux-design, accessibility-audit]
 portable:
   package: zetetic-design
 hand_off:
-  implementation_feasibility: "frontend-engineer -- non-trivial engineering constraint before committing to the design"
-  system_architecture: "/decompose -- architect + alexander for pattern-language coherence when the design system itself is the object of change"
+  implementation_feasibility: "kay -- late-binding and malleability constraints before committing to the design (general-purpose delegate, GENIUS: kay)"
+  system_architecture: "/decompose -- simon + alexander for pattern-language coherence when the design system itself is the object of change"
   research_integrity: "/audit-integrity -- feynman when the underlying research sample or method is doubtful"
   ethics: "arendt -- thoughtlessness audit for dark-pattern or autonomy/attention/dignity consequences"
 ---
@@ -138,13 +138,11 @@ or justify the exception). Not aesthetic preference -- the procedure below, appl
 - [none, or the specific blind-spot agent per the frontmatter's hand_off map]
 ```
 
-## Notes on running this inline vs. as the `ux-designer` subagent
+## Notes on running this inline vs. as a delegated agent
 
-This skill is the primary path for `/design`-shaped work: `ux-designer` is `model: sonnet`
-(matching this repo's caller baseline, `agents/ux-designer.md:4`), so inlining its procedure
-here does not silently drop a capability escalation the way inlining an opus/fable-tier agent
-would (`tools/skill-runner.sh`'s escalation banner does not fire for it -- verified empirically
-against a live run, not assumed). Spawn `ux-designer` as a real subagent instead when the work
-needs to survive the calling session's own compaction, or needs an isolated context independent
-of the caller's history (`rules/agent-vs-skill-classification.md`'s test 2) -- for example a
+This skill is the primary path for `/design`-shaped work and runs inline in the calling
+session. The UX team agent was removed (owner decision 2026-10-21); a design pass
+that must survive the calling session's own compaction, or needs an isolated context independent
+of the caller's history, is delegated to a built-in `general-purpose` agent whose prompt carries
+`GENIUS: jobs, ranganathan` (integrated experience, navigation and findability). For example a
 long, multi-round accessibility audit spanning many files.

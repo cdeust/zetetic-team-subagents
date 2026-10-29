@@ -37,7 +37,7 @@ When your **Craftsmanship gate** trigger fires (you are about to ship, approve, 
 
 ## §2 — Clean Architecture
 
-**§2.2 — the absolute import matrix.** *(No team agent currently enumerates this — it is the single source for it.)*
+**§2.2 — the absolute import matrix.** *(No agent currently enumerates this — it is the single source for it.)*
 *Trigger:* any added/changed `import`/`require`/`use` statement, or any new module placed in a layer. *Detector:* dependencies point **inward only**, against this matrix:
 
 | Layer | May import |
@@ -109,4 +109,4 @@ Also refuse, per §9: dead code / "future-proofing" with no current caller (buil
 
 ## Test-suite strength — mutation, not coverage
 
-*Trigger:* you are about to call a test suite adequate for High- or Medium-stakes code (to ship, approve, or rest a behavior-preservation claim on it). *Detector:* line/branch coverage proves a line *executed*, not that a test would *fail* if the line were wrong — a high-coverage suite that kills no mutants tests nothing. *Fix:* the suite must **kill mutants**, not merely cover lines: every mutant in the *changed lines* is killed or explicitly marked equivalent with a written rationale. This is owned and operationalized by **test-engineer** (named runner per stack: mutmut/Cosmic-Ray (Py), Stryker (JS/TS), PIT (JVM), `cargo-mutants` (Rust), `go-mutesting` (Go)); **refactorer**'s pass-count-equal behavior-preservation proof and **code-reviewer**'s test-adequacy check are valid only against a mutation-strong suite. (coding-standards.md §3.2 test-strength clause; §9; DeMillo–Lipton–Sayward 1978; Jia & Harman 2011)
+*Trigger:* you are about to call a test suite adequate for High- or Medium-stakes code (to ship, approve, or rest a behavior-preservation claim on it). *Detector:* line/branch coverage proves a line *executed*, not that a test would *fail* if the line were wrong — a high-coverage suite that kills no mutants tests nothing. *Fix:* the suite must **kill mutants**, not merely cover lines: every mutant in the *changed lines* is killed or explicitly marked equivalent with a written rationale. This is owned and operationalized by `tools/mutation-gate.sh` (named runner per stack: mutmut/Cosmic-Ray (Py), Stryker (JS/TS), PIT (JVM), `cargo-mutants` (Rust), `go-mutesting` (Go)); a refactoring's pass-count-equal behavior-preservation proof and the review's test-adequacy check are valid only against a mutation-strong suite. (coding-standards.md §3.2 test-strength clause; §9; DeMillo–Lipton–Sayward 1978; Jia & Harman 2011)

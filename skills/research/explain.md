@@ -8,7 +8,7 @@ trigger: >
   When someone (including yourself) needs to understand a concept; when jargon is being
   used without the ability to define it; when a team member needs onboarding on a topic.
 agents:
-  - professor
+  - vygotsky
   - feynman
 shapes: [explain-to-freshman, rederive-from-scratch]
 input: A concept to explain. The audience's background level.
@@ -27,7 +27,7 @@ hand_off:
 
 ## Procedure
 
-1. **professor: explain at three levels.** (a) One sentence for a non-specialist. (b) One paragraph for a practitioner in an adjacent field. (c) Full technical explanation for an expert.
+1. **vygotsky: explain at three levels.** (a) One sentence for a non-specialist. (b) One paragraph for a practitioner in an adjacent field. (c) Full technical explanation for an expert.
 2. **feynman: jargon audit.** For each technical term used: can you define it in simpler terms? If not, that is an understanding gap, not a vocabulary gap.
 3. **feynman: rederive (if applicable).** Can the concept be derived from simpler premises? Walk through the derivation. Note where it breaks.
 4. **Understanding-gap report.** List the specific points where explanation failed, jargon couldn't be simplified, or derivation broke. These are the real findings.

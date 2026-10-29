@@ -2,7 +2,7 @@
 name: token-budget
 description: "Full token-budget protocol: per-model limits table, checkpoint procedure and template, memory store/recover rules, session chunking"
 read_when: "The first time your running token estimate approaches your checkpoint threshold"
-audience: team agents — loaded on demand via Read, never at spawn
+audience: delegated agents — loaded on demand via Read, never at spawn
 ---
 
 ## Token Budget Protocol

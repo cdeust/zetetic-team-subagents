@@ -40,7 +40,7 @@
 # judgment trains agents to ignore the checker, §7.3):
 #   §1.1 SRP, §1.4 ISP, §3.3 rule-of-three, §5.3 service-locator, §5.4 typed-injection,
 #   §9 dead-code (delegate to vulture / ts-prune / cargo-machete), §6 root-cause,
-#   and mutation / test-strength (owned by test-engineer Move 8).
+#   and mutation / test-strength (owned by tools/mutation-gate.sh, coding-standards.md §12).
 #
 # .md policy: structural rules target CODE files; recognized-grammar gating means
 # .md never matches a recognized language, so FUNCTION/CLASS/PARAM fail-open on .md
@@ -56,7 +56,7 @@ set -euo pipefail
 # source: rules/coding-standards.md §4 (Martin 2008, Clean Code Ch.3 & Ch.10).
 # A committed .craftsmanship.conf overrides any of these (fully tunable).
 FILE_MAX="${FILE_MAX:-500}"    # §4.1
-# §4.1 test-file exception (test-engineer agent domain-context): test files may
+# §4.1 test-file exception (fixture-grouping exception): test files may
 # exceed §4.1 when organized by fixture grouping (sharding would duplicate shared
 # fixtures across files, raising coupling). Applied ONLY to files matching
 # TEST_FILE_RE — production source stays bound by FILE_MAX. Advisory ceiling kept

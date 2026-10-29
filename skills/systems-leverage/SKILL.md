@@ -41,7 +41,7 @@ high as is accessible.
 4. Typical chain: meadows maps and ranks leverage → beer audits the control
    structure → rogers plans the adoption. Run via
    `tools/genius-invoker.sh compose meadows beer -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

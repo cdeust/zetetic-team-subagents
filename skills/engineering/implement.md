@@ -8,9 +8,9 @@ trigger: >
   When a feature needs to be built; when a task requires new code in the right place
   with the right dependency direction.
 agents:
-  - engineer
-  - architect
-  - test-engineer
+  - dijkstra
+  - simon
+  - popper
 shapes: []
 input: A feature description or task specification.
 output: Working implementation with tests, respecting layer boundaries and SOLID principles.
@@ -22,21 +22,21 @@ zetetic_gate:
 composes: []
 aliases: [build, code]
 hand_off:
-  needs_design: "/decompose — architect decomposes first if scope is large"
+  needs_design: "/decompose — simon decomposes first if scope is large"
   needs_spec: "/spec — lamport writes spec first if concurrent/distributed"
-  needs_review: "/review — code-reviewer reviews the implementation"
+  needs_review: "/review — popper reviews the implementation"
 ---
 
 ## Purpose
 
-Implement a feature correctly in the right architectural layer. The architect identifies where the code belongs; the engineer writes it; the test-engineer verifies it. Dependencies point inward. No speculative abstractions. No extra features.
+Implement a feature correctly in the right architectural layer. The simon identifies where the code belongs; the dijkstra writes it; the popper verifies it. Dependencies point inward. No speculative abstractions. No extra features.
 
 ## Procedure
 
-1. **architect identifies the layer.** Where does this feature live? Core (pure logic), infrastructure (I/O), handlers (wiring)?
-2. **architect designs interfaces.** If the feature crosses layers, define the interface in core; implement in infrastructure; wire in handlers.
-3. **engineer implements.** Writes the code in the identified layer with the designed interfaces. SOLID throughout: single responsibility per module, dependency inversion, no god classes.
-4. **test-engineer writes tests.** Unit tests for core logic (no mocks needed if core is pure). Integration tests for the wiring. Tests must fail without the implementation (red-green).
+1. **simon identifies the layer.** Where does this feature live? Core (pure logic), infrastructure (I/O), handlers (wiring)?
+2. **simon designs interfaces.** If the feature crosses layers, define the interface in core; implement in infrastructure; wire in handlers.
+3. **dijkstra implements.** Writes the code in the identified layer with the designed interfaces. SOLID throughout: single responsibility per module, dependency inversion, no god classes.
+4. **popper writes tests.** Unit tests for core logic (no mocks needed if core is pure). Integration tests for the wiring. Tests must fail without the implementation (red-green).
 5. **Verify.** All tests pass. Layer boundaries respected. No new anti-patterns introduced.
 
 ## Zetetic Gates

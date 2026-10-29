@@ -41,8 +41,8 @@ measured on the receiving end rather than asserted on the producing end.
    observer is outside → jobs specifies the integrated experience from it →
    vygotsky sequences the scaffolding that gets people there. Run via
    `tools/genius-invoker.sh compose varela jobs vygotsky -- "<problem>"`.
-5. If no shape above matches, do not force a genius — use a standard team agent
-   (INDEX.md routing rule).
+5. If no shape above matches, do not force a genius — use a built-in agent with the closest `GENIUS:` pattern
+   (`rules/agent-routes.json`, INDEX.md routing rule).
 
 ## Refuse when
 

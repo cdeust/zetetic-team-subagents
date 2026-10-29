@@ -38,23 +38,18 @@ README.md|agents_total|badge/agents-([0-9]+)-
 README.md|skills_total|badge/skills-([0-9]+)-
 README.md|hook_registrations|badge/hooks-([0-9]+)_lifecycle
 README.md|suites|badge/suites-([0-9]+)-
-README.md|genius_agents|[^0-9]([0-9]+) genius agents \(plus
-README.md|team_agents|genius agents \(plus ([0-9]+) team-role
-README.md|agents_total|team-role agents = ([0-9]+) total
+README.md|genius_agents|across ([0-9]+) genius agents, with the lifecycle
 README.md|skills_total|\*\*([0-9]+) multi-step workflows\*\*
 README.md|problem_skills|\| ([0-9]+) problem-shaped skills route you
 README.md|category_skills|[^0-9]([0-9]+) category skills run full pipelines
 README.md|memory_suites|\*\*([0-9]+) memory suites\*\*
 README.md|agents_total|All ([0-9]+) agent files pass
 CONTRIBUTING.md|genius_agents|ships \*\*([0-9]+) reasoning
-CONTRIBUTING.md|team_agents|patterns \+ ([0-9]+) team agents
-CONTRIBUTING.md|skills_total|team agents \+ ([0-9]+) skills
+CONTRIBUTING.md|skills_total|patterns \+ ([0-9]+) skills
 CONTRIBUTING.md|hook_registrations|skills \+ ([0-9]+) lifecycle hooks
 .claude-plugin/marketplace.json|genius_agents|[^0-9]([0-9]+) reasoning patterns from history
-.claude-plugin/marketplace.json|team_agents|\+ ([0-9]+) team specialists
 .claude-plugin/marketplace.json|problem_skills|Complete system: ([0-9]+) problem-shaped skills
 .claude-plugin/marketplace.json|genius_agents|problem-shaped skills backed by ([0-9]+) genius agents
-.claude-plugin/marketplace.json|team_agents|genius agents, ([0-9]+) team agents
 .claude-plugin/marketplace.json|skills_total|[^0-9]([0-9]+) skills total
 .claude-plugin/marketplace.json|commands|skills total, ([0-9]+) commands
 .claude-plugin/marketplace.json|tools|commands, ([0-9]+) tools
@@ -77,7 +72,6 @@ REGISTRY
 # ── Measurement ────────────────────────────────────────────────────────
 # One function per quantity, each the exact command from docs/COUNTING.md.
 count_genius_agents()    { grep -l '^name:' agents/genius/*.md 2>/dev/null | wc -l | tr -d ' '; }
-count_team_agents()      { grep -l '^name:' agents/*.md 2>/dev/null | wc -l | tr -d ' '; }
 count_problem_skills()   { find skills -name 'SKILL.md' 2>/dev/null | wc -l | tr -d ' '; }
 count_skills_total()     { find skills -name '*.md' ! -name '_index.md' ! -name '_template.md' 2>/dev/null | wc -l | tr -d ' '; }
 count_hook_scripts()     { ls hooks/*.sh hooks/*.py 2>/dev/null | wc -l | tr -d ' '; }
@@ -95,8 +89,7 @@ count_hook_registrations() {
 }
 
 GENIUS_AGENTS="$(count_genius_agents)"
-TEAM_AGENTS="$(count_team_agents)"
-AGENTS_TOTAL=$(( GENIUS_AGENTS + TEAM_AGENTS ))
+AGENTS_TOTAL="$GENIUS_AGENTS"  # only genius agents exist (owner decision 2026-10-21)
 PROBLEM_SKILLS="$(count_problem_skills)"
 SKILLS_TOTAL="$(count_skills_total)"
 CATEGORY_SKILLS=$(( SKILLS_TOTAL - PROBLEM_SKILLS ))
@@ -110,7 +103,6 @@ MEMORY_SUITES="$(count_memory_suites)"
 quantity_of() {
   case "$1" in
     genius_agents)      printf '%s' "$GENIUS_AGENTS" ;;
-    team_agents)        printf '%s' "$TEAM_AGENTS" ;;
     agents_total)       printf '%s' "$AGENTS_TOTAL" ;;
     problem_skills)     printf '%s' "$PROBLEM_SKILLS" ;;
     category_skills)    printf '%s' "$CATEGORY_SKILLS" ;;
@@ -127,7 +119,6 @@ quantity_of() {
 
 report() {
   printf '%-20s %s\n' "genius_agents" "$GENIUS_AGENTS"
-  printf '%-20s %s\n' "team_agents" "$TEAM_AGENTS"
   printf '%-20s %s\n' "agents_total" "$AGENTS_TOTAL"
   printf '%-20s %s\n' "problem_skills" "$PROBLEM_SKILLS"
   printf '%-20s %s\n' "category_skills" "$CATEGORY_SKILLS"

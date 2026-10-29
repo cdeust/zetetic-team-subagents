@@ -49,7 +49,8 @@ def full_cycle(repo: Path, check: str = CHECK) -> list:
     """Every transcript-provable stage, in engineering-loop order."""
     return [call(RECALL, query="parser"), call("Read", file_path=str(repo / "a.py")),
             call("Edit", file_path=str(repo / "a.py")), call("Bash", command=check),
-            call("Agent", subagent_type="zetetic-team-subagents:code-reviewer"),
+            call("Agent", subagent_type="general-purpose", description="review the diff",
+                 prompt="GENIUS: popper\nreview the diff"),
             call(REMEMBER, content="lesson")]
 
 

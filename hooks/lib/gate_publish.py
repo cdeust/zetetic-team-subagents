@@ -1,0 +1,252 @@
+"""Which commits a `git push` / `gh pr create` publishes: the tip of every ref it names, as trees.
+
+The push gate used to judge HEAD's tree whatever the command published, so `git push origin feat`,
+`feat:main`, `--all` or `gh pr create --head feat` passed on a green HEAD with a failing `feat`. A push
+is judged by the tree of EVERY tip it publishes (gate_state.check, per tip).
+
+Resolution, from the words of the command (gate_pushargs.publish):
+
+  --all / --branches / --mirror   every local branch (mirror: the remote-tracking refs too)
+  refspec  `src`, `+src`, `src:dst`   the commit `src` names (a branch, HEAD, a sha, HEAD~2, a TAG: `src` is
+                                      resolved whatever `dst` is, so `refs/tags/t:refs/heads/main` publishes the
+                                      commit behind `t`); a glob in `src` expands over refs; `:dst` deletes and
+                                      publishes nothing
+  tags      `--tags`, a refspec whose `dst` is `refs/tags/...`, `tag NAME`: the commit behind each tag, unless the
+            remote already has it (a remote-tracking ref of the remote reaches it); a tag that is not a commit
+            publishes none. `--follow-tags` (or `push.followTags=true`): the annotated tags whose commit is an ancestor of a pushed tip.
+            `--tags` without a refspec pushes tags only, as git does: no current-branch default
+  no refspec                      what git would push: `remote.<remote>.push` when set; with
+                                  `push.default=matching`, every local branch (the safe superset of
+                                  "matching"); else the current branch. A detached HEAD publishes nothing
+                                  nameable: refused with the reason
+  gh pr create                    `--head [owner:]branch`, else the current branch
+
+Anything that does not resolve to a commit raises ``Unresolvable`` with the reason: the hook denies
+(closed by default) instead of judging a tree it was not asked about. No call here touches the network
+or the working tree (gate_git).
+
+Each tip also names its DESTINATIONS (``Tip.dests``): the remote-tracking refs of the branches the push updates,
+`refs/remotes/<remote>/<branch>` for a `dst` that is a branch (`main`, `refs/heads/main`, `HEAD` for the current
+branch), plus the current branch's upstream when no refspec is written. Their rules are an anchor of the rule
+floor (gate_state, docs/gate.md "Rule changes"): a push may not replace a branch by a tip with weaker rules. A
+destination the remote has but that was never fetched has no remote-tracking ref and adds no anchor.
+"""
+from __future__ import annotations
+
+import fnmatch
+from typing import NamedTuple
+
+import gate_git as gitq
+import gate_pushargs as pushargs
+
+
+class Unresolvable(Exception):
+    """A published ref cannot be resolved to a commit; the message is the reason shown to the user."""
+
+
+class Tip(NamedTuple):
+    name: str  # as the user wrote it (a branch without `refs/heads/`), for messages
+    commit: str
+    tree: str
+    base: str | None  # the tree of the tip's first parent, the tree the change is measured from
+    dests: tuple = ()  # the remote-tracking refs of the branches it updates, as of the last fetch
+
+
+def _lines(top: str, *args: str) -> list:
+    out = gitq.git(top, *args)
+    if out.returncode != 0:
+        raise Unresolvable(f"git {args[0]} failed: {out.stderr.strip()[:200]}")
+    return [line for line in out.stdout.splitlines() if line]
+
+
+def _refs(top: str, *prefixes: str) -> list:
+    return _lines(top, "for-each-ref", "--format=%(refname)", *prefixes)
+
+
+def _commit_of(top: str, rev: str) -> str | None:
+    """The commit ``rev`` peels to, or None when it is not one (a missing name, a tag of a blob or a tree).
+    A failed `rev-parse --verify --quiet` prints nothing, so the object-id test alone decides."""
+    commit = gitq.git(top, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}").stdout.strip()
+    return commit if gitq.TREE_RE.match(commit) else None
+
+
+def _tip(top: str, name: str, rev: str) -> Tip:
+    commit = _commit_of(top, rev)
+    if commit is None:
+        raise Unresolvable(f"cannot resolve {name!r} to a commit in {top}: the tree being published cannot be judged")
+    tree = gitq.tree_of(top, commit)
+    if tree is None:
+        raise Unresolvable(f"cannot read the tree of {name!r} ({commit[:12]})")
+    return Tip(name.removeprefix("refs/heads/"), commit, tree, gitq.tree_of(top, f"{commit}^"))
+
+
+def _current_branch(top: str) -> str:
+    out = gitq.git(top, "symbolic-ref", "--quiet", "HEAD")
+    if out.returncode != 0:
+        raise Unresolvable("HEAD is detached and no ref was named: nothing to resolve the push to; name the ref")
+    return out.stdout.strip()
+
+
+def _config(top: str, key: str) -> list:
+    out = gitq.git(top, "config", "--get-all", key)
+    return [line for line in out.stdout.splitlines() if line] if out.returncode == 0 else []
+
+
+def _remote_of(top: str, publish: dict) -> str:
+    if publish["remote"]:
+        return publish["remote"]
+    branch = _current_branch(top)
+    configured = _config(top, f"branch.{branch.removeprefix('refs/heads/')}.remote")
+    return configured[0] if configured else "origin"
+
+
+class _Ref(NamedTuple):
+    name: str  # a ref or a revision, as git would resolve it
+    tag: str | None  # "tag v1" when it is published as a tag (the remote may have the commit already), else None
+    dests: tuple = ()  # Tip.dests
+
+
+def _tracking(top: str, remote: str, dst: str) -> tuple:
+    """The remote-tracking ref of the branch ``dst`` of ``remote`` when it exists locally; () otherwise (a tag,
+    another namespace, a URL as the remote, a branch never fetched)."""
+    if dst.startswith("refs/") and not dst.startswith("refs/heads/"):
+        return ()
+    branch = dst.removeprefix("refs/heads/")
+    if branch == "HEAD":
+        out = gitq.git(top, "symbolic-ref", "--quiet", "--short", "HEAD")
+        branch = out.stdout.strip() if out.returncode == 0 else ""
+    ref = f"refs/remotes/{remote}/{branch}"
+    return (ref,) if branch and _commit_of(top, ref) else ()
+
+
+def _upstream(top: str, branch: str, remote: str) -> tuple:
+    """The upstream of the local ``branch`` when it is a remote-tracking ref of ``remote``: a refspec-less push may update it."""
+    short = branch.removeprefix("refs/heads/")  # `<branch>@{upstream}` takes the short name only (git 2.50.1)
+    out = gitq.git(top, "rev-parse", "--verify", "--quiet", "--symbolic-full-name", f"{short}@{{upstream}}")
+    ref = out.stdout.strip()
+    return (ref,) if out.returncode == 0 and ref.startswith(f"refs/remotes/{remote}/") else ()
+
+
+def _tag_label(name: str) -> str:
+    return "tag " + name.removeprefix("refs/tags/")
+
+
+def _expand(top: str, spec: pushargs.Refspec, remote: str) -> list:
+    """The local sides a refspec names: a glob expands over all refs, anything else stands for itself."""
+    if spec.deletes:
+        return []
+    if any(c in spec.src for c in "*?["):
+        return [_globbed(top, spec, remote, r) for r in _refs(top) if fnmatch.fnmatchcase(r, spec.src)]
+    return [_Ref(spec.src, _tag_label(spec.dst) if spec.to_tag else None, _tracking(top, remote, spec.dst))]
+
+
+def _globbed(top: str, spec: pushargs.Refspec, remote: str, ref: str) -> _Ref:
+    """The local ref ``ref`` matched by the glob of ``spec``, with the destination its `*` maps it to."""
+    head, star, tail = spec.dst.partition("*")
+    dests = _tracking(top, remote, head + _glob_part(spec.src, ref) + tail) if star else ()
+    return _Ref(ref, _tag_label(ref) if spec.to_tag else None, dests)
+
+
+def _glob_part(pattern: str, ref: str) -> str:
+    """What the `*` of a refspec pattern stands for in ``ref`` (git allows one `*` per side)."""
+    head, _, tail = pattern.partition("*")
+    return ref[len(head):len(ref) - len(tail)] if ref.startswith(head) and ref.endswith(tail) else ""
+
+
+def _default_specs(top: str, publish: dict) -> list:
+    configured = _config(top, f"remote.{_remote_of(top, publish)}.push")
+    if configured:
+        return configured
+    if _config(top, "push.default") == ["matching"]:
+        return _refs(top, "refs/heads")
+    return [_current_branch(top)]
+
+
+def _branch_names(top: str, publish: dict) -> list:
+    """The refs (or revisions) the command publishes, not counting `--tags`."""
+    if publish["gh"]:
+        head = publish["gh_head"]
+        return [_Ref(f"refs/heads/{head.rpartition(':')[2]}" if head else _current_branch(top), None)]
+    remote = _remote_name(top, publish)
+    if publish["all"] or publish["mirror"]:
+        return [_Ref(r, None, _tracking(top, remote, r)) for r in _refs(top, "refs/heads")] + (
+            [_Ref(r, None) for r in _refs(top, "refs/remotes")] if publish["mirror"] else [])
+    default = not publish["specs"] and not publish["tags"]
+    words = publish["specs"] or ([] if publish["tags"] else _default_specs(top, publish))
+    names = [ref for spec in pushargs.refspecs(words) for ref in _expand(top, spec, remote)]
+    return [ref._replace(dests=ref.dests + _upstream(top, ref.name, remote)) for ref in names] if default else names
+
+
+def _remote_name(top: str, publish: dict) -> str:
+    try:
+        return _remote_of(top, publish)
+    except Unresolvable:  # FAILS_ON: a detached HEAD and no remote named; then the conventional name stands in
+        return "origin"
+
+
+def _on_remote(top: str, commit: str, remote: str) -> bool:
+    """True when a remote-tracking ref of ``remote`` reaches ``commit``: the remote has it (as of the last fetch)."""
+    out = gitq.git(top, "rev-list", "--max-count=1", commit, "--not", f"--remotes={remote}")
+    return out.returncode == 0 and not out.stdout.strip()
+
+
+def _all_tags(top: str) -> list:
+    return [_Ref(r, _tag_label(r)) for r in _refs(top, "refs/tags")]
+
+
+def _follow_tags_setting(top: str, written: bool | None) -> bool:
+    """`--follow-tags` / `--no-follow-tags` as written, else the boolean `push.followTags`."""
+    if written is not None:
+        return written
+    out = gitq.git(top, "config", "--type=bool", "--get", "push.followTags")
+    return out.returncode == 0 and out.stdout.strip() == "true"
+
+
+def _follows_tags(top: str, publish: dict) -> bool:
+    """Whether the push carries the annotated tags behind its commits. `gh pr create` pushes nothing by itself."""
+    return not publish["gh"] and _follow_tags_setting(top, publish["follow_tags"])
+
+
+def _followed_tags(top: str, tips: list) -> list:
+    """The annotated tags whose commit is an ancestor of (or is) a pushed tip: what `--follow-tags` pushes."""
+    found = []
+    for line in _lines(top, "for-each-ref", "--format=%(objecttype) %(refname)", "refs/tags"):
+        kind, _, ref = line.partition(" ")
+        commit = _commit_of(top, ref) if kind == "tag" else None
+        if commit and any(gitq.git(top, "merge-base", "--is-ancestor", commit, t.commit).returncode == 0 for t in tips):
+            found.append(_Ref(ref, _tag_label(ref)))
+    return found
+
+
+def _merge(top: str, refs: list, remote: str, into: dict) -> None:
+    """Add the tip of each ref to ``into`` (commit -> [names, Tip]); a tag whose commit the remote has adds none."""
+    for ref in refs:
+        if ref.tag is None:
+            tip = _tip(top, ref.name, ref.name)
+            label = tip.name
+        else:
+            commit = _commit_of(top, ref.name)
+            if commit is None or _on_remote(top, commit, remote):
+                continue
+            tip, label = _tip(top, ref.name, ref.name), ref.tag
+        found = into.setdefault(tip.commit, [[], tip])
+        if label not in found[0]:
+            found[0].append(label)
+        found[1] = found[1]._replace(dests=tuple(dict.fromkeys(found[1].dests + ref.dests)))
+
+
+def resolve(top: str, publish: dict) -> list:
+    """The tips ``publish`` (gate_pushargs.publish / gh) would publish, deduplicated by commit.
+
+    Post: every returned Tip has a tree; a commit named twice is one Tip named by all its names; an empty list
+    means the command publishes no commit (deletions, tags the remote has). Raises Unresolvable when a named
+    ref is not a commit.
+    """
+    into: dict = {}
+    remote = _remote_name(top, publish)
+    _merge(top, _branch_names(top, publish), remote, into)
+    extra = _all_tags(top) if publish["tags"] else []
+    if _follows_tags(top, publish):
+        extra += _followed_tags(top, [found[1] for found in into.values()])
+    _merge(top, extra, remote, into)
+    return [tip._replace(name=", ".join(names)) for names, tip in into.values()]

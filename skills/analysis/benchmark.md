@@ -9,7 +9,7 @@ trigger: >
   when "it feels faster" is the evidence.
 agents:
   - curie
-  - engineer
+  - dijkstra
   - fisher
 shapes: [instrument-before-hypothesis, two-independent-methods, replicate-to-estimate-variance]
 input: The change to benchmark. The metric. The target.

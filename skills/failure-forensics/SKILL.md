@@ -39,7 +39,7 @@ design the degraded state as a first-class behavior.
 4. Typical chain: ginzburg reconstructs the timeline → braudel separates
    timescales → hamilton designs the degraded state. Run via
    `tools/genius-invoker.sh compose ginzburg hamilton -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 
