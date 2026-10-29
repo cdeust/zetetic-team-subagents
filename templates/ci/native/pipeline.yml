@@ -551,6 +551,9 @@ jobs:
           echo "tested_sha=$actual" >> "$GITHUB_OUTPUT"
 
 
+      - name: Test embedded workflow authorization
+        run: python3 -m unittest discover -s scripts/tests -p test_ci_workflow_authorization.py -v
+
       - name: Validate ci.json
         id: commands
         run: |
