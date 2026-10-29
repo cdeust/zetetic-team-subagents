@@ -2,7 +2,7 @@
   "repository": "cdeust/Cortex",
   "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
   "assets": {
-    "scripts/ci_codex_review_event_source.py": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
+    "scripts/ci_codex_review_event_source.py": "c5fc0b31169e1b7de64e33b9d49040989082903ee0fd9e7f58e368d8c995a90c",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
     ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
@@ -99,6 +99,15 @@
       ],
       "reason": "Preserve fixed not_found, forbidden, rate_limited or unknown transport category while str(error) remains api. Actual gh REST404 response includes status; --paginate --slurp wraps it in one array element. Never classify raw stderr or expose response bodies."
     },
+    "security-receipt-proof": {
+      "sources": [
+        "https://github.com/cdeust/cortex-viz/pull/213#issuecomment-6491350304",
+        "https://github.com/cdeust/Cortex/pull/829#issuecomment-6491478435",
+        "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#issuecomment-6491660443",
+        "https://learn.chatgpt.com/docs/security/security-review"
+      ],
+      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '· _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
+    },
     "proof-first-discovery": {
       "source": "https://github.com/cdeust/Cortex/issues/comments/6459888424",
       "reason": "Authenticate current-head GraphQL summaries before REST run/attempt discovery. Incomplete reviews and successful-review unresolved waits perform no REST work. Truncated gate contexts cannot veto an authorized readiness repair. Only known per-PR404 is isolated; quota/unknown transport and initial listing failures stop the scan."
@@ -141,6 +150,15 @@
       "source": "https://github.com/cdeust/session-optimizer/pull/87#discussion_r4409903427",
       "reason": "The completion resolver folds merge and merge pending review into one logical job before keeping the newest attempt, as rerun-merge-job-identity does for the event reader. A stale successful merge cannot authorize a rerun that now waits for reviews; both aliases in one attempt are rejected."
     },
+    "private-repo-fetch": {
+      "sources": [
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/modes/tag/index.ts#L79-L135",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/branch.ts#L241",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/git-config.ts#L78-L81"
+      ],
+      "evidence": "cdeust/ci-autonome job 123331564638: git fetch origin --depth=20 <head> failed with could not read Username on a private repository; cdeust/Cortex job 123333637093 (public, same template) fetched anonymously.",
+      "reason": "The pinned action fetches through origin before installing its App token. Keep persist-credentials false and give that fetch the job token as a local http extraheader, which the action unsets before Claude runs."
+    },
     "claude-review-verdict-marker": {
       "consumer": "https://github.com/cdeust/Cortex/pull/834",
       "fixture": "https://github.com/cdeust/claude-mods/pull/51#issuecomment-6491944909",
@@ -150,21 +168,23 @@
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "047114ea11b2fcbb0cd7aca7820703057df51e99e4599119d662cd7a3614ebf1",
+      "sha256": "aebc2a9ce66e8dcee4ce34dc52a6bb6bf29900f082463bd48b726b30e7d90dd4",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
         "owner-model-selection",
+        "private-repo-fetch",
         "claude-review-verdict-marker"
       ]
     },
     ".github/workflows/claude.yml": {
       "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
-      "sha256": "dc4b350b28296c8aa6a0da9f3ebb34ef42daf18440e02921d436aec8c67b5738",
+      "sha256": "a639c9c18b345025a0f3b956e4e02e2f58b089c82edeb224833cc38338ba51e6",
       "adaptation": [
         "strict-mcp-config",
         "owner-model-selection",
-        "owner-fix-permissions"
+        "owner-fix-permissions",
+        "private-repo-fetch"
       ]
     },
     "scripts/ci_codex_review_runtime.py": {
@@ -182,9 +202,10 @@
       "adaptation": [
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "security-receipt-proof"
       ],
-      "sha256": "76f0d79a4c2127ef43a2b0dc4523f21d3dc17cd1bb000d68ac446d8f96245d02"
+      "sha256": "60908be8ffc229db41db8f8e09cf8bdddb5460402f6947581d9c330b87f8aaf3"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -208,7 +229,7 @@
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "a416d2dbda7d18f10f92809fd66c09bbc14e2deb2dc518579aa21ed584c14145",
+    "scripts/ci_codex_review_comments.py": "16d13d662bad85c0a6860ad3a5cbf995eab75b4fa4b37386679c6493d4b72076",
     "scripts/tests/codex_resume_fixtures.py": "c1d6fec17d416696db4429cc948de981c7c0d147cf5910f9a0a81f97fcfd0a4b",
     "scripts/tests/test_ci_codex_review_event.py": "cdd6794e8714d67a069ef69a559518971e629a77d9fbdc4b91f5c9201f665761",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
@@ -227,12 +248,13 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "f50f96d2f88154ce8ea70fdb4a410623ca845571a934867007f68afa927c28ce",
+      "sha256": "055044ee85311bd182d2d1cb420f2faa5df26b1bc4eb3412d1ccb7849b11271c",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "security-receipt-proof"
       ]
     },
     "merge": {

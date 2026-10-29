@@ -124,9 +124,41 @@ def original_reader_api(original):
     return original
 
 
+def original_security_receipt(original):
+    # Inverse of source.json adaptation "security-receipt-proof".
+    signature = "def _reviews(latest, target"
+    return (
+        original.replace(
+            "from ci_codex_review_comments import BLOCKED_REASONS, BLOCKING, "
+            "security_receipt  # noqa: E402\n",
+            "",
+        )
+        .replace(
+            "if any(s in BLOCKING for s in states)",
+            'if any(s in ("failed", "unresolved") for s in states)',
+        )
+        .replace(
+            '"blocked": next((r for s, r in BLOCKED_REASONS if s in states), '
+            '"review_unresolved"),',
+            '"blocked": "review_failed" if "failed" in states else "review_unresolved",',
+        )
+        .replace(signature + ", comments):", signature + "):")
+        .replace(
+            "            ) or security_receipt(\n"
+            "                comments, (repo, pr, expected_sha), reviews[kind], security\n"
+            "            )\n",
+            "            )\n",
+        )
+        .replace(
+            "_reviews(latest, (expected_sha, repo, pr), comments)",
+            "_reviews(latest, (expected_sha, repo, pr))",
+        )
+    )
+
+
 def original_security_reader(delivered):
     original = delivered.decode()
-    original = original_reader_api(original)
+    original = original_security_receipt(original_reader_api(original))
     imported = (
         "from ci_codex_review_comments import _authenticate_editor, "
         "_bot_author, _canonical  # noqa: E402\n"
@@ -266,7 +298,15 @@ def original_claude_owner(delivered):
     return re.sub(rb'            --append-system-prompt "[^\n]+\n', b"", delivered)
 
 
+def without_fetch_authorization(delivered):
+    first = delivered.index(b"      # source: pinned action src/modes/tag/index.ts#L79")
+    last = delivered.index(b"      - name: Install subprocess isolation\n", first)
+    return delivered[:first] + delivered[last:]
+
+
 def original_asset(delivered, relative):
+    if relative.endswith(("/claude-review.yml", "/claude.yml")):
+        delivered = without_fetch_authorization(delivered)
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
             b"    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.\n",

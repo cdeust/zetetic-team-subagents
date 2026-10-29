@@ -51,6 +51,16 @@ alongside code review. `Codex.yml` consumes the authenticated completion summari
 it does not request another model run. A missing code or security review stays
 pending. Native reviews are an account prerequisite, not a GitHub Actions secret.
 
+A security review can complete with both verdict flags null. Codex then posts
+an authenticated receipt, "No security issues were found", for the reviewed
+commit (13 of 13 security receipts in 36 PRs on 2026-10-29, manual or
+automatic). The reader accepts that receipt as the verdict only for a completed,
+current-head security review whose metadata names this repository, PR and head,
+from the native Bot with an authenticated editor. Without it the gate blocks as
+`codex_security_verdict_missing`; a security receipt with other wording blocks
+as `codex_security_receipt_unrecognized`. The gate names the cause and never
+requests a review; once a receipt arrives, `Codex.yml` resume re-runs the gate.
+
 Install the Claude GitHub app and configure `CLAUDE_CODE_OAUTH_TOKEN`. The pinned
 Anthropic action supports this OAuth input. Automatic review uses the official
 `pull_request` event for same-repository PRs and grants `id-token: write` for the
