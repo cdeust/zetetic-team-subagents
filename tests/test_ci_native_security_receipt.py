@@ -326,6 +326,23 @@ class SecurityReceiptTests(unittest.TestCase):
         self.assert_outcome(result, "blocked", "codex_security_receipt_unrecognized")
         self.assertEqual(result["security_review"]["resolution"]["receipt_ids"], [9])
 
+    def test_contradictory_verdict_after_the_sentence_is_unrecognized(self):
+        # Codex finding4411675624: presence of the sentence is not the verdict.
+        body = VIZ213_SECURITY.replace(
+            "found in this pull request.\n",
+            "found in this pull request.\n\n1 security issue was found.\n",
+            1,
+        )
+        result = self.evidence([summary(VIZ_SHA), row(9, body)])
+        self.assert_outcome(result, "blocked", "codex_security_receipt_unrecognized")
+
+    def test_text_added_anywhere_in_the_receipt_is_unrecognized(self):
+        body = VIZ213_SECURITY.replace(
+            "</details>", "</details>\n\nA blocking security issue was found.", 1
+        )
+        result = self.evidence([summary(VIZ_SHA), row(9, body)])
+        self.assert_outcome(result, "blocked", "codex_security_receipt_unrecognized")
+
     def test_receipt_never_overrides_a_running_review(self):
         running = dict(
             commit_sha=VIZ_SHA, status="running", has_any_findings=None,
@@ -354,6 +371,37 @@ class SecurityReceiptTests(unittest.TestCase):
         )
         result = self.evidence([summary(VIZ_SHA, security=clean)])
         self.assert_outcome(result, "success", "reviews_complete")
+
+
+EVENT_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "templates/ci/native/assets/scripts/ci_codex_review_event_source.py"
+)
+
+
+class ReceiptEventTests(unittest.TestCase):
+    """Codex finding4411383156: a receipt event must reach gate resumption."""
+
+    def canonical(self):
+        sys.path.insert(0, str(EVENT_SOURCE.parent))
+        try:
+            for name in ("ci_codex_review_comments", "ci_codex_review_runtime",
+                         "ci_codex_reviews"):
+                sys.modules.pop(name, None)
+            spec = importlib.util.spec_from_file_location("receipt_event", EVENT_SOURCE)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module.canonical
+        finally:
+            sys.path.remove(str(EVENT_SOURCE.parent))
+
+    def test_native_receipt_comment_identifies_the_pr(self):
+        rest = dict(login="chatgpt-codex-connector[bot]", type="Bot")
+        self.assertTrue(self.canonical()(dict(user=rest, body=VIZ213_SECURITY)))
+
+    def test_human_receipt_copy_does_not(self):
+        human = dict(login="someone", type="User")
+        self.assertFalse(self.canonical()(dict(user=human, body=VIZ213_SECURITY)))
 
 
 if __name__ == "__main__":

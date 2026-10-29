@@ -1,9 +1,10 @@
 # Native review tools and the Fix guard, 2026-10-29
 
-Base: `5f5537a` (#223). Three changes: the native `claude-review.yml` asset
-gets what #211 gave the legacy `Review` step (E1), the legacy `Fix` step runs
-only on a failed test job (E2), and the native `claude.yml` asset serializes
-owner mentions per thread again (E3).
+Base: `5f5537a` (#223), merged with `541a90a` (#225). Four changes: the native
+`claude-review.yml` asset gets what #211 gave the legacy `Review` step (E1),
+the legacy `Fix` step runs only on a failed test job (E2), the native
+`claude.yml` asset serializes owner mentions per thread again (E3), and the
+native post-merge resolver declines a draft PR's green Pipeline (E4).
 
 ## E1: what the native review could not do
 
@@ -123,12 +124,36 @@ it a thread keeps one pending request and a newer one replaces it. Adaptation
 `owner-mention-concurrency`; the reversion still hashes to `c7604362...`.
 Red: `test_owner_mentions_run_one_at_a_time_per_thread` 1 failed, 9 passed.
 
+## E4: a draft PR's Pipeline no longer turns main red (native)
+
+Port of #226 to the inline resolver of `templates/ci/native/pipeline.yml`. A
+draft's Pipeline succeeds with `review` and `merge` skipped
+(`!github.event.pull_request.draft`), and `_validate_jobs` accepted only
+`success`: "source merge gate requires completed review" (zetetic #219, runs
+40865808090 and 40875336583, legacy resolver). In the native profile the
+skipped merge job also keeps its unevaluated display name: the jobs API of
+Cortex run 40832536658 lists
+`needs.review.outputs.state == 'pending' && 'merge pending review' || 'merge'`,
+`completed`, `skipped`; the resolver would have failed on "exactly one merge
+job". That name now counts as `merge` only when skipped. When review and merge
+are both completed and skipped and every test job succeeded, the resolver
+requires the live PR to be a draft and returns `run_tests=false` before the
+workflow proof and any write, and `main()` exits 0. A ready PR with both
+skipped, a single skipped gate job, a test job not successful, an unevaluated
+merge name that did not skip, and a green run whose PR went back to draft all
+still fail. Adaptation `draft-pipeline-decline` on the `resolve` job; its
+`sha256` is now `3c7e70b7...` and `original_resolve_job` still hashes to the
+recorded `4671437a...`. `generated/pipeline.yml` is the new native render
+(header `f03c46de...`). Red: 10 failed, 8 passed; green: 18 passed
+(`tests/test_ci_native_post_merge_draft.py`, the 15 cases of #226 plus the
+unevaluated name, a ready-again draft and the CLI exit).
+
 ## Validation
 
 - Red, on the templates of `5f5537a` with the new tests: `30 failed, 93 passed`
   (7 E1 tests in `tests/test_ci_native_review_tools.py`, 22 E2 cases in
   `tests/test_ci_pr_safety.py`, 1 in `tests/test_ci_template.py`).
-- Green: `python3 -m pytest -q tests/test_ci_*.py`, 582 passed, 39 subtests
+- Green: `python3 -m pytest -q tests/test_ci_*.py`, 604 passed, 39 subtests
   passed; `bash tools/tests/render-ci/run-tests.sh`, 7 passed.
 - `actionlint`: exit 0 on the three rendered workflows of this repository and on
   the six workflows of a native render.

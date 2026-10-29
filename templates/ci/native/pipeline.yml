@@ -249,11 +249,29 @@ jobs:
               full_sha(run.get("head_sha"))
 
 
+          # A skipped merge job keeps its unevaluated display name (Cortex run
+          # 40832536658, a draft PR's Pipeline).
+          UNEVALUATED_MERGE = (
+              "needs.review.outputs.state == 'pending' && 'merge pending review' || 'merge'"
+          )
+
+
+          def _gate_name(job):
+              name = job.get("name")
+              if name == UNEVALUATED_MERGE and job.get("conclusion") == "skipped":
+                  return "merge"
+              return name
+
+
           def _validate_jobs(jobs, actor):
               # Source: the owner's single-push contract requires every author
               # to complete review. Overall success alone accepts skipped jobs.
+              # Returns "pending" when the merge job waits for reviews, and
+              # "unrequested" when review and merge were both skipped: on a
+              # same-repository pull_request run that succeeded, the only
+              # condition the two jobs share and can fail is the draft check.
               required = ["contract", "unit", "regression", "e2e", "review", "merge"]
-              pending = not any(job.get("name") == "merge" for job in jobs) and any(
+              pending = not any(_gate_name(job) == "merge" for job in jobs) and any(
                   job.get("name") == "merge pending review" for job in jobs
               )
               if pending:
@@ -273,18 +291,28 @@ jobs:
                       f"source merge gate requires the exact {category} matrix",
                   )
                   required.extend(sorted(expected))
+              found = {}
               for name in required:
-                  matching = [job for job in jobs if job.get("name") == name]
+                  matching = [job for job in jobs if _gate_name(job) == name]
                   require(
                       len(matching) == 1, f"source merge gate requires exactly one {name} job"
                   )
-                  job = matching[0]
-                  allowed = job.get("conclusion") == "success"
+                  found[name] = matching[0]
+              unrequested = not pending and all(
+                  found[name].get("status") == "completed"
+                  and found[name].get("conclusion") == "skipped"
+                  for name in ("review", "merge")
+              )
+              for name in required:
+                  job = found[name]
+                  allowed = job.get("conclusion") == "success" or (
+                      unrequested and name in ("review", "merge")
+                  )
                   require(
                       job.get("status") == "completed" and allowed,
                       f"source merge gate requires completed {name}",
                   )
-              return pending
+              return "pending" if pending else "unrequested" if unrequested else None
 
 
           def _pr_identity(pr, repository, head):
@@ -351,8 +379,11 @@ jobs:
               jobs = _effective_jobs(
                   api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
               )
-              if _validate_jobs(jobs, run.get("actor", {}).get("login")):
+              state = _validate_jobs(jobs, run.get("actor", {}).get("login"))
+              if state == "pending":
                   run["review_pending"] = True
+              elif state == "unrequested":
+                  run["merge_unrequested"] = True
 
               return run
 
@@ -462,6 +493,19 @@ jobs:
                       "run_tests": "false",
                       "pr_number": str(number),
                       "reason": "Tests passed; native Codex reviews pending",
+                  }
+              if run.get("merge_unrequested"):
+                  # A draft's Pipeline succeeds with review and merge skipped: it never
+                  # asked for a merge, so declining one is not a failure. No API write.
+                  require(
+                      pr.get("draft") is True,
+                      "source merge gate skipped review and merge on a PR that is not a draft",
+                  )
+                  return {
+                      "tested_sha": run["head_sha"],
+                      "run_tests": "false",
+                      "pr_number": str(number),
+                      "reason": "Draft PR: its Pipeline skipped review and merge; nothing to merge",
                   }
               _proof.authorize_workflow(run, repository, api, PostMergeError)
               pr_path = f"/repos/{repository}/pulls/{number}"
@@ -1446,10 +1490,28 @@ jobs:
           SECURITY_HEADING = re.compile(
               r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n"
           )
-          NO_SECURITY_ISSUES = (
-              "\nSecurity review completed. No security issues were found in this pull request.\n"
-          )
           RECEIPT_COMMIT = re.compile(r"\n\*\*Reviewed commit:\*\* `([0-9a-f]{10,40})`\n")
+          # The whole no-issues receipt, byte-identical across the six captured ones up to
+          # the commit prefix, task id and automatic suffix (Codex finding4411675624: the
+          # verdict is the exact text, never a sentence found somewhere in the body).
+          NO_ISSUES_RECEIPT = re.compile(
+              re.escape(RECEIPT)
+              + r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n\n"
+              r"Security review completed\. No security issues were found in this pull request\.\n\n"
+              r"\*\*Reviewed commit:\*\* `[0-9a-f]{10,40}`\n\n"
+              r"\[View security finding report\]"
+              r"\(https://chatgpt\.com/codex/cloud/tasks/task_e_[0-9a-f]+\)\n\n"
+              r"_Only the user who started this review can view the report in Codex\._\n\n"
+              + re.escape(
+                  "<details> <summary>ℹ️ About Codex security reviews in GitHub</summary>\n<br/>\n\n"
+                  "This is an experimental Codex feature. Security reviews are triggered when:\n"
+                  '- You comment "@codex security review"\n'
+                  '- A regular code review gets triggered (for example, "@codex review" or when a'
+                  " PR is opened), and you’re opted in so security review runs alongside code review\n\n"
+                  "Once complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n"
+                  "</details>"
+              )
+          )
           # A completed null verdict without a receipt, or a receipt whose wording no
           # observed receipt has, blocks under its own name (the gate never relaunches).
           MISSING, UNRECOGNIZED = "verdict_missing", "receipt_unrecognized"
@@ -1490,7 +1552,7 @@ jobs:
                   if len(commits) != 1 or not sha.startswith(commits[0]):
                       continue
                   _authenticate_editor(comment)
-                  if body.count(NO_SECURITY_ISSUES) != 1:
+                  if NO_ISSUES_RECEIPT.fullmatch(body) is None:
                       return {"state": UNRECOGNIZED, "source": "codex_security_receipt",
                               "receipt_ids": [comment["id"]]}
                   receipts.append(comment["id"])

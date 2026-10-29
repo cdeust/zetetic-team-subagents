@@ -231,6 +231,11 @@ def original_review_job(delivered):
 
 
 def original_resolve_job(delivered):
+    # Inverse of source.json adaptation "draft-pipeline-decline".
+    pairs = json.loads((ROOT / "tests/fixtures/native_resolve_draft_decline.json").read_text())
+    for new, old in pairs["pairs"]:
+        assert delivered.count(new.encode()) == 1
+        delivered = delivered.replace(new.encode(), old.encode())
     # Inverse of source.json adaptation "post-merge-merge-alias".
     folded = (
         b"                  # The single merge job has two review-dependent display names;\n"
@@ -363,6 +368,13 @@ def original_asset(delivered, relative):
         first = original.index(b"  # Supported fallback:")
         last = original.index(b"\npermissions:\n", first)
         return original[:first] + original[last:]
+    if relative == "scripts/ci_codex_review_event_source.py":
+        # Inverse of source.json adaptation "receipt-event-resumption".
+        return delivered.replace(
+            b"from ci_codex_review_comments import RECEIPT\n", b""
+        ).replace(
+            b'item["body"].startswith((SUMMARY, RECEIPT))', b'item["body"].startswith(SUMMARY)'
+        )
     if relative == "scripts/ci_codex_review_runtime.py":
         return original_security_runtime(delivered)
     if relative == "scripts/ci_codex_reviews.py":
@@ -405,13 +417,13 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     assert receipt["commit"] == "8e7375bf2edfb33fb9c45809b9af6b428f0f4235"
     for relative, digest in receipt["assets"].items():
         assert hashlib.sha256(files[tmp_path / relative]).hexdigest() == digest
-    assert len(receipt["assets"]) == 8
+    assert len(receipt["assets"]) == 7
     for relative, source in receipt["adapted_assets"].items():
         delivered = files[tmp_path / relative]
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
         original = original_asset(delivered, relative)
         assert hashlib.sha256(original).hexdigest() == source["source_sha256"]
-    assert len(receipt["adapted_assets"]) == 6
+    assert len(receipt["adapted_assets"]) == 7
     for relative, digest in receipt["authored_assets"].items():
         assert hashlib.sha256(files[tmp_path / relative]).hexdigest() == digest
     assert (
