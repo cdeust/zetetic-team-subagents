@@ -2,7 +2,6 @@
   "repository": "cdeust/Cortex",
   "commit": "8e7375bf2edfb33fb9c45809b9af6b428f0f4235",
   "assets": {
-    "scripts/ci_codex_review_event_source.py": "c5fc0b31169e1b7de64e33b9d49040989082903ee0fd9e7f58e368d8c995a90c",
     "scripts/ci_codex_review_resume.py": "465a4ad99c0dd676dfc0ae03dfc3fa4fc01b1f18736e9a315c55dfa87e0c0b19",
     ".claude/commands/review-pr.md": "7b03c6330355c70ceaffa42e29c237f9b9b7ead723867e2445f196e9b8023f68",
     ".claude/agents/code-quality-reviewer.md": "96d77dc41b511ddb33f44b6239869ca0cfd9afa0caf7ab6a873501092a347c68",
@@ -108,6 +107,13 @@
       ],
       "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '· _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
     },
+    "receipt-event-resumption": {
+      "sources": [
+        "https://github.com/cdeust/zetetic-team-subagents/pull/223#discussion_r4411383156",
+        "https://github.com/cdeust/zetetic-team-subagents/commit/e1dcc25a5c016acae6ffa163049cc39fe7d4427b"
+      ],
+      "reason": "A security receipt can arrive after the Pipeline completed without a later summary edit; the authenticated comment-event filter only accepted the summary, so the receipt never resumed the gate (Codex finding4411383156). Accept a native-Bot comment that starts with the receipt marker as a resumption trigger. The event only identifies the PR; the comment is re-read through REST with the Bot author check and resume recomputes the full proof at the live head. The gate never requests a review."
+    },
     "proof-first-discovery": {
       "source": "https://github.com/cdeust/Cortex/issues/comments/6459888424",
       "reason": "Authenticate current-head GraphQL summaries before REST run/attempt discovery. Incomplete reviews and successful-review unresolved waits perform no REST work. Truncated gate contexts cannot veto an authorized readiness repair. Only known per-PR404 is isolated; quota/unknown transport and initial listing failures stop the scan."
@@ -207,12 +213,19 @@
         "reconciliation-checks-read",
         "bounded-completion-jobs"
       ]
+    },
+    "scripts/ci_codex_review_event_source.py": {
+      "source_sha256": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
+      "sha256": "c5fc0b31169e1b7de64e33b9d49040989082903ee0fd9e7f58e368d8c995a90c",
+      "adaptation": [
+        "receipt-event-resumption"
+      ]
     }
   },
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "16d13d662bad85c0a6860ad3a5cbf995eab75b4fa4b37386679c6493d4b72076",
+    "scripts/ci_codex_review_comments.py": "4550dd5dcacb9fb898d3b6e7bf4c619ee614fe296f6c959d7ade84e6406513f9",
     "scripts/tests/codex_resume_fixtures.py": "c1d6fec17d416696db4429cc948de981c7c0d147cf5910f9a0a81f97fcfd0a4b",
     "scripts/tests/test_ci_codex_review_event.py": "cdd6794e8714d67a069ef69a559518971e629a77d9fbdc4b91f5c9201f665761",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
@@ -231,7 +244,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "055044ee85311bd182d2d1cb420f2faa5df26b1bc4eb3412d1ccb7849b11271c",
+      "sha256": "8e2791b1baad9e19ec36acbab74644bd9fc6937dce9560e83f520d632375daa5",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
