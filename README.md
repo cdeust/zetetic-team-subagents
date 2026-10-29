@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/suites-43-brightgreen" alt="Test suites">
+  <img src="https://img.shields.io/badge/suites-44-brightgreen" alt="Test suites">
   <img src="https://img.shields.io/badge/agents-97-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-86-green" alt="Skills">
   <img src="https://img.shields.io/badge/hooks-28_lifecycle-red" alt="Hooks">

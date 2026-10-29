@@ -25,6 +25,9 @@ def fixture(tmp_path):
     root = tmp_path / "repository"
     (root / "tests").mkdir(parents=True)
     shutil.copyfile(ROOT / "tests/run-all.sh", root / "tests/run-all.sh")
+    # run-all.sh resolves the pytest interpreter through tools/dev-python.sh (#171).
+    (root / "tools").mkdir()
+    shutil.copy2(ROOT / "tools/dev-python.sh", root / "tools/dev-python.sh")
     binary = root / "bin"
     binary.mkdir()
     python = binary / "fixture-python"
@@ -155,6 +158,25 @@ def test_default_still_reports_missing_pytest_as_failure(fixture):
     assert result.returncode == 1
     assert "pytest is not installed" in result.stdout
     assert set(events) == {"tool", "script", "memory"}
+
+
+@pytest.mark.parametrize("group", ["regression", "e2e"])
+def test_the_shell_groups_resolve_no_python(fixture, group):
+    # The regression and e2e jobs run shell suites only; a full run alone needs
+    # pytest, so only it calls tools/dev-python.sh (#171), which may create a venv.
+    root = fixture[0]
+    stub = root / "tools/dev-python.sh"
+    stub.write_text('#!/usr/bin/env bash\nprintf "%s\\n" dev-python >> "$TRACE"\nexit 1\n')
+    stub.chmod(0o755)
+    for args in (("--group", group), ("--list", "--group", group)):
+        result, events = run(fixture, *args)
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "dev-python" not in events
+    fixture[2].unlink()  # the trace of the shell-group runs above
+    result, events = run(fixture)
+    assert result.returncode == 1
+    assert events == ["dev-python"]
+    assert "FATAL: tools/dev-python.sh" in result.stderr
 
 
 @pytest.mark.parametrize("args", [("--group",), ("--group", "unknown"), ("--unknown",)])

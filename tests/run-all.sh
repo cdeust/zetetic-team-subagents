@@ -26,10 +26,6 @@ set -uo pipefail   # NOT -e: suites are run and their exit codes collected.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || { echo "FATAL: cannot cd to repo root $REPO_ROOT" >&2; exit 1; }
 
-# Python interpreter used for the pytest suite. Overridable so a contributor
-# whose default python3 lacks pytest can point at one that has it.
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-
 # Source: ci.json category ownership, tasks/ci-suite-partition-20261024.md.
 group=all
 list_only=false
@@ -44,6 +40,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "usage: bash tests/run-all.sh [--list] [--group regression|e2e]" >&2; exit 2 ;;
   esac
 done
+
+# Python interpreter of the pytest suite, which only the full run has:
+# PYTHON_BIN if set, else a .venv, created from requirements-dev.lock when
+# missing (source: ADR-9849). The regression and e2e groups run shell suites
+# only (tasks/ci-suite-partition-20261024.md), so they resolve no Python and
+# never create a venv.
+if [[ "$group" == all && "$list_only" != true ]]; then
+  PYTHON_BIN="$(tools/dev-python.sh)" || { echo "FATAL: tools/dev-python.sh found no Python with pytest and yaml (its diagnostic is above)" >&2; exit 1; }
+  export PYTHON_BIN
+fi
 
 list_shell_suites() {
   local s
@@ -96,7 +102,7 @@ if [[ -z "$selected_suites" ]]; then
   exit 2
 fi
 if [[ "$list_only" == true ]]; then
-  [[ "$group" != all ]] || printf '%s\n' "$PYTHON_BIN -m pytest"
+  [[ "$group" != all ]] || printf '%s\n' "${PYTHON_BIN:-python3} -m pytest"
   printf '%s\n' "$selected_suites"
   exit 0
 fi

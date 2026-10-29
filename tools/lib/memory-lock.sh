@@ -43,7 +43,20 @@
 _lock_reclaim_dead() {
   local lockdir="$1" scope="$2" holder_pid="$3"
   if [[ -z "$holder_pid" ]] || kill -0 "$holder_pid" 2>/dev/null; then return 2; fi
-  rm -f "$lockdir/pid" 2>/dev/null || true
+  # Claim the pid file by an atomic rename, then verify it still names the dead
+  # holder: the caller read holder_pid earlier, and that holder may have released
+  # and a new one taken the lock since. Deleting the pid file blind would
+  # steal that live holder's lock (two creators of one file under 10-way load).
+  local claimed="$lockdir.reclaim.$$" claimed_pid
+  mv "$lockdir/pid" "$claimed" 2>/dev/null || return 1
+  claimed_pid=$(cat "$claimed" 2>/dev/null || true)
+  if [[ "$claimed_pid" != "$holder_pid" ]]; then
+    # We took a live holder's pid file: put it back (a new holder rewrites its own).
+    [[ -e "$lockdir/pid" ]] || mv "$claimed" "$lockdir/pid" 2>/dev/null || true
+    rm -f "$claimed" 2>/dev/null || true
+    return 1
+  fi
+  rm -f "$claimed" 2>/dev/null || true
   if rmdir "$lockdir" 2>/dev/null; then
     audit "with_lock" "/memories/$scope" 0 "stale_lock_reclaimed"
     if mkdir "$lockdir" 2>/dev/null; then
