@@ -61,6 +61,8 @@ jobs:
             Complete all five reviews using foreground agents and wait for their actual reports.
             Use `gh pr comment` for top-level feedback and a completion summary, including when there are no findings.
             Only post GitHub comments - don't submit review text as messages.
+            End the completion summary with this exact last line, unchanged except `true` becomes `false` when any finding blocks the merge:
+            <!-- claude-review-verdict:v1 {"head":"${{ github.event.pull_request.head.sha }}","merge":true} -->
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
             --strict-mcp-config

@@ -338,6 +338,14 @@ def original_asset(delivered, relative):
         b'--model "claude-opus-5-5"', b'--model "claude-opus-4-7"'
     )
     if relative.endswith("/claude-review.yml"):
+        # Inverse of source.json adaptation "claude-review-verdict-marker".
+        marker = (
+            b"            End the completion summary with this exact last line, unchanged except"
+            b" `true` becomes `false` when any finding blocks the merge:\n"
+            b'            <!-- claude-review-verdict:v1 {"head":"${{ github.event.pull_request.head.sha }}","merge":true} -->\n'
+        )
+        assert original.count(marker) == 1
+        original = original.replace(marker, b"")
         original = original.replace(b"  pull_request:\n", b"  pull_request_target:\n")
         original = original.replace(b"      id-token: write\n", b"")
         original = original.replace(
