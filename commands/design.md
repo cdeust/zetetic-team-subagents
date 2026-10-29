@@ -25,11 +25,10 @@ separate, unnamespaced, non-overridable capability. Neither overrides the other.
 ## Instructions
 
 1. Resolve the skill file: `tools/skill-runner.sh design`.
-   If the output opens with a `!!! MODEL-TIER ESCALATION REQUIRED !!!` banner, spawn the named
-   agent as a real subagent via the Agent tool instead of inlining -- but for this skill's
-   current `agents:` list (`ux-designer`, `model: sonnet`, matching this runner's baseline) no
-   banner should fire; if one does, the frontmatter has drifted and should be re-verified before
-   proceeding.
+   If the output opens with a `!!! MODEL-TIER ESCALATION REQUIRED !!!` banner, delegate through
+   the Agent tool to a built-in `general-purpose` agent whose prompt carries the `GENIUS:` line
+   the skill names (`jobs`), instead of inlining. The pattern is `model: opus`, so the banner is
+   expected for this skill.
 
 2. Read the resolved skill file. Follow its **Procedure** section step by step against
    `$ARGUMENTS` (the screen, flow, component, or existing markup/design to design or audit).
@@ -38,13 +37,13 @@ separate, unnamespaced, non-overridable capability. Neither overrides the other.
    report the failure and stop -- do not produce partial output that bypasses a gate.
 
 4. Produce output in the skill's **Output Format** section. Check the **Hand-offs** section
-   (`frontend-engineer` for implementation feasibility, `architect`+`alexander` for design-system
+   (`kay` for implementation feasibility, `simon`+`alexander` for design-system
    architecture, `feynman` for research-integrity doubts, `arendt` for dark-pattern/ethics
    concerns) and suggest the next step if a hand-off condition is met.
 
 5. For work that needs to survive this session's own compaction or needs an isolated context
    independent of this session's history (a long, multi-round accessibility audit spanning many
-   files), spawn `ux-designer` as a real subagent via the Agent tool instead of running this
-   command inline.
+   files), delegate to a built-in `general-purpose` agent with `GENIUS: jobs, ranganathan` via the
+   Agent tool instead of running this command inline.
 
 $ARGUMENTS

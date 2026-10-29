@@ -40,7 +40,7 @@ or cognitive load across it.
 4. Typical chain: coase places the boundary → simon shapes the decomposition →
    liskov contracts the interface. Run via
    `tools/genius-invoker.sh compose coase liskov -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

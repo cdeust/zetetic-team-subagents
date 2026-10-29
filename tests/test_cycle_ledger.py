@@ -50,7 +50,7 @@ def test_task_repo_counts_new_files_and_skips_ignored_or_outside_files(repo, tmp
 def test_one_open_task_per_session_and_agent_in_an_owner_only_append_only_file(path, repo):
     first, created = cl.open_task(path, opener(repo))
     again, created_again = cl.open_task(path, opener(repo))
-    sub, sub_created = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="engineer"))
+    sub, sub_created = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="general-purpose"))
     other, other_created = cl.open_task(path, opener(repo, session_id="sess-other"))
     assert (created, created_again, sub_created, other_created) == (True, False, True, True)
     assert again["open"] == first["open"] and len({first["open"], sub["open"], other["open"]}) == 3
@@ -78,10 +78,10 @@ def test_a_subagent_window_ignores_parent_closes_and_a_main_window_ignores_subag
     main agent; the larger subagent end must not leak into the main window."""
     main, _ = cl.open_task(path, opener(repo))
     cl.close(path, main["open"], {"evidence": {}, "counts": {}}, (1234, "/t/main.jsonl"))
-    sub, _ = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="engineer"))
+    sub, _ = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="general-purpose"))
     assert sub["window_start"] == 0
     cl.close(path, sub["open"], {"evidence": {}, "counts": {}}, (5000, "/t/main/subagents/agent-ag1.jsonl"))
-    resumed, _ = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="engineer"))
+    resumed, _ = cl.open_task(path, opener(repo, agent_id="ag1", agent_type="general-purpose"))
     later_main, _ = cl.open_task(path, opener(repo))
     assert (resumed["window_start"], later_main["window_start"]) == (5000, 1234)
 
@@ -129,7 +129,7 @@ def test_a_closed_or_unknown_task_cannot_be_declared(path, repo):
 
 def test_metrics_give_the_promise_rate_reopens_and_bypasses_per_agent_type(path, repo):
     main, _ = cl.open_task(path, opener(repo))
-    eng, _ = cl.open_task(path, opener(repo, agent_id="a", agent_type="engineer"))
+    eng, _ = cl.open_task(path, opener(repo, agent_id="a", agent_type="general-purpose"))
     evidence = {s: {"source": "transcript"} for s in ("recall", "verify", "review")}
     cl.close(path, main["open"], {"evidence": {**evidence, "refine": {"source": "declaration"}},
                                   "counts": {"reopens": 2}}, (10, "/t/main.jsonl"))
@@ -138,7 +138,7 @@ def test_metrics_give_the_promise_rate_reopens_and_bypasses_per_agent_type(path,
     out = cl.metrics(gates_jsonl.read_rows(path))
     assert out["main"] == {"tasks": 1, "declared": 1, "proven": 3, "reopens": 2, "bypasses": 0,
                            "promise_rate": 0.25}
-    assert out["engineer"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0, "bypasses": 1,
+    assert out["general-purpose"] == {"tasks": 0, "declared": 0, "proven": 0, "reopens": 0, "bypasses": 1,
                                "promise_rate": None}  # a bypass proved nothing
     assert cl.open_tasks(gates_jsonl.read_rows(path)) == []  # and it closed the task
 

@@ -43,7 +43,7 @@ The move: dissolve, restate, or invert the frame before solving anything.
 4. Typical chain: wittgenstein dissolves the verbal dispute → altshuller
    formulates the residual contradiction → polya attacks it. Run via
    `tools/genius-invoker.sh compose wittgenstein altshuller -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

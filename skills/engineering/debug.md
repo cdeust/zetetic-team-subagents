@@ -8,7 +8,7 @@ trigger: >
   When a bug is reported and the cause is unknown; when a test fails intermittently;
   when a symptom is visible but the root cause hasn't been identified.
 agents:
-  - engineer
+  - dijkstra
   - curie
 shapes: [residual-with-a-carrier, instrument-before-hypothesis]
 input: >
@@ -41,7 +41,7 @@ Trace a bug to its root cause using the curie method: instrument, measure, name 
 4. **Name the anomaly.** curie Move 2: coin a term for the observed deviation. "Checkout-stale-cart-bug" not "the cart thing."
 5. **Isolate.** curie Move 4-5: bisect (git bisect, binary search on components, feature flags) until the carrier is isolated. At each step, verify the signal concentrates.
 6. **Confirm.** curie Move 6: a second independent method confirms the root cause (e.g., the bisect AND a code review of the identified change agree).
-7. **Fix.** engineer implements the fix at the root cause, not at the symptom.
+7. **Fix.** dijkstra implements the fix at the root cause, not at the symptom.
 8. **Verify.** Before/after measurement confirms the fix. The original reproduction must now pass.
 
 ## Zetetic Gates

@@ -32,7 +32,7 @@ test_c1() {
 
   local pids=() outs=()
   for i in $(seq 1 10); do
-    local f; f=$(mktemp)
+    local f="$ROOT/output-$i"
     outs+=("$f")
     ( MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
       "$TOOL" create /memories/testscope/race.md "body-$i" >"$f" 2>&1 ) &
@@ -50,6 +50,7 @@ test_c1() {
     pass 1 "10-way parallel create: exactly 1 success, 9 duplicates (mutex correct)"
   else
     fail 1 "10-way parallel create" "successes=$successes duplicates=$duplicates (expected 1+9)"
+    for f in "${outs[@]}"; do cat "$f"; done
   fi
 }
 

@@ -44,13 +44,14 @@ fi
 
 q() { printf '%s' "$report" | awk -v k="$1" '$1==k {print $2}'; }
 
-genius="$(q genius_agents)"; team="$(q team_agents)"; total="$(q agents_total)"
+genius="$(q genius_agents)"; total="$(q agents_total)"
 prob="$(q problem_skills)"; cat_="$(q category_skills)"; skills="$(q skills_total)"
 
-if [[ -n "$genius" && -n "$team" && "$total" == "$(( genius + team ))" ]]; then
-  ok "agents_total = genius_agents + team_agents ($genius + $team = $total)"
+# Only genius agents exist since the 2026-10-21 owner decision.
+if [[ -n "$genius" && "$total" == "$genius" ]]; then
+  ok "agents_total = genius_agents ($genius = $total)"
 else
-  bad "agents_total is not the sum of its two populations ($genius + $team != $total)"
+  bad "agents_total differs from genius_agents ($genius != $total)"
 fi
 
 if [[ -n "$prob" && -n "$skills" && "$cat_" == "$(( skills - prob ))" ]]; then
@@ -59,7 +60,7 @@ else
   bad "category_skills is not the remainder ($skills - $prob != $cat_)"
 fi
 
-for key in genius_agents team_agents agents_total problem_skills category_skills \
+for key in genius_agents agents_total problem_skills category_skills \
            skills_total hook_registrations hook_scripts commands tools suites memory_suites; do
   v="$(q "$key")"
   if [[ "$v" =~ ^[0-9]+$ ]] && [[ "$v" -gt 0 ]]; then

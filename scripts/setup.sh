@@ -8,6 +8,7 @@
 #
 # Usage:
 #   bash scripts/setup.sh [install|update|uninstall|configure] [--dry-run] [--verbose]
+#   bash scripts/setup.sh render-ci <target-repository>   # the single CI pipeline + ci.json
 
 set -euo pipefail
 
@@ -44,7 +45,7 @@ step() { echo ""; echo -e "${TEAL}───${NC} ${WHITE}${BOLD}$1${NC} ${TEAL}�
 # ── Sourced modules (lib/) ─────────────────────────────────────────────
 # Behavior-preserving split for coding-standards §4 (file/function size).
 # shellcheck source=/dev/null
-for _mod in overrides staging actions state; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
+for _mod in overrides staging actions state render-ci; do source "$SCRIPT_DIR/lib/${_mod}.sh"; done
 
 # ── Flag parsing ───────────────────────────────────────────────────────
 ACTION="install"
@@ -105,8 +106,9 @@ installed_version() {
 case "$ACTION" in
   uninstall)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_uninstall; exit 0 ;;
   configure)  [[ -d "$CLAUDE_DIR" ]] && migrate_flat_state; do_configure; exit 0 ;;
+  render-ci)  do_render_ci "${ARGS[@]:1}"; exit $? ;;
   install|update) ;;
-  *) echo "usage: $0 [install|update|uninstall|configure] [--dry-run] [--verbose]" >&2; exit 2 ;;
+  *) echo "usage: $0 [install|update|uninstall|configure|render-ci <target>] [--dry-run] [--verbose]" >&2; exit 2 ;;
 esac
 
 # ── Banner ─────────────────────────────────────────────────────────────
@@ -162,7 +164,6 @@ STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
 
 manifest_lines=()
-count_agents=0
 count_genius=0
 count_skills=0
 count_commands=0
@@ -178,10 +179,9 @@ if plugin_serves_agents; then
   PLUGIN_SERVED=true
   ok "Marketplace plugin present: agents and skills are served by it, not copied to ~/.claude/"
 else
-  stage_tree "$PLUGIN_ROOT/agents"   "agents"   true  _n; count_agents=$_n
-  # Count genius agents separately for reporting
+  stage_tree "$PLUGIN_ROOT/agents"   "agents"   true  _n
+  # Only genius agents exist (owner decision 2026-10-21); INDEX.md is a routing table, not an agent.
   count_genius=$(find "$STAGING/agents/genius" -name "*.md" -not -name "INDEX.md" 2>/dev/null | wc -l | tr -d ' ')
-  count_agents=$((count_agents - count_genius))
   stage_tree "$PLUGIN_ROOT/skills"   "skills"   false _n; count_skills=$_n
 fi
 stage_tree "$PLUGIN_ROOT/commands" "commands" false _n; count_commands=$_n
@@ -189,7 +189,7 @@ stage_tree "$PLUGIN_ROOT/hooks"    "hooks"    false _n; count_hooks=$_n
 stage_tree "$PLUGIN_ROOT/tools"    "tools"    false _n; count_tools=$_n
 stage_tree "$PLUGIN_ROOT/rules"    "reference" false _n; count_rules=$_n
 
-ok "Staged: $count_agents team + $count_genius genius agents, $count_skills skills, $count_commands commands, $count_hooks hooks, $count_tools tools, $count_rules rules"
+ok "Staged: $count_genius genius agents, $count_skills skills, $count_commands commands, $count_hooks hooks, $count_tools tools, $count_rules rules"
 [[ "$count_overridden" -gt 0 ]] && ok "Applied $count_overridden model overrides"
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -417,9 +417,6 @@ else
   genius_count=$(find "$CLAUDE_DIR/agents/genius" -name "*.md" -not -name "INDEX.md" 2>/dev/null | wc -l | tr -d ' ')
   [[ "$genius_count" -ge 90 ]] && ok "Genius agents accessible ($genius_count agents)" || warn "Expected ~97 genius agents, found $genius_count"
 
-  team_count=$(find "$CLAUDE_DIR/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-  ok "Team agents installed ($team_count)"
-
   skill_count=$(find "$CLAUDE_DIR/skills" -name "*.md" -not -name "_*" 2>/dev/null | wc -l | tr -d ' ')
   ok "Skills installed ($skill_count)"
 fi
@@ -437,7 +434,7 @@ echo ""
 if [[ "$PLUGIN_SERVED" == true ]]; then
   echo "  agents and skills served by the marketplace plugin (not copied)"
 else
-  echo "  $count_agents team + $count_genius genius agents, $count_skills skills"
+  echo "  $count_genius genius agents, $count_skills skills"
 fi
 echo "  $count_commands commands, $count_hooks hooks, $count_tools tools, $count_rules rules"
 [[ "$count_overridden" -gt 0 ]] && echo "  $count_overridden model overrides applied from ~/.claude/zetetic/agent-models.json"

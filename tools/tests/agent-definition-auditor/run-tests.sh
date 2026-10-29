@@ -25,7 +25,7 @@ cd "$(dirname "$0")" || { echo "FATAL: cannot cd to suite directory $(dirname "$
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || (cd ../../.. && pwd))"
 AUDITOR="$REPO/tools/agent-definition-auditor.sh"
-SAMPLE="$REPO/agents/engineer.md"
+SAMPLE="$REPO/agents/genius/curie.md"
 CURRENT_PREFIX="mcp__plugin_hypermnesia-mcp_cortex__"
 STALE_PREFIX="mcp__plugin_cortex_cortex__"
 # The sample also names the codebase-intelligence server. Case 5 needs a live
@@ -62,7 +62,7 @@ fp_row() { grep -E '^FP ' <<<"$1" | awk '{print $1, $2, $3}'; }
 # =====================================================================
 echo " 1. current prefixes pass and the run exits 0:"
 mkdir -p "$TMP/clean"
-cp "$SAMPLE" "$TMP/clean/engineer.md"
+cp "$SAMPLE" "$TMP/clean/curie.md"
 out="$(bash "$AUDITOR" "$TMP/clean" 2>&1)"; rc=$?
 [[ "$(fp_row "$out")" == "FP 1 0" ]] \
   && pass "FP tallies 1 pass, 0 fail" || fail "FP row was '$(fp_row "$out")'"
@@ -73,7 +73,7 @@ out="$(bash "$AUDITOR" "$TMP/clean" 2>&1)"; rc=$?
 # =====================================================================
 echo " 2. the pre-rename cortex prefix is a blocker:"
 mkdir -p "$TMP/stale"
-sed "s/$CURRENT_PREFIX/$STALE_PREFIX/g" "$SAMPLE" > "$TMP/stale/engineer.md"
+sed "s/$CURRENT_PREFIX/$STALE_PREFIX/g" "$SAMPLE" > "$TMP/stale/curie.md"
 out="$(bash "$AUDITOR" "$TMP/stale" 2>&1)"; rc=$?
 grep -q "FP unknown MCP tool prefix '$STALE_PREFIX'" <<<"$out" \
   && pass "blocker names the stale prefix" || fail "no blocker for $STALE_PREFIX"
@@ -87,7 +87,7 @@ grep -q "FP unknown MCP tool prefix '$STALE_PREFIX'" <<<"$out" \
 echo " 3. an unrelated unknown prefix also blocks:"
 mkdir -p "$TMP/unknown"
 sed "s/$CURRENT_PREFIX/mcp__plugin_not-installed_srv__/g" "$SAMPLE" \
-  > "$TMP/unknown/engineer.md"
+  > "$TMP/unknown/curie.md"
 out="$(bash "$AUDITOR" "$TMP/unknown" 2>&1)"
 grep -q "FP unknown MCP tool prefix 'mcp__plugin_not-installed_srv__'" <<<"$out" \
   && pass "blocker names the unknown prefix" || fail "unknown prefix not blocked"
@@ -97,13 +97,13 @@ grep -q "FP unknown MCP tool prefix 'mcp__plugin_not-installed_srv__'" <<<"$out"
 # =====================================================================
 echo " 4. a file naming no MCP tool is not tallied as an FP pass:"
 mkdir -p "$TMP/nomcp"
-# Every MCP tool goes, not only the Cortex ones: engineer.md also names the
+# Every MCP tool goes, not only the Cortex ones: curie.md also names the
 # ai-architect-mcp-codebase server, and leaving it in would make FP tally a pass for
 # a reason this case is not testing.
 sed -E 's/mcp__plugin_[A-Za-z0-9_-]*__[a-z_]*/Read/g' "$SAMPLE" \
-  > "$TMP/nomcp/engineer.md"
+  > "$TMP/nomcp/curie.md"
 out="$(bash "$AUDITOR" "$TMP/nomcp" 2>&1)"
-if grep -q 'mcp__plugin_' "$TMP/nomcp/engineer.md"; then
+if grep -q 'mcp__plugin_' "$TMP/nomcp/curie.md"; then
   fail "fixture still names an MCP tool; case 4 would be vacuous"
 else
   pass "fixture names no MCP tool"
@@ -120,7 +120,7 @@ grep -q "$CODEBASE_PREFIX" "$SAMPLE" \
   || fail "sample no longer names $CODEBASE_PREFIX; case 5 would be vacuous"
 sed -e "s/$CURRENT_PREFIX/$STALE_PREFIX/g" \
     -e "s/$CODEBASE_PREFIX/$CODEBASE_STALE_PREFIX/g" \
-    "$SAMPLE" > "$TMP/two/engineer.md"
+    "$SAMPLE" > "$TMP/two/curie.md"
 out="$(bash "$AUDITOR" "$TMP/two" 2>&1)"
 n="$(grep -c "FP unknown MCP tool prefix" <<<"$out")"
 [[ "$n" -eq 2 ]] && pass "2 blockers for 2 stale prefixes" || fail "got $n blockers, want 2"

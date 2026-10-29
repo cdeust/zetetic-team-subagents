@@ -2,7 +2,7 @@ export const meta = {
   name: 'autonomous-build-loop',
   // meta must be a PURE LITERAL for the Workflow runtime — no string concatenation here (BinaryExpression
   // is rejected at load), so description/whenToUse are single string literals even though they run long.
-  description: 'Closed-loop autonomous build on ANY target repository: refine -> plan -> verify-plan -> orchestrator build on an isolated iteration branch -> best-effort in-loop acceptance checks -> iterate until green or the budget is spent. The target repo (args.repoPath), the deterministic gate runner (args.gateRunner) and an optional base gate config (args.gateConfig) are inputs, so the loop runs from any working directory against a repo that need not contain this tooling. The loop DRAFTS and converges a candidate on the integration branch; it does not self-certify. The AUTHORITATIVE external gate is a real exec OUTSIDE the loop: a human/CI re-running the gate runner against the target repo and reading the real exit code before merging. Fails closed; does not push; does not modify main.',
+  description: 'Closed-loop autonomous build on ANY target repository: refine -> plan -> verify-plan -> builder (general-purpose agent) build on an isolated iteration branch -> best-effort in-loop acceptance checks -> iterate until green or the budget is spent. The target repo (args.repoPath), the deterministic gate runner (args.gateRunner) and an optional base gate config (args.gateConfig) are inputs, so the loop runs from any working directory against a repo that need not contain this tooling. The loop DRAFTS and converges a candidate on the integration branch; it does not self-certify. The AUTHORITATIVE external gate is a real exec OUTSIDE the loop: a human/CI re-running the gate runner against the target repo and reading the real exit code before merging. Fails closed; does not push; does not modify main.',
   whenToUse: 'A non-trivial build task you want drafted and iterated to a candidate under acceptance checks in a chosen target repository, with per-iteration branch isolation, for a human/CI to certify and merge.',
   phases: [
     { title: 'Refine', detail: 'compile the verifiable acceptance contract' },
@@ -10,7 +10,7 @@ export const meta = {
     { title: 'Branch', detail: 'create + checkout the iteration branch off integration' },
     { title: 'Plan', detail: 'decompose against the contract' },
     { title: 'Verify-plan', detail: 'zetetic-check the plan before any code is written' },
-    { title: 'Build', detail: 'orchestrator commits subtasks onto the checked-out iteration branch' },
+    { title: 'Build', detail: 'the builder commits subtasks onto the checked-out iteration branch' },
     { title: 'Accept', detail: 'deterministic gate runners + independent reviews + independent compare' },
     { title: 'Converge', detail: 'merge-on-green (reported), or preserve/discard branch and iterate' },
   ],
@@ -168,9 +168,9 @@ function parseVerdict(d) {
 // two runners' file lists disagree or are empty (an untrusted/empty list must not narrow review).
 // source: coding-standards §10 stakes (sensitive = auth/crypto/billing/PII).
 function reviewLenses(files1, files2) {
-  const security = { agentType: 'zetetic-team-subagents:security-auditor', dimension: 'security (auth / crypto / billing / PII)' }
-  const architecture = { agentType: 'zetetic-team-subagents:architect', dimension: 'architecture / layer boundaries' }
-  const lenses = [{ agentType: 'zetetic-team-subagents:code-reviewer', dimension: 'clean-architecture / SOLID / size limits' }]
+  const security = { agentType: 'general-purpose', geniuses: 'taleb, boyd', dimension: 'security (auth / crypto / billing / PII)' }
+  const architecture = { agentType: 'general-purpose', geniuses: 'simon, alexander', dimension: 'architecture / layer boundaries' }
+  const lenses = [{ agentType: 'general-purpose', geniuses: 'popper, feynman', dimension: 'clean-architecture / SOLID / size limits' }]
   const topDirs = (fs) => Array.from(new Set(fs.map((f) => f.split('/')[0]))).sort().join(',')
   const trusted = files1.length && files2.length && topDirs(files1) === topDirs(files2)
   if (!trusted) return lenses.concat(security, architecture)  // untrusted/empty -> widen, do not narrow
@@ -179,6 +179,10 @@ function reviewLenses(files1, files2) {
   if (new Set(files1.map((f) => f.split('/')[0])).size > 1) lenses.push(architecture)
   return lenses
 }
+
+// Every delegation carries a `GENIUS: <name>[, <name>]` line (hooks/pre-agent-genius-gate.py denies an
+// Agent call without it). The names are files in agents/genius/; the delegate applies their method.
+const GL = (names) => 'GENIUS: ' + names + '\n'
 
 // --- inputs ---------------------------------------------------------------
 // args may arrive as an object OR a JSON STRING (launch-dependent). Normalize, so a
@@ -215,7 +219,7 @@ const semanticLayer = hasArg('semanticLayer') ? A.semanticLayer : (isExternal ? 
 // --- Refine: the acceptance contract is the spec everything else is judged against ---
 phase('Refine')
 const contract = await agent(
-  'Act as the refine layer (session-optimizer:refine). Turn the raw task below into a VERIFIABLE ' +
+  GL('polya, popper') + 'Act as the refine layer (session-optimizer:refine). Turn the raw task below into a VERIFIABLE ' +
   'acceptance contract: a one-sentence measurable goal, explicit scope and out_of_scope, and at least ' +
   'one acceptance criterion. For each criterion choose kind: "deterministic" WITH a non-null ' +
   'checkable_cmd shell line that exits 0 iff the criterion is met (prefer these — they are ' +
@@ -233,7 +237,7 @@ log('contract goal: ' + contract.goal)
 //     then create the integration branch in it before the first iteration branches off. ---
 phase('Setup')
 const setup = await agent(
-  '<role>You prepare the autonomous build loop on its target repository. Use only explicit paths; never ' +
+  GL('hamilton') + '<role>You prepare the autonomous build loop on its target repository. Use only explicit paths; never ' +
   'assume the process working directory is the target.</role>\n' +
   '<target_repo_path>' + (repoPathArg || 'the current directory') + '</target_repo_path>\n' +
   '<rules>Do not check out over uncommitted work. Do not touch main. Do not push.</rules>\n' +
@@ -302,7 +306,7 @@ while (!accepted && iter < maxIterations) {
   //     drift to the home repo) and the target repo's own working tree is left untouched. ---
   phase('Branch')
   const branch = await agent(
-    '<target_repo>' + REPO + '</target_repo>\n' +
+    GL('hamilton') + '<target_repo>' + REPO + '</target_repo>\n' +
     '<task>Create a dedicated, isolated git WORKTREE for this iteration so the build never touches the ' +
     'target repo\'s own working tree. Choose an absolute path WT OUTSIDE ' + REPO + ' (e.g. ' +
     'WT="$(mktemp -d)/' + iterBranch.replace('/', '-') + '"), then run: git -C "' + REPO + '" worktree add ' +
@@ -320,8 +324,8 @@ while (!accepted && iter < maxIterations) {
 
   phase('Plan')
   const plan = await agent(
-    'Plan the implementation that satisfies this acceptance contract. Decompose into subtasks with ' +
-    'named artifacts and a critical path (orchestrator Move 1). Set ready=true only if the plan is ' +
+    GL('polya, simon') + 'Plan the implementation that satisfies this acceptance contract. Decompose into subtasks with ' +
+    'named artifacts and a critical path (near-decomposability, Simon). Set ready=true only if the plan is ' +
     'complete enough to build now.\n\nCONTRACT:\n' + JSON.stringify(contract, null, 2) +
     (backlog.length ? '\n\nOUTSTANDING FROM LAST ITERATION (must be fixed):\n- ' + backlog.join('\n- ') : ''),
     { schema: PLAN_SCHEMA, phase: 'Plan' }
@@ -329,7 +333,7 @@ while (!accepted && iter < maxIterations) {
 
   phase('Verify-plan')
   const planVerdict = await agent(
-    'Zetetically verify this plan BEFORE any code is written. Does it actually satisfy every ' +
+    GL('popper, feynman') + 'Zetetically verify this plan BEFORE any code is written. Does it actually satisfy every ' +
     'acceptance criterion, respect rules/coding-standards.md (layer dependencies, SOLID, size limits), ' +
     'and avoid dead/unwired code? Be a skeptic; set sound=false with specific issues if not.\n\n' +
     'CONTRACT:\n' + JSON.stringify(contract) + '\n\nPLAN:\n' + JSON.stringify(plan),
@@ -343,7 +347,7 @@ while (!accepted && iter < maxIterations) {
 
   phase('Build')
   const build = await agent(
-    '<role>You are the orchestrator; build exactly what the plan specifies to satisfy the contract.</role>\n' +
+    GL('dijkstra, liskov') + '<role>You are the builder; build exactly what the plan specifies to satisfy the contract.</role>\n' +
     '<workdir>' + WT + '</workdir>  <working_branch>' + iterBranch + '</working_branch>\n' +
     '<rules>ALL build work happens inside <workdir> — an isolated worktree with ' + iterBranch + ' already ' +
     'checked out. Treat <workdir> as the repository root: cd "' + WT + '" before shell commands, and use ' +
@@ -354,7 +358,7 @@ while (!accepted && iter < maxIterations) {
     '<contract>' + JSON.stringify(contract) + '</contract>\n<plan>' + JSON.stringify(plan) + '</plan>\n' +
     (backlog.length ? '<fix_from_last_iteration>- ' + backlog.join('\n- ') + '</fix_from_last_iteration>\n' : '') +
     '<report>built_branch = the branch you committed to; subtasks merged/rejected.</report>',
-    { agentType: 'zetetic-team-subagents:orchestrator', schema: BUILD_SCHEMA, phase: 'Build' }
+    { agentType: 'general-purpose', schema: BUILD_SCHEMA, phase: 'Build' }
   )
   const builtBranch = (build && build.built_branch) || iterBranch
   if (builtBranch !== iterBranch) {
@@ -369,7 +373,7 @@ while (!accepted && iter < maxIterations) {
   // (1) DETERMINISTIC gate — two runners; JS parses each tool output (not a model boolean) and requires
   //     agreement + consistency. Best-effort (EXTERNALITY): catches transcription drift, not collusion.
   const detRun = (n) => () => agent(
-    'Run the deterministic acceptance gate for this iteration and return its RAW output — do not judge, ' +
+    GL('curie') + 'Run the deterministic acceptance gate for this iteration and return its RAW output — do not judge, ' +
     'summarize, or alter it.\nSteps:\n' +
     '(a) Write the contract\'s deterministic checks to an absolute temp JSON file (C="$(mktemp)"): a JSON ' +
     'object {"version":1,"gates":[ ... ]} with ONE gate per acceptance criterion whose kind="deterministic" ' +
@@ -395,7 +399,7 @@ while (!accepted && iter < maxIterations) {
   const lenses = reviewLenses(dv1.files || [], dv2.files || [])
   const reviews = await parallel(lenses.map((l) => () =>
     agent(
-      'You are reviewing code you did NOT write, in the target repo at ' + REPO + '. Read the diff of the ' +
+      GL(l.geniuses) + 'You are reviewing code you did NOT write, in the target repo at ' + REPO + '. Read the diff of the ' +
       'commit range ' + integrationBranch + '...' + iterBranch + ' (run: git -C "' + REPO + '" diff ' +
       integrationBranch + '...' + iterBranch + ') and review it for: ' + l.dimension + '. Approve ONLY if you ' +
       'read the diff and found no blocking issue; cite file:line evidence for your verdict.\n\nCONTRACT GOAL: ' +
@@ -407,13 +411,13 @@ while (!accepted && iter < maxIterations) {
   // (3) COMPARE-TO-CONTRACT — an INDEPENDENT reviewer-type agent (not the builder's default lineage)
   //     judges the review/manual criteria a command cannot check, against the actual diff, with evidence.
   const compare = await agent(
-    'You are reviewing code you did NOT write, in the target repo at ' + REPO + '. Read the diff of ' +
+    GL('popper, feynman') + 'You are reviewing code you did NOT write, in the target repo at ' + REPO + '. Read the diff of ' +
     integrationBranch + '...' + iterBranch + ' (git -C "' + REPO + '" diff ' + integrationBranch + '...' +
     iterBranch + ') and compare it to the acceptance contract. For every criterion with kind=review or ' +
     'manual, decide whether the implementation satisfies it and cite file:line evidence. Return the unmet ' +
     'criteria (id + why). Judge against the contract AS WRITTEN; do not invent requirements.\n\nCONTRACT:\n' +
     JSON.stringify(contract),
-    { agentType: 'zetetic-team-subagents:code-reviewer', schema: COMPARE_SCHEMA, phase: 'Accept', label: 'compare-to-contract' }
+    { agentType: 'general-purpose', schema: COMPARE_SCHEMA, phase: 'Accept', label: 'compare-to-contract' }
   )
 
   phase('Converge')
@@ -436,7 +440,7 @@ while (!accepted && iter < maxIterations) {
     // the reported current_branch is the integration branch. The AUTHORITATIVE ancestry/exit check is the
     // human re-run on the integration branch (see EXTERNALITY + the return note).
     const merge = await agent(
-      'In the target repo at ' + REPO + ', check out ' + integrationBranch + ' and merge the iteration ' +
+      GL('lamport') + 'In the target repo at ' + REPO + ', check out ' + integrationBranch + ' and merge the iteration ' +
       'branch ' + iterBranch + ' into it (git -C "' + REPO + '" checkout ' + integrationBranch + ' && ' +
       'git -C "' + REPO + '" merge --no-ff ' + iterBranch + '). Do NOT push and do NOT touch main. If the ' +
       'merge conflicts, abort it cleanly (git -C "' + REPO + '" merge --abort) and report merged=false with ' +
@@ -463,7 +467,7 @@ while (!accepted && iter < maxIterations) {
   if (!accepted && !greenButUnmerged) {
     // Rejected iteration: the controller owns the branch lifecycle — discard the branch, persist the backlog.
     await agent(
-      'Housekeeping for a rejected iteration: remove the iteration worktree and branch (discarded). Run: ' +
+      GL('hamilton') + 'Housekeeping for a rejected iteration: remove the iteration worktree and branch (discarded). Run: ' +
       'git -C "' + REPO + '" worktree remove --force "' + WT + '"; git -C "' + REPO + '" branch -D ' + iterBranch +
       '. Do NOT touch main, do NOT push.' +
       (SEMLAYER

@@ -12,7 +12,7 @@ trigger: >
   native goal would carry only a sentence and the work needs criteria that survive a
   context reset or a change of host.
 agents:
-  - engineer
+  - dijkstra
 shapes: []
 input: >
   A request in prose, or the path of a file describing one. Optional slug and budget.

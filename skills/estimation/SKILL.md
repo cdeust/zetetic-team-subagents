@@ -37,7 +37,7 @@ derived before methods are chosen.
    dominant uncertainty named — never a bare point value.
 4. Cross-check: two independent decompositions must agree within ×10 before
    the estimate is used for a decision (fermi's sanity-check shape).
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

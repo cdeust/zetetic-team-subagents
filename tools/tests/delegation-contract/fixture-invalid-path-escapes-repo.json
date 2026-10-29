@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "agent": "engineer",
+  "agent": "curie",
   "target_repo": "{{TARGET_REPO}}",
   "owned_paths": ["../../etc/**"],
   "excluded_paths": [],
@@ -10,5 +10,5 @@
   "acceptance_oracle": {"type": "test", "criterion": "x"},
   "model": "sonnet",
   "tool_grant": ["Read"],
-  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "engineer"}
+  "checkpoint_policy": {"threshold_tokens": 180000, "scope": "curie"}
 }

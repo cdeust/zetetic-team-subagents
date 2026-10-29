@@ -8,7 +8,7 @@ trigger: >
   When something unexpected happened and the cause is unknown; when a metric moved and
   nobody knows why; when an incident occurred and root-cause analysis is needed.
 agents:
-  - orchestrator
+  - peirce
 shapes: []
 input: Description of the anomaly. What was expected vs. what was observed.
 output: Investigation report with root cause, evidence, and recommendations.
@@ -28,7 +28,7 @@ hand_off:
 ## Procedure
 
 1. **State expected vs observed.** What should have happened? What did happen? Quantify both.
-2. **Classify the shape.** The orchestrator identifies which problem shape fits:
+2. **Classify the shape.** The calling session identifies which problem shape fits (it routes; no routing agent exists):
    - Measured > predicted from known parts → curie (residual with a carrier)
    - Slow phenomenon, snapshots misleading → darwin (long-horizon observation)
    - Matched groups with different outcomes → semmelweis (statistical anomaly)

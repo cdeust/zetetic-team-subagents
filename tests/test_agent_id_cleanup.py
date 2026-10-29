@@ -52,7 +52,7 @@ def test_cleanup_preserves_caller_worktrees(tmp_path, spawn_fails):
     shutil.copyfile(ROOT / "scripts" / script.name, script)
     agents = repo / "agents"
     agents.mkdir()
-    for name in ("engineer", "feynman"):
+    for name in ("curie", "feynman"):
         (agents / f"{name}.md").write_text("test agent\n")
     spawn = scripts / "spawn-agent.sh"
     spawn.write_text(

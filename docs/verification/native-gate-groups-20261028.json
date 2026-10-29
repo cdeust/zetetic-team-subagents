@@ -1,0 +1,14 @@
+{
+  "base": "db00f85dbd0596c2f74c05d311b921e7f4bb37f1",
+  "native_contracts": 95,
+  "source_contracts": 54,
+  "source_subtests": 33,
+  "red_before": "duplicate gates and StatusContext assertions failed before correction; retained full-plan positive controls passed",
+  "actual_graphql": "existing DISCOVERY_QUERY includes __typename and a real GitHub response returned CheckRun nodes",
+  "filter_policy": "CheckRun groups only; duplicates and partial contexts are possible waits; no prerequisite veto without authenticated workflow identity",
+  "checks": "actual Cortex Ruff and scan_source returned no violations; generic source/craft passed",
+  "sha256": {
+    "scripts/ci_codex_review_reconcile.py": "a1e484a9e674f51971ecbaca87d99ca6dda94da2aa69569c513efedfa0077d16",
+    "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6"
+  }
+}

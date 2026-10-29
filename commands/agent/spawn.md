@@ -5,9 +5,9 @@ Spawn an agent as a standalone Claude Code session in an isolated git worktree.
 ## Instructions
 
 1. Parse arguments: the first word is the agent name, the rest is the task description.
-   Example: `/agent-spawn engineer Fix the auth bug in login.py`
+   Example: `/agent-spawn curie Find why the benchmark drifts between runs`
 
-2. Validate the agent exists by checking `agents/<name>.md` or `agents/genius/<name>.md`.
+2. Validate the agent exists by checking `agents/genius/<name>.md` (only genius agents exist).
 
 3. Build a delegation contract (JSON, per `schemas/delegation-contract.schema.yaml`)
    declaring, at minimum: `agent`, `target_repo`, `owned_paths`, `excluded_paths`,

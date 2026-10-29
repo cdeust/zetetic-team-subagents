@@ -128,13 +128,13 @@ def test_unattributed_tasks_block_the_main_agent_and_say_why(fire, repo, transcr
 def test_a_subagent_task_is_judged_on_the_subagents_own_transcript(fire, repo, tmp_path, transcript):
     agent_t = tmp_path / "proj" / SESSION / "subagents" / "agent-ag7.jsonl"
     write_transcript(agent_t, [call("Edit", file_path=str(repo / "a.py"))])
-    fire(open_hook, edit_event(repo, str(repo / "a.py"), transcript, agent_id="ag7", agent_type="engineer"))
+    fire(open_hook, edit_event(repo, str(repo / "a.py"), transcript, agent_id="ag7", agent_type="general-purpose"))
     write_transcript(transcript, full_cycle(repo))  # the parent's proof is not the subagent's
     sub_stop = {**stop_event(repo, transcript), "hook_event_name": "SubagentStop", "agent_id": "ag7",
-                "agent_type": "engineer", "agent_transcript_path": str(agent_t)}
+                "agent_type": "general-purpose", "agent_transcript_path": str(agent_t)}
     assert fire(gate_hook, stop_event(repo, transcript))[1] == ""
     _, out, _ = fire(gate_hook, sub_stop)
-    assert "engineer" in json.loads(out)["reason"]
+    assert "general-purpose" in json.loads(out)["reason"]
     declare_all(repo, rows(repo)[0]["open"])
     write_transcript(agent_t, full_cycle(repo), append=True)
     assert fire(gate_hook, sub_stop)[1] == ""
@@ -172,11 +172,11 @@ def test_a_subagent_task_recorded_without_session_blocks_its_own_subagent_stop(f
     agent_t = tmp_path / "proj" / SESSION / "subagents" / "agent-ag8.jsonl"
     write_transcript(agent_t, [call("Edit", file_path=str(repo / "a.py"))])
     fire(open_hook, edit_event(repo, str(repo / "a.py"), transcript, session_id="", agent_id="ag8",
-                               agent_type="engineer"))
+                               agent_type="general-purpose"))
     sub_stop = {**stop_event(repo, transcript), "hook_event_name": "SubagentStop", "agent_id": "ag8",
-                "agent_type": "engineer", "agent_transcript_path": str(agent_t)}
+                "agent_type": "general-purpose", "agent_transcript_path": str(agent_t)}
     _, out, _ = fire(gate_hook, sub_stop)
-    assert "engineer" in json.loads(out)["reason"]
+    assert "general-purpose" in json.loads(out)["reason"]
     declare_all(repo, rows(repo)[0]["open"])
     write_transcript(agent_t, full_cycle(repo), append=True)
     assert fire(gate_hook, sub_stop)[1] == ""

@@ -9,7 +9,7 @@ trigger: >
   when correctness is argued by example traces rather than invariants.
 agents:
   - lamport
-  - architect
+  - simon
 shapes: [proof-before-code, invariants-not-traces, spec-first, partial-failure-default, distributed-causality]
 input: The protocol or system to specify. Its correctness requirements.
 output: Formal specification with states, transitions, invariants, failure model, and model-check results.
@@ -21,7 +21,7 @@ zetetic_gate:
 composes: [contract]
 aliases: [specify, write-spec, tla, formal-spec]
 hand_off:
-  spec_clean: "/implement — engineer builds code that refines the spec"
+  spec_clean: "/implement — dijkstra builds code that refines the spec"
   counterexample_found: "Revise the spec; the counterexample is gold"
   needs_priority_design: "/design-for-failure — hamilton: priority scheduling under failure"
 ---

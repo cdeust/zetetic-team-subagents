@@ -11,7 +11,7 @@ trigger: >
   harden the criteria before the goal is reused as a template; when two iterations refute
   each other without converging.
 agents:
-  - code-reviewer
+  - popper
 shapes: []
 input: >
   The path of a goal file whose latest iteration was written by verify-goal.

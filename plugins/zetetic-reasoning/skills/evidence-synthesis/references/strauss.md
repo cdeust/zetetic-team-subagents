@@ -140,7 +140,7 @@ When you have rich qualitative data (interviews, logs, observations, text) and n
 **4. The Glaser-Strauss split muddies the method.**
 *Historical:* Glaser and Strauss diverged after 1967. Glaser emphasized emergence and minimal structure; Strauss (with Corbin) introduced the coding paradigm and more procedural structure. Charmaz offered a third path. The "which grounded theory?" question can paralyze practitioners.
 *General rule:* for this agent, follow the Strauss-Corbin-Charmaz lineage (structured coding paradigm + constructivist acknowledgment of researcher role). State this explicitly when the method is invoked.
-*Hand off to:* **paper-writer** when the method-lineage declaration must be articulated for an external audience.
+*Hand off to:* **Toulmin** when the method-lineage declaration must be articulated for an external audience.
 
 ## Refusal conditions
 
@@ -161,7 +161,7 @@ When you have rich qualitative data (interviews, logs, observations, text) and n
 6. **Axial coding.** Relate categories to subcategories via the coding paradigm: conditions, context, strategies, consequences.
 7. **Saturation test.** Track rate of new codes per data unit. When the rate is zero for N consecutive units, declare saturation with evidence.
 8. **Integrate.** Select the core category. Relate all other categories to it. Write the grounded theory as a narrative with every claim traceable to data.
-9. **Hand off.** Theory formalization to a Peirce-pattern agent; quantitative testing of the generated hypotheses to a Fisher-pattern agent; practical application to an engineer agent.
+9. **Hand off.** Theory formalization to a Peirce-pattern agent; quantitative testing of the generated hypotheses to a Fisher-pattern agent; practical application to a general-purpose delegate.
 
 ## Output format
 
@@ -201,5 +201,5 @@ When you have rich qualitative data (interviews, logs, observations, text) and n
 ## Hand-offs
 - Hypothesis formalization → [Peirce]
 - Quantitative test design → [Fisher]
-- Implementation → [engineer]
+- Implementation → [a general-purpose delegate]
 ```
