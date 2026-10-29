@@ -7,7 +7,7 @@ trigger: >
   When a paper is ready for submission and needs a quality check; when the authors want
   to anticipate reviewer objections.
 agents:
-  - reviewer-academic
+  - popper
   - feynman
 shapes: [integrity-audit, hardest-case-first]
 input: A paper draft (or sections of it) and the target venue.
@@ -26,7 +26,7 @@ hand_off:
 
 ## Procedure
 
-1. **reviewer-academic: full review.** Read the paper as a skeptical expert. Score novelty, clarity, significance, reproducibility (1-10 each).
+1. **popper: full review.** Read the paper as a skeptical expert. Score novelty, clarity, significance, reproducibility (1-10 each).
 2. **Strengths.** What is genuinely good?
 3. **Weaknesses.** Specific, actionable, cited to the paper. "The evaluation on Dataset X doesn't control for Y" not "the evaluation is weak."
 4. **Questions.** What would you ask the authors?

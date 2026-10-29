@@ -42,7 +42,7 @@ then let it predict something you haven't seen yet.
 4. ramanujan output is conjecture by definition: chain a prover
    (`tools/genius-invoker.sh compose ramanujan lamport -- "<problem>"` or
    hand to dijkstra) before anything ships.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

@@ -8,7 +8,7 @@ trigger: >
   When a claim is made without a source; when a "fact" drives a decision but nobody has checked it;
   when a blog post is cited instead of the primary source; when "everyone knows" is the justification.
 agents:
-  - research-scientist
+  - cochrane
   - feynman
 shapes: [two-independent-methods, cargo-cult-detector]
 input: >
@@ -43,7 +43,7 @@ Enforce the zetetic standard's core rule: no implementation without a source. Ta
 ## Procedure
 
 1. **Sharpen.** Restate as a specific, falsifiable proposition with conditions. Refuse vague claims.
-2. **Search.** research-scientist finds 2+ independent primary sources (papers, specs, benchmarks).
+2. **Search.** cochrane finds 2+ independent primary sources (papers, specs, benchmarks).
 3. **Read.** Extract exact statements from each source, including conditions and caveats. No abstracts, no summaries.
 4. **Cross-reference.** Do sources agree? Are they truly independent (different lab/dataset/methodology)?
 5. **Mechanism check (if needed).** feynman rederives the claimed mechanism from first principles.

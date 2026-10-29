@@ -42,7 +42,7 @@ skips heterogeneity, or has no explicit warrant connecting evidence to claim.
 4. Typical chain: cochrane grades the corpus → toulmin structures the argument
    → feynman audits the integrity. Run via
    `tools/genius-invoker.sh compose cochrane toulmin -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

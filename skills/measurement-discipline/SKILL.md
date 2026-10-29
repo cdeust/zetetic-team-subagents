@@ -38,8 +38,8 @@ inputs and outputs that don't balance, observer effects, one-method-only results
    in its `<output-format>`.
 4. Chain when the problem spans shapes (e.g. lavoisier finds the residual,
    curie isolates its carrier): `tools/genius-invoker.sh compose lavoisier curie -- "<problem>"`.
-5. If no shape above matches, do not force a genius — use a standard team agent
-   (INDEX.md routing rule).
+5. If no shape above matches, do not force a genius — use a built-in agent with the closest `GENIUS:` pattern
+   (`rules/agent-routes.json`, INDEX.md routing rule).
 
 ## Refuse when
 

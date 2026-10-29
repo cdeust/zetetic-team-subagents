@@ -41,7 +41,7 @@ Closes #
   See CONTRIBUTING.md for the audit cycle.
 -->
 
-- Engineering review (code-reviewer / architect / refactorer / test-engineer): findings + closures
+- Native review (`/code-review` and `/security-review`): findings applied
 - Genius review (feynman / curie / popper / dijkstra / others): findings + closures
 - Outstanding deferred findings (with follow-up issue links):
 

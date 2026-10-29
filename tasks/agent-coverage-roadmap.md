@@ -38,7 +38,7 @@ faux positifs, rattrapée seulement par une vérif adverse multi-agents. C'est l
 - **A1. test-engineer — nouveaux *moves* nommés** : metamorphic, property-based, characterization-harness,
   boundary-enumeration, contract-from-interface, concurrency/idempotence, numerical-battery, differential,
   fixtures-from-real. Chaque move = recette + scaffold (Hypothesis/proptest/golden) + critère d'acceptation.
-- **A2. Vérification adverse PAR DÉFAUT** : transformer le red-team manuel en phase obligatoire du pipeline.
+- **A2. [RETIRÉ 2026-10-21 : workflow et gate CR-4 supprimés, voir CHANGELOG] Vérification adverse PAR DÉFAUT** : transformer le red-team manuel en phase obligatoire du pipeline.
   Livrable : `.claude/workflows/adversarial-verify.js` (4 lentilles : FP-résiduels/over-fit, cas manqués,
   robustesse, adéquation-tests) invoqué automatiquement par code-reviewer avant tout "done".
 - **A3. Mutation runner** (= follow-up #2) : construire le vrai runner (refs dans tools/craftsmanship-checker.sh,

@@ -39,8 +39,8 @@ steps, and whether the arrangement is actually justified or merely inherited.
    the replacement behind the veil → hart writes the rule and its exception
    structure. Run via
    `tools/genius-invoker.sh compose foucault rawls hart -- "<problem>"`.
-5. If no shape above matches, do not force a genius — use a standard team agent
-   (INDEX.md routing rule).
+5. If no shape above matches, do not force a genius — use a built-in agent with the closest `GENIUS:` pattern
+   (`rules/agent-routes.json`, INDEX.md routing rule).
 
 ## Refuse when
 

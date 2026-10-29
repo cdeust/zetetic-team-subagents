@@ -7,8 +7,7 @@ trigger: >
   When research results need to be written up; when a paper draft needs structuring;
   when claim-evidence chains need to be made explicit.
 agents:
-  - paper-writer
-  - latex-engineer
+  - toulmin
 shapes: []
 input: Research results, data, and the target venue.
 output: Paper draft with explicit claim-evidence chains and venue-appropriate structure.
@@ -26,10 +25,10 @@ hand_off:
 
 ## Procedure
 
-1. **paper-writer: structure.** Identify the contribution, the claim-evidence chains, and the narrative arc.
-2. **paper-writer: draft.** Abstract → intro → related work → method → results → discussion → conclusion. Every claim has a citation or experimental evidence.
+1. **toulmin: structure.** Identify the contribution, the claim-evidence chains, and the narrative arc.
+2. **toulmin: draft.** Abstract → intro → related work → method → results → discussion → conclusion. Every claim has a citation or experimental evidence.
 3. **difficulty-book: limitations.** darwin: catalog every known weakness, negative result, and open question. The limitations section is not boilerplate; it is the difficulty book.
-4. **latex-engineer: format.** Venue-appropriate template, figures, tables, bibliography.
+4. **Format.** Venue-appropriate template, figures, tables, bibliography.
 5. **Preview.** Use `tools/live-preview.sh start paper.tex` to launch a live preview of the LaTeX output, auto-recompiling on changes.
 
 ## Output Format

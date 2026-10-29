@@ -25,7 +25,7 @@ aliases: [design-tool, tool-design, build-tool]
 hand_off:
   needs_spec: "/spec — lamport: if the tool has concurrent behavior"
   needs_contracts: "/contract — liskov: if the tool has plugin boundaries"
-  needs_implementation: "/implement — engineer builds it"
+  needs_implementation: "/implement — dijkstra builds it"
 ---
 
 ## Procedure

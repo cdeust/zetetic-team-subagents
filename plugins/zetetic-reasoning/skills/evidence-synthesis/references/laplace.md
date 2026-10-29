@@ -143,7 +143,7 @@ When a decision must be made under uncertainty and the evidence is incomplete; w
 **4. Computational intractability of exact Bayesian inference in high dimensions.**
 *Historical:* Laplace could compute posteriors analytically for simple models. Modern Bayesian inference in high-dimensional parameter spaces requires MCMC, variational inference, or other approximations that introduce their own errors.
 *General rule:* for the qualitative reasoning applications of this agent (debugging, risk assessment, decision-making), exact computation is rarely needed. The discipline of making priors explicit and updating with evidence is valuable even without precise numbers.
-*Hand off to:* **engineer** (MCMC / variational implementation when quantitative inference is required), **Knuth** (complexity analysis of the inference procedure).
+*Hand off to:* **a general-purpose delegate** (MCMC / variational implementation when quantitative inference is required), **Knuth** (complexity analysis of the inference procedure).
 
 ## Refusal conditions
 

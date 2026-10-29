@@ -26,47 +26,49 @@ Each wraps a cluster of genius-agent categories from [`agents/genius/INDEX.md`](
 
 ## Quick Reference
 
+The Agents column names the genius patterns the skill applies. Only genius agents exist (owner decision 2026-10-21): delegate a skill's work to a built-in `general-purpose`, `Explore` or `Plan` agent and put `GENIUS: <name>[, <name>]` (1 or 2 of the names below) on its own line in the prompt. `hooks/pre-agent-genius-gate.py` denies the call otherwise.
+
 | Skill | Category | Agents | One-line |
 |-------|----------|--------|----------|
-| `/verify-claim` | zetetic | research-scientist, feynman | Verify a claim against multiple independent primary sources |
+| `/verify-claim` | zetetic | cochrane, feynman | Verify a claim against multiple independent primary sources |
 | `/difficulty-book` | zetetic | darwin, feynman | Catalog observations that contradict the current theory |
 | `/cargo-cult-check` | zetetic | feynman | Detect procedures followed without causal mechanism |
 | `/seek-disconfirmation` | zetetic | darwin, feynman, mcclintock | Actively hunt evidence against a hypothesis |
-| `/review` | engineering | code-reviewer, architect | Code review: Clean Architecture, SOLID, layer integrity |
-| `/implement` | engineering | engineer, architect, test-engineer | Feature implementation with layer-aware design |
-| `/refactor` | engineering | architect, engineer, test-engineer | Structural refactoring with incremental steps |
-| `/debug` | engineering | engineer, curie | Root-cause debugging with instrumentation and bisection |
-| `/optimize` | engineering | knuth, engineer, curie | Profile first, fix the 3%, leave the 97% alone |
-| `/secure` | engineering | security-auditor, engineer | Threat model + OWASP + supply chain + defense-in-depth |
-| `/test` | engineering | test-engineer, dijkstra | Test suite design acknowledging what tests can't prove |
-| `/deploy` | engineering | devops-engineer, engineer, hamilton | Deployment with rollback, monitoring, and blast-radius assessment |
-| `/migrate-db` | engineering | dba, engineer, lavoisier | Database migration with mass-balance data verification |
+| `/review` | engineering | popper, simon | Code review: Clean Architecture, SOLID, layer integrity |
+| `/implement` | engineering | dijkstra, simon, popper | Feature implementation with layer-aware design |
+| `/refactor` | engineering | simon, dijkstra, popper | Structural refactoring with incremental steps |
+| `/debug` | engineering | dijkstra, curie | Root-cause debugging with instrumentation and bisection |
+| `/optimize` | engineering | knuth, dijkstra, curie | Profile first, fix the 3%, leave the 97% alone |
+| `/secure` | engineering | taleb, dijkstra | Threat model + OWASP + supply chain + defense-in-depth |
+| `/test` | engineering | popper, dijkstra | Test suite design acknowledging what tests can't prove |
+| `/deploy` | engineering | hamilton, dijkstra | Deployment with rollback, monitoring, and blast-radius assessment |
+| `/migrate-db` | engineering | lavoisier, dijkstra | Database migration with mass-balance data verification |
 | `/estimate` | analysis | fermi | Fermi decomposition: bracket, cross-check, dominant uncertainty |
-| `/investigate` | analysis | orchestrator (routes by shape) | Structured investigation routing to genius agents by problem shape |
-| `/benchmark` | analysis | curie, engineer, fisher | Before/after measurement with statistical comparison |
+| `/investigate` | analysis | peirce | Structured investigation routing to genius agents by problem shape |
+| `/benchmark` | analysis | curie, dijkstra, fisher | Before/after measurement with statistical comparison |
 | `/balance` | analysis | lavoisier, curie | Conservation audit: enumerate flows, close the ledger |
-| `/experiment` | analysis | fisher, experiment-runner | Controlled experiment: randomize, block, replicate, pre-specify |
+| `/experiment` | analysis | fisher | Controlled experiment: randomize, block, replicate, pre-specify |
 | `/audit-integrity` | analysis | feynman, darwin | Integrity check: self-deception, cargo cults, missing limitations |
-| `/decompose` | architecture | architect, engineer, kekule | Module decomposition: forces, boundaries, dependency graph |
-| `/adr` | architecture | architect, darwin | Architecture Decision Record with difficulty-book per option |
-| `/spec` | architecture | lamport, architect | Formal specification: states, transitions, invariants, failure model |
-| `/contract` | architecture | liskov, architect | Behavioral contracts: pre/post/invariant/history constraint |
-| `/evaluate-tool` | architecture | hopper, engelbart, architect, feynman | Tool evaluation with cargo-cult and obsolescence checks |
-| `/design` | design | ux-designer | UX/UI design and WCAG 2.2 AA accessibility audit |
-| `/goal` | loop | engineer | Compile a request into a goal contract with executable acceptance checks (portable) |
-| `/plan` | loop | architect, engineer | Plan an active goal and verify the plan against its criteria (portable) |
-| `/verify-goal` | loop | test-engineer | Run every acceptance check of a goal and ledger the evidence (portable) |
-| `/refine-goal` | loop | code-reviewer | Turn a verification ledger into the next iteration's backlog (portable) |
-| `/advisor-model` | loop | advisor | Consult a separate model at a selected plan, fork, or completion decision (portable) |
-| `/literature-review` | research | research-scientist | Systematic search: find papers, read them, assess applicability |
-| `/explain` | research | professor, feynman | Multi-level explanation with understanding-gap diagnostic |
-| `/write-paper` | research | paper-writer, latex-engineer | Paper draft with claim-evidence chains and difficulty-book limitations |
-| `/pre-submit-review` | research | reviewer-academic, feynman | Simulated peer review with integrity check |
-| `/design-experiment` | research | fisher, experiment-runner | Experimental design for research: ablations, controls, seeds |
+| `/decompose` | architecture | simon, dijkstra, kekule | Module decomposition: forces, boundaries, dependency graph |
+| `/adr` | architecture | simon, darwin | Architecture Decision Record with difficulty-book per option |
+| `/spec` | architecture | lamport, simon | Formal specification: states, transitions, invariants, failure model |
+| `/contract` | architecture | liskov, simon | Behavioral contracts: pre/post/invariant/history constraint |
+| `/evaluate-tool` | architecture | hopper, engelbart, simon, feynman | Tool evaluation with cargo-cult and obsolescence checks |
+| `/design` | design | jobs | UX/UI design and WCAG 2.2 AA accessibility audit |
+| `/goal` | loop | dijkstra | Compile a request into a goal contract with executable acceptance checks (portable) |
+| `/plan` | loop | simon, dijkstra | Plan an active goal and verify the plan against its criteria (portable) |
+| `/verify-goal` | loop | popper | Run every acceptance check of a goal and ledger the evidence (portable) |
+| `/refine-goal` | loop | popper | Turn a verification ledger into the next iteration's backlog (portable) |
+| `/advisor-model` | loop | (native advisor tool) | Consult a separate model at a selected plan, fork, or completion decision (portable) |
+| `/literature-review` | research | cochrane | Systematic search: find papers, read them, assess applicability |
+| `/explain` | research | vygotsky, feynman | Multi-level explanation with understanding-gap diagnostic |
+| `/write-paper` | research | toulmin | Paper draft with claim-evidence chains and difficulty-book limitations |
+| `/pre-submit-review` | research | popper, feynman | Simulated peer review with integrity check |
+| `/design-experiment` | research | fisher | Experimental design for research: ablations, controls, seeds |
 | `/performance-investigation` | compose | fermi → curie → knuth | Bracket → measure → profile → fix the 3% |
 | `/anomaly-to-explanation` | compose | mcclintock → curie → shannon/noether | Notice → isolate → formalize |
-| `/conjecture-to-code` | compose | ramanujan → dijkstra/lamport → engineer | Generate → prove → implement (prover mandatory) |
-| `/failure-resilient-design` | compose | hamilton → lamport → engineer | Degrade → specify → build |
+| `/conjecture-to-code` | compose | ramanujan → dijkstra/lamport → dijkstra | Generate → prove → implement (prover mandatory) |
+| `/failure-resilient-design` | compose | hamilton → lamport → dijkstra | Degrade → specify → build |
 | `/product-quality-audit` | compose | jobs → galileo → dijkstra | Experience spec → strip to essential → verify |
 | `/new-tool-design` | compose | engelbart → hopper → kay → jobs | Augment → abstract → make malleable → integrate |
 | `/statistical-intervention` | compose | semmelweis → fisher → feynman | Detect anomaly → design experiment → integrity-check → communicate |

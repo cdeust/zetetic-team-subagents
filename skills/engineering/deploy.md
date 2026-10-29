@@ -7,9 +7,8 @@ trigger: >
   When shipping to staging or production; when a deployment pipeline needs design;
   when "how do we roll this back?" hasn't been answered.
 agents:
-  - devops-engineer
-  - engineer
   - hamilton
+  - dijkstra
 shapes: [graceful-degradation, defensive-by-default]
 input: What is being deployed. Target environment. Risk assessment.
 output: Deployment plan with pipeline steps, rollback strategy, health checks, monitoring.
@@ -27,7 +26,7 @@ hand_off:
 ## Procedure
 
 1. **hamilton: criticality assessment.** What is the blast radius if this fails? What is the rollback time?
-2. **devops-engineer: pipeline design.** Build → test → deploy-to-staging → verify → deploy-to-production. Each step has a gate.
+2. **hamilton: pipeline design.** Build → test → deploy-to-staging → verify → deploy-to-production. Each step has a gate.
 3. **Rollback plan.** For each step: what is the rollback? How long does it take? Is it tested?
 4. **Monitoring.** Set up health checks, error-rate alerts, latency alerts BEFORE deploying.
 5. **Deploy.** Execute the pipeline. Verify at each gate.

@@ -8,7 +8,7 @@ Analyze a problem description, find matching genius agent shapes, and recommend 
 
 2. Run `tools/genius-invoker.sh route "$ARGUMENTS"` to grep INDEX.md for matching shapes.
 
-3. Read `rules/agent-routing-table.md` (installed: `~/.claude/reference/agent-routing-table.md`) — the compact generated table of all 116 agents (name + shape keywords + one-line description, ~25KB). Match the problem against shape keywords and descriptions:
+3. Read `rules/agent-routing-table.md` (installed: `~/.claude/reference/agent-routing-table.md`) — the compact generated table of all 97 genius agents (name + shape keywords + one-line description, ~25KB). Match the problem against shape keywords and descriptions:
    - Exact shape name matches
    - Semantic matches where the problem structure fits a shape even without keyword overlap
 
@@ -22,6 +22,6 @@ Analyze a problem description, find matching genius agent shapes, and recommend 
 
 5. If multiple agents match, suggest a **composition sequence**: which agent to run first and why, what its output feeds into the next agent, and the expected combined insight. Reference `tools/genius-invoker.sh compose` for execution.
 
-6. If no shapes match, say so clearly. Suggest the user try a standard team agent instead or rephrase the problem to expose its structural shape.
+6. If no shapes match, say so clearly. Suggest the user use a built-in agent with the closest `GENIUS:` pattern from the task-class table of the routing table, or rephrase the problem to expose its structural shape.
 
 $ARGUMENTS

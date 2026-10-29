@@ -1,0 +1,7 @@
+{
+  "unit": "echo 'write the unit command: it must emit a Cobertura coverage.xml' && exit 1",
+  "regression": "echo 'write the regression command' && exit 1",
+  "e2e": "echo 'write the end-to-end command' && exit 1",
+  "environment": "echo 'write the environment command (runs on linux, macos, windows; CI_OS, CI_WORK set)' && exit 1",
+  "install": "echo 'write the install command (fresh HOME and CLAUDE_CONFIG_DIR; the Claude Code CLI is on PATH)' && exit 1"
+}

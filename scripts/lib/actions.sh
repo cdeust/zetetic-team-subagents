@@ -107,29 +107,7 @@ _write_model_config() {
     { "glob": "genius/*", "model": "sonnet" }
   ],
 
-  "agents": {
-    "refactorer":        { "model": "haiku",  "effort": "low"    },
-    "latex-engineer":    { "model": "haiku",  "effort": "low"    },
-
-    "engineer":          { "model": "sonnet", "effort": "medium" },
-    "code-reviewer":     { "model": "sonnet", "effort": "medium" },
-    "test-engineer":     { "model": "sonnet", "effort": "medium" },
-    "frontend-engineer": { "model": "sonnet", "effort": "medium" },
-    "dba":               { "model": "sonnet", "effort": "medium" },
-    "devops-engineer":   { "model": "sonnet", "effort": "medium" },
-    "data-scientist":    { "model": "sonnet", "effort": "medium" },
-    "experiment-runner": { "model": "sonnet", "effort": "medium" },
-    "mlops":             { "model": "sonnet", "effort": "medium" },
-    "ux-designer":       { "model": "sonnet", "effort": "medium" },
-    "professor":         { "model": "sonnet", "effort": "medium" },
-
-    "architect":          { "model": "opus", "effort": "high" },
-    "orchestrator":       { "model": "opus", "effort": "medium" },
-    "security-auditor":   { "model": "opus", "effort": "high" },
-    "research-scientist": { "model": "opus", "effort": "high" },
-    "paper-writer":       { "model": "opus", "effort": "high" },
-    "reviewer-academic":  { "model": "opus", "effort": "high" }
-  }
+  "agents": {}
 }
 CONF
 }
@@ -138,10 +116,7 @@ CONF
 _print_config_help() {
   echo ""
   echo "  Default config (model + effort):"
-  echo "    - refactorer, latex-engineer          → haiku  + low     (mechanical)"
-  echo "    - most team agents                     → sonnet + medium  (balanced)"
-  echo "    - architect, security, research roles  → opus   + high    (deep)"
-  echo "    - 97 genius agents                     → sonnet (effort kept from frontmatter:"
+  echo "    - every genius agent                   → sonnet (effort kept from frontmatter:"
   echo "                                              deep-reasoning geniuses default to high,"
   echo "                                              procedural geniuses default to medium)"
   echo ""

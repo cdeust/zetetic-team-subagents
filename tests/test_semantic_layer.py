@@ -11,7 +11,7 @@ entry-points (cmd_* functions + main(argv)), not through subprocess, so mutmut
 can kill mutants in the module.
 
 # §4.1 exception: test files may exceed 500 lines when organized by fixture
-# grouping (test-engineer agent domain-context override). This file is organized
+# grouping (fixture-grouping exception, see .craftsmanship.conf). This file is organized
 # by the 15 public API entry points of semantic_layer.py (load, save, validate,
 # find, match, upsert, apply_feedback, stale_entries, render, cmd_*, main).
 # Each section is a fixture group; splitting into separate files would replicate

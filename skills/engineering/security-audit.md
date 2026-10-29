@@ -26,7 +26,7 @@ composes: []
 aliases: [security, audit, threat-model, pentest]
 hand_off:
   needs_hardening: "/design-for-failure — hamilton: graceful degradation under attack"
-  needs_implementation: "/implement — engineer builds the fixes"
+  needs_implementation: "/implement — dijkstra builds the fixes"
   needs_monitoring: "/deploy — monitoring for attack detection"
 ---
 

@@ -9,8 +9,8 @@ trigger: >
   is added; when a security review is needed before shipping; when an incident suggests
   a vulnerability.
 agents:
-  - security-auditor
-  - engineer
+  - taleb
+  - dijkstra
 shapes: []
 input: Code, config, or architecture to audit. Scope (full audit / targeted review / incident response).
 output: >
@@ -24,7 +24,7 @@ composes: []
 aliases: [security, audit-security, pentest]
 hand_off:
   needs_experiment: "/experiment — fisher: design a controlled security test"
-  needs_architecture_change: "/decompose — architect restructures for defense-in-depth"
+  needs_architecture_change: "/decompose — simon restructures for defense-in-depth"
 ---
 
 ## Procedure

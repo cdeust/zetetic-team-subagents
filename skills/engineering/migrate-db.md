@@ -7,9 +7,8 @@ trigger: >
   When a schema change is needed; when a migration must preserve data integrity;
   when backward compatibility with running code is required during deployment.
 agents:
-  - dba
-  - engineer
   - lavoisier
+  - dijkstra
 shapes: [mass-balance, conservation-accounting]
 input: The required schema change and the current schema.
 output: Migration plan with SQL, validation queries, rollback script, and data-integrity verification.
@@ -26,7 +25,7 @@ hand_off:
 
 ## Procedure
 
-1. **dba designs migration.** Forward migration SQL + rollback SQL. Each step preserves referential integrity.
+1. **lavoisier designs migration.** Forward migration SQL + rollback SQL. Each step preserves referential integrity.
 2. **lavoisier: mass-balance check.** Row counts, constraint counts, index counts before and after must balance. Any residual = lost data.
 3. **Backward compatibility.** The new schema must work with the currently-deployed code AND the new code. If not, the migration needs a multi-step deployment plan.
 4. **Test on staging.** Run the migration on a copy of production data. Verify mass-balance. Verify application behavior.

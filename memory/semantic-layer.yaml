@@ -41,7 +41,7 @@ entries:
     confidence: high
     source: hooks/session-start-research.sh:52-66; hooks/session-end-memory-drain.sh:34-44
   - claim: 'P4 built: semantic layer added as 4th retrieval surface in memory-protocol.md with a recall-before-ingest
-      / record-after protocol binding all team agents.'
+      / record-after protocol binding all agents.'
     confidence: high
     source: rules/agent-reference/memory-protocol.md
   sources:

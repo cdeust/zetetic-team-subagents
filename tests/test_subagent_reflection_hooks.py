@@ -25,12 +25,12 @@ import reflection_subagent
 def test_payload_with_agent_type_records_pending_row(reflection_repo, tmp_path, monkeypatch, capsys):
     transcript = make_transcript(tmp_path, meta={"agentType": "from-meta", "description": "fix parser"})
     code, _, err = run_hook(start_hook, event(reflection_repo, transcript, agent_id="a1b2c3",
-                                              agent_type="zetetic-team-subagents:engineer"),
+                                              agent_type="general-purpose"),
                             monkeypatch, capsys)
     assert code == 0
     (row,) = rows(reflection_repo)
     assert row["agent_id"] == "a1b2c3"
-    assert row["agent_type"] == "zetetic-team-subagents:engineer"
+    assert row["agent_type"] == "general-purpose"
     assert row["description"] == "fix parser"
     assert row["transcript_path"] == str(transcript)
     assert row["session_id"] == SESSION
@@ -141,13 +141,13 @@ def test_a_typed_subagent_whose_transcript_was_not_located_is_still_scheduled(
     parent = tmp_path / "proj" / f"{SESSION}.jsonl"
     parent.parent.mkdir(parents=True, exist_ok=True)
     parent.write_text("", encoding="utf-8")
-    payload = event(reflection_repo, None, agent_id="b2c3d4e5", agent_type="code-reviewer",
+    payload = event(reflection_repo, None, agent_id="b2c3d4e5", agent_type="Plan",
                     transcript_path=str(parent), last_assistant_message="VERDICT: APPROVE")
     code, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
     assert code == 0 and "not a delegated agent" not in err
     assert "subagent transcript not identified" in err
     (row,) = rows(reflection_repo)
-    assert row["agent_id"] == "b2c3d4e5" and row["agent_type"] == "code-reviewer"
+    assert row["agent_id"] == "b2c3d4e5" and row["agent_type"] == "Plan"
 
 
 def test_the_ledger_is_owner_only_because_rows_carry_transcript_excerpts(reflection_repo, tmp_path, monkeypatch, capsys):
@@ -190,7 +190,7 @@ def test_both_hooks_are_registered_for_their_events():
 
 
 def test_the_hook_writes_the_pending_row_and_nothing_else(reflection_repo, tmp_path, monkeypatch, capsys):
-    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="general-purpose")
     _, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
     (row,) = raw_rows(reflection_repo)
     assert row["agent_id"] == "a1b2c3" and "hindsight" not in row
@@ -198,7 +198,7 @@ def test_the_hook_writes_the_pending_row_and_nothing_else(reflection_repo, tmp_p
 
 
 def test_B_a_subagent_event_without_session_id_is_noted_on_the_row(reflection_repo, tmp_path, monkeypatch, capsys):
-    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="engineer")
+    payload = event(reflection_repo, make_transcript(tmp_path), agent_id="a1b2c3", agent_type="general-purpose")
     del payload["session_id"]
     _, _, err = run_hook(start_hook, payload, monkeypatch, capsys)
     (row,) = rows(reflection_repo)

@@ -3,17 +3,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml"><img src="https://github.com/cdeust/zetetic-team-subagents/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <img src="https://img.shields.io/badge/suites-42-brightgreen" alt="Test suites">
-  <img src="https://img.shields.io/badge/agents-120-8A2BE2" alt="Agents">
+  <img src="https://img.shields.io/badge/suites-43-brightgreen" alt="Test suites">
+  <img src="https://img.shields.io/badge/agents-97-8A2BE2" alt="Agents">
   <img src="https://img.shields.io/badge/skills-86-green" alt="Skills">
-  <img src="https://img.shields.io/badge/hooks-24_lifecycle-red" alt="Hooks">
+  <img src="https://img.shields.io/badge/hooks-28_lifecycle-red" alt="Hooks">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://www.bestpractices.dev/projects/13847"><img src="https://www.bestpractices.dev/projects/13847/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
 > **One epistemic standard on three hosts: portable skills for Codex and Gemini CLI, shared quality gates for Claude Code and Codex, and a full Claude-native distribution of 15 problem-shaped skills backed by 97 sourced reasoning patterns.**
-> Three portable packages ship without the agent roster: evidence synthesis, UX design and accessibility audit, and goal-driven iteration (goal, plan, verify-goal, refine-goal, advisor-model). The mechanical gates run on both coding hosts from one shared runtime: source discipline and craftsmanship at commit, a fail-before check at push, secret-read refusal, deletion detection, and prose checks on returned and published text. The full Claude Code package additionally routes skills such as `causal-audit`, `failure-forensics`, and `estimation` across 97 genius agents (plus 23 team-role agents = 120 total), with the lifecycle hooks and the research and memory tooling.
+> Three portable packages ship without the agent roster: evidence synthesis, UX design and accessibility audit, and goal-driven iteration (goal, plan, verify-goal, refine-goal, advisor-model). The mechanical gates run on both coding hosts from one shared runtime: source discipline and craftsmanship at commit, a fail-before check at push, secret-read refusal, deletion detection, and prose checks on returned and published text. The full Claude Code package additionally routes skills such as `causal-audit`, `failure-forensics`, and `estimation` across 97 genius agents, with the lifecycle hooks and the research and memory tooling.
 > Not a prompt library. A methodology with **commit-time enforcement**.
 
 ---
@@ -259,7 +258,7 @@ Each chain is a procedure. Each step is sourced. Each output declares what it wa
 Beyond reasoning chains, the plugin ships a **closed-loop autonomous build** ([`.claude/workflows/autonomous-build-loop.js`](.claude/workflows/autonomous-build-loop.js)) that drives a build task to a candidate under a *deterministic acceptance gate*, on **any git repository, invoked from any working directory**, not just this one.
 
 ```
-refine → plan → verify-plan → orchestrator build (isolated worktree)
+refine → plan → verify-plan → builder build (isolated worktree)
        → deterministic gate + independent reviews → merge-on-green, else iterate
 ```
 
@@ -350,10 +349,10 @@ How it's wired: the [`web-to-semantic`](skills/research/web-to-semantic.md) and 
 
 ## A visible, enforced context budget
 
-Every agent here follows a per-model **token-budget protocol** (`agents/orchestrator.md` → `<token-budget>`): on Fable 5 a 160K session budget with a checkpoint at ~120K; on Opus and Sonnet a 200K budget with a checkpoint at ~180K. The authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard and the status line. Left to prose, that protocol is easy to ignore. This plugin ships it as a **status line you can see** and a **hook that enforces it**, both from the companion [**session-optimizer**](https://github.com/cdeust/session-optimizer) repo (MIT).
+Every agent here follows a per-model **token-budget protocol** (`hooks/stop-context-guard.py`, the table in its docstring): on Fable 5 a 160K session budget with a checkpoint at ~120K; on Opus and Sonnet a 200K budget with a checkpoint at ~180K. The authoritative per-model values live in `~/.claude/ctxguard-thresholds.json`, shared by the Stop guard and the status line. Left to prose, that protocol is easy to ignore. This plugin ships it as a **status line you can see** and a **hook that enforces it**, both from the companion [**session-optimizer**](https://github.com/cdeust/session-optimizer) repo (MIT).
 
 - **`statusline-command.sh`**: a persistent two-line status bar. The context progress bar, percentage, and token count are colored **green → yellow → red** on the exact per-model threshold above, with a `⚠ save+recall` marker once you cross 200K. It also shows model, effort, git branch + dirty flag, worktree, PR badge, session cost, duration, and 5h/7d rate-limit usage, so the cost of *not* checkpointing is always on screen.
-- **`hooks/stop-context-guard.py`** ([included here](hooks/stop-context-guard.py) for reference; the `Stop` registration lives in the companion `context-guard` plugin, because registering it in both fired the checkpoint twice per crossing), reads the live token usage from the transcript and acts when you cross the line: at the checkpoint threshold it captures mechanical state (branch, last commit, modified files) **for free**, with no model tokens spent; at the 200K soft cap it blocks the stop **exactly once** and injects the checkpoint procedure, so the agent persists a scoped `memory-tool.sh` checkpoint and tells you to `/clear` and resume via `cortex:recall`. Loop-safe and non-fatal by construction.
+- **`hooks/stop-context-guard.py`** ([included here](hooks/stop-context-guard.py) for reference; the `Stop` registration lives in the companion `context-guard` plugin, because registering it in both fired the checkpoint twice per crossing), reads the live token usage from the transcript and acts when you cross the line: at the checkpoint threshold and again at the hard cap it writes a filled checkpoint **itself**, with no model tokens spent and no agent spawned: the last user requests, files edited, commands run, tool errors, last assistant message, open TODOs and repository state, all measured from the transcript (`tools/checkpoint_summary.py`). It never blocks the turn; a status message names the checkpoint file and, at the hard cap, tells you to `/clear` and resume via `cortex:recall`. Loop-safe and non-fatal by construction.
 
 Together they close the four failure modes of a long session: **context poisoning** (stale accumulation stops growing), **session poisoning** (a clean reset boundary is forced), **quota poisoning** (the 5h/7d budget isn't burned on oversized turns), and **runaway cost** (the largest-context turns are the most expensive). Install both from [session-optimizer](https://github.com/cdeust/session-optimizer). This plugin's [`hooks/hooks.json`](hooks/hooks.json) deliberately does not register the guard a second time.
 
@@ -409,6 +408,7 @@ A team that never writes the file gets the strict defaults; a team that disagree
 - [`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md): threat model, trust boundaries, and the security argument with its limits
 - [`agents/genius/INDEX.md`](agents/genius/INDEX.md): 400+ problem shapes → agent routing table
 - [`rules/coding-standards.md`](rules/coding-standards.md): the engineering standard agents enforce
+- [`rules/public-apis-reference.md`](rules/public-apis-reference.md): how to find, verify and safely use a free public API from the community list
 
 ---
 
@@ -433,4 +433,4 @@ publications.
 
 ---
 
-<p align="center"><sub>Built by <a href="https://github.com/cdeust">cdeust</a>. All 120 agent files pass the <a href="tools/agent-definition-auditor.sh">structural auditor</a>. The system enforces source-citation discipline on the constants in its own commits.</sub></p>
+<p align="center"><sub>Built by <a href="https://github.com/cdeust">cdeust</a>. All 97 agent files pass the <a href="tools/agent-definition-auditor.sh">structural auditor</a>. The system enforces source-citation discipline on the constants in its own commits.</sub></p>

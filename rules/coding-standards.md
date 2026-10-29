@@ -1,13 +1,13 @@
 ---
 name: coding-standards
-description: Zetetic coding standards — SOLID, Clean Architecture, 3R (readability/reliability/reusability), size limits, reverse dependency injection, factory pattern. Authoritative rules all coding agents must follow.
+description: Zetetic coding standards — SOLID, Clean Architecture, 3R (readability/reliability/reusability), size limits, reverse dependency injection, factory pattern. Authoritative rules every coding agent must follow.
 version: 1.0.0
-applies_to: [engineer, architect, code-reviewer, frontend-engineer, dba, devops-engineer, test-engineer, mlops, refactorer]
+applies_to: [every agent that writes, reviews or restructures code (built-in agents carrying a GENIUS pattern)]
 ---
 
 # Zetetic Coding Standards
 
-These are **hard rules**. Coding agents enforce them; refactorer strictly applies them. Exceptions must be justified with a written rationale (comment at use site or ADR) and approved by a human reviewer.
+These are **hard rules**. Coding agents enforce them; an agent restructuring code applies them strictly. Exceptions must be justified with a written rationale (comment at use site or ADR) and approved by a human reviewer.
 
 Primary sources cited per section. Rules without a source are not standards — they are preferences.
 
@@ -66,7 +66,7 @@ Standard layer roles:
 - Handlers → core + infrastructure (wiring layer)
 - Server/transport → handlers (NOT core or infrastructure directly)
 
-**Violation of this rule is a code-reviewer block. No exceptions without an ADR.**
+**Violation of this rule is a blocking finding. No exceptions without an ADR.**
 
 ### 2.3 Ports and Adapters
 - Core declares *ports* (interfaces it needs) in its own type system.
@@ -239,7 +239,7 @@ These rules apply proportionally:
 
 **Rules 1 (SOLID), 2 (layer dependency), 7 (local reasoning), 8 (sources), 13 (Definition of Done — Completion Contract), and 14 (Boy-Scout Rule — nothing seen goes untreated) apply at all stakes levels.**
 
-Stakes classification is **objective**, never self-declared. See engineer.md Move 6 for criteria.
+Stakes classification is **objective**, never self-declared. See the stakes criteria in §10 and the genius method named for the task.
 
 ---
 
@@ -376,8 +376,8 @@ Every PR marked ready-for-review MUST embed a **Completion Ledger**: one row per
 Becomes a **dated, planned work item in the active series** (an issue with acceptance criteria), never a free-floating "worth a follow-up" note. Discovering debt creates an obligation to schedule it, not permission to ignore it.
 
 ### 13.5 Enforcement wiring
-- **engineer/refactorer**: the change report ends with the Completion Ledger; without it the task is not done — do not hand off.
-- **code-reviewer**: reconciliation duty (§13.2) is Move 0 — run it before any other analysis; a failed reconciliation short-circuits to REFUSED.
+- **Implementing and restructuring agents**: the change report ends with the Completion Ledger; without it the task is not done — do not hand off.
+- **The review**: reconciliation duty (§13.2) comes first — run it before any other analysis; a failed reconciliation is a blocking finding.
 - **git:pr skill**: the PR description template requires the ledger section; a PR created through the skill without it is invalid.
 - This section applies at **all stakes levels**, joining §1, §2, §7, §8 in §10's always-on list.
 
@@ -416,8 +416,8 @@ A deliverable is **not done** while a seen defect in touched material remains un
 - **H7. Boy-scout check (§14):** every defect seen in touched material during this change is either fixed in this PR or deferred with a cited issue number. No unfixed, un-issued seen defect remains.
 
 ### 14.5 Enforcement wiring
-- **Every implementing agent** (engineer, refactorer, test-engineer, frontend-engineer, devops-engineer, dba, mlops, data-scientist, latex-engineer, and any other agent producing or modifying source/build/doc material): the Boy-scout gate runs before the Completion Ledger is finalized — a seen defect in touched material blocks hand-off exactly like a §13 ledger gap.
-- **code-reviewer**: a diff or author report containing an un-addressed seen-defect rationalization ("pre-existing," "unrelated," "untouched by me," "out of scope" without a cited issue number) is a blocking finding — verdict is **REFUSED**, not "approve with comments."
+- **Every implementing agent** (any agent producing or modifying source/build/doc material): the Boy-scout gate runs before the Completion Ledger is finalized — a seen defect in touched material blocks hand-off exactly like a §13 ledger gap.
+- **The review**: a diff or author report containing an un-addressed seen-defect rationalization ("pre-existing," "unrelated," "untouched by me," "out of scope" without a cited issue number) is a blocking finding, not an optional one.
 - This section applies at **all stakes levels**, joining §1, §2, §7, §8, §13 in §10's always-on list.
 
 ## 15. No-Deviation Rule — the task definition is the contract (blocking, all stakes levels)
@@ -437,7 +437,7 @@ Source: maintainer directives, 2026-07-25, issued across one working day in esca
 §13 asks "is the new code complete?"; §14 asks "did you fix what you saw?"; §15 asks "did you build what was asked?" — all three are blocking at every stakes level. A PR that passes §13's checklist against a quietly narrowed spec still fails §15: completeness is measured against the task definition, not against the shipped subset.
 
 ### 15.3 Enforcement
-- Reviewer agents (code-reviewer, orchestrator verify steps) diff the delivery against the ORIGINAL task definition and block on any unmet clause, exactly as they block on §13 items.
+- The review (and any verify step of the delegating session) diffs the delivery against the ORIGINAL task definition and block on any unmet clause, exactly as they block on §13 items.
 - Implementation-agent briefs quote this section's rule line verbatim. An agent that cannot meet the spec does not open a PR; it reports the blocker with evidence and waits — an unopened PR is recoverable, a half-PR wastes a review cycle.
 
 ## Primary Sources

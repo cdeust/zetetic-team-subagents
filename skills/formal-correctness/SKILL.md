@@ -39,7 +39,7 @@ implementations, decidability before optimization.
 4. Typical chain: turing bounds what is decidable → lamport writes the spec →
    dijkstra derives the code → liskov contracts the interfaces. Run pairs via
    `tools/genius-invoker.sh compose lamport dijkstra -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 

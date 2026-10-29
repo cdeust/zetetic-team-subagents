@@ -36,16 +36,20 @@ markers = [
 #
 #   tests/           The suite measures the product, not itself.
 #
-# Measured on 2026-08-03 at 97% (1607 statements, 50 missed, 969 tests). The
-# floor is set at 80 rather than at the measured value on purpose: it is the
-# criterion's bar and a real bound, not a ratchet that turns any refactor red.
+# Measured on 2026-08-03 at 97% (1607 statements, 50 missed, 969 tests); 80%
+# in the ci.yml run of 2026-10-22. The floor is 90, the single CI's number for
+# the eight repositories (design 2026-10-22-single-ci, Constraints): red today
+# on purpose, so the pipeline exposes the gap rather than hiding it.
 [tool.coverage.run]
+# Measure the real Python CLIs spawned by integration tests; combine before report.
+# Source: https://coverage.readthedocs.io/en/7.15.2/config.html#run-patch
+patch = ["subprocess"]
 source = ["hooks", "tools"]
 branch = false
 
 [tool.coverage.report]
 # A GATE, not a report: coverage exits non-zero below this, so CI fails.
-fail_under = 80
+fail_under = 90
 show_missing = true
 skip_covered = false
 exclude_also = [

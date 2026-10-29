@@ -30,7 +30,7 @@ later position in the window than the last edit of a task file:
               ``CHECK || true`` or ``echo CHECK`` exit 0 whatever CHECK does
   benchmark   a declaration (a reference, or not applicable with the reason)
   review      a Skill call of a review skill or an Agent call of a code
-              reviewer (REVIEW_SKILLS, REVIEW_AGENT_SUFFIX), after the last edit
+              reviewer (REVIEW_SKILLS, or a GENIUS-pattern Agent that reviews), after the last edit
   remember    a Cortex remember call after the first edit
 
 Complexity: one pass, O(bytes in the window); a line is JSON-decoded only when
@@ -68,10 +68,12 @@ _CORTEX_REMEMBER = re.compile(r"^mcp__.*cortex__remember$")
 # Review the current diff ...", "zetetic:review: Quick Review"); no Skill call
 # naming a review occurs in ~/.claude/projects/**/*.jsonl (scan, 2026-10-13).
 REVIEW_SKILLS = frozenset({"code-review", "zetetic:review"})
-# A code-reviewer agent of any plugin scope; reviewer-academic reviews papers.
-# source: the only reviewer Agent call in ~/.claude/projects/**/*.jsonl
-# (scan, 2026-10-13) has subagent_type "zetetic-team-subagents:code-reviewer".
-REVIEW_AGENT_SUFFIX = "code-reviewer"
+# A reviewer is a built-in agent delegated with a genius pattern: its Agent call
+# carries the `GENIUS:` line that hooks/pre-agent-genius-gate.py requires and its
+# description or prompt says "review". The team-role code-reviewer agent was
+# removed 2026-10-21 (owner decision), so the subagent_type no longer identifies one.
+_GENIUS_LINE = re.compile(r"^[ \t]*GENIUS:[ \t]*\S", re.M)
+_REVIEW_WORD = re.compile(r"\breview", re.I)
 # The refine skill, by exact name: a substring would accept any skill whose
 # name merely contains "refine". source: the Skill listing of the owner's
 # session 2026-10-13 ("refine-gate:refine"; "/refine" when invoked unscoped).
@@ -97,7 +99,7 @@ HOW = {
     "benchmark": "declare the measured delta: {tool} declare {task} --stage benchmark --sha <commit> | "
                  "--url <PR> | --memory-id <id>, or --not-applicable \"<why nothing is measurable>\"",
     "review": "review the diff after the last edit: the code-review or zetetic:review skill, "
-              "or an Agent of type code-reviewer",
+              "or an Agent whose prompt has a GENIUS: line and asks for a review",
     "remember": "call Cortex remember with what a future session needs (engineering-loop step 8)",
 }
 
@@ -142,9 +144,11 @@ def _investigation(call: Dict) -> bool:
 def _review(call: Dict) -> bool:
     if call["name"] == "Skill":
         return str(call["input"].get("skill", "")) in REVIEW_SKILLS
-    agent_type = str(call["input"].get("subagent_type", ""))
-    return call["name"] in AGENT_TOOLS and (agent_type == REVIEW_AGENT_SUFFIX
-                                            or agent_type.endswith(":" + REVIEW_AGENT_SUFFIX))
+    if call["name"] not in AGENT_TOOLS:
+        return False
+    prompt = str(call["input"].get("prompt", ""))
+    said = f"{call['input'].get('description', '')}\n{prompt}"
+    return bool(_GENIUS_LINE.search(prompt) and _REVIEW_WORD.search(said))
 
 
 def _edited_path(call: Dict) -> str:

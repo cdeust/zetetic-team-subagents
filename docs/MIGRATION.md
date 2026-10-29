@@ -26,11 +26,11 @@ Permissive mode reports findings but never blocks. Commits go through. Keep the 
 
 ## Step 3: Burn down existing violations
 
-Use the included team agents incrementally:
+Use the included genius patterns incrementally (delegate to a built-in agent with a `GENIUS:` line):
 
 ```
 For magic numbers:
-  Ask the engineer or refactorer to add // source: annotations to constants
+  Ask a delegate (`GENIUS: dijkstra, simon`) to add // source: annotations to constants
   they can verify from docs, benchmarks, or the standard library.
 
 For orphan TODOs:
@@ -58,9 +58,9 @@ For algorithms from papers, financial logic, crypto, ML hyperparameters, and the
 2. A pre-push hook that runs `ZETETIC_PROFILE=strict` on those paths, OR
 3. An ADR formalizing the stricter threshold.
 
-## Customizing which team agents proactively fire
+## Customizing which genius agents proactively fire
 
-Eight agents auto-delegate by default (refactorer, code-reviewer, test-engineer, security-auditor, architect, Feynman, Curie, Dijkstra). To make them less aggressive on existing-project transition:
+Several genius agents (Feynman, Curie, Dijkstra, among others) auto-delegate by default. To make them less aggressive on existing-project transition:
 
 1. Edit the installed agent copy in `~/.claude/agents/` to remove the `Proactively` lead-in and scenario examples (survives plugin updates: `setup.sh` detects user-modified files and backs them up before overwriting).
 2. Or set specific agents to `model: haiku` in `~/.claude/zetetic/agent-models.json` for cheaper evaluation during the transition.

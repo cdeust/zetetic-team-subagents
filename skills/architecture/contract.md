@@ -9,7 +9,7 @@ trigger: >
   (replacing an implementation breaks callers); when callers depend on internal representation.
 agents:
   - liskov
-  - architect
+  - simon
 shapes: [substitutability-as-contract, behavioral-subtyping, contract-is-interface, composition-correctness]
 input: The interface or boundary to specify.
 output: Behavioral contract with pre/post/invariant/history constraint for each operation.
@@ -22,7 +22,7 @@ composes: []
 aliases: [define-contract, behavioral-contract, interface-spec]
 hand_off:
   distributed_boundary: "/spec — lamport: the boundary needs a full protocol spec"
-  implementation_needed: "/implement — engineer builds an implementation that satisfies the contract"
+  implementation_needed: "/implement — dijkstra builds an implementation that satisfies the contract"
 ---
 
 ## Procedure

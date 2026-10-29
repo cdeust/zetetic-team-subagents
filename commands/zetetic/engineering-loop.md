@@ -61,17 +61,31 @@ Not "it works". Code leaving this loop is held to what the best engineering orga
 first reviewer and the strict one. A delivery you would not defend line by line in front of the
 best engineer you can imagine does not leave the loop.
 
-## Self-denial — the loop reviews itself and reopens
+## Review: Claude Code's native commands, one cycle
 
-Phase 5 is not advisory. Review your own delivery against the contract violations and the
-standard above, then record the verdict on the PR as a comment whose first line is
-`ZETETIC-REVIEW: APPROVE` or `ZETETIC-REVIEW: REQUEST_CHANGES`, followed by the reasoning.
+The review is Claude Code's own, not one written for this loop: `/code-review` for correctness
+and `/security-review` for security. Run each once on the diff, apply what they report, and the
+review is over. There is no home-made review procedure, no verdict format, no re-review, no
+second round, no change-request loop and no iterating until approval.
 
-- Any violation, return to Phase 2, fix it, re-review. Not a note, not a follow-up: the same
-  delivery.
-- **Three violations in one contract and the delivery is denied.** Reopen and rebuild it clean.
-- Iterate until the verdict is APPROVE on evidence. There is no iteration budget: the loop ends
-  when the work meets the standard, not when you tire of it.
+Quality comes upstream, while the code is written, not from a longer review.
+
+## Every modification is governed by a genius pattern
+
+Delegated work runs on a Claude Code built-in subagent (`general-purpose`, `Explore` or `Plan`).
+That agent MUST apply the reasoning pattern of one or two genius agents chosen for the task.
+The delegation prompt carries one line, `GENIUS: <name>[, <name>]`, naming files in
+`agents/genius/<name>.md`, and embeds or points to the method in that file. The task-class to
+built-in type to genius mapping is `rules/agent-routes.json` (rendered in
+`rules/agent-routing-table.md`). The PreToolUse hook `hooks/pre-agent-genius-gate.py` denies an
+Agent call that lacks the line, names an unknown genius, or targets a removed team-role agent
+type.
+
+Every modification is therefore governed by principles those geniuses already established, and
+the code must respect the published method the pattern carries: the source is read first, the
+implementation is derived from it, and the citation is in the code or the PR (the source
+precedes the implementation, never the reverse). That is what makes the code meet the science,
+and it is what the implementation step below is held to.
 
 ## Instructions
 
@@ -122,6 +136,10 @@ did not change. Validate at system boundaries only.
 
 Root causes, not symptoms. Fix where the invariant breaks, never at the throw site.
 
+Apply the genius pattern(s) of the task's `GENIUS:` line while writing, not afterwards: derive
+each constant, threshold and algorithm from the published method that pattern carries, read
+first, and cite it where the value lives.
+
 ### 5. Verify — run the check from step 0
 
 Run it. Read the result. Iterate until it passes.
@@ -137,14 +155,11 @@ that caused it. A change with no measured delta does not ship as an improvement.
 Never tune a rule against the sample used to measure it. If a fix was made because a
 measurement exposed it, rebuild the measurement on fresh, held-out data.
 
-### 7. Review — a fresh context, not self-critique
+### 7. Review: the native commands, once
 
-Run `/code-review` on the diff, or delegate a reviewer that sees the diff and the criteria but
-not the reasoning that produced them.
-
-Instruct the reviewer to flag only what affects correctness or the stated requirements — a
-reviewer asked for gaps will find some regardless, and chasing all of them produces
-over-engineering.
+Run `/code-review` on the diff, then `/security-review`. One run each, one cycle: apply their
+findings and the review is over. No home-made reviewer prompt, no verdict comment, no second
+round.
 
 Note the model-specific rule (`~/.claude/reference/model-behavior.md`): on Opus 5, do **not** spawn
 a subagent to verify your own work; on Fable 5, a fresh-context verifier is recommended.
@@ -215,8 +230,6 @@ sufficient.
 **A declared violation is still a violation.** Naming a broken rule in the PR body does not
 license it. "Declared, not hidden" is a confession, not an acceptance criterion. The fix lands in
 the same PR, before delivery, and a regression is fixed, never accepted and never annotated.
-**Three violations in one contract and the PR is DENIED by default** — reopen and rebuild it
-clean. The count is per contract, and one you declare yourself counts like one a reviewer finds.
 
 **No artefact, no figure, applied in both directions.** A published number carries a committed
 artefact that produces it: the run record, the commit it ran at, the dirty flag, the condition.

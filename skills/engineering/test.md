@@ -8,7 +8,7 @@ trigger: >
   When new code needs tests; when test coverage is insufficient; when someone asks
   "what should we test?" for a module.
 agents:
-  - test-engineer
+  - popper
   - dijkstra
 shapes: [tests-insufficient]
 input: Code or module to test. Context on criticality.
@@ -27,7 +27,7 @@ hand_off:
 
 ## Procedure
 
-1. **test-engineer identifies what to test.** Happy paths, error paths, edge cases, boundary conditions.
+1. **popper identifies what to test.** Happy paths, error paths, edge cases, boundary conditions.
 2. **dijkstra identifies what testing cannot cover.** Concurrency interleavings, numerical edge cases, security guarantees. These need stronger methods.
 3. **Test plan.** Unit (core logic, pure functions), integration (wiring, I/O), e2e (user-facing flows). Coverage target proportional to criticality.
 4. **Write tests.** Each test: clear name, arrange-act-assert, one assertion per behavior, deterministic.

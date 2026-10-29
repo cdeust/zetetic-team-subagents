@@ -2,7 +2,7 @@
 name: failure-resilient-design
 description: >
   Design for failure: priority-displaced scheduling (hamilton), formal specification (lamport),
-  implementation (engineer). The system degrades gracefully, not catastrophically.
+  implementation (dijkstra). The system degrades gracefully, not catastrophically.
 category: compose
 trigger: >
   When building a system that must survive overload, partial failure, or operator error;
@@ -11,7 +11,7 @@ trigger: >
 agents:
   - hamilton
   - lamport
-  - engineer
+  - dijkstra
 shapes: [hard-real-time, priority-under-failure, graceful-degradation, spec-first, partial-failure-default]
 input: The system to harden. Its criticality requirements. Known failure modes.
 output: "Resilience design: criticality taxonomy, priority schedule, formal spec, implementation."
@@ -23,7 +23,7 @@ zetetic_gate:
 composes: [design-for-failure, spec, implement]
 aliases: [harden, resilience, design-for-failure]
 hand_off:
-  implementation_ready: "/implement — engineer builds it"
+  implementation_ready: "/implement — dijkstra builds it"
   needs_measurement: "/benchmark — verify the system actually degrades as designed"
 ---
 
@@ -40,8 +40,8 @@ hand_off:
 6. lamport: model-check on small instances. Counterexamples → revise the spec.
 7. **Gate:** spec is clean on small instances and reviewed for omitted requirements.
 
-### Phase 3: Implement (engineer)
-8. engineer: implement per the spec. Every error path is a first-class code artifact with tests.
+### Phase 3: Implement (dijkstra)
+8. dijkstra: implement per the spec. Every error path is a first-class code artifact with tests.
 9. Chaos/fault-injection testing: verify the system actually degrades as designed under real failures.
 
 ## Output Format

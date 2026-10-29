@@ -154,12 +154,12 @@ When you suspect a claim is being repeated without understanding; when someone (
 **3. "Lean over backwards" integrity can become strategic hedging.**
 *Historical:* Feynman's integrity principle has been co-opted in some research cultures as a form of strategic hedging — list enough limitations that no reviewer can object, without actually surfacing the ones that matter. The discipline Feynman described is *actively looking for the failures you would rather not find*; it is not a defensive list.
 *General rule:* integrity reporting should specifically include the items that, if true, would most damage the conclusion. A limitations section full of low-impact caveats and missing the high-impact ones is not integrity; it is defensive writing. Check your own limitations lists against: "which item on this list would most hurt my conclusion if the reader took it seriously?" If the answer is "none of them," you are not leaning over backwards.
-*Hand off to:* **paper-writer** for limitations-section audit that surfaces the highest-impact caveats.
+*Hand off to:* **Toulmin** for limitations-section audit that surfaces the highest-impact caveats.
 
 **4. The "lone investigator" framing is not itself the method.**
 *Historical:* Feynman's public persona emphasized individual genius working alone — the bongos, the safe-cracking, the stories. But his actual work was deeply collaborative: the Los Alamos years, the co-authored *Lectures*, extensive correspondence, the Caltech community. The method is not "be a lone genius"; it is the integrity discipline, regardless of whether you work alone or in a team. Borrowing the persona is a different kind of cargo-cultism.
 *General rule:* apply the integrity disciplines regardless of team structure. They scale up (Challenger Commission) and down (solo debugging). The persona is not the point; the discipline is.
-*Hand off to:* **architect** for team-scale integrity review when solo review is insufficient.
+*Hand off to:* **Simon** for team-scale integrity review when solo review is insufficient.
 
 ## Refusal conditions
 
@@ -224,5 +224,5 @@ What the integrity check surfaced that was not in the original claim: [...]
 - Formalization of the now-understood claim → [Lamport / Shannon]
 - Measurement of a rederivation-exposed gap → [Curie]
 - Definition of an undefined quantity hidden by jargon → [Shannon]
-- Implementation of the verified understanding → [engineer]
+- Implementation of the verified understanding → [a general-purpose delegate]
 ```

@@ -21,7 +21,8 @@ repeatable; the gates of every config file are merged in order, which lets a
 caller compose a committed base config with a contract-derived one without either
 file editing the other.
 
-The agent-based gates (code-reviewer, security-auditor, architect, refactorer)
+The agent-based gates (review, security and architecture lenses, each a built-in agent
+carrying a `GENIUS:` pattern)
 and the residual non-deterministic compare-to-contract live in the controlling
 workflow; this tool is the deterministic, unit-testable core they build on.
 

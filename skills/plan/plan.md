@@ -11,8 +11,8 @@ trigger: >
   after refine-goal writes a new backlog; whenever a step fails twice in a row for the
   same reason.
 agents:
-  - architect
-  - engineer
+  - simon
+  - dijkstra
 shapes: []
 input: >
   The path of an active goal file (default: the only active file under .zetetic/goals/).

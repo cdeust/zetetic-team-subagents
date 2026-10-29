@@ -2,9 +2,8 @@
 """stop-redaction-gate.py — Stop / SubagentStop hook: the redaction gate on
 every message handed back.
 
-The five prose-producing agents (paper-writer, professor, reviewer-academic,
-memory-writer, ux-designer) carry a ``<redaction-gate>`` section that asks them
-to run the eval in ``skills/writing/redaction.md`` on their own output before
+Agents are asked (by the ``<redaction-gate>`` prompt section, where an agent
+carries one) to run the eval in ``skills/writing/redaction.md`` on their own output before
 returning it. A section in a prompt is advisory; what must happen every time
 belongs in a hook. This hook is that enforcement point: it takes the final
 assistant text of the turn (``last_assistant_message`` on Stop and

@@ -40,7 +40,7 @@ was meant to.
 4. Typical chain: kahneman audits the intuition → popper designs the severe
    test → taleb classifies the tail exposure. Run via
    `tools/genius-invoker.sh compose kahneman popper -- "<problem>"`.
-5. If no shape above matches, use a standard team agent instead.
+5. If no shape above matches, use a built-in agent with the closest `GENIUS:` pattern from `rules/agent-routes.json` instead.
 
 ## Refuse when
 
