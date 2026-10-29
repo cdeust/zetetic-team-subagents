@@ -114,3 +114,13 @@ Evidence: docs/verification/native-gate-groups-20261028.md.
 - [ ] Publish source PR, verify remote head and dispose owned worktree.
 
 Review: docs/ci-workflow-proof.md records source contracts and hosted acceptance limits.
+
+## Native rerun merge identity, 2026-10-29
+
+- [x] Read cortex-vision PR5 finding4408735600 and canonical merge-name expression.
+- [x] Reproduce full-history failure against the same current graph without history.
+- [x] Fold both merge display names as one logical job, retaining the winning payload.
+- [x] Verify 101 native contracts, 28 rendering/delivery contracts, and 7 render-ci shell checks.
+- [ ] Root diff review, publication, hosted CI, and registered-worktree disposal.
+
+Review: [source evidence](../docs/verification/native-rerun-merge-identity-20261029.md).
