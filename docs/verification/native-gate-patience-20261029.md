@@ -11,7 +11,7 @@ Replay: `gh run list --repo cdeust/<repo> --workflow Pipeline --status failure
 --created ">=2026-10-27"`, then `gh api repos/cdeust/<repo>/actions/runs/<id>/jobs`
 and `gh api --allow-escape-sequences repos/cdeust/<repo>/actions/jobs/<job>/logs`.
 
-## Attribution (43 failed runs, 48 failed merge/review jobs)
+## Attribution (43 failed runs, 48 failed merge/review jobs: 41 rows below + 7 `merge` jobs red downstream of a red `review`)
 
 | Class | Runs | Failing step and code path | Verdict |
 |---|---|---|---|
@@ -23,6 +23,14 @@ and `gh api --allow-escape-sequences repos/cdeust/<repo>/actions/jobs/<job>/logs
 | PR no longer open | 1 (Cortex 40548981339) | `review` reader `_eligible`: `pr_eligibility`. PR 805 merged at 17:35:00, the step ran at 17:38:20 | Harmless, the PR is merged |
 | Deliberate hold | 1 (Cortex 40583904933) | `merge` "Verify live PR eligibility": PR 811 renamed to "do not merge: ..." at 21:15:40, head still `6fec2753` until 21:35:51. The message said "closed, draft, held, or no longer at the tested head" | Correct red, but unreadable: it looked like a moved head |
 | Old Claude review step | 1 (Cortex 40425805584) | `review` "Validate review execution": `cannot read execution file` | Profile removed from the native template |
+
+The 41 rows count each failed job once at the step that made it red. The other 7
+of the 48 jobs are `merge` jobs that failed at "Require completed tests and review"
+only because `review` was already red in the same run (`review: failure, requires
+completion`), so they are counted in the `review` rows: Cortex 40425805584,
+40444948084, 40522795315 and 40548981339; codebase 40642626192; spec 40614484791 and
+40617164871. Run 40548981339 never reached "Verify live PR eligibility", so it does
+not support the diagnostics change; only 40583904933 does.
 
 Findings that matter:
 

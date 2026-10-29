@@ -1,55 +1,44 @@
 """Native merge gate: a red merge names the condition that made it red.
 
-Source: Pipeline merge jobs of cdeust/Cortex run 40583904933 (a deliberate
-"do not merge" title) and run 40548981339 (an already merged PR), both reported
-as "closed, draft, held, or no longer at the tested head". Attribution of every
-failed gate of 2026-10-27/28: docs/verification/native-gate-patience-20261029.md.
+Source: Pipeline merge job of cdeust/Cortex run 40583904933 (a deliberate
+"do not merge" title), reported as "closed, draft, held, or no longer at the
+tested head". Attribution of every failed gate of 2026-10-27/28:
+docs/verification/native-gate-patience-20261029.md. The step runs under the
+shell GitHub uses (`bash --noprofile --norc -eo pipefail`) through the harness
+of test_ci_pr_safety, so an empty or failed `gh pr view` is exercised as in CI.
 """
 
 import json
-import os
 from pathlib import Path
-import stat
-import subprocess
 from types import ModuleType
 
 import pytest
 import yaml
 
+from test_ci_pr_safety import GH_STUB, execute
+from test_ci_template import heredoc
+
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "templates/ci/native"
 SHA = "a" * 40
 MOVED = "b" * 40
+STEP = "Verify live PR eligibility"
 
 
-def eligibility_script():
-    jobs = yaml.safe_load((NATIVE / "pipeline.yml").read_text())["jobs"]
-    return next(
-        item["run"]
-        for item in jobs["merge"]["steps"]
-        if item["name"] == "Verify live PR eligibility"
-    )
+@pytest.fixture(scope="module")
+def jobs():
+    return yaml.safe_load((NATIVE / "pipeline.yml").read_text())["jobs"]
 
 
-def run_eligibility(tmp_path, live):
+def run_eligibility(jobs, tmp_path, payload, rc="0"):
     """Run the merge job's eligibility step against a stubbed `gh pr view`."""
-    stub = tmp_path / "bin/gh"
-    stub.parent.mkdir(parents=True)
-    stub.write_text('#!/bin/sh\ncat "$LIVE_PR"\n')
-    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
-    payload = tmp_path / "live.json"
-    payload.write_text(json.dumps(live))
-    env = {
-        **os.environ,
-        "PATH": f"{stub.parent}{os.pathsep}{os.environ['PATH']}",
-        "LIVE_PR": str(payload),
-        "GITHUB_STEP_SUMMARY": str(tmp_path / "summary.md"),
-        "PR": "7",
-        "HEAD_SHA": SHA,
-        "REVIEW_STATE": "success",
-    }
-    result = subprocess.run(
-        ["bash", "-c", eligibility_script()], capture_output=True, text=True, env=env
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    script = next(s["run"] for s in jobs["merge"]["steps"] if s.get("name") == STEP)
+    result = execute(
+        script,
+        tmp_path,
+        {"FIXTURE_PR": payload, "FIXTURE_VIEW_RC": rc, "REVIEW_STATE": "success"},
+        GH_STUB,
     )
     return result.returncode, result.stdout
 
@@ -67,14 +56,34 @@ def pull(**changes):
         ({"isDraft": True}, "is a draft"),
         ({"headRefOid": MOVED}, f"head moved: tested {SHA}, live {MOVED}"),
         ({"title": "do not merge: probe"}, "is held by title"),
+        ({"title": "Fix: Do Not Merge yet"}, "is held by title"),
         ({"labels": [{"name": "Hold"}]}, "is held by label"),
+        ({"labels": [{"name": "DO-NOT-MERGE"}]}, "is held by label"),
     ],
 )
-def test_red_merge_names_the_condition_that_failed(tmp_path, changes, cause):
-    assert run_eligibility(tmp_path / "ok", pull())[0] == 0  # control: same harness
-    code, out = run_eligibility(tmp_path / "red", pull(**changes))
+def test_red_merge_names_the_condition_that_failed(jobs, tmp_path, changes, cause):
+    assert run_eligibility(jobs, tmp_path / "ok", json.dumps(pull()))[0] == 0  # control
+    code, out = run_eligibility(jobs, tmp_path / "red", json.dumps(pull(**changes)))
     assert code == 1
     assert f"::error::PR {cause}." in out
+
+
+@pytest.mark.parametrize("payload", ["", "   ", "\n\t"], ids=["empty", "spaces", "blank"])
+def test_empty_payload_from_gh_is_refused_not_passed(jobs, tmp_path, payload):
+    # Fail-open before: `jq -r` prints nothing for empty input, so no cause was
+    # found and the step passed with rc=0. The base template exited 1 here.
+    code, out = run_eligibility(jobs, tmp_path, payload)
+    assert code == 1
+    assert "::error::PR state is unreadable." in out
+
+
+@pytest.mark.parametrize("payload", ["not json", "{"], ids=["text", "truncated"])
+def test_unparsable_payload_from_gh_is_refused(jobs, tmp_path, payload):
+    assert run_eligibility(jobs, tmp_path, payload)[0] == 1
+
+
+def test_failed_gh_read_is_refused(jobs, tmp_path):
+    assert run_eligibility(jobs, tmp_path, json.dumps(pull()), rc="1")[0] == 1
 
 
 # Characterization of the native `resolve` job (pipeline-post-merge.yml). Green on
@@ -85,11 +94,10 @@ RUNNERS = ("ubuntu-latest", "macos-latest", "windows-latest")
 MATRIX = [f"{kind} ({runner})" for kind in ("environment", "install") for runner in RUNNERS]
 
 
-def resolver(tmp_path):
+def resolver(jobs, tmp_path):
     """The native resolve job's inline source, loaded as a module."""
-    jobs = yaml.safe_load((NATIVE / "pipeline.yml").read_text())["jobs"]
     command = jobs["resolve"]["steps"][0]["run"]
-    source = command.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    source = heredoc(command, "python3")
     module = ModuleType("native_resolve")
     module.__file__ = str(tmp_path / "native_resolve.py")
     exec(compile(source, module.__file__, "exec"), module.__dict__)
@@ -151,17 +159,17 @@ def resolve(module, api):
     return module.resolve(event, "o/r", api)
 
 
-def test_superseded_run_does_not_trigger_merge(tmp_path):
+def test_superseded_run_does_not_trigger_merge(jobs, tmp_path):
     # The PR head moved after this run tested SHA: the new head's run decides.
-    module = resolver(tmp_path)
+    module = resolver(jobs, tmp_path)
     api = FakeGitHub(SHA, MOVED, "merge")
     with pytest.raises(module.PostMergeError, match="head advanced"):
         resolve(module, api)
     assert api.merges() == []
 
 
-def test_pending_run_does_not_trigger_merge(tmp_path):
-    module = resolver(tmp_path)
+def test_pending_run_does_not_trigger_merge(jobs, tmp_path):
+    module = resolver(jobs, tmp_path)
     api = FakeGitHub(SHA, SHA, "merge pending review")
     assert resolve(module, api)["run_tests"] == "false"
     assert api.merges() == []
