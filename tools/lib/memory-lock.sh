@@ -51,8 +51,11 @@ _lock_reclaim_dead() {
   mv "$lockdir/pid" "$claimed" 2>/dev/null || return 1
   claimed_pid=$(cat "$claimed" 2>/dev/null || true)
   if [[ "$claimed_pid" != "$holder_pid" ]]; then
-    # We took a live holder's pid file: put it back (a new holder rewrites its own).
-    [[ -e "$lockdir/pid" ]] || mv "$claimed" "$lockdir/pid" 2>/dev/null || true
+    # We took a newer holder's pid file. Do NOT put it back: by now that holder
+    # may have released and a third process re-created the lockdir, and a stale
+    # pid restored there names a dead holder, so a later waiter would reclaim
+    # (rmdir) the third process's live lock. A live holder merely loses
+    # crash-recovery for this one acquisition; mutual exclusion is kept.
     rm -f "$claimed" 2>/dev/null || true
     return 1
   fi
