@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -22,7 +23,7 @@ from test_ci_codex_review_event_fixtures import (
     event,
     invoke,
 )
-from codex_resume_fixtures import OTHER, state, comment, summary_pages
+from codex_resume_fixtures import OTHER, state, comment, summary_pages, with_claude
 from test_ci_codex_review_resume import waiting_jobs
 
 
@@ -158,13 +159,13 @@ class CodexEventTests(unittest.TestCase):
             self.assertEqual(result["action"], "none")
             self.assertEqual(post, [])
 
-    def test_all_pr_holds_and_ineligible_states_prevent_rerun(self):
+    def test_owner_holds_and_ineligible_states_prevent_rerun(self):
         for mutate in (
             lambda p: p.update(state="closed"),
             lambda p: p.update(draft=True),
             lambda p: p.update(title="DO NOT MERGE this"),
-            lambda p: p.update(labels=[{"name": "Hold"}]),
             lambda p: p.update(labels=[{"name": "do-not-merge"}]),
+            lambda p: p.update(labels=[{"name": "Hold"}, {"name": "do-not-merge"}]),
             lambda p: p["head"]["repo"].update(full_name="other/fork"),
             lambda p: p["base"].update(ref="develop"),
         ):
@@ -173,6 +174,80 @@ class CodexEventTests(unittest.TestCase):
             result, post = invoke(server)
             self.assertEqual(result["action"], "none")
             self.assertEqual(post, [])
+
+    def test_review_holds_are_reconsidered_when_a_review_completes(self):
+        # Owner rule 2026-10-29: hold and autopilot:hold wait for both
+        # reviewers; the completion that ends the wait must reach the gate.
+        for labels in (["hold"], ["Autopilot:Hold"], ["hold", "autopilot:hold"]):
+            server = Server()
+            server.data["pull"]["labels"] = [{"name": name} for name in labels]
+            result, post = invoke(server)
+            self.assertEqual(result, {"action": "merge", "job_id": 21}, labels)
+            self.assertEqual(len(post), 1)
+
+    def test_held_pr_resumes_when_the_security_receipt_arrives(self):
+        # The review job failed on codex_security_verdict_missing (null flags,
+        # no receipt yet); the native receipt event must rerun it on a held PR.
+        server = Server()
+        server.data["pull"]["labels"] = [{"name": "hold"}]
+        data = state()
+        data["security_review"].update(has_any_findings=None, has_unresolved_findings=None)
+        summary = comment(data)
+        metadata = {"repository": "cdeust/Cortex", "pullRequestNumber": 797,
+                    "headSha": SHA, "status": "completed"}
+        summary["body"] += "\n<!-- codex-security-review:v1 " + json.dumps(metadata) + " -->"
+        receipt = comment(comment_id=9, updated="2026-10-26T22:10:00Z")
+        # The exact native receipt form (cortex-viz PR213 receipt6491350304).
+        receipt["body"] = (
+            "<!-- codex-review-receipt:v1 -->\n\n### \U0001f6e1\ufe0f Codex Security Review\n\n"
+            "Security review completed. No security issues were found in this pull request.\n\n"
+            "**Reviewed commit:** `" + SHA[:10] + "`\n\n"
+            "[View security finding report](https://chatgpt.com/codex/cloud/tasks/task_e_0a1b)\n\n"
+            "_Only the user who started this review can view the report in Codex._\n\n"
+            "<details> <summary>\u2139\ufe0f About Codex security reviews in GitHub</summary>\n"
+            "<br/>\n\nThis is an experimental Codex feature. Security reviews are triggered when:\n"
+            '- You comment "@codex security review"\n'
+            '- A regular code review gets triggered (for example, "@codex review" or when a'
+            " PR is opened), and you\u2019re opted in so security review runs alongside code review\n\n"
+            "Once complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n"
+            "</details>"
+        )
+        receipt["issue_url"] = "https://api.github.com/" + PREFIX + "/issues/797"
+        server.data["comments"] = [summary]
+        server.data["comment"] = receipt
+        review = server.data["jobs"][-2]
+        review.update(conclusion="failure", steps=[
+            {"name": "Require completed Codex reviews", "conclusion": "failure"}])
+        server.data["jobs"][-1].update(conclusion="failure", steps=[
+            {"name": "Require completed tests and review", "conclusion": "failure"}])
+        payload = event()
+        payload["comment"]["body"] = receipt["body"]
+        waiting, post = invoke(server, payload=payload)
+        self.assertEqual((waiting, post), ({"action": "none"}, []))  # no receipt yet
+        server.data["comments"] = [summary, receipt]
+        result, post = invoke(server, payload=payload)
+        self.assertEqual(result, {"action": "review", "job_id": review["id"]})
+        self.assertEqual(len(post), 1)
+
+    def test_dependabot_pr_resumes_on_codex_alone(self):
+        # Rule D5: the Claude review skips Dependabot (PR #224); on its own PR,
+        # read from the comments' GraphQL node, Codex and the tests decide.
+        server = Server()
+        server.data["claude"] = False
+        self.assertEqual(invoke(server)[0], {"action": "none"})  # claude_verdict_missing
+
+        def dependabot(count):
+            pages = summary_pages([server.data["comments"]])
+            pages[0]["data"]["repository"]["pullRequest"].update(
+                author={"login": "dependabot", "__typename": "Bot"},
+                headRefName="dependabot/github_actions/x",
+            )
+            return pages
+
+        server.overrides[COMMENTS] = dependabot
+        result, post = invoke(server)
+        self.assertEqual(result, {"action": "merge", "job_id": 21})
+        self.assertEqual(len(post), 1)
 
     def test_current_head_is_checked_immediately_before_post(self):
         server = Server()
@@ -238,7 +313,7 @@ class CodexEventTests(unittest.TestCase):
             has_any_findings=True, has_unresolved_findings=True
         )
         server.overrides[COMMENTS] = lambda count: summary_pages(
-            [server.data["comments"] if count == 1 else [comment(data)]]
+            [with_claude(server.data["comments"] if count == 1 else [comment(data)])]
         )
         result, post = invoke(server)
         self.assertEqual(result["action"], "none")

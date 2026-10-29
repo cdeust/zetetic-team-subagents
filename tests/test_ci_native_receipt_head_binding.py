@@ -16,6 +16,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
+from test_ci_native_hold_lift import claude_row
 from test_ci_native_security_receipt import PR, READER, REPO, VIZ213_SECURITY, row, summary
 
 PREFIX = "522f87761d"
@@ -35,7 +36,7 @@ def load():
 class ReceiptHeadBindingTests(unittest.TestCase):
     def evidence(self, head, body, resolved):
         module = load()
-        comments = sys.modules["ci_codex_review_comments"]
+        runtime = sys.modules["ci_codex_review_runtime"]
         calls = []
 
         def api(endpoint, **_):
@@ -47,8 +48,9 @@ class ReceiptHeadBindingTests(unittest.TestCase):
                 raise sys.modules["ci_codex_review_runtime"].APIError(resolved)
             return {"sha": resolved}
 
-        with patch.object(comments, "_api", side_effect=api, create=True):
-            result = module.review_evidence([summary(head), row(9, body)], head, REPO, PR)
+        with patch.object(runtime, "_api", side_effect=api):
+            rows = [summary(head), row(9, body), claude_row(head)]
+            result = module.review_evidence(rows, head, REPO, PR)
         return result, calls
 
     def test_prefix_resolving_to_another_commit_is_not_proof(self):

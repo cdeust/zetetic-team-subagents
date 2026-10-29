@@ -16,6 +16,7 @@ from codex_resume_fixtures import (
     comment,
     pull,
     summary_pages,
+    with_claude,
 )
 from test_ci_codex_review_resume import jobs
 
@@ -142,6 +143,8 @@ class Server:
             ]
         elif endpoint == PREFIX + "/commits/" + SHA + "/pulls":
             result = [[self.data["pull"]]]
+        elif endpoint == PREFIX + "/commits/" + SHA[:10]:
+            result = {"sha": SHA}  # a security receipt's prefix, resolved (#227)
         else:
             raise AssertionError("unexpected API endpoint: " + endpoint)
         return copy.deepcopy(result)
@@ -151,18 +154,20 @@ class Server:
             raise AssertionError("unexpected GraphQL query")
         if "reviewThreads(" in fields["query"]:
             return [self.data["threads"]]
-        return summary_pages(
-            [self.data["comments"]],
-            number=fields["number"],
-            sha=self.data["pull"]["head"]["sha"],
-        )
+        sha = self.data["pull"]["head"]["sha"]
+        rows = self.data["comments"]
+        if self.data.get("claude", True):
+            rows = with_claude(rows, sha)
+        return summary_pages([rows], number=fields["number"], sha=sha)
 
 
 def invoke(server, name="issue_comment", payload=None, expected=797):
     target = load()
+    runtime = sys.modules["ci_codex_review_runtime"]
     with (
         patch.dict(os.environ, {"EXPECTED_PR": str(expected)}),
         patch.object(target.source, "_api", side_effect=server),
+        patch.object(runtime, "_api", side_effect=server),
         patch.object(target.subprocess, "run") as post,
     ):
         result = target.coordinate(

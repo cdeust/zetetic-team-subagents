@@ -10,7 +10,7 @@ from datetime import datetime
 import re
 from typing import Any
 
-from ci_codex_review_runtime import EvidenceError, _api
+from ci_codex_review_runtime import EvidenceError
 
 Record = dict[str, Any]
 # Source: native Codex summary6456275844 on2026-10-28.
@@ -41,7 +41,7 @@ def _bot_author(comment: Record) -> bool:
     )
 
 
-def _authenticate_editor(comment: Record) -> None:
+def _authenticate_editor(comment: Record, login: str = "chatgpt-codex-connector") -> None:
     # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
     if "editor" not in comment or "lastEditedAt" not in comment:
         raise EvidenceError("editor")
@@ -62,7 +62,7 @@ def _authenticate_editor(comment: Record) -> None:
     if (
         not isinstance(editor, dict)
         or editor.get("__typename") != "Bot"
-        or editor.get("login") != "chatgpt-codex-connector"
+        or editor.get("login") != login
         or editor.get("id") != identity
     ):
         raise EvidenceError("editor")
@@ -120,6 +120,8 @@ def _receipt_head(repo: str, named: str) -> str | None:
     """
     if len(named) == 40:
         return named
+    # Late binding: the caller's runtime API, as ci_codex_reviews._api uses it.
+    from ci_codex_review_runtime import _api  # noqa: PLC0415
     try:
         commit = _api(f"repos/{repo}/commits/{named}")
     except EvidenceError:
@@ -170,13 +172,23 @@ def security_receipt(comments, target, review, metadata):
     }
 
 
+# Rule D5, 2026-10-29: Claude skips Dependabot (no Actions secrets, PR #224), so an absent
+# marker agrees on a PR by GraphQL author dependabot/Bot on dependabot/* (prD evidence, PR212).
+DEPENDABOT = {"login": "dependabot", "__typename": "Bot"}
+
+
+class Comments(list):
+    """Comment rows of one PR, read with its author from the same GraphQL node."""
+    dependabot = False
+
+
 # Body and edit attribution must come from the same authenticated API node.
 # https://docs.github.com/en/graphql/reference/issues#issuecomment
 COMMENTS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      number headRefOid
+      number headRefOid headRefName author { login __typename }
       comments(first:100, after:$endCursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -192,17 +204,8 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
 
 
 def _comment_row(node: Any) -> Record:
-    if not isinstance(node, dict) or any(
-        key not in node
-        for key in (
-            "databaseId",
-            "body",
-            "updatedAt",
-            "author",
-            "editor",
-            "lastEditedAt",
-        )
-    ):
+    keys = ("databaseId", "body", "updatedAt", "author", "editor", "lastEditedAt")
+    if not isinstance(node, dict) or any(key not in node for key in keys):
         raise EvidenceError("protocol")
     identity = node["databaseId"]
     if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
@@ -211,8 +214,8 @@ def _comment_row(node: Any) -> Record:
     if not isinstance(author, dict):
         raise EvidenceError("protocol")
     login, kind = author.get("login"), author.get("__typename")
-    if login == "chatgpt-codex-connector" and kind == "Bot":
-        login = "chatgpt-codex-connector[bot]"
+    if login in ("chatgpt-codex-connector", "claude") and kind == "Bot":
+        login += "[bot]"  # REST form; GraphQL Bot logins omit it (prD evidence).
     return {
         "id": identity,
         "body": node["body"],
@@ -226,12 +229,15 @@ def _comment_row(node: Any) -> Record:
 def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
     if not isinstance(pages, list) or not pages:
         raise EvidenceError("protocol")
-    rows, identities, cursors = [], set(), set()
+    rows, identities, cursors = Comments(), set(), set()
     try:
         for index, page in enumerate(pages):
             if page.get("errors"):
                 raise EvidenceError("protocol")
             pull = page["data"]["repository"]["pullRequest"]
+            if index == 0:  # Same node as the comments; absent fields mean not Dependabot.
+                who, ref = pull.get("author"), str(pull.get("headRefName"))
+                rows.dependabot = who == DEPENDABOT and ref.startswith("dependabot/")
             if pull["headRefOid"] != sha:
                 raise EvidenceError("head_moved")
             if type(pull["number"]) is not int or pull["number"] != pr:

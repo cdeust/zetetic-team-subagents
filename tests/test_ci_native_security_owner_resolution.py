@@ -16,6 +16,8 @@ import sys
 import unittest
 from unittest.mock import patch
 
+from test_ci_native_hold_lift import claude_row
+
 READER = (
     Path(__file__).resolve().parents[1]
     / "templates/ci/native/assets/scripts/ci_codex_reviews.py"
@@ -74,7 +76,7 @@ def evidence(unresolved, pages):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     with patch.object(module.runtime, "_api", return_value=pages):
-        return module.review_evidence([summary(unresolved)], SHA, REPO, PR)
+        return module.review_evidence([summary(unresolved), claude_row(SHA)], SHA, REPO, PR)
 
 
 class OwnerResolutionTests(unittest.TestCase):

@@ -268,8 +268,11 @@ def row(identity, body, **fields):
 
 class SecurityReceiptTests(unittest.TestCase):
     def evidence(self, rows, sha=VIZ_SHA):
+        # Owner rule 2026-10-29: a mergeable head also carries Claude's verdict.
+        from test_ci_native_hold_lift import claude_row
+
         module = reader()
-        comments = sys.modules["ci_codex_review_comments"]
+        runtime = sys.modules["ci_codex_review_runtime"]
 
         def commits(endpoint, **_):
             # The repository's commits API: a receipt prefix resolves to its one known commit.
@@ -279,8 +282,8 @@ class SecurityReceiptTests(unittest.TestCase):
                 raise sys.modules["ci_codex_review_runtime"].APIError("not_found")
             return {"sha": found.pop()}
 
-        with patch.object(comments, "_api", side_effect=commits):
-            return module.review_evidence(rows, sha, REPO, PR)
+        with patch.object(runtime, "_api", side_effect=commits):
+            return module.review_evidence([*rows, claude_row(sha)], sha, REPO, PR)
 
     def assert_outcome(self, result, state, reason):
         self.assertEqual((result["state"], result["reason"]), (state, reason))
