@@ -278,7 +278,7 @@
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "29ab4a68e344fa6dcc5d38ac02ef851c6e5c5e415e5efb50d13c8b35f08658e9",
+    "scripts/ci_codex_review_comments.py": "5b2a3e73a5aa7a29e51a89c348123fca87a0ba35e27e067020a3e39fe1675f9b",
     "scripts/tests/codex_resume_fixtures.py": "3259d5d6049f9a72e3e1adc4f72e7021a72c67c82a1fae842f6b8e4242f58ad3",
     "scripts/tests/test_ci_codex_review_event.py": "4f4fb694130571e4d570280c87becc8ad07ae02d11dcee1c90aaed35fc758c35",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
@@ -298,7 +298,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "6ccfabfb9a75500e5394fadbd6badc8125302f50b0bbf2d2bd372475303a7c56",
+      "sha256": "c4d22bf3516c66ae0eb68d621cee00c69c4cd84031c454b6a0a292f645dcee8f",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
