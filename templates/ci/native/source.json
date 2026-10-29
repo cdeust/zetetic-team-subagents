@@ -104,6 +104,15 @@
       ],
       "reason": "Preserve fixed not_found, forbidden, rate_limited or unknown transport category while str(error) remains api. Actual gh REST404 response includes status; --paginate --slurp wraps it in one array element. Never classify raw stderr or expose response bodies."
     },
+    "security-receipt-proof": {
+      "sources": [
+        "https://github.com/cdeust/cortex-viz/pull/213#issuecomment-6491350304",
+        "https://github.com/cdeust/Cortex/pull/829#issuecomment-6491478435",
+        "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#issuecomment-6491660443",
+        "https://learn.chatgpt.com/docs/security/security-review"
+      ],
+      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '· _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
+    },
     "proof-first-discovery": {
       "source": "https://github.com/cdeust/Cortex/issues/comments/6459888424",
       "reason": "Authenticate current-head GraphQL summaries before REST run/attempt discovery. Incomplete reviews and successful-review unresolved waits perform no REST work. Truncated gate contexts cannot veto an authorized readiness repair. Only known per-PR404 is isolated; quota/unknown transport and initial listing failures stop the scan."
@@ -177,9 +186,10 @@
       "adaptation": [
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "security-receipt-proof"
       ],
-      "sha256": "76f0d79a4c2127ef43a2b0dc4523f21d3dc17cd1bb000d68ac446d8f96245d02"
+      "sha256": "60908be8ffc229db41db8f8e09cf8bdddb5460402f6947581d9c330b87f8aaf3"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -203,7 +213,7 @@
   "authored_assets": {
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "a416d2dbda7d18f10f92809fd66c09bbc14e2deb2dc518579aa21ed584c14145",
+    "scripts/ci_codex_review_comments.py": "16d13d662bad85c0a6860ad3a5cbf995eab75b4fa4b37386679c6493d4b72076",
     "scripts/tests/codex_resume_fixtures.py": "c1d6fec17d416696db4429cc948de981c7c0d147cf5910f9a0a81f97fcfd0a4b",
     "scripts/tests/test_ci_codex_review_event.py": "cdd6794e8714d67a069ef69a559518971e629a77d9fbdc4b91f5c9201f665761",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
@@ -222,12 +232,13 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "f50f96d2f88154ce8ea70fdb4a410623ca845571a934867007f68afa927c28ce",
+      "sha256": "055044ee85311bd182d2d1cb420f2faa5df26b1bc4eb3412d1ccb7849b11271c",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
-        "structured-api-errors"
+        "structured-api-errors",
+        "security-receipt-proof"
       ]
     },
     "merge": {
