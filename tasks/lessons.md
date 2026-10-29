@@ -26,3 +26,5 @@
   Never publish raw GitHub OIDC/JWT bearer values as proof artifacts; use
   authoritative run-file provenance when available. A locally verified signature
   does not make publishing the signed bearer token acceptable.
+
+- FIX request idempotency must not depend on a native summary existing: CI can fail before any review is posted. Branch on request kind before reading summary ordering metadata; only validated security-review recovery uses that ordering. Regression: test_fix_receipt_without_native_summary_is_idempotent.

@@ -8,6 +8,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from codex_resume_fixtures import (
@@ -163,7 +164,7 @@ def invoke(server, name="issue_comment", payload=None, expected=797):
     with (
         patch.dict(os.environ, {"EXPECTED_PR": str(expected)}),
         patch.object(target.source, "_api", side_effect=server),
-        patch.object(target.subprocess, "run") as post,
+        patch.object(target.subprocess, "run", return_value=SimpleNamespace(stdout='{"id":91}')) as post,
     ):
         result = target.coordinate(
             name, event(name) if payload is None else payload, REPO
@@ -178,7 +179,7 @@ def invoke_resume(server, trigger):
         patch.dict(os.environ, {"EXPECTED_PR": "797"}),
         patch.object(target.source, "_api", side_effect=server),
         patch.object(runtime, "_api", side_effect=server),
-        patch.object(target.subprocess, "run") as post,
+        patch.object(target.subprocess, "run", return_value=SimpleNamespace(stdout='{"id":91}')) as post,
     ):
         result = target.resume(REPO, trigger)
     return result, post.call_args_list

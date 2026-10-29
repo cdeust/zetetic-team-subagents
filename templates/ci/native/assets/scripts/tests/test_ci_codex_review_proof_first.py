@@ -53,12 +53,13 @@ class ProofFirstTests(unittest.TestCase):
             self.assertEqual(json.loads(result[1]), [])
             self.assertFalse(any(path.startswith("repos/") for path, _ in server.calls))
 
-    def test_successful_review_with_unresolved_proof_uses_no_rest(self):
+    def test_unresolved_current_proof_queues_native_fix_without_posting(self):
         server = nullable.ReconciliationTests().server()
         server.data["threads"] = nullable.threads(resolved=False)
         result = self.invoke(server)
-        self.assertEqual(json.loads(result[1]), [])
-        self.assertFalse(any(path.startswith("repos/") for path, _ in server.calls))
+        self.assertEqual(json.loads(result[1]), [dict(number=797, sha=SHA)])
+        self.assertEqual(result[4], [])
+        self.assertIn((PULL, False), server.calls)
 
     def test_unresolved_proof_still_allows_actual_failed_test_readiness_repair(self):
         server = nullable.ReconciliationTests().server()
@@ -96,11 +97,11 @@ class ProofFirstTests(unittest.TestCase):
         self.assertEqual(plan["action"], expected_action)
         result = self.invoke(server)
         self.assertEqual(result[0], 0, result[2])
-        expected = [] if expected_action == "none" else [dict(number=797, sha=SHA)]
+        expected = [dict(number=797, sha=SHA)]  # Resumption route or positive-finding fix.
         self.assertEqual(json.loads(result[1]), expected)
         self.assertEqual(result[4], [])
         if expected_action == "none":
-            self.assertFalse(any(path.startswith("repos/") for path, _ in server.calls))
+            self.assertIn((PULL, False), server.calls)  # No merge; recover through a fix task.
 
     def test_known_missing_pr_does_not_starve_next_pr(self):
         server = Server()

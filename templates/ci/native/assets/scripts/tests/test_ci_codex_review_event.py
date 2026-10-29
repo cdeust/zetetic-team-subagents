@@ -57,7 +57,7 @@ class CodexEventTests(unittest.TestCase):
         )
         self.assertFalse(post[0].kwargs.get("shell", False))
 
-    def test_complete_findings_resume_waiting_review(self):
+    def test_complete_findings_request_fix_instead_of_repeating_readiness(self):
         server = Server()
         server.data["jobs"] = waiting_jobs()
         for job in server.data["jobs"]:
@@ -66,7 +66,7 @@ class CodexEventTests(unittest.TestCase):
         data["code_review"].update(has_any_findings=True, has_unresolved_findings=True)
         server.data["comments"] = [comment(data)]
         result, post = invoke(server)
-        self.assertEqual(result, {"action": "review", "job_id": 20})
+        self.assertEqual(result, {"action": "request", "kind": "fix", "comment_id": 91})
         self.assertEqual(len(post), 1)
 
     def test_forged_event_actor_is_ignored_before_api(self):

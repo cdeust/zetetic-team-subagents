@@ -165,8 +165,9 @@ class PartialAttempts(unittest.TestCase):
         current[0]["conclusion"] = "failure"
         attempts(server, [server.data["jobs"], current])
         result, post = invoke(server)
-        self.assertEqual(result, {"action": "none"})
-        self.assertEqual(post, [])
+        self.assertEqual(result, {"action": "request", "kind": "fix", "comment_id": 91})
+        self.assertEqual(len(post), 1)
+        self.assertIn("/issues/797/comments", post[0].args[0][-3])
 
     def test_old_unrelated_failure_cannot_disappear_from_effective_graph(self):
         server = Server()

@@ -141,6 +141,15 @@
         "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/git-config.ts"
       ],
       "reason": "Owner-authored requests inherit pinned tag workspace edit approval instead of overriding acceptEdits with auto; explicitly allow test and git tools. Reject fork or default-branch PR targets before running the action. Preserve action App git authentication, owner-only comment context, native read-only review and merge gates."
+    },
+    "automatic-security-review-recovery": {
+      "sources": [
+        "https://learn.chatgpt.com/docs/security/security-review",
+        "https://docs.github.com/en/rest/issues/comments#create-an-issue-comment",
+        "https://github.com/cdeust/ci-autonome/blob/f9d4591/docs/superpowers/specs/2026-10-28-ci-autonome-design.md",
+        "https://learn.chatgpt.com/docs/third-party/github#act-on-review-findings"
+      ],
+      "reason": "Request native security review for an authenticated completed unknown verdict, and native fix tasks for positive current-head findings or authenticated failed category jobs. Durable actor/editor-checked head/kind receipts and existing per-PR concurrency deduplicate requests. Keep null/findings fail-closed and exact-head merge authorization unchanged. Inventory-scoped once/dry-run controller shares the actual coordinator."
     }
   },
   "adapted_assets": {
@@ -186,17 +195,19 @@
       "adaptation": [
         "summary-editor-authentication",
         "proof-first-discovery",
-        "rerun-merge-job-identity"
+        "rerun-merge-job-identity",
+        "automatic-security-review-recovery"
       ],
-      "sha256": "5c895dff173ee50eb0adc5cfc75e5eba359e917708c27e551d427b37e94c7fee"
+      "sha256": "038f5db4911b299d79e3db969e54ccde67c5ec99ec210f84e06d716f7c76ab13"
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-      "sha256": "3f6c9d7a58570ce410d794367ac9dfcfddfe68413d539c0e8a20e130cf59a1f6",
+      "sha256": "ea7d907e1b4f6c610ca7c78d12f8dabf2532565e386271003eefaa965ebf9f9d",
       "adaptation": [
         "scheduled-reconciliation",
         "reconciliation-checks-read",
-        "bounded-completion-jobs"
+        "bounded-completion-jobs",
+        "automatic-security-review-recovery"
       ]
     }
   },
@@ -205,18 +216,22 @@
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
     "scripts/ci_codex_review_comments.py": "a416d2dbda7d18f10f92809fd66c09bbc14e2deb2dc518579aa21ed584c14145",
     "scripts/tests/codex_resume_fixtures.py": "c1d6fec17d416696db4429cc948de981c7c0d147cf5910f9a0a81f97fcfd0a4b",
-    "scripts/tests/test_ci_codex_review_event.py": "cdd6794e8714d67a069ef69a559518971e629a77d9fbdc4b91f5c9201f665761",
-    "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
+    "scripts/tests/test_ci_codex_review_event.py": "8568151679805e818bbe5062a9d96bf1b1daccac1f27d224390a4a191c44aba1",
+    "scripts/tests/test_ci_codex_review_event_attempts.py": "a52b374013b7eccb6cfcc7b34be192a4a2b00bb106199c22cbc621a900cde724",
     "scripts/tests/test_ci_codex_review_event_cli.py": "046e5dc369508d0b4641148b4e6dbf20bba8690af66247b601286cbf440c9f43",
-    "scripts/tests/test_ci_codex_review_event_fixtures.py": "1eafc10be2db306f5a65fb27d74bdc27429c41b038abff743c7dfbfd14639a11",
-    "scripts/tests/test_ci_codex_review_reconcile.py": "b4214c4fbcb3d719af0e7deb632f62693e976fea9d0fb6633e6656fdc17ca49a",
+    "scripts/tests/test_ci_codex_review_event_fixtures.py": "3967f8b4131375d232470bd954baf955054e404031e25b58c5c05d6b2366a454",
+    "scripts/tests/test_ci_codex_review_reconcile.py": "899a46410676a2e173c8bf8d33439a1b1defb1da0fa176ecd1fb26a9c676fb8f",
     "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
-    "scripts/ci_codex_review_reconcile.py": "53acd5512f5b49c3ce42fb36b496a9e5c09ca74afa9604878a2d4c2fbb07d58e",
-    "scripts/tests/test_ci_codex_review_schedule.py": "5a76b931e09946cd1cc03d6a0f23a5ebfada121a4b5767833fdbd2eaa2321967",
+    "scripts/ci_codex_review_reconcile.py": "f128e2a7c74f0ef8ed7ac2ed9609882f49d6e18ec028d44f6ea74150e7567459",
+    "scripts/tests/test_ci_codex_review_schedule.py": "bdf03a0960750dc73badf9c8ab009212ca468c48e9654a0e7d9ad421e6e642ed",
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
-    "scripts/tests/test_ci_codex_review_proof_first.py": "1b046a129447084575e2260b7eac4175342bfdd4fa9ec339d81fc3fb48348403",
-    "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6",
-    "scripts/tests/test_ci_workflow_authorization.py": "c93a4fe5ad8f9b9f57fe17a058d00f1a7723349af648a87a6589b260bb685cf1"
+    "scripts/tests/test_ci_codex_review_proof_first.py": "d15b0a980fb3afa58a320aff162837f70dbc0999af788eb70397552b912438d4",
+    "scripts/tests/test_ci_codex_review_gate_groups.py": "87f7d2b11429d7255eba8ab69415e5542d292890c56fd141fa8ab8280f108863",
+    "scripts/tests/test_ci_workflow_authorization.py": "c93a4fe5ad8f9b9f57fe17a058d00f1a7723349af648a87a6589b260bb685cf1",
+    "scripts/ci_codex_review_request.py": "390473bab977362a820dfac4da039aadd83859d0be2593182108bffae6f1cf14",
+    "scripts/ci_codex_review_controller.py": "8bfdad37ab17fb720aa356bb7c322d407aa6e6c9c23e35c6a311162639e2ab04",
+    "scripts/tests/test_ci_codex_review_recovery.py": "84ca65caca4a871ed7052a400c8ec61f85c811ff56355ac29fbdfb1397ee67c6",
+    "scripts/tests/test_ci_codex_review_controller.py": "843bfe8567bd4a9ea1e150d19018ab7fe247cff302230f7272c5508a31044dd7"
   },
   "adapted_jobs": {
     "review": {

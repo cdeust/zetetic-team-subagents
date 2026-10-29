@@ -80,7 +80,8 @@ class GateGroupTests(unittest.TestCase):
         server = Server()
         server.data["jobs"][1]["conclusion"] = "failure"
         result = self.invoke(server)
-        self.assertEqual(json.loads(result[1]), [])
+        self.assertEqual(json.loads(result[1]), [dict(number=797, sha=SHA)])
+        self.assertEqual(result[4], [])
         self.assertTrue(any("/attempts/" in path for path, _ in server.calls))
 
     def test_red_prerequisite_never_vetoes_readiness_or_partial_rollup(self):

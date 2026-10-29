@@ -39,8 +39,8 @@ def test_native_keeps_common_jobs_and_separates_both_reviewers(tmp_path):
     for name in ("contract", *renderer.CATEGORIES, "tag"):
         actual = direct["jobs"][name]
         if name == "contract":
-            omitted = "Test embedded workflow authorization"
-            steps = [step for step in actual["steps"] if step.get("name") != omitted]
+            omitted = {"Test embedded workflow authorization", "Test native review recovery and resumption"}
+            steps = [step for step in actual["steps"] if step.get("name") not in omitted]
             actual = {**actual, "steps": steps}
         assert actual == legacy["jobs"][name]
     review = str(direct["jobs"]["review"])
@@ -251,9 +251,29 @@ def original_claude_owner(delivered):
     return re.sub(rb'            --append-system-prompt "[^\n]+\n', b"", delivered)
 
 
+def original_recovery_event(delivered):
+    # Inverse of source.json adaptation "automatic-security-review-recovery".
+    return delivered.replace(
+        b"import ci_codex_review_request as requests  # noqa: E402\n", b"",
+    ).replace(
+        b"def resume(repo: str, trigger: Record, *, dry_run=False) -> Record:",
+        b"def resume(repo: str, trigger: Record) -> Record:",
+    ).replace(
+        b"    proof = _proof(repo, number, run, jobs)\n"
+        b"    if requests.needs_request(proof, jobs):\n"
+        b"        return requests.recover(dict(repository=repo, number=number, sha=sha), _jobs, dry_run=dry_run)\n"
+        b"    plan = _plan(run, jobs, proof, sha)",
+        b"    plan = _plan(run, jobs, _proof(repo, number, run, jobs), sha)",
+    ).replace(
+        b"    if dry_run:\n        return {**plan, \"dry_run\": True}\n", b"",
+    )
+
+
 def original_asset(delivered, relative):
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
+            b"      issues: write\n      actions: write", b"      issues: read\n      actions: write",
+        ).replace(
             b"    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.\n",
             b"",
         ).split(b"\n  reconcile-identify:\n", 1)[0]
@@ -265,7 +285,7 @@ def original_asset(delivered, relative):
     if relative == "scripts/ci_codex_reviews.py":
         return original_security_reader(delivered)
     if relative == "scripts/ci_codex_review_event.py":
-        delivered = original_event_jobs(delivered).replace(
+        delivered = original_event_jobs(original_recovery_event(delivered)).replace(
             b'    return head_proof(repo, number, run["head_sha"])\n\n\n'
             b"def head_proof(repo: str, number: int, sha: str) -> Record:",
             b'    sha = run["head_sha"]',

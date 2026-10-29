@@ -82,8 +82,9 @@ class ReconciliationTests(unittest.TestCase):
             server = self.server()
             server.data["threads"] = packet
             result, post = invoke_resume(server, self.trigger())
-            self.assertEqual(result, {"action": "none"})
-            self.assertEqual(post, [])
+            self.assertEqual(result, dict(action="request", kind="fix", comment_id=91))
+            self.assertEqual(len(post), 1)
+            self.assertNotIn("/rerun", " ".join(post[0].args[0]))
 
     def test_stale_head_or_unrelated_failure_prevents_reconciliation(self):
         server = self.server()
@@ -92,9 +93,10 @@ class ReconciliationTests(unittest.TestCase):
         )
         server = self.server()
         server.data["jobs"][0]["conclusion"] = "failure"
-        self.assertEqual(
-            invoke_resume(server, self.trigger()), ({"action": "none"}, [])
-        )
+        result, post = invoke_resume(server, self.trigger())
+        self.assertEqual(result, dict(action="request", kind="fix", comment_id=91))
+        self.assertEqual(len(post), 1)
+        self.assertNotIn("/rerun", " ".join(post[0].args[0]))
 
     def test_resolution_is_reread_before_any_rerun_request(self):
         server = self.server()

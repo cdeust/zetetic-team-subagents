@@ -20,6 +20,7 @@ from typing import Any
 # The wrapper checks out trusted main; isolated Python may still load these files.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_event_source as source  # noqa: E402
+import ci_codex_review_request as requests  # noqa: E402
 from ci_codex_reviews import EvidenceError, REPO_PATTERN, _json, review_evidence  # noqa: E402
 from ci_codex_reviews import summary_comments  # noqa: E402
 from ci_codex_review_resume import resumption_plan  # noqa: E402
@@ -163,7 +164,7 @@ def coordinate(name: str, event: Record, repo: str) -> Record:
     return resume(repo, trigger)
 
 
-def resume(repo: str, trigger: Record) -> Record:
+def resume(repo: str, trigger: Record, *, dry_run=False) -> Record:
     """Rerun the waiting gate for a server-derived {number, sha, run_id} trigger."""
     number = trigger["number"]
     if number != _expected_pr():
@@ -178,7 +179,10 @@ def resume(repo: str, trigger: Record) -> Record:
     ):
         return NONE.copy()
     jobs = _jobs(repo, run)
-    plan = _plan(run, jobs, _proof(repo, number, run, jobs), sha)
+    proof = _proof(repo, number, run, jobs)
+    if requests.needs_request(proof, jobs):
+        return requests.recover(dict(repository=repo, number=number, sha=sha), _jobs, dry_run=dry_run)
+    plan = _plan(run, jobs, proof, sha)
     if plan["action"] == "none":
         return plan
     current = source.latest(repo, sha, number)
@@ -190,6 +194,8 @@ def resume(repo: str, trigger: Record) -> Record:
     fresh = _plan(current, fresh_jobs, _proof(repo, number, current, fresh_jobs), sha)
     if fresh != plan or source.live_pr(repo, number, sha) is None:
         return NONE.copy()
+    if dry_run:
+        return {**plan, "dry_run": True}
     _post(repo, plan["job_id"])
     return plan
 

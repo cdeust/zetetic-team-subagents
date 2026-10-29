@@ -132,3 +132,14 @@ Review: [source evidence](../docs/verification/native-rerun-merge-identity-20261
 - [x] Export stdlib tests of actual generated resolver and invoke before configured unit jobs.
 - [x] Verify combined 117 source contracts + 33 subtests, 113 generated consumer tests, mutation RED and actionlint.
 - [ ] Hand exact local source evidence to root for publication; no external writes here.
+
+## Automatic native review recovery, 2026-10-29
+
+- [x] Verify actual native protocol, official triggers, and approved owner design.
+- [x] Reproduce stalled unknown security and missing native FIX behavior.
+- [x] Add authenticated head/kind request dedup, fresh evidence, fixed task prompts, and automatic event/schedule routing.
+- [x] Deliver once/dry-run inventory controller and explicit consumer contract execution.
+- [x] Verify 125 canonical native contracts and rendered consumer checks.
+- [ ] Root review/publication, hosted Bot acknowledgement, native correction/new-head CI, and registered cleanup.
+
+Review: docs/verification/native-review-recovery-20261029.md.

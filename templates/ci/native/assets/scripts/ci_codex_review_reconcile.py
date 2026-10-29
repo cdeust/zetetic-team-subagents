@@ -168,7 +168,7 @@ def _rollup_wait(rollup):
             raise EvidenceError("protocol")
         if contexts["pageInfo"]["hasNextPage"]:
             return True  # Incomplete optimization cannot veto actual full policy.
-        return _gate_wait(_group_checks(checks))
+        return _gate_wait(_group_checks(checks)) or events.requests.failure_hint(contexts)
     except (KeyError, TypeError, AttributeError) as exc:
         raise EvidenceError("protocol") from exc
 
@@ -202,12 +202,20 @@ def _candidate(repo, row):
     proof = events.head_proof(repo, number, sha)
     if proof.get("reason") == "api":
         raise APIError(proof.get("api_category", "unknown"))
-    if not _proof_can_resume(row, proof):
+    if proof.get("reason") in ("protocol", "editor", "arguments"):
+        return None
+    contexts = row["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]
+    if not (events.requests.needs_request(proof) or events.requests.failure_hint(contexts)
+            or _proof_can_resume(row, proof)):
         return None
     run = events.source.latest(repo, sha, number)
     if run is None:
         return None
     jobs = events._jobs(repo, run)
+    if events.requests.needs_request(proof, jobs):
+        return {"number": number, "sha": sha}
+    if not _proof_can_resume(row, proof):
+        return None
     plan = events._plan(run, jobs, proof, sha)
     return {"number": number, "sha": sha} if plan["action"] != "none" else None
 

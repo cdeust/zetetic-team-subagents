@@ -554,6 +554,9 @@ jobs:
       - name: Test embedded workflow authorization
         run: python3 -m unittest discover -s scripts/tests -p test_ci_workflow_authorization.py -v
 
+      - name: Test native review recovery and resumption
+        run: python3 -B -m unittest discover -s scripts/tests -p 'test_ci_codex_review_*.py' -v
+
       - name: Validate ci.json
         id: commands
         run: |

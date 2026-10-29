@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import tempfile
 import unittest
@@ -113,7 +114,7 @@ class ScheduledReconciliationTests(unittest.TestCase):
                 patch.object(
                     sys.modules["ci_codex_review_runtime"], "_api", side_effect=request
                 ),
-                patch.object(target.events.subprocess, "run") as post,
+                patch.object(target.events.subprocess, "run", return_value=SimpleNamespace(stdout='{"id":91}')) as post,
                 contextlib.redirect_stdout(out),
                 contextlib.redirect_stderr(err),
             ):
@@ -148,7 +149,8 @@ class ScheduledReconciliationTests(unittest.TestCase):
                 row.update(id=99, name="unrelated", conclusion="failure")
                 server.data["jobs"].append(row)
             result = self.invoke(server)
-            self.assertEqual(json.loads(result[1]), [])
+            expected = [dict(number=797, sha=SHA)] if kind == "failed_prerequisite" else []
+            self.assertEqual(json.loads(result[1]), expected)
             self.assertEqual(result[4], [])
 
     def test_drafts_forks_holds_and_stale_heads_never_queue(self):
@@ -280,7 +282,7 @@ class ScheduledReconciliationTests(unittest.TestCase):
         result = self.invoke(server)
         self.assertEqual(json.loads(result[1]), [dict(number=797, sha=SHA)])
         worker = self.invoke(server, flags=["--pr", "797", "--sha", SHA])
-        self.assertEqual(json.loads(worker[1]), dict(action="review", job_id=20))
+        self.assertEqual(json.loads(worker[1]), dict(action="request", kind="fix", comment_id=91))
 
     def test_discovery_does_not_repeat_live_pr_read(self):
         server = Server()

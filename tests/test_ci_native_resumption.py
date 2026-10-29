@@ -15,6 +15,8 @@ from scripts.lib import render_ci as renderer
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "templates/ci/native/assets"
 CONTRACTS = (
+    "test_ci_codex_review_recovery.py",
+    "test_ci_codex_review_controller.py",
     "test_ci_codex_review_resume.py",
     "test_ci_codex_review_event.py",
     "test_ci_codex_review_event_attempts.py",
