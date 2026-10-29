@@ -1,0 +1,12 @@
+A3 plain                         runs: bash=[] zsh=[] czsh=[]   cmd='y=comm; git -c alias.c=${y}it c -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+A3 pre                           runs: bash=[] zsh=[] czsh=[]   cmd=": <<'Q'\nit's\nQ\ny=comm; git -c alias.c=${y}it c -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command and git is still in it
+A3 suf                           runs: bash=[] zsh=[] czsh=[]   cmd="y=comm; git -c alias.c=${y}it c -m x\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command and git is still in it
+A3 ansi                          runs: bash=[] zsh=[] czsh=[]   cmd="echo $'\\''\ny=comm; git -c alias.c=${y}it c -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command and git is still in it

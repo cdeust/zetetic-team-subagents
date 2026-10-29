@@ -184,7 +184,24 @@ def artifacts(root=ROOT, native_review=False):
     return result
 
 
-def prepare_files(target, root=ROOT, native_review=False):
+def native_asset(path: Path, no_schedule: bool) -> bytes:
+    data = path.read_bytes()
+    if no_schedule and path.name == "Codex.yml":
+        # Source: native/assets/.github/workflows/Codex.yml fallback trigger.
+        # Keep dispatch discovery and both authenticated completion event paths.
+        schedule = (
+            "  # Supported fallback: review-thread resolution has no Actions event.\n"
+            "  # GitHub documents five minutes as the shortest schedule interval.\n"
+            "  schedule:\n"
+            '    - cron: "*/5 * * * *"\n'
+        )
+        data = replace_exact(data.decode(), schedule, "").encode()
+    return data
+
+
+def prepare_files(target, root=ROOT, native_review=False, no_schedule=False):
+    if no_schedule and not native_review:
+        raise ValueError("--no-schedule requires --native-review")
     # Resolve/validate every source before the first destination write.
     files = {
         target / ".github/workflows" / name: body.encode()
@@ -193,7 +210,7 @@ def prepare_files(target, root=ROOT, native_review=False):
     if native_review:
         assets = root / "templates/ci/native/assets"
         files.update(
-            {target / name: (assets / name).read_bytes() for name in NATIVE_ASSETS}
+            {target / name: native_asset(assets / name, no_schedule) for name in NATIVE_ASSETS}
         )
     example = (root / "templates/ci/ci.example.json").read_bytes()
     if not (target / "ci.json").exists():
@@ -257,10 +274,20 @@ def main():
         action="store_true",
         help="install native Codex and official Claude review workflows",
     )
+    parser.add_argument(
+        "--no-schedule",
+        action="store_true",
+        help="omit native Codex polling; retain event and manual completion",
+    )
     args = parser.parse_args()
+    if args.no_schedule and not args.native_review:
+        parser.error("--no-schedule requires --native-review")
     if not args.target.is_dir():
         parser.error("target must be an existing repository directory")
-    deliver(prepare_files(args.target, native_review=args.native_review), args.dry_run)
+    files = prepare_files(
+        args.target, native_review=args.native_review, no_schedule=args.no_schedule
+    )
+    deliver(files, args.dry_run)
 
 
 if __name__ == "__main__":

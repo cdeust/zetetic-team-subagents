@@ -1,0 +1,7 @@
+ok                     A1 a[1<<2] terminated          main=['commit']         r2=[]                 head=REFUSE             bash=['commit']         zsh=[]                 cmd='a[1<<2]=x;\ngit commit -m hi;\n2]=x'
+ok                     B1 <<$(x) delim                main=['commit']         r2=[]                 head=['commit']         bash=['commit']         zsh=['commit']         cmd='cat <<$(echo);\n$(echo)\ngit commit -m x\n$'
+ok                     C1 ansi-c desync               main=['commit']         r2=[]                 head=['commit']         bash=['commit']         zsh=['commit']         cmd="echo $'\\' <<X ' \\';\ngit commit -m x\nX"
+ok                     C2 dq-$() desync               main=['commit']         r2=[]                 head=['commit']         bash=['commit']         zsh=[]                 cmd='echo "$(echo "<<X")";\ngit commit -m x\nX)'
+ok                     C4 dq-$() plain delim          main=['commit']         r2=[]                 head=['commit']         bash=['commit']         zsh=['commit']         cmd='echo "$(echo "<<EOF ")";\ngit commit -m x\nEOF'
+ok                     control plain commit           main=['commit']         r2=['commit']         head=['commit']         bash=['commit']         zsh=['commit']         cmd='git commit -m x'
+COUNTS {'ok': 6}

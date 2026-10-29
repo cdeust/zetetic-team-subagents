@@ -1,0 +1,36 @@
+$ bash tools/doc-count-check.sh
+doc-count-check: 37 claim instance(s) verified, 0 problem(s)
+PASSED: every documented count matches the tree.
+exit=0
+
+$ bash tools/doc-command-check.sh
+doc-command-check: 14 runnable command(s) checked across 20 document(s), 0 missing
+PASSED: every documented command resolves.
+
+$ bash tools/changelog-commit-check.sh
+changelog-commit-check: 3 feat/fix/sec/perf commit(s) since v2.45.1 checked, 0 missing.
+PASSED: every user-visible commit since v2.45.1 is represented in CHANGELOG.md.
+
+$ bash tools/deletion-gate.sh --repo . --base origin/main --head HEAD
+deletion-gate: no top-level definitions were removed — pass
+
+$ craftsmanship-checker --files (added files vs origin/main)
+Profile: standard  (files mode)
+Errors:   0  (blocking)
+Warnings: 0  (advisory — promoted to errors when profile=strict)
+PASSED: no blocking violations.
+
+$ python3 scripts/sync-gates.py --check
+Gate package matches canonical sources.
+
+$ ZETETIC_PROFILE=strict bash tools/zetetic-checker.sh --files <files changed vs origin/main, excluding tasks/>
+Profile: strict  (files mode)
+Errors:   0  (blocking)
+Warnings: 0  (informational — promoted to errors when profile=strict)
+PASSED: no blocking violations.
+
+$ ZETETIC_PROFILE=strict bash tools/zetetic-checker.sh --staged  (evidence commit)
+Profile: strict  (staged mode)
+Errors:   0  (blocking)
+Warnings: 0  (informational — promoted to errors when profile=strict)
+PASSED: no blocking violations.

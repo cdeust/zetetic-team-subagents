@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from lib.host_events import HostEventError, normalize_event
-from lib.gate_targets import git_commands, post_directories
+from lib.gate_targets import git_commands, mentions_git, post_directories
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,6 +32,17 @@ def invoke(name, event):
     return result.stdout.strip()
 
 
+def gate_git(normalized):
+    """Run the commit and push gates on every git commit or push the command holds."""
+    command = normalized['tool_input'].get('command', '')
+    for directory, verb in git_commands(command, normalized.get('cwd') or os.getcwd()):
+        # Preserve the parsed verb when dispatching legacy shell guards.
+        gated = {**normalized, 'cwd': directory, 'tool_input': {'command': f'git {verb}'}}
+        invoke('pre-commit-zetetic.sh', gated)
+        if verb == 'push':
+            invoke('pre-push-fail-before.sh', gated)
+
+
 def before(event):
     """Adapt edits once, then use the same checks for both hosts."""
     context = []
@@ -44,14 +55,7 @@ def before(event):
                 output = invoke(script, normalized)
                 context.extend([output] if output else [])
         if name == 'Bash':
-            command = normalized['tool_input'].get('command', '')
-            for directory, verb in git_commands(command, normalized.get('cwd') or os.getcwd()):
-                # Preserve the parsed verb when dispatching legacy shell guards.
-                gated = {**normalized, 'cwd': directory,
-                         'tool_input': {'command': f'git {verb}'}}
-                invoke('pre-commit-zetetic.sh', gated)
-                if verb == 'push':
-                    invoke('pre-push-fail-before.sh', gated)
+            gate_git(normalized)
         if name.startswith('mcp__codex_apps__github_'):
             normalized = {**normalized, 'tool_name': name.replace('mcp__codex_apps__github_', 'mcp__github__', 1)}
         if name == 'Bash' or name.startswith('mcp__'):
@@ -84,6 +88,7 @@ def run(event):
 
 
 def main():
+    event = None
     try:
         event = json.load(sys.stdin)
         if not isinstance(event, dict):
@@ -93,6 +98,15 @@ def main():
     except (HostEventError, OSError, ValueError) as error:
         print(f'Zetetic gates: {error}', file=sys.stderr)
         return 2
+    except Exception as error:
+        # Any other exit code lets the tool call through (Claude Code hooks:
+        # only exit 2 blocks). An unexpected failure never waves a commit on.
+        tool_input = event.get('tool_input') if isinstance(event, dict) else None
+        texts = tool_input.values() if isinstance(tool_input, dict) else ()
+        if any(isinstance(text, str) and mentions_git(text) for text in texts):
+            print(f'Zetetic gates: unexpected {type(error).__name__}: {error}', file=sys.stderr)
+            return 2
+        raise
 
 
 if __name__ == '__main__':

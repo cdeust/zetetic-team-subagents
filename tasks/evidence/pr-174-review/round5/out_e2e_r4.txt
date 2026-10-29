@@ -1,0 +1,15 @@
+Z1 plain                     main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+Z1 plain                     r4   exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+Z1 plain                     head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: bare { inside ${...}: bash and zsh end it at different braces
+Z1 wrapped                   main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+Z1 wrapped                   r4   exit=0 :: {}
+Z1 wrapped                   head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: bare { inside ${...}: bash and zsh end it at different braces
+Z2 wrapped push              main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+Z2 wrapped push              r4   exit=0 :: {}
+Z2 wrapped push              head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: bare { inside ${...}: bash and zsh end it at different braces
+Z7 plain                     main exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+Z7 plain                     r4   exit=2 :: Zetetic gates: BLOCKED: Zetetic violations in staged files. | MAGIC_NUMBER (error)    sample.py:1: DELAY = <literal> |  | Profile: strict  (staged mode) | Errors:   1  (b
+Z7 plain                     head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: case without in: zsh reads case WORD { ... }, bash does not
+Z7 wrapped                   main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+Z7 wrapped                   r4   exit=0 :: {}
+Z7 wrapped                   head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: case without in: zsh reads case WORD { ... }, bash does not

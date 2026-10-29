@@ -1,0 +1,7 @@
+tests/test_session_start_timebox.py::test_a_signal_kills_every_live_group_removes_the_scratch_dir_and_exits_zero[15]
+failed once in tests/run-all.sh on dfd7fb3 ("a section group outlived the signalled runner").
+This PR does not touch hooks/session-start.sh, hooks/lib/run_sections.py or that test
+(git diff --stat origin/main HEAD on those paths is empty).
+Reruns of tests/test_session_start_timebox.py, machine load average 156-164 at the time:
+  on dfd7fb3:      1 failed / 1 failed / 15 passed
+  on origin/main:  15 passed / 1 failed / 1 failed / 15 passed

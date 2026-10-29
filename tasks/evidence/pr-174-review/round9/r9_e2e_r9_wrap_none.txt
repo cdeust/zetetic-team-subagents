@@ -1,0 +1,44 @@
+I2d ${x}t                          WRAP=none runs: bash=commit zsh=commit czsh=commit  len=42
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N1 $(printf gi)t                   WRAP=none runs: bash=commit zsh=commit czsh=commit  len=44
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N2 `echo gi`t                      WRAP=none runs: bash=commit zsh=commit czsh=commit  len=41
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N3 exec ${x}t                      WRAP=none runs: bash=commit zsh=commit czsh=commit  len=47
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N4 && ${x}t                        WRAP=none runs: bash=commit zsh=commit czsh=commit  len=50
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N5 then ${x}t                      WRAP=none runs: bash=commit zsh=commit czsh=commit  len=60
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N6 A=1 ${x}t                       WRAP=none runs: bash=commit zsh=commit czsh=commit  len=46
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N7 env ${x}t                       WRAP=none runs: bash=commit zsh=commit czsh=commit  len=59
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N8 sh -c                           WRAP=none runs: bash=commit zsh=commit czsh=commit  len=50
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N10 {gi,}t                         WRAP=none runs: bash=- zsh=- czsh=-  len=37
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N11 xargs @t                       WRAP=none runs: bash=- zsh=- czsh=-  len=53
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N12 suffix data                    WRAP=none runs: bash=commit zsh=commit czsh=commit  len=42
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N13 push                           WRAP=none runs: bash=push zsh=push czsh=push  len=35
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N14 >f ${x}t                       WRAP=none runs: bash=commit zsh=commit czsh=commit  len=53
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N15 case a) ${x}t                  WRAP=none runs: bash=commit zsh=commit czsh=commit  len=62
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N16 noglob ${x}t                   WRAP=none runs: bash=commit zsh=- czsh=-  len=82
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+N18 <(${x}t)                       WRAP=none runs: bash=commit zsh=commit czsh=commit  len=49
+    dirty main=2:REFUSED r6=0:pass r7=2:REFUSED
+C5 echo $(date) $x                 WRAP=none runs: bash=- zsh=- czsh=-  len=53
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+C1 echo $x                         WRAP=none runs: bash=- zsh=- czsh=-  len=31
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+C2 gh body $(cat)                  WRAP=none runs: bash=- zsh=- czsh=-  len=85
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+C3 for *.py                        WRAP=none runs: bash=- zsh=- czsh=-  len=52
+    dirty main=2:REFUSED r6=0:pass r7=0:pass
+C4 x=$(date)                       WRAP=none runs: bash=- zsh=- czsh=-  len=51
+    dirty main=2:REFUSED r6=0:pass r7=0:pass

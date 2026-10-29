@@ -1,0 +1,4 @@
+R1 cp built git to ./x             WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=83
+    dirty main=0:pass r6=0:pass r7=0:pass
+R2 PATH and a static name          WRAP=ansi runs: bash=commit zsh=commit czsh=commit  len=112
+    dirty main=0:pass r6=0:pass r7=0:pass

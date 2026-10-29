@@ -1,0 +1,30 @@
+P1 plain                         runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd='cat =(echo a)#x; git commit -m x'
+    main exit=0 :: {}
+    head exit=0 :: {}
+P1 wrapped                       runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncat =(echo a)#x; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P2 wrapped                       runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\n[[ a == (a|b)#x ]]; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P3 wrapped                       runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ncase a in (a)#x) echo IN;; esac; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P5 wrapped push                  runs: bash=[] zsh=[('consumer', 'push')] czsh=[('consumer', 'push')]   cmd=": <<'Q'\nit's\nQ\ncat =(echo a)#x; git push"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P1 suf-wrapped                   runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="cat =(echo a)#x; git commit -m x\n: <<'Q'\nit's\nQ"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+P1 ansi-wrapped                  runs: bash=[] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="echo $'\\''\ncat =(echo a)#x; git commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I1 wrapped                       runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ngit status; x=git; y=comm; $x ${y}it -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+I4 wrapped                       runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd=": <<'Q'\nit's\nQ\ngit status; $(printf gi)t $(printf com)mit -m m"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=0 :: {}
+C7 cost                          runs: bash=[('consumer', 'commit')] zsh=[('consumer', 'commit')] czsh=[('consumer', 'commit')]   cmd="cat <<'EOF'\ndon't\nEOF\ngit commit -m x"
+    main exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation
+    head exit=2 :: Zetetic gates: Cannot inspect shell quoting before git validation: origin/main refused this command
