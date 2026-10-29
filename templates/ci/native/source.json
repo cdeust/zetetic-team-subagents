@@ -134,6 +134,13 @@
     "portable-workflow-authorization-contract": {
       "source": "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#discussion_r4408715493",
       "reason": "Export committed stdlib tests that execute the actual generated post-merge resolver, and run them in the native contract job before configured unit commands. Production authorization logic is unchanged."
+    },
+    "owner-fix-permissions": {
+      "sources": [
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/modes/tag/index.ts",
+        "https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/github/operations/git-config.ts"
+      ],
+      "reason": "Owner-authored requests inherit pinned tag workspace edit approval instead of overriding acceptEdits with auto; explicitly allow test and git tools. Reject fork or default-branch PR targets before running the action. Preserve action App git authentication, owner-only comment context, native read-only review and merge gates."
     }
   },
   "adapted_assets": {
@@ -148,10 +155,11 @@
     },
     ".github/workflows/claude.yml": {
       "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
-      "sha256": "20f97602745660cf3f0daccd00fa23499aa57dfd6baee7a6f1c6f51b1380f810",
+      "sha256": "dc4b350b28296c8aa6a0da9f3ebb34ef42daf18440e02921d436aec8c67b5738",
       "adaptation": [
         "strict-mcp-config",
-        "owner-model-selection"
+        "owner-model-selection",
+        "owner-fix-permissions"
       ]
     },
     "scripts/ci_codex_review_runtime.py": {

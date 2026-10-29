@@ -919,7 +919,7 @@ jobs:
   # The bot (design, "The bot step"): runs whether install passed or failed,
   # on same-repo, non-draft pull requests. Dependabot remains out of scope.
   # Claude commits skip duplicate review, but failing tests still need repair.
-  # Workflow changes retain the bootstrap skip (design decision 2).
+  # Owner-authored workflow PRs are repairable; other workflow PRs keep bootstrap isolation.
   # Cancellation stops mutation; ordinary failed tests still reach repair.
   review:
     needs: [unit, regression, e2e, environment, install]
@@ -954,8 +954,16 @@ jobs:
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           TEST_RESULTS: ${{ toJSON(needs) }}
         run: |
+          if [ -z "$HEAD_REF" ] || [ "$HEAD_REF" = "$DEFAULT_BRANCH" ]; then
+            echo "::error::Automatic fixes require a non-default PR head branch."
+            exit 1
+          fi
           if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
             echo "::error::The branch advanced after this run started; use its new run."
             exit 1
@@ -964,7 +972,8 @@ jobs:
           author="$(git log -1 --format=%ae "$HEAD_SHA")"
           review=true
           fix=true
-          if grep -qx '.github/workflows/pipeline.yml' <<<"$changed"; then
+          if grep -qx '.github/workflows/pipeline.yml' <<<"$changed" \
+            && { [ -z "$PR_AUTHOR" ] || [ "$PR_AUTHOR" != "$REPO_OWNER" ]; }; then
             review=false
             fix=false
             echo "## Review: bootstrap workflow change, bot steps skipped" >> "$GITHUB_STEP_SUMMARY"
@@ -1061,10 +1070,12 @@ jobs:
             1. Read every review comment on the pull request (gh pr view --comments, gh api for inline comments) and apply each finding.
             2. Fix every failed job of pipeline run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}:
             ${{ steps.failed.outputs.list }}
-            Read each job's log (gh run view ${{ github.run_id }} --log-failed) and correct the product, not the pipeline.
+            Read each job's log (gh run view ${{ github.run_id }} --log-failed), correct the underlying fault, and preserve every required check. If the fault is in a generated workflow, fix its canonical source.
             3. Run the tests you touched, commit on this branch with a message that names what was fixed, and git push.
-            Change nothing when there is nothing to fix. Never edit .github/workflows/pipeline.yml.
+            Change nothing when there is nothing to fix. For generated GitHub workflows, edit their canonical source and run render-ci; never hand-edit generated workflows.
+            Work only on this PR branch; never push main or bypass a review or merge gate.
           claude_args: >-
+            --permission-mode acceptEdits
             --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(cargo:*),Bash(bash:*)"
 
   # Decision 4, hardened after claude-mods #38 and session-optimizer #73 merged
