@@ -14,7 +14,7 @@
   "jobs": {
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
-      "sha256": "f1ede573b7aeced03540e5f0995c198f7f740efff614c4c4bbab1a0bc34233af"
+      "sha256": "4671437a6fae0307b39e3b0dda1c9b3ee5350a44f486baa97a3cef3ac8ea8821"
     }
   },
   "adaptations": {
@@ -121,6 +121,11 @@
         "https://github.com/cdeust/Cortex/actions/runs/40583904933"
       ],
       "reason": "The live-eligibility step reported closed, draft, held and moved head with one sentence. Cortex run40583904933 failed on a deliberate 'do not merge' title and read as a moved head. Name the first failing condition and pass only on the value `eligible`: a failed `gh pr view`, an empty, blank or BOM-only read and any other jq result are refused as unreadable. The conditions that fail are those of the single-sentence form plus multiple jq results."
+    },
+    "executed-workflow-definition": {
+      "source": "https://github.com/cdeust/cortex-voice/pull/5#discussion_r4408352195",
+      "reason": "Authenticate the executed definition through WorkflowRun.file, bound to exact live run and attempt. Allow installed main or canonical native export from protected shared source main. Read candidate definition as data only.",
+      "api_source": "https://docs.github.com/en/graphql/reference/actions#workflowrunfile"
     }
   },
   "adapted_assets": {

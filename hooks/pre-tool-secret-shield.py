@@ -23,6 +23,12 @@ The agent must never have any reason to *read* the contents of:
 If you legitimately need to inspect one of these, override per-call via the
 permissions allow-list, or relocate the file to a non-matched path.
 
+One whole command is authorized by the owner (2026-10-29): reading the
+`Claude Code-credentials` keychain entry with `security find-generic-password
+-s "Claude Code-credentials" -w`, to provision the OAuth token. It is matched
+word for word (AUTHORIZED_COMMANDS); any other command that contains it is
+judged by the rules below.
+
 Why blocking READS is enough
 ----------------------------
 Writing/Editing a credential file (e.g. setting up a fresh `.env`) does not
@@ -289,8 +295,35 @@ def _scan_env_read(tokens: list[str]) -> tuple[bool, str | None]:
     return False, None
 
 
+# Whole commands the owner authorized, compared word for word after shell
+# quote removal (shlex). A pipe, a redirection, a separator, a substitution or
+# any extra word makes another command, which the rules of bash_blocked judge.
+# source: owner authorization 2026-10-29, reading the Claude Code keychain
+# entry to provision CLAUDE_CODE_OAUTH_TOKEN.
+AUTHORIZED_COMMANDS = frozenset({
+    ("security", "find-generic-password", "-s", "Claude Code-credentials", "-w"),
+})
+
+
+def is_authorized_command(cmd: str) -> bool:
+    """True only when `cmd` is one AUTHORIZED_COMMANDS entry and nothing else.
+
+    shlex reads a newline as a blank, while the shell reads it as a command
+    separator, so a command holding a line break is never authorized.
+    """
+    if "\n" in cmd or "\r" in cmd:
+        return False
+    try:
+        words = tuple(shlex.split(cmd, posix=True))
+    except ValueError:
+        return False
+    return words in AUTHORIZED_COMMANDS
+
+
 def bash_blocked(cmd: str) -> tuple[bool, str | None]:
     if not cmd:
+        return False, None
+    if is_authorized_command(cmd):
         return False, None
 
     # 1) Whole-environment dump commands (command-positioned so a literal

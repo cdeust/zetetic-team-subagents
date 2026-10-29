@@ -20,3 +20,9 @@
   choices, report those strata separately. Exact A/B alignment can make a model
   look balanced because of `none` votes even while its shape decisions strongly
   favor one rater.
+
+- Native merge authorization must authenticate the workflow definition through
+  GitHub's executed-file API, in addition to successful expected job names.
+  Never publish raw GitHub OIDC/JWT bearer values as proof artifacts; use
+  authoritative run-file provenance when available. A locally verified signature
+  does not make publishing the signed bearer token acceptable.
