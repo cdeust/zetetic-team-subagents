@@ -102,3 +102,15 @@ Review evidence: docs/verification/native-proof-first-20261028.md.
 - [x] Obtain explicit independent root production approval.
 
 Evidence: docs/verification/native-gate-groups-20261028.md.
+
+## Native executed-workflow authorization, 2026-10-29
+
+- [x] Inspect source ownership, open PRs and actual native P1.
+- [x] Demonstrate RED: fake workflow with successful authenticated job metadata merges.
+- [x] Bind authorization to GitHub WorkflowRun.file and exact run/attempt.
+- [x] Permit installed definitions and protected canonical renderer upgrades.
+- [x] Verify focused native tests, renderer/inventory gates and actionlint (144 passed).
+- [x] Complete full unit/coverage verification and preserve final receipts.
+- [ ] Publish source PR, verify remote head and dispose owned worktree.
+
+Review: docs/ci-workflow-proof.md records source contracts and hosted acceptance limits.
