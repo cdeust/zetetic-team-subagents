@@ -114,3 +114,11 @@ Evidence: docs/verification/native-gate-groups-20261028.md.
 - [ ] Publish source PR, verify remote head and dispose owned worktree.
 
 Review: docs/ci-workflow-proof.md records source contracts and hosted acceptance limits.
+
+## Portable native authorization contract export, 2026-10-29
+
+- [x] Read actual Spec P1 and baseline/source evidence; coordinate P2-owned paths.
+- [x] Demonstrate missing exported executable contract RED (2 failed, 1 passed).
+- [x] Export stdlib tests of actual generated resolver and invoke before configured unit jobs.
+- [x] Verify 82 source contracts, 12 generated consumer tests, mutation RED and actionlint.
+- [ ] Hand exact local source evidence to root for publication; no external writes here.

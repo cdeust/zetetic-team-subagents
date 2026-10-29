@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CATEGORIES = ("unit", "regression", "e2e", "environment", "install")
 # Source: templates/ci/native/source.json pins the copied Cortex configuration.
 NATIVE_ASSETS = (
+    "scripts/tests/test_ci_workflow_authorization.py",
     ".github/workflows/Codex.yml",
     ".github/workflows/claude-review.yml",
     ".github/workflows/claude.yml",

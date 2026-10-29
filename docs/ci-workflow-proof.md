@@ -53,3 +53,13 @@ is tested). It validates its own run/attempt and executed-file pointer with
 GITHUB_TOKEN, then reads `cdeust/Cortex`'s public pipeline through the same
 Contents API. It prints only sanitized identities and a public Git blob hash.
 A green hosted result is required before declaring scoped-token compatibility.
+
+
+Native rendering also exports `scripts/tests/test_ci_workflow_authorization.py`.
+The native contract job runs this named stdlib unittest before reading the
+configured unit commands. The tests compile the actual generated post-merge
+resolver and its embedded proof, then exercise installed/canonical acceptance,
+untrusted metadata/definition rejection, the tested-head merge precondition,
+and nonzero CLI/no-output failure signals. Source renderer tests run both
+schedule profiles with site packages disabled and prove that removing the
+actual authorization call makes the exported contracts fail.
