@@ -46,3 +46,59 @@ reported, without miscounting them as three independent families.
 ## Shared Claude Code / Codex gates
 
 See [implementation and validation](shared-host-gates.md). Native hook trust remains an owner action.
+
+
+## Native resumption contracts, 2026-10-28
+
+- [x] Verify Spec159 findings and current canonical source.
+- [x] Reproduce absent delivered/executed contracts (two failures).
+- [x] Deliver the existing Cortex decision/coordinator contracts as native assets.
+- [x] Execute those contracts through Spec ci.json and verify renderer integrity.
+- [x] Obtain independent root diff review; publication and cleanup follow verification.
+
+Thread resolution is webhook-only, not an Actions event. Keep the unsupported trigger absent; controller reconciliation is owned by root.
+
+Review: 59 canonical contracts; 50 renderer/native tests plus 33 subtests; 78 Spec Python CI contracts. See docs/verification/native-resumption-contracts-20261028.md.
+
+## Native scheduled reconciliation, 2026-10-28
+
+- [x] Verify supported schedule events and public runner billing in GitHub documentation.
+- [x] Reproduce missing fallback helper with ten failing contracts.
+- [x] Implement paginated discovery and exact existing-policy resumption.
+- [x] Add trusted-main discovery and per-PR workers to Codex.yml.
+- [x] Validate 69 native contracts, 52 renderer contracts plus 33 subtests, and 88 Spec CI contracts.
+- [x] Obtain independent root review of helper and workflow.
+
+Review: see docs/verification/native-scheduled-reconciliation-20261028.md. Hosted scheduled acceptance requires publication to main.
+
+## Native discovery review corrections, 2026-10-28
+
+- [x] Verify actual native Claude findings and current canonical main.
+- [x] Add paginated GraphQL status-rollup prefilter and serialize discovery.
+- [x] Preserve existing policy readiness-repair authorization and remove duplicate PR read.
+- [x] Prove API-failure stop, CLI/output boundaries and RED/GREEN contracts.
+- [x] Verify 77 canonical, 52 renderer plus 33 subtests, and 96 Codebase contracts.
+
+Review evidence: docs/verification/native-discovery-review-corrections-20261028.md. Root independently reviews final artifacts before publication.
+
+## Native proof-first followup, 2026-10-28
+
+- [x] Verify actual second native Claude findings and observed API/error/job evidence.
+- [x] Authenticate head proof before REST discovery without vetoing readiness repair.
+- [x] Preserve sanitized typed API categories and isolate only known per-PR missing resources.
+- [x] Bound all completion jobs to one existing schedule period.
+- [x] Verify 88 native contracts, 54 source tests plus 33 subtests, Cortex Ruff and actual craftsmanship scanner.
+- [x] Obtain explicit root production review approval; provenance and staged gates follow.
+
+Review evidence: docs/verification/native-proof-first-20261028.md.
+
+## Native gate-name groups, 2026-10-28
+
+- [x] Read real native Claude report and verify current canonical main.
+- [x] Reproduce gate-name collisions before the fix.
+- [x] Preserve a superset hint using CheckRun groups and full-policy authorization.
+- [x] Exercise normalized proof API categories through actual callbacks.
+- [x] Verify95 native contracts and54 source contracts plus33 subtests; actual Cortex gates pass.
+- [x] Obtain explicit independent root production approval.
+
+Evidence: docs/verification/native-gate-groups-20261028.md.
