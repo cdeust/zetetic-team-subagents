@@ -175,23 +175,25 @@
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "39a843f9682902fd5131c59d66361af523f960747f1ee5ae2a76f27212ccca44",
+      "sha256": "8d7b69bf5434a891291ca7d06b9999b0c3ea9a3f6691a7b3ed43014eb0590913",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
         "owner-model-selection",
-        "private-repo-fetch"
+        "private-repo-fetch",
+        "native-skill-default-head"
       ]
     },
     ".github/workflows/claude.yml": {
       "source_sha256": "c7604362d83f83f11d761cb2c9365387125fce1aadd347534670007ceb978df5",
-      "sha256": "0d9e50551cb9aa2290e5c136797d0ae973551c46311fc3c11d16129a2d08ba48",
+      "sha256": "2982b52d3e9f6bfcd2cd50c28ea68b69d9e45eb26916ce70057b3bce0a6e3372",
       "adaptation": [
         "strict-mcp-config",
         "owner-model-selection",
         "owner-fix-permissions",
         "private-repo-fetch",
-        "native-shell-classifier"
+        "native-shell-classifier",
+        "native-skill-default-head"
       ]
     },
     "scripts/ci_codex_review_runtime.py": {

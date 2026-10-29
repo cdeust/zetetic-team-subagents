@@ -95,3 +95,27 @@ def test_automatic_fix_has_workspace_permission_and_can_render_workflows():
     assert "render-ci" in prompt
     assert "canonical" in prompt
     assert "never push main" in prompt
+
+
+def test_native_skill_default_head_exists_before_model(tmp_path):
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    for name in ("claude.yml", "claude-review.yml"):
+        workflow = yaml.safe_load(files[tmp_path / ".github/workflows" / name])
+        job = next(iter(workflow["jobs"].values()))
+        steps = job["steps"]
+        step_name = "Establish default branch reference"
+        reference = next(step for step in steps if step.get("name") == step_name)
+        action = next(step for step in steps if "claude-code-action@" in step.get("uses", ""))
+        assert steps.index(reference) < steps.index(action)
+        repo = tmp_path / name
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                        "commit", "--allow-empty", "-qm", "fixture"], cwd=repo, check=True)
+        subprocess.run(["git", "update-ref", "refs/remotes/origin/main", "HEAD"], cwd=repo, check=True)
+        env = {**os.environ, "DEFAULT_BRANCH": "main"}
+        subprocess.run(["bash", "-e", "-c", reference["run"]], cwd=repo, env=env, check=True)
+        target = subprocess.check_output(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo, text=True)
+        assert target.strip() == "refs/remotes/origin/main"
+        env["DEFAULT_BRANCH"] = "missing"
+        assert subprocess.run(["bash", "-e", "-c", reference["run"]], cwd=repo, env=env).returncode != 0

@@ -310,9 +310,15 @@ def without_fetch_authorization(delivered):
     return delivered[:first] + delivered[last:]
 
 
+def without_default_head(delivered):
+    first = delivered.index(b"      - name: Establish default branch reference\n")
+    last = delivered.index(b"      - name: Install subprocess isolation\n", first)
+    return delivered[:first] + delivered[last:]
+
+
 def original_asset(delivered, relative):
     if relative.endswith(("/claude-review.yml", "/claude.yml")):
-        delivered = without_fetch_authorization(delivered)
+        delivered = without_fetch_authorization(without_default_head(delivered))
     if relative == ".github/workflows/Codex.yml":
         original = delivered.replace(
             b"      pull-requests: write\n      issues: read\n      actions: write",

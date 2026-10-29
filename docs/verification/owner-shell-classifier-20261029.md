@@ -28,3 +28,10 @@ continues to reconstruct the original exported workflow byte for byte, while
 recording the delivered adaptation digest. A real repair and push with this
 corrected policy still require hosted acceptance; static checks alone do not
 establish those capabilities.
+
+The real native code-review skill subsequently completed on d97c6ab, including its
+four parallel review agents, without a blocking finding (run40865005929). The
+native security-review skill could not load because checkout omitted origin/HEAD.
+Both native exports now establish that symbolic default-branch reference before
+the model starts. The regression executes the actual checked-in shell with real
+Git, verifies the symbolic target and rejects an absent default-branch ref.

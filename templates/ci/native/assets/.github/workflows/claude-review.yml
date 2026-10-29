@@ -38,6 +38,14 @@ jobs:
           basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
           echo "::add-mask::$basic"
           git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
+      - name: Establish default branch reference
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # Native security-review preprocesses origin/HEAD (run40865005929).
+          git show-ref --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH"
+          git symbolic-ref refs/remotes/origin/HEAD "refs/remotes/origin/$DEFAULT_BRANCH"
       - name: Install subprocess isolation
         run: |
           sudo apt-get update
