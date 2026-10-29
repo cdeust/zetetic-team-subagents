@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 READER = (
     Path(__file__).resolve().parents[1]
@@ -267,7 +268,19 @@ def row(identity, body, **fields):
 
 class SecurityReceiptTests(unittest.TestCase):
     def evidence(self, rows, sha=VIZ_SHA):
-        return reader().review_evidence(rows, sha, REPO, PR)
+        module = reader()
+        comments = sys.modules["ci_codex_review_comments"]
+
+        def commits(endpoint, **_):
+            # The repository's commits API: a receipt prefix resolves to its one known commit.
+            prefix = endpoint.rsplit("/", 1)[1]
+            found = {full for _, full in REAL if full.startswith(prefix)}
+            if len(found) != 1:
+                raise sys.modules["ci_codex_review_runtime"].APIError("not_found")
+            return {"sha": found.pop()}
+
+        with patch.object(comments, "_api", side_effect=commits):
+            return module.review_evidence(rows, sha, REPO, PR)
 
     def assert_outcome(self, result, state, reason):
         self.assertEqual((result["state"], result["reason"]), (state, reason))

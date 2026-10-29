@@ -10,7 +10,7 @@ from datetime import datetime
 import re
 from typing import Any
 
-from ci_codex_review_runtime import EvidenceError
+from ci_codex_review_runtime import EvidenceError, _api
 
 Record = dict[str, Any]
 # Source: native Codex summary6456275844 on2026-10-28.
@@ -109,6 +109,27 @@ BLOCKED_REASONS = (
 )
 
 
+def _receipt_head(repo: str, named: str) -> str | None:
+    """The full commit a receipt names, never a prefix match on the head.
+
+    A 10-hex prefix is 40 bits: a branch writer can make two commits share it
+    (Codex finding Cortex PR836 discussion_r4412420778). 40 hex compares exactly;
+    a shorter prefix counts only when the repository resolves it to one commit.
+    A 404, an ambiguous prefix (422) or any API failure proves nothing.
+    https://docs.github.com/en/rest/commits/commits#get-a-commit
+    """
+    if len(named) == 40:
+        return named
+    try:
+        commit = _api(f"repos/{repo}/commits/{named}")
+    except EvidenceError:
+        return None
+    full = commit.get("sha") if isinstance(commit, dict) else None
+    if not isinstance(full, str) or re.fullmatch(r"[0-9a-f]{40}", full) is None:
+        return None
+    return full if full.startswith(named) else None
+
+
 def security_receipt(comments, target, review, metadata):
     """Native verdict for a completed security review whose flags stayed null.
 
@@ -135,7 +156,7 @@ def security_receipt(comments, target, review, metadata):
         if not body.startswith(RECEIPT) or len(SECURITY_HEADING.findall(body)) != 1:
             continue
         commits = RECEIPT_COMMIT.findall(body)
-        if len(commits) != 1 or not sha.startswith(commits[0]):
+        if len(commits) != 1 or _receipt_head(repo, commits[0]) != sha:
             continue
         _authenticate_editor(comment)
         if NO_ISSUES_RECEIPT.fullmatch(body) is None:
