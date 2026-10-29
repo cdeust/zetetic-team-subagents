@@ -60,7 +60,12 @@ def test_renderer_generates_three_files_in_empty_consumer_and_keeps_config(tmp_p
         key: value for key, value in os.environ.items() if key != "CLAUDE_PLUGIN_ROOT"
     }
     env["TMPDIR"] = str(tmp_path)
-    command = ["bash", str(ROOT / "scripts/setup.sh"), "render-ci", str(tmp_path)]
+    # This repository installs the native profile; legacy default generation is
+    # independently exercised by test_ci_renderer.py and the shell suite.
+    command = [
+        "bash", str(ROOT / "scripts/setup.sh"), "render-ci", str(tmp_path),
+        "--native-review",
+    ]
     subprocess.run(command, check=True, env=env, capture_output=True)
     for name in FILES:
         rendered = (tmp_path / ".github/workflows" / name).read_bytes()

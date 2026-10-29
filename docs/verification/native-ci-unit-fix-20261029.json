@@ -1,0 +1,18 @@
+{
+  "prior_head": "08759b5eda233d8ad419f2e585298aceffbcc120",
+  "failed_hosted_run": 40807089617,
+  "failed_hosted_job": 123228553135,
+  "before": "4 failed,3307passed; legacy installed-profile assumptions",
+  "focused_after": "154passed,33subtests",
+  "exact_ci_unit_after": "3310passed,33subtests;exit0",
+  "coverage": {
+    "line-rate": "0.9455",
+    "lines-valid": "9008",
+    "lines-covered": "8517"
+  },
+  "coverage_gate": "tools/ci_coverage.py coverage.xml --min90",
+  "isolated_runner": "/private/tmp/disk-hygiene-q7ad767e",
+  "unit_log_sha256": "51f4d295c94fa253a393b7cf2c8df0658e748bd96f404360e6397f234edd92ef",
+  "changes": "Only installed-profile comparison tests; preserve legacy template security assertions and explicitly check native entrypoint raw-output privacy",
+  "ci_json": "unchanged"
+}

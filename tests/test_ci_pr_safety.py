@@ -250,7 +250,7 @@ def test_mutating_jobs_handle_failures_but_stop_on_workflow_cancellation(workflo
 
 
 @pytest.mark.parametrize(
-    "path", ["templates/ci/pipeline.yml", ".github/workflows/pipeline.yml"]
+    "path", ["templates/ci/pipeline.yml"]
 )
 @pytest.mark.parametrize("name", ["Review", "Fix"])
 def test_only_review_publishes_the_official_report_without_full_output(path, name):
@@ -264,3 +264,19 @@ def test_only_review_publishes_the_official_report_without_full_output(path, nam
     else:
         assert inputs.get("display_report", False) is False
         assert inputs.get("show_full_output", False) is False
+
+
+def test_native_entrypoint_keeps_raw_output_private_and_pipeline_has_no_review_action():
+    # Native mode moves Claude into its official entrypoint instead of embedding
+    # the legacy Review/Fix actions in Pipeline (native source.json).
+    pipeline = yaml.safe_load((ROOT / ".github/workflows/pipeline.yml").read_text())
+    assert not any(
+        item.get("uses", "").startswith("anthropics/claude-code-action@")
+        for job in pipeline["jobs"].values()
+        for item in job.get("steps", [])
+    )
+    workflow = yaml.safe_load((ROOT / ".github/workflows/claude-review.yml").read_text())
+    action = step(workflow, "review", "PR Review")
+    assert action["uses"].startswith("anthropics/claude-code-action@")
+    assert action["with"].get("show_full_output", False) is False
+    assert action["with"]["track_progress"] is True
