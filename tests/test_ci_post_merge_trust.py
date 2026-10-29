@@ -1,4 +1,4 @@
-"""A completed merge must still belong to the trusted main branch."""
+"""A completed merge must still be the merge of the reviewed pull request, and main is never compared."""
 
 from copy import deepcopy
 import json
@@ -19,25 +19,13 @@ from test_ci_post_merge import scenario as scenario
 
 
 @pytest.mark.parametrize("already_merged", [False, True])
-@pytest.mark.parametrize(
-    "comparison",
-    [
-        {"status": "ahead", "merge_base_commit": {"sha": MERGED}},
-        {"status": "diverged", "merge_base_commit": {"sha": MERGED}},
-        {"status": "behind", "merge_base_commit": {"sha": HEAD}},
-        {"status": "identical", "merge_base_commit": {}},
-        {},
-    ],
-)
-def test_merge_outside_main_never_authorizes_tests_or_dedup(
-    scenario, already_merged, comparison
-):
+def test_no_comparison_with_main_is_requested(scenario, already_merged):
+    """Owner rule 2026-10-29: the resolver reads PR state only, never main's history."""
     if already_merged:
         scenario[2].update(merged=True, state="closed", merge_commit_sha=MERGED)
-    scenario[3][("GET", COMPARE_PATH)] = comparison
-    with pytest.raises(resolver.PostMergeError):
-        execute(scenario)
-    assert not any(path == PUSH_PATH for _, path, _ in scenario[-1])
+    scenario[2]["merge_commit_sha"] = MERGED
+    assert execute(scenario)["tested_sha"] == MERGED
+    assert not any(path == COMPARE_PATH or "/compare/" in path for _, path, _ in scenario[-1])
 
 
 @pytest.mark.parametrize(
@@ -57,13 +45,6 @@ def test_retarget_or_head_change_during_merge_never_returns_sha(scenario, field,
         execute(scenario)
 
 
-@pytest.mark.parametrize("status", ["behind", "identical"])
-def test_confirmed_main_membership_is_checked_before_output(scenario, status):
-    scenario[3][("GET", COMPARE_PATH)]["status"] = status
-    assert execute(scenario)["tested_sha"] == MERGED
-    assert scenario[-1][-2:] == [("GET", PR_PATH, None), ("GET", COMPARE_PATH, None)]
-
-
 @pytest.mark.parametrize("changes", [{"merged": False}, {"merge_commit_sha": HEAD}])
 def test_after_merge_pr_must_confirm_the_exact_returned_commit(scenario, changes):
     original = deepcopy(scenario[2])
@@ -79,12 +60,12 @@ def test_after_merge_pr_must_confirm_the_exact_returned_commit(scenario, changes
 
 
 @pytest.mark.parametrize("already_merged", [False, True])
-def test_foreign_merge_cli_writes_no_output(
+def test_unconfirmed_merge_cli_writes_no_output(
     scenario, tmp_path, monkeypatch, already_merged
 ):
     if already_merged:
         scenario[2].update(merged=True, state="closed", merge_commit_sha=MERGED)
-    scenario[3][("GET", COMPARE_PATH)] = {"status": "ahead"}
+    scenario[3][("GET", PR_PATH)] = {**scenario[2], "merged": False}
     event = tmp_path / "event.json"
     event.write_text(json.dumps(scenario[0]))
     output = tmp_path / "output"

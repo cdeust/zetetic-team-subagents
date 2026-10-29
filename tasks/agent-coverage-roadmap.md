@@ -107,7 +107,7 @@ et readiness-avant-instruments est non négociable.
 Avant de construire ou lancer quoi que ce soit, prouver que chaque cause *évitable* d'échec ou de sortie fausse
 est éliminée. Mode d'échec à tuer : agent qui ne charge pas, outil/lib manquant, doc périmée qui induit l'agent
 en erreur (cf. bug `limit`→`max_results` qui cassait `recall`), baseline rouge, prompt de permission qui gèle un
-workflow en arrière-plan. C'est l'équivalent du gate hygiene-pre (running/installed == committed HEAD).
+workflow en arrière-plan.
 
 **« Éléments nécessaires » = inventaire de complétude sur ces axes (liste NON exhaustive — voir critique de
 complétude ci-dessous)** :

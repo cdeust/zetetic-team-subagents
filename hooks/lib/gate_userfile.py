@@ -1,10 +1,9 @@
-"""The files the USER owns that the gate consults: the trusted-repositories list and the rule-change
-acknowledgements. Both live in ``~/.claude/zetetic/``; neither is ever written by a hook.
+"""The file the USER owns that the gate consults: the trusted-repositories list. It lives in
+``~/.claude/zetetic/`` and is never written by a hook.
 
     ~/.claude/zetetic/gate-trusted-repos     one absolute repository path per line
-    ~/.claude/zetetic/gate-rule-changes      `<absolute repository path> <hash of the rules state>` per line
 
-Blank lines and `#` lines are ignored. Each file has an override variable (tests, non-default layouts).
+Blank lines and `#` lines are ignored. The file has an override variable (tests, non-default layouts).
 
 A project's settings can set session environment variables, so an OVERRIDE that points inside the repository
 being judged (its working tree or its git directory) is ignored: a repository cannot vouch for itself. The

@@ -164,7 +164,7 @@ def test_check_begin_and_peek_are_wired_to_the_task_layer(monkeypatch):
     monkeypatch.setattr(state.tasks, "start", lambda *a: seen.append(("start", a)) or green)
     monkeypatch.setattr(state.tasks, "status", lambda *a: seen.append(("status", a)) or record(state="running"))
     verdict = state.check("/repo", "commit", TREE, "b" * 40)
-    assert verdict == state.Verdict(True, "", (plan().rules.new,), plan().rules.old, False)  # what the floor needs
+    assert verdict == state.Verdict(True, "")
     assert state.begin("/repo", "push", TREE, None) is green
     assert state.peek(plan())["state"] == "running"
     assert seen == [("start", ("gate", plan().key, plan().argv, "/repo")),

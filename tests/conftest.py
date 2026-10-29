@@ -32,22 +32,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 
-# -- the gate's rule floor (PR #169, round 4) ----------------------------------
-# A gated commit the hooks allow records the rules it leaves in force in the user's floor directory
-# (hooks/lib/gate_floor.py, default ~/.claude/zetetic/gate-rule-floor). No test may write there: every
-# hook a test starts inherits this session-wide directory unless the test names its own.
-@pytest.fixture(autouse=True, scope="session")
-def _private_gate_floor(tmp_path_factory):
-    name = "ZETETIC_GATE_RULE_FLOOR"  # source: gate_floor.ENV_DIR
-    saved = os.environ.get(name)
-    os.environ[name] = str(tmp_path_factory.mktemp("gate-floor"))
-    yield
-    if saved is None:
-        os.environ.pop(name, None)
-    else:
-        os.environ[name] = saved
-
-
 # -- worktree sweep fixtures -------------------------------------------------
 SWEPT_ROOTS = ("/tmp/", "/private/tmp/")  # source: tools/worktree-manager.sh sweepable_path()
 

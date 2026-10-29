@@ -82,13 +82,12 @@ def test_the_worker_checks_the_committed_content_not_a_replacement_of_it(gate):
 
 def test_a_replace_ref_of_head_itself_does_not_choose_the_trusted_tree(gate):
     """`git replace HEAD <a commit with no rules>`: HEAD^{tree} would read as ungated, so dropping the config would
-    weaken nothing and the failing change would pass unjudged."""
+    be read as having no rules and the failing change would pass unjudged."""
     empty = git(gate.repo, "hash-object", "-t", "tree", "/dev/null")
     git(gate.repo, "replace", git(gate.repo, "rev-parse", "HEAD"), git(gate.repo, "commit-tree", empty, "-m", "no rules"))
     git(gate.repo, "rm", "-q", "--cached", ".zetetic/gate.json")
     stage_bad(gate)
-    rc, _, err = gate.gate(COMMIT)
-    assert rc == 2 and "weakens the gate rules" in err, err
+    refused_and_failed(gate)  # the real HEAD's rules still judge the staged tree
 
 
 def grafted(g: Gate) -> tuple:

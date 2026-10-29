@@ -293,7 +293,7 @@
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
     "scripts/tests/test_ci_codex_review_proof_first.py": "1b046a129447084575e2260b7eac4175342bfdd4fa9ec339d81fc3fb48348403",
     "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6",
-    "scripts/tests/test_no_main_comparison.py": "0227dad7aae661ee5b166c268a72a7fc5fbb3f5f2d0e4b7998f441a95ec8f7a9",
+    "scripts/tests/test_no_main_comparison.py": "61901ca00aec3d6c280a35a9a22e298ce5eac88dc95fb63676f066cc17850b27",
     "scripts/ci_codex_review_agreement.py": "427535b75ecf3d374c15f69a59868e59a23b8ea6ac323102f848ced794846923"
   },
   "adapted_jobs": {
@@ -325,8 +325,8 @@
     },
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
-      "source_sha256": "f1ede573b7aeced03540e5f0995c198f7f740efff614c4c4bbab1a0bc34233af",
-      "sha256": "3e46114bc9622f7b1a143da7bbd4f9033c14665b4e1c6104ff702d267386f0a0",
+      "source_sha256": "a835d2c1f884c33896f4fd8a3f6b903385c50ed2ed36b22e98579592f6277209",
+      "sha256": "568ccf020cb78dc1026b2f8b301c22f59ce707043df80157ad02e16a5ed8a8aa",
       "adaptation": [
         "post-merge-merge-alias",
         "reviewer-agreement-lifts-review-holds"

@@ -275,9 +275,9 @@ def _merge_open_pr(pr, merge_path, head, api):
     return full_sha(result.get("sha"))
 
 
-def _confirm_main_merge(pr_path, original_pr, sha, api):
-    # REST merge constrains only head SHA, not base ref. Re-read after PUT;
-    # a retarget race must not authorize tests or release of a foreign merge.
+def _confirm_pr_merge(pr_path, original_pr, sha, api):
+    # REST merge constrains only head SHA, not base ref. Re-read after PUT:
+    # the PR must report this exact merge commit and the head that was tested.
     # https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request
     repository = original_pr["base"]["repo"]["full_name"]
     pr = api.request("GET", pr_path)
@@ -285,16 +285,6 @@ def _confirm_main_merge(pr_path, original_pr, sha, api):
     require(
         pr.get("merged") is True and pr.get("merge_commit_sha") == sha,
         "PR does not confirm the returned merge commit",
-    )
-    # BASE...HEAD reports behind/identical only when HEAD is in BASE history.
-    # https://docs.github.com/en/rest/commits/commits#compare-two-commits
-    comparison = api.request(
-        "GET", f"/repos/{repository}/compare/main...{full_sha(sha)}"
-    )
-    require(
-        comparison.get("status") in ("behind", "identical")
-        and comparison.get("merge_base_commit", {}).get("sha") == sha,
-        "Merged commit is not confirmed in main history",
     )
 
 
@@ -320,7 +310,7 @@ def resolve(event, repository: str, api: GitHub):
         sha = full_sha(pr.get("merge_commit_sha"))
     else:
         sha = _merge_open_pr(pr, pr_path + "/merge", run["head_sha"], api)
-    _confirm_main_merge(pr_path, pr, sha, api)
+    _confirm_pr_merge(pr_path, pr, sha, api)
     if already_merged and _has_push_pipeline(repository, sha, api):
         return {
             "tested_sha": sha,

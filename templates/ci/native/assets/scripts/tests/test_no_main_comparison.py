@@ -8,9 +8,11 @@ protection, a workflow definition authorized against main, or a generated header
 that carries a hash) makes every open pull request stale each time main moves.
 This test fails when any of those traces returns to the CI definitions below.
 
-Not covered on purpose: the confirmation after a merge that the commit is in
-main, the publication of tags on a push to main (`merge-base --is-ancestor`) and
-the diff perimeter `origin/$BASE_REF...$HEAD_SHA`.
+Not covered on purpose: the diff perimeter `origin/$BASE_REF...$HEAD_SHA`, a
+`merge-base --is-ancestor` safety check before a deletion, the `headRefOid` of the
+reviewed pull request and a SHA cited as provenance. The confirmation that a merged
+commit is in main's history and the publication of tags on a push to main are NOT
+exceptions any more: a tag goes on the commit the push event built (github.sha).
 
 Standard library only. This file is delivered to consuming repositories by
 `render-ci --native-review`; it ignores every file with its own name.
@@ -36,10 +38,16 @@ FORBIDDEN = (
     "update_branch",
     "merge-base HEAD origin/main",
     "render_head != render_base",
+    "compare/main",
+    "refs/remotes/origin/main^{commit}",
+    "differs from trusted main",
+    "_confirm_main_merge",
 )
 PATTERNS = (
     # blob(...) in the generated header changes every consumer's bytes per render.
     (re.compile(r"header\s*\+\s*blob\("), "blob( in the generated header"),
+    # A variable that carries main's tip into a decision.
+    (re.compile(r"\b(?:MAIN|TRUSTED)_SHA\b", re.IGNORECASE), "a SHA of main kept in a variable"),
 )
 # `strict: true` requires the branch to be up to date with main. It is forbidden only
 # in a branch-protection configuration; other files may use the word freely.

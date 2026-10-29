@@ -50,8 +50,7 @@ judged (its working tree or its git directory) is ignored: a repository cannot l
 file that already lists the repository's exact real path would still be honoured.
 
 The **default** location is not an override. A repository whose root contains `~/.claude/zetetic` (a dotfiles
-repository at `$HOME`) is still trustable: the two files themselves, `gate-trusted-repos` and
-`gate-rule-changes`, are exempt from the in-repository rule, and only they. The exemption holds only while
+repository at `$HOME`) is still trustable: the file itself, `gate-trusted-repos`, is exempt from the in-repository rule, and only it. The exemption holds only while
 `$HOME` is the account's home directory (the one the account database gives); a session whose `HOME` was
 redirected into the repository gets no exemption, so the redirected default counts as an override and is ignored.
 
@@ -83,110 +82,17 @@ working copy:
 - A legacy `scripts/gate.sh` is run from the trusted tree's copy of `scripts/`, exported from the git object
   database into a private directory; an edited script in the working copy does not judge itself.
 
-## Rule changes: rules may only grow without the owner
+## Rule changes: the gate applies the rules present in the tree
 
-The union above lags one commit. Commit A deletes `.zetetic/gate.json` (or replaces it by one check, `["true"]`);
-it passes, because HEAD's old checks still pass on it. Commit B is then judged by a HEAD with no rules and a
-failing file is allowed. HEAD alone is not a floor either, because commands the gate does not judge move it:
-after `git checkout --orphan x` (the index is kept) or `git reset --soft <a commit before the gate>`, HEAD has no
-rules, so dropping the config weakened nothing and `git push -f origin x:main` published a failing tree.
+The gate compares the rules with nothing. There is no floor kept by the user, no acknowledgement by hash, no
+"no weaker than" relation and no rule read from a remote-tracking ref (`main` included): a commit or a push is
+judged by the rules of the trusted tree and of the judged tree (the union above), and a change that edits the
+rules is not refused for having edited them. Owner rule, 2026-10-29, verbatim: "Supprime le sha de main et la
+comparaison des gates". Test: `tests/test_gate_applies_tree_rules.py`.
 
-**The invariant.** No `git commit` and no `git push` the hook judges is allowed when the rules it would leave in
-force (in the new commit, or on a destination ref) are weaker than one of its **anchors**, unless the owner's
-acknowledgement file holds the exact `<repository> <hash>` line for that end state. The anchors:
-
-| Anchor | For | What it is |
-|---|---|---|
-| HEAD's rules | a commit | the rules of HEAD's tree |
-| the floor | a commit and a push | the strongest rules the hooks have seen in force for this repository, kept by the user outside every repository (below) |
-| each destination | a push | the rules of `refs/remotes/<remote>/<branch>` for each branch the push updates (the `dst` of a refspec, `HEAD` meaning the current branch; a refspec-less push adds the current branch's upstream), as of the last fetch |
-
-Each anchor is compared on its own (`hooks/lib/gate_superset.py`): rule states are only partially ordered, two
-branches may each add a check the other lacks, so there is no single "strongest" state to compare with. One
-acknowledgement line, the hash of the end state, covers every anchor at once.
-
-A denied commit or push lists every weakened rule, with the anchor it comes from:
-
-```
-GATE-PROOF: this commit weakens the gate rules of <repo>; rules may only grow without you. Nothing was run.
-  - check "no-bad" was removed
-  - env changed (a variable can disarm a check)
-If you intend this, add this line to ~/.claude/zetetic/gate-rule-changes (create the file if it is absent):
-<absolute repository path> <hash of the new rules state>
-It covers this one rules state only. Then retry.
-```
-
-The denial names each rule being weakened; a rule weakened against the floor ends with `(the floor recorded for
-this repository in <file>)`, one weakened against a destination with `(the rules of refs/remotes/origin/main, as
-of the last fetch)`. The line is `<absolute repository path> <32 hex>`: the hash is of the rules state the commit
-or the pushed tip would LEAVE BEHIND (kind, rules, and for a legacy script its object id), so it covers that one
-state in that one repository; the next, different weakening is denied again. Listing the main checkout covers its
-worktrees. The hooks never write the file and never offer to; `ZETETIC_GATE_RULE_CHANGES` replaces the path
-(tests), under the same rule as the trusted list (an override inside the repository is ignored).
-
-**The floor** (`hooks/lib/gate_floor.py`) is one file per repository, in a directory no repository controls:
-
-```
-~/.claude/zetetic/gate-rule-floor/<32 hex>.jsonl     the hex: sha256 of the real path of the main checkout
-{"repo": "<main checkout>", "op": "raise", "states": [<rule state>, ...]}
-{"repo": "<main checkout>", "op": "set", "states": [<rule state>, ...]}
-```
-
-The identity of a repository is the real path of its main checkout, as for the acknowledgement file, so the
-worktrees of a checkout share its floor. Each line is one change, appended in one write (concurrent hooks
-neither interleave lines nor lose one), and the floor is the replay of the file in line order: `raise` keeps
-the maximal states of the floor and the line's states, `set` keeps the maximal states of the line's states. A
-rule state is `{"kind", "cfg", "scripts", "script"}`, what `state_hash` hashes. The file is created 0600 in a
-0700 directory.
-
-- When every verdict of a call allows it, the hook records what the call leaves in force: the new commit's rules,
-  or each pushed tip's rules and HEAD's (a push leaves HEAD in force). The line is `raise`, unless an end state
-  passed only by an acknowledgement: then the owner lowered the floor and the line is `set`.
-- When a call is denied, HEAD's rules are recorded (`raise`): they are in force whatever the verdict. This goes
-  further than "record only what is allowed" on purpose: the first judged commit attempt in a gated repository
-  seeds the floor even when it is denied (a verification just started, say).
-- Nothing is written when the floor would not change; the head-start hook (`gate-start.py`) never writes.
-
-**How the owner lowers the floor:** with the same acknowledgement line. The weakened commit or push is then
-allowed, and the floor becomes what that call leaves in force, so a later growth from the lowered state needs no
-second line. Pushing an acknowledged branch without rules together with `main` keeps `main`'s rules in the floor.
-
-**Closed by default.** A floor file that exists but cannot be read or parsed (a line that is not of the form
-above, a line naming another repository, a state whose rules are invalid) denies every commit and push in that
-repository, with the file and the line; it is never read as empty. `ZETETIC_GATE_RULE_FLOOR` names another
-directory (tests); the default directory is read as well, so an override pointing at an empty directory cannot
-hide a floor already kept, and an override (or a redirected HOME) inside the repository is refused. Where only
-the floor holds (an orphan branch that declares nothing), a crash of the hook and an unreadable payload refuse,
-as they do where a gate is declared.
-
-**Where the floor starts.** A repository whose rules no judged call has seen in force has no floor file, and is
-judged by HEAD's rules and the destinations alone, as before. So `git checkout --orphan` as the very first act in
-a repository, before any `git commit` or `git push` the hook judged there, still drops the rules of that orphan
-(`git push -f origin x:main` is refused by the destination anchor; a push to a new branch is not). One judged
-commit attempt in the repository, allowed or denied, closes it. Tests: `tests/test_gate_floor_user.py` (the
-attacks, against the real hooks) and `tests/test_gate_floor_record.py` (the file and the destinations).
-
-**Consequence for branches.** The floor is the repository's, not a branch's: a check added on one branch and
-committed there is kept on every branch. Committing on a branch that lacks it is denied until that branch has the
-check, or the owner acknowledges the branch's state (which lowers the floor to it).
-
-**Superset, precisely** (`hooks/lib/gate_superset.py`; sound, deliberately conservative: everything it calls
-growth is growth; a spelling it cannot prove is reported and acknowledged once). With `old` = an anchor's rules
-and `new` = the rules the commit or the pushed tip leaves behind:
-
-| Part | `new` is no weaker when |
-|---|---|
-| `checks[]` | every check of `old` has a check of `new` with the **same `argv`** whose path selection covers it. `old` has no `paths` (runs for any change, deletions too): `new` has none. Otherwise `new` has none, or holds `**`, or holds every pattern of `old` literally (patterns are compared as strings). A `new` with `"scope": "added"` keeps only an `old` with the same scope (it judges fewer files); dropping the scope is growth. Names do not matter. Added checks are growth; a removed, replaced or narrowed check (different `argv`, narrowed or dropped `paths`, a scope added) is not |
-| `tests` | if `old` has a tests block, `new` has one with equal `argv`, `files` and `same_name` (either one changed changes which tests a change selects, and an empty selection falls back to the whole suite); `fast` equal, or non-empty in `old` and a superset in `new`; `map`: the same set of path patterns, and for each pattern `new` runs every test `old` ran (a pattern may gain tests; a new pattern would take paths away from the fallback, a removed one gives them up) |
-| `full_on` | `new` has every entry of `old` |
-| `env` | equal (an added variable such as `PYTEST_ADDOPTS=--co` can disarm a check) |
-| declaration | `off: true`, a deleted config, or no declaration at all is a weakening when the anchor declares rules. A stack default (no config, `package.json`, `Cargo.toml`, ...) is compared as the config it generates, so a config that replaces it must keep its checks |
-| legacy `scripts/gate.sh` | with no config, deleting it, making it non-executable, replacing it by another script or by a config is a weakening: a script's content cannot be compared, so the object id of the script itself is the rule (other files of `scripts/` do not count) |
-
-An anchor with no rules has nothing to weaken: a repository with no rules at HEAD, no floor and no destination
-with rules is not floored at all. What a check RUNS (a script it calls, a test file) is not a rule and is not
-compared: the set of declared commands is the floor,
-and CI is the check that sees what they do.
+What this leaves to other checks: a change that removes a check is judged by the checks of HEAD's tree still
+(the union), but once it is committed the next commit is judged by the reduced rules; review and CI are the
+checks that see a rules file shrink.
 
 ## Kind, and the cache key
 
@@ -340,7 +246,7 @@ worker removes it.
 
 **This repository's own gate.** The CI job `gate-self-verification` (`.github/workflows/ci.yml`) runs
 `python hooks/lib/gate_task.py verify --repo . --base <PR base>` on HEAD's tree, with `CLAUDE_PLUGIN_ROOT` set as
-Claude Code sets it and the trusted list, the floor and the task state in the runner's temp directory: the hook's
+Claude Code sets it and the trusted list and the task state in the runner's temp directory: the hook's
 own planning, then the full configured gate (no earlier record exists there). Its craftsmanship check is a ratchet
 (`"scope": "added"`), the policy of CI's own craftsmanship job: every file a change adds must comply, legacy files
 are reported by CI's informational sweep, not blocked. Round 5 of the review measured that without the ratchet and
@@ -454,14 +360,7 @@ not see:
 - Another index or repository: `GIT_INDEX_FILE=`, `--git-dir`, `--work-tree`.
 - Commits that no `git commit` makes: `git merge`, `git cherry-pick`, `git rebase`.
 - What a check runs: a rule is the declared command (`argv`, `paths`, the test map); the content of a script a
-  check calls is not compared by the rule floor (Rule changes).
-- The start of the floor: a repository's floor holds only what a judged call saw in force (Rule changes, "Where the
-  floor starts"); the identity is the main checkout's path, so a renamed checkout or a fresh clone starts with an
-  empty floor.
-- A destination is known only through its remote-tracking ref, as of the last fetch: a push to a URL, or to a
-  branch never fetched (or whose remote-tracking ref was deleted), adds no destination anchor.
-- The floor file and the acknowledgement file are the owner's: an ungated `rm` of the floor file is the same
-  kind of act as an ungated edit of the acknowledgement file, and the gate cannot tell either from the owner.
+  check calls is not compared with anything.
 - A legacy script's siblings: only `scripts/gate.sh` itself is compared.
 
 These are limits of reading a command line and of comparing declared rules, not of the verification; CI is the
