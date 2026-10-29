@@ -936,6 +936,10 @@ jobs:
       id-token: write
       actions: read
     steps:
+      # No GITHUB_TOKEN in git config: the Fix push must leave with the Claude
+      # App token. checkout v7 links its token by includeIf, which the action
+      # does not clear, and a GITHUB_TOKEN push leaves pull_request runs
+      # waiting for approval (PR #171, ae628d6). Every later git call is local.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: >-
           github.event_name == 'pull_request'
@@ -943,6 +947,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Review guard
         id: guard
@@ -1041,7 +1046,9 @@ jobs:
           exit 1
 
       # The fix: every review finding and every failed job, on the branch.
-      # Its push is a synchronize event; the five tests run again on it.
+      # It pushes with the action's Claude App token, so the synchronize event
+      # starts the pipeline on the new head without an approval
+      # (docs.github.com, "Triggering a workflow from a workflow").
       - name: Fix
         if: steps.guard.outputs.fix == 'true'
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263

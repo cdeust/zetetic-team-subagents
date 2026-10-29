@@ -219,6 +219,24 @@ def test_the_review_skips_drafts_forks_dependabot_and_duplicate_bot_review(workf
     assert ".github/workflows/pipeline.yml" in text
 
 
+def test_the_fix_pushes_with_the_claude_app_token_so_the_pipeline_runs_on_it(workflow, text):
+    # PR #171, commit ae628d6 (2026-10-29): the Fix push went out as
+    # github-actions[bot] and its pull_request runs stayed action_required.
+    # A GITHUB_TOKEN push creates runs that wait for approval; an App token
+    # push runs them (docs.github.com, "Triggering a workflow from a workflow").
+    # checkout v7 keeps GITHUB_TOKEN in an includeIf file that the action does
+    # not clear (run 40820034691: "No existing authentication headers to
+    # remove"), so the checkout must not persist it.
+    rendered = yaml.safe_load((REPO / ".github" / "workflows" / "pipeline.yml").read_text(encoding="utf-8"))
+    for source in (workflow, rendered):
+        steps = source["jobs"]["review"]["steps"]
+        checkout = next(s for s in steps if s.get("uses", "").startswith("actions/checkout"))
+        assert checkout["with"].get("persist-credentials") is False
+        fix = next(s for s in steps if s.get("name") == "Fix")
+        assert "github_token" not in fix["with"], "the Fix push keeps the action's App token"
+    assert "Its push is a synchronize event; the five tests run again on it." not in text
+
+
 def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):
     # claude-mods #38 and session-optimizer #73 (2026-10-22) auto-merged on a
     # red pipeline: a skipped required check is satisfied, so the job's if:
