@@ -164,17 +164,23 @@
       ],
       "evidence": "cdeust/ci-autonome job 123331564638: git fetch origin --depth=20 <head> failed with could not read Username on a private repository; cdeust/Cortex job 123333637093 (public, same template) fetched anonymously.",
       "reason": "The pinned action fetches through origin before installing its App token. Keep persist-credentials false and give that fetch the job token as a local http extraheader, which the action unsets before Claude runs."
+    },
+    "claude-review-verdict-marker": {
+      "consumer": "https://github.com/cdeust/Cortex/pull/834",
+      "fixture": "https://github.com/cdeust/claude-mods/pull/51#issuecomment-6491944909",
+      "reason": "The final native Claude review comment ends with exactly one line <!-- claude-review-verdict:v1 {\"head\":\"<event head sha>\",\"merge\":true|false} -->, so the Cortex convergence planner reads the verdict for the reviewed head instead of reporting claude_verdict_unreadable. The head is the event's pull_request.head.sha, never model-chosen text."
     }
   },
   "adapted_assets": {
     ".github/workflows/claude-review.yml": {
       "source_sha256": "4b2455d3145e7648718c099b63df94126a30d4d665f526f882ce2d892483f593",
-      "sha256": "39a843f9682902fd5131c59d66361af523f960747f1ee5ae2a76f27212ccca44",
+      "sha256": "aebc2a9ce66e8dcee4ce34dc52a6bb6bf29900f082463bd48b726b30e7d90dd4",
       "adaptation": [
         "strict-mcp-config",
         "native-app-oidc",
         "owner-model-selection",
-        "private-repo-fetch"
+        "private-repo-fetch",
+        "claude-review-verdict-marker"
       ]
     },
     ".github/workflows/claude.yml": {
