@@ -163,3 +163,22 @@ Review: docs/verification/native-security-clean-receipt-20261029.md.
 - [ ] Root publish the combined source, run full hosted CI and exercise the complete outbox against the blocked queue.
 
 Review: docs/verification/native-security-exact-transport-20261029.md.
+
+## Source219 and source220 integration, 2026-10-29
+
+- [x] Fetch protected main and merge normally into the published integration branch.
+- [x] Preserve shared source219 receipts/outbox and source220 post-merge alias folding.
+- [x] Regenerate canonical native export and merge metadata without dropping adaptations.
+- [x] Add four portable regressions against the actual generated authorization controller.
+- [x] Verify focused CI/native/portable suites, source receipts, doc counts and actionlint.
+- [ ] Hand local merge commit and durable evidence to root for publication.
+
+Review: protected main fd9cd91431bbc6cdce5d3e4d2030f0669aeddeb6 merged into
+published source219 head39d31dc5c2c289a74a06fc5f4df8fb51977ac377. The combined
+source CI suite passes546 tests plus33 subtests; native contracts pass156;
+portable actual-workflow authorization passes16. Removing only the alias mapping
+in a disposable generated workflow produces two assertion failures and one error,
+while the original12 contracts and inverse pending-to-merge case still pass.
+Doc counts verify32 claims with zero problems; actionlint and staged strict
+zetetic, craftsmanship and redaction gates pass. Full combined hosted CI and
+fresh exact-head native reviews remain required after root publication.

@@ -11,12 +11,7 @@
     ".claude/agents/security-code-reviewer.md": "41732a89e6af707041d6d767f5d71c324d6fdab808b76c6cb10fff6664f5de5c",
     ".claude/agents/test-coverage-reviewer.md": "1747fa00bc1cd3de9aec93d5a6181661393fd0df43202308132b5363a5aef192"
   },
-  "jobs": {
-    "resolve": {
-      "path": ".github/workflows/pipeline-post-merge.yml",
-      "sha256": "4671437a6fae0307b39e3b0dda1c9b3ee5350a44f486baa97a3cef3ac8ea8821"
-    }
-  },
+  "jobs": {},
   "adaptations": {
     "setup-python": {
       "from": "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
@@ -162,6 +157,10 @@
       "positive_source": "https://github.com/cdeust/zetetic-team-subagents/pull/219#issuecomment-6491562935",
       "reason": "Send exactly @codex security review with no metadata in its command comment. Keep authenticated head/kind state in a separate no-mention outbox control; persist posting before command emission and never resend uncertain outcomes. Native FIX body is unchanged. Hosted mutation workers use pull-requests:write and issues:read; the prior issues:write/pull-requests:read combination failed POST with403, while the minimal PR-write canary posted successfully and the native App acknowledged.",
       "hosted_permission_proof": "https://github.com/cdeust/ci-autonome/actions/runs/40849421081"
+    },
+    "post-merge-merge-alias": {
+      "source": "https://github.com/cdeust/session-optimizer/pull/87#discussion_r4409903427",
+      "reason": "The completion resolver folds merge and merge pending review into one logical job before keeping the newest attempt, as rerun-merge-job-identity does for the event reader. A stale successful merge cannot authorize a rerun that now waits for reviews; both aliases in one attempt are rejected."
     }
   },
   "adapted_assets": {
@@ -241,7 +240,7 @@
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
     "scripts/tests/test_ci_codex_review_proof_first.py": "d15b0a980fb3afa58a320aff162837f70dbc0999af788eb70397552b912438d4",
     "scripts/tests/test_ci_codex_review_gate_groups.py": "87f7d2b11429d7255eba8ab69415e5542d292890c56fd141fa8ab8280f108863",
-    "scripts/tests/test_ci_workflow_authorization.py": "c93a4fe5ad8f9b9f57fe17a058d00f1a7723349af648a87a6589b260bb685cf1",
+    "scripts/tests/test_ci_workflow_authorization.py": "25458f815169453287ecbeef51526758bf0ea9d0b71d5596cb98fd1c7ca59b75",
     "scripts/ci_codex_review_request.py": "3f4589b307082278c94f5a7f790f042a49da0a53cd6c3f6b5a84de9b3c6958f0",
     "scripts/ci_codex_review_controller.py": "8bfdad37ab17fb720aa356bb7c322d407aa6e6c9c23e35c6a311162639e2ab04",
     "scripts/tests/test_ci_codex_review_recovery.py": "e08e16e0fb42cf98b66e41df9fcacbdac5168ac8aa55aed426f8583ff73b49e5",
@@ -271,6 +270,14 @@
       "sha256": "e4de70f3cd8347f7a4b39a8980417cf4f9b8e3eda9017dc5c1f9eaf4d2ec885b",
       "adaptation": [
         "merge-condition-diagnostics"
+      ]
+    },
+    "resolve": {
+      "path": ".github/workflows/pipeline-post-merge.yml",
+      "source_sha256": "4671437a6fae0307b39e3b0dda1c9b3ee5350a44f486baa97a3cef3ac8ea8821",
+      "sha256": "3a62a2d83110f8c763feb21d24ce16036d06b28337aec3af3fad2c25ec674a23",
+      "adaptation": [
+        "post-merge-merge-alias"
       ]
     }
   },

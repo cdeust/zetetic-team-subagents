@@ -217,6 +217,21 @@ def original_review_job(delivered):
     return original.encode()
 
 
+def original_resolve_job(delivered):
+    # Inverse of source.json adaptation "post-merge-merge-alias".
+    folded = (
+        b"                  # The single merge job has two review-dependent display names;\n"
+        b"                  # fold them so a stale attempt cannot outvote the newest one.\n"
+        b"                  # Source: session-optimizer PR87 discussion_r4409903427.\n"
+        b'                  key = "merge" if name == "merge pending review" else name\n'
+        b"                  previous = indexed.get(key)\n"
+    )
+    assert delivered.count(folded) == 1
+    original = delivered.replace(folded, b"                  previous = indexed.get(name)\n")
+    assert original.count(b"indexed[key] = job") == 1
+    return original.replace(b"indexed[key] = job", b"indexed[name] = job")
+
+
 def original_merge_job(delivered):
     # Inverse of source.json adaptation "merge-condition-diagnostics".
     text = delivered.decode()
@@ -363,7 +378,11 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
     for name, source in receipt["adapted_jobs"].items():
         delivered = jobs[name].encode()
         assert hashlib.sha256(delivered).hexdigest() == source["sha256"]
-        original = {"review": original_review_job, "merge": original_merge_job}[name]
+        original = {
+            "review": original_review_job,
+            "merge": original_merge_job,
+            "resolve": original_resolve_job,
+        }[name]
         assert hashlib.sha256(original(delivered)).hexdigest() == source["source_sha256"]
 
 

@@ -148,6 +148,41 @@ class WorkflowAuthorizationContract(unittest.TestCase):
         upstream = any("/repos/cdeust/zetetic-team-subagents/" in call[1] for call in self.api.calls)
         self.assertTrue(upstream)
 
+    def rerun_merge(self, old_name: str, old_conclusion: str, current_name: str) -> None:
+        # Real GitHub filter=all retains earlier attempts alongside current rows.
+        self.api.run["run_attempt"] = 2
+        self.event["workflow_run"]["run_attempt"] = 2
+        self.api.node["runAttempt"] = 2
+        old = next(job for job in self.api.jobs if job["name"] == "merge")
+        old.update(name=old_name, conclusion=old_conclusion)
+        review = next(job for job in self.api.jobs if job["name"] == "review")
+        self.api.jobs.extend([
+            {**review, "id": 1000, "run_attempt": 2},
+            {**old, "id": 1001, "run_attempt": 2,
+             "name": current_name, "conclusion": "success"},
+        ])
+
+    def test_old_failed_merge_cannot_block_current_pending_alias(self) -> None:
+        self.rerun_merge("merge", "failure", "merge pending review")
+        self.assertEqual(self.resolve()["run_tests"], "false")
+        self.assertEqual(self.api.merge_calls(), [])
+
+    def test_old_successful_merge_cannot_authorize_current_pending_alias(self) -> None:
+        self.rerun_merge("merge", "success", "merge pending review")
+        self.assertEqual(self.resolve()["run_tests"], "false")
+        self.assertEqual(self.api.merge_calls(), [])
+
+    def test_old_pending_alias_allows_current_verified_merge(self) -> None:
+        self.rerun_merge("merge pending review", "success", "merge")
+        self.assert_confirmed_merge()
+
+    def test_both_merge_aliases_in_one_attempt_are_rejected(self) -> None:
+        old = next(job for job in self.api.jobs if job["name"] == "merge")
+        self.api.jobs.append({**old, "id": 1000, "name": "merge pending review"})
+        with self.assertRaisesRegex(self.resolver.PostMergeError, "duplicate job name"):
+            self.resolve()
+        self.assertEqual(self.api.merge_calls(), [])
+
     def test_successful_fake_job_names_do_not_authorize_merge(self) -> None:
         self.api.actual = b"fake workflow emitting every expected successful job name"
         self.assertTrue(all(job["conclusion"] == "success" for job in self.api.jobs))
