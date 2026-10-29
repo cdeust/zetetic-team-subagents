@@ -5,8 +5,8 @@ For native Codex plus Claude reviews, use the explicit
 the default renderer.
 
 Edit `templates/ci/pipeline.yml` and `templates/ci/pipeline-after-merge.yml`, then
-run `bash scripts/setup.sh render-ci .`. The renderer copies both templates with
-their Git blob identifiers and preserves the repository's `ci.json`.
+run `bash scripts/setup.sh render-ci .`. The renderer copies both templates under a fixed
+header without a hash and preserves the repository's `ci.json`.
 
 The five test categories, the 90 percent line-coverage gate, and the three bare
 runner environments remain the existing CI contract. The common Claude CLI pin

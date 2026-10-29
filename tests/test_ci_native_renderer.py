@@ -39,7 +39,7 @@ def test_native_keeps_common_jobs_and_separates_both_reviewers(tmp_path):
     for name in ("contract", *renderer.CATEGORIES, "tag"):
         actual = direct["jobs"][name]
         if name == "contract":
-            omitted = "Test embedded workflow authorization"
+            omitted = "Test no comparison with main"
             steps = [step for step in actual["steps"] if step.get("name") != omitted]
             actual = {**actual, "steps": steps}
         assert actual == legacy["jobs"][name]

@@ -142,18 +142,9 @@
       ],
       "reason": "The live-eligibility step reported closed, draft, held and moved head with one sentence. Cortex run40583904933 failed on a deliberate 'do not merge' title and read as a moved head. Name the first failing condition and pass only on the value `eligible`: a failed `gh pr view`, an empty, blank or BOM-only read and any other jq result are refused as unreadable. The conditions that fail are those of the single-sentence form plus multiple jq results."
     },
-    "executed-workflow-definition": {
-      "source": "https://github.com/cdeust/cortex-voice/pull/5#discussion_r4408352195",
-      "reason": "Authenticate the executed definition through WorkflowRun.file, bound to exact live run and attempt. Allow installed main or canonical native export from protected shared source main. Read candidate definition as data only.",
-      "api_source": "https://docs.github.com/en/graphql/reference/actions#workflowrunfile"
-    },
     "rerun-merge-job-identity": {
       "source": "https://github.com/cdeust/cortex-vision/pull/5#discussion_r4408735600",
       "reason": "Fold merge and merge pending review as one logical job across authenticated attempts; retain the newest original job payload and reject duplicate aliases in one attempt. Preserve unrelated historical failures."
-    },
-    "portable-workflow-authorization-contract": {
-      "source": "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#discussion_r4408715493",
-      "reason": "Export committed stdlib tests that execute the actual generated post-merge resolver, and run them in the native contract job before configured unit commands. Production authorization logic is unchanged."
     },
     "owner-fix-permissions": {
       "sources": [
@@ -302,7 +293,7 @@
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
     "scripts/tests/test_ci_codex_review_proof_first.py": "1b046a129447084575e2260b7eac4175342bfdd4fa9ec339d81fc3fb48348403",
     "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6",
-    "scripts/tests/test_ci_workflow_authorization.py": "c93a4fe5ad8f9b9f57fe17a058d00f1a7723349af648a87a6589b260bb685cf1",
+    "scripts/tests/test_no_main_comparison.py": "0227dad7aae661ee5b166c268a72a7fc5fbb3f5f2d0e4b7998f441a95ec8f7a9",
     "scripts/ci_codex_review_agreement.py": "427535b75ecf3d374c15f69a59868e59a23b8ea6ac323102f848ced794846923"
   },
   "adapted_jobs": {
@@ -334,8 +325,8 @@
     },
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
-      "source_sha256": "4671437a6fae0307b39e3b0dda1c9b3ee5350a44f486baa97a3cef3ac8ea8821",
-      "sha256": "77d71ba55994a74e55985e57362674ecea2bc2b758a140b03d4728f33f8bc56f",
+      "source_sha256": "f1ede573b7aeced03540e5f0995c198f7f740efff614c4c4bbab1a0bc34233af",
+      "sha256": "3e46114bc9622f7b1a143da7bbd4f9033c14665b4e1c6104ff702d267386f0a0",
       "adaptation": [
         "post-merge-merge-alias",
         "reviewer-agreement-lifts-review-holds"

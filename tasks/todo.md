@@ -103,18 +103,6 @@ Review evidence: docs/verification/native-proof-first-20261028.md.
 
 Evidence: docs/verification/native-gate-groups-20261028.md.
 
-## Native executed-workflow authorization, 2026-10-29
-
-- [x] Inspect source ownership, open PRs and actual native P1.
-- [x] Demonstrate RED: fake workflow with successful authenticated job metadata merges.
-- [x] Bind authorization to GitHub WorkflowRun.file and exact run/attempt.
-- [x] Permit installed definitions and protected canonical renderer upgrades.
-- [x] Verify focused native tests, renderer/inventory gates and actionlint (144 passed).
-- [x] Complete full unit/coverage verification and preserve final receipts.
-- [ ] Publish source PR, verify remote head and dispose owned worktree.
-
-Review: docs/ci-workflow-proof.md records source contracts and hosted acceptance limits.
-
 ## Native rerun merge identity, 2026-10-29
 
 - [x] Read cortex-vision PR5 finding4408735600 and canonical merge-name expression.
@@ -125,10 +113,8 @@ Review: docs/ci-workflow-proof.md records source contracts and hosted acceptance
 
 Review: [source evidence](../docs/verification/native-rerun-merge-identity-20261029.md).
 
-## Portable native authorization contract export, 2026-10-29
+## Purge the comparison with main, 2026-10-29
 
-- [x] Read actual Spec P1 and baseline/source evidence; coordinate P2-owned paths.
-- [x] Demonstrate missing exported executable contract RED (2 failed, 1 passed).
-- [x] Export stdlib tests of actual generated resolver and invoke before configured unit jobs.
-- [x] Verify combined 117 source contracts + 33 subtests, 113 generated consumer tests, mutation RED and actionlint.
-- [ ] Hand exact local source evidence to root for publication; no external writes here.
+- [x] Remove the executed-workflow comparison against main, its probe workflow, tests and docs.
+- [x] Fixed generated header without a hash; a re-render changes no consumer byte.
+- [x] Permanent guard tests/test_no_main_comparison.py, delivered to native consumers and run in their contract job.

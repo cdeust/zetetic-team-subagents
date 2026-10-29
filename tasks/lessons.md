@@ -21,8 +21,10 @@
   look balanced because of `none` votes even while its shape decisions strongly
   favor one rater.
 
-- Native merge authorization must authenticate the workflow definition through
-  GitHub's executed-file API, in addition to successful expected job names.
-  Never publish raw GitHub OIDC/JWT bearer values as proof artifacts; use
-  authoritative run-file provenance when available. A locally verified signature
-  does not make publishing the signed bearer token acceptable.
+- A CI definition never compares a pull request, a rendered output or a workflow
+  definition with main's tip, and a generated header never carries a hash:
+  every open PR goes stale each time main moves (owner rule 2026-10-29, enforced by
+  tests/test_no_main_comparison.py, also delivered to native consumers).
+
+- Never publish raw GitHub OIDC/JWT bearer values as proof artifacts. A locally
+  verified signature does not make publishing the signed bearer token acceptable.
