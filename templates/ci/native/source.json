@@ -247,5 +247,13 @@
       "path": "tests_py/scripts/test_ci_codex_review_resume.py",
       "sha256": "17e52772017d76571a34987fdbc92facdf04941b5c766fafb28123179c4d2700"
     }
+  },
+  "render_options": {
+    "--no-schedule": {
+      "requires": "--native-review",
+      "asset": ".github/workflows/Codex.yml",
+      "effect": "Remove only the schedule trigger and its explanatory comment; preserve issue_comment, workflow_run, workflow_dispatch and all jobs. Default native assets remain byte-identical.",
+      "source": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule"
+    }
   }
 }
