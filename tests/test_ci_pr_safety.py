@@ -55,6 +55,10 @@ def execute(script, tmp_path, overrides=None, stub=""):
         BASE_REF="main",
         PR="42",
         ACTOR="person",
+        PR_AUTHOR="person",
+        REPO_OWNER="owner",
+        HEAD_REF="fix/product",
+        DEFAULT_BRANCH="main",
     )
     env.update(overrides or {})
     return subprocess.run(
@@ -130,6 +134,30 @@ def test_workflow_bootstrap_skips_review_and_fix(workflow, tmp_path, author):
     result, values = guard(workflow, tmp_path, author, ".github/workflows/pipeline.yml")
     assert result.returncode == 0, result.stderr
     assert values == {"review": "false", "fix": "false"}
+
+
+def test_owner_workflow_pr_runs_review_and_fix(workflow, tmp_path):
+    result, values = guard(workflow, tmp_path, changed=".github/workflows/pipeline.yml",
+                           PR_AUTHOR="owner", REPO_OWNER="owner")
+    assert result.returncode == 0, result.stderr
+    assert values == {"review": "true", "fix": "true"}
+
+
+def test_owner_workflow_bot_head_still_repairs_failed_checks(workflow, tmp_path):
+    result, values = guard(
+        workflow, tmp_path, "41898282+claude[bot]@users.noreply.github.com",
+        ".github/workflows/pipeline.yml", PR_AUTHOR="owner", REPO_OWNER="owner",
+        TEST_RESULTS=json.dumps({"unit": {"result": "failure"}}),
+    )
+    assert result.returncode == 0, result.stderr
+    assert values == {"review": "false", "fix": "true"}
+
+
+@pytest.mark.parametrize("branch", ["main", ""])
+def test_automatic_fix_refuses_default_or_missing_head_branch(workflow, tmp_path, branch):
+    result, values = guard(workflow, tmp_path, HEAD_REF=branch)
+    assert result.returncode != 0
+    assert values == {}
 
 
 @pytest.mark.parametrize(
