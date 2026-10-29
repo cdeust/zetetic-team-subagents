@@ -8,6 +8,20 @@ bash scripts/setup.sh render-ci /path/to/repository --native-review --dry-run
 bash scripts/setup.sh render-ci /path/to/repository --native-review
 ```
 
+To avoid recurring polling runs on a private consumer, explicitly opt out:
+
+```bash
+bash scripts/setup.sh render-ci /path/to/repository --native-review --no-schedule
+```
+
+This removes only the Codex `schedule` trigger and its explanatory comment.
+`issue_comment`, `workflow_run`, and `workflow_dispatch` completion remain intact.
+Thread resolution alone will then require a manual dispatch or a later completion
+event to reconcile a waiting gate. Re-render with `--native-review` alone to restore
+polling. `--no-schedule` requires `--native-review` and supports `--dry-run`.
+The canonical assets and their source digests remain unchanged; the consumer
+rendering option is recorded in `templates/ci/native/source.json`.
+
 The default invocation keeps the legacy Claude review/fix pipeline byte for byte.
 The native profile replaces its review and merge jobs with the Cortex native
 Codex readers and protected completion resolver. It preserves the common test
