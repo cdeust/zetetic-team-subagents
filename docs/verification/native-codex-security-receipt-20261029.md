@@ -67,3 +67,19 @@ When a receipt arrives, Codex.yml resume re-runs the failed review job
 - `pytest tests/ -k 'ci_ or native or render or receipt'`: 604 passed.
 - Exported consumer tests in a rendered tree, actionlint on the published
   export, and the rendered reader against live PR data: see the PR body.
+
+## Review follow-up
+
+- Codex finding 4411383156 (P2): a receipt arriving after the Pipeline never
+  resumed the gate. Fixed by the pipeline's Fix step in e1dcc25 (`canonical()`
+  accepts the receipt marker); the event only identifies the PR and resume
+  recomputes the proof. Declared here as `receipt-event-resumption`:
+  `ci_codex_review_event_source.py` moves from unchanged to adapted assets with
+  its Cortex source digest and a test undo; tests cover a native receipt and a
+  human copy.
+- Codex finding 4411675624 (P1): the sentence was only counted. The receipt must
+  now fullmatch the observed no-issues receipt (six captured receipts are
+  identical apart from commit prefix, task id and automatic suffix); a
+  contradictory sentence after the verdict or text added anywhere is
+  `codex_security_receipt_unrecognized`.
+- `pytest tests/ -k 'ci_ or native or render or receipt'`: 610 passed.

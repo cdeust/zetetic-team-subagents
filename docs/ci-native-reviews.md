@@ -59,7 +59,10 @@ current-head security review whose metadata names this repository, PR and head,
 from the native Bot with an authenticated editor. Without it the gate blocks as
 `codex_security_verdict_missing`; a security receipt with other wording blocks
 as `codex_security_receipt_unrecognized`. The gate names the cause and never
-requests a review; once a receipt arrives, `Codex.yml` resume re-runs the gate.
+requests a review; a native receipt comment is itself a resumption event, so
+`Codex.yml` re-runs the gate when it arrives after the Pipeline. The receipt must
+match the observed no-issues receipt exactly, apart from the commit prefix, task
+id and automatic suffix; any other text for the head is unrecognized.
 
 A head merges only when both reviewers conclude for it (owner rule, 2026-10-29:
 "until the review of codex and claude (done autonomously) are there, it cannot
@@ -139,7 +142,7 @@ account authentication or hosted model execution.
 
 The assets and native job blocks originate from
 [Cortex commit 8e7375bf](https://github.com/cdeust/Cortex/tree/8e7375bf2edfb33fb9c45809b9af6b428f0f4235).
-`templates/ci/native/source.json` records SHA256 digests for nine unchanged assets
+`templates/ci/native/source.json` records SHA256 digests for seven unchanged assets
 and two unchanged native job blocks. The Codex runtime asset and review job
 record their original and adapted digests for current-finding resolution:
 all finding IDs announced by the current authenticated summary must exist,

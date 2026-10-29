@@ -453,6 +453,16 @@ def without_fetch_authorization(delivered):
     return delivered[:first] + delivered[last:]
 
 
+def original_event_source(delivered):
+    delivered = without_agreement(delivered, [AGREEMENT_EVENT_SOURCE])
+    # Inverse of source.json adaptation "receipt-event-resumption".
+    return delivered.replace(
+        b"from ci_codex_review_comments import RECEIPT\n", b""
+    ).replace(
+        b'item["body"].startswith((SUMMARY, RECEIPT))', b'item["body"].startswith(SUMMARY)'
+    )
+
+
 def original_asset(delivered, relative):
     if relative.endswith(("/claude-review.yml", "/claude.yml")):
         delivered = without_fetch_authorization(delivered)
@@ -465,7 +475,7 @@ def original_asset(delivered, relative):
         last = original.index(b"\npermissions:\n", first)
         return original[:first] + original[last:]
     if relative == "scripts/ci_codex_review_event_source.py":
-        return without_agreement(delivered, [AGREEMENT_EVENT_SOURCE])
+        return original_event_source(delivered)
     if relative == "scripts/ci_codex_review_runtime.py":
         return original_security_runtime(delivered)
     if relative == "scripts/ci_codex_reviews.py":

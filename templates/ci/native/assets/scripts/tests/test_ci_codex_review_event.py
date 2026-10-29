@@ -197,10 +197,20 @@ class CodexEventTests(unittest.TestCase):
                     "headSha": SHA, "status": "completed"}
         summary["body"] += "\n<!-- codex-security-review:v1 " + json.dumps(metadata) + " -->"
         receipt = comment(comment_id=9, updated="2026-10-26T22:10:00Z")
+        # The exact native receipt form (cortex-viz PR213 receipt6491350304).
         receipt["body"] = (
-            "<!-- codex-review-receipt:v1 -->\n\n### \U0001f6e1\ufe0f Codex Security Review\n"
-            "\nSecurity review completed. No security issues were found in this pull request.\n"
-            "\n**Reviewed commit:** `" + SHA[:10] + "`\n"
+            "<!-- codex-review-receipt:v1 -->\n\n### \U0001f6e1\ufe0f Codex Security Review\n\n"
+            "Security review completed. No security issues were found in this pull request.\n\n"
+            "**Reviewed commit:** `" + SHA[:10] + "`\n\n"
+            "[View security finding report](https://chatgpt.com/codex/cloud/tasks/task_e_0a1b)\n\n"
+            "_Only the user who started this review can view the report in Codex._\n\n"
+            "<details> <summary>\u2139\ufe0f About Codex security reviews in GitHub</summary>\n"
+            "<br/>\n\nThis is an experimental Codex feature. Security reviews are triggered when:\n"
+            '- You comment "@codex security review"\n'
+            '- A regular code review gets triggered (for example, "@codex review" or when a'
+            " PR is opened), and you\u2019re opted in so security review runs alongside code review\n\n"
+            "Once complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n"
+            "</details>"
         )
         receipt["issue_url"] = "https://api.github.com/" + PREFIX + "/issues/797"
         server.data["comments"] = [summary]
