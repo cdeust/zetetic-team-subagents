@@ -254,7 +254,11 @@ def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):
     for name in ("unit", "regression", "e2e", "environment", "install"):
         assert f"${{{{ needs.{name}.result }}}}" in gate["env"].values(), name
     assert "exit 1" in gate["run"]
-    assert len(steps) == 1 and "gh " not in gate["run"] and "headRefOid" not in gate["run"]
+    assert "gh " not in gate["run"] and "headRefOid" not in gate["run"]
+    # Owner rule 2026-11-03: the PR's own pipeline arms GitHub auto-merge once the
+    # tests are green, so a fix to the pipeline is merged by the pipeline it fixes.
+    assert len(steps) == 2 and steps[1]["name"].startswith("Arm auto-merge")
+    assert "--match-head-commit" in steps[1]["run"]
 
 
 def test_the_tag_runs_on_push_or_resolved_merge_over_the_deploy_key(workflow):

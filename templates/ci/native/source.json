@@ -230,6 +230,20 @@
         "tests/test_ci_tag_no_checkout.py",
         "tests/test_ci_post_merge_template.py"
       ]
+    },
+    "merge-arms-auto-merge": {
+      "rule": "Owner rule 2026-11-03: a CI that blocks itself and cannot correct itself is not autonomous; the PR's own definition merges the PR.",
+      "evidence": "spec PR168, Cortex PR839, codebase PR471 (2026-11-03): each PR fixes the merge gate, and main's completion resolver, running main's definition, refused them (source merge gate requires completed review); a human merge was the only exit.",
+      "reason": "The merge job, once the test jobs of the run are green, runs gh pr merge --auto --squash --match-head-commit on its own PR. GitHub performs the squash when branch protection is satisfied (the merge check included), with the PR's definition as the only code in the path. Already armed, already merged and a disabled Allow auto-merge setting are not failures; the completion resolver stays as the fallback merger.",
+      "sources": [
+        "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request",
+        "https://cli.github.com/manual/gh_pr_merge"
+      ],
+      "tests": [
+        "tests/test_ci_template.py",
+        "tests/test_ci_post_merge_template.py",
+        "tests/test_ci_native_renderer.py"
+      ]
     }
   },
   "adapted_assets": {
@@ -400,6 +414,6 @@
     }
   },
   "authored_jobs": {
-    "merge": "50fed3df434f661c7b91cf3fe4ac1242782ff4f4716b28f96a2c4a5d1d87e19e"
+    "merge": "b9f7eb6374608d34e97219e954118efbf45e221d27cbc9f9ab31e01264d4b52b"
   }
 }

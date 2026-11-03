@@ -188,7 +188,12 @@ def test_merge_is_the_aggregate_of_the_test_jobs_of_the_run(workflow):
     """Owner rule 2026-10-29: green pipeline, merge; nothing else is waited for or read."""
     merge = workflow["jobs"]["merge"]
     assert set(merge["needs"]) == {"contract", *CATEGORIES}
-    assert [s.get("name") for s in merge["steps"]] == ["Require the test jobs of this run"]
+    # Owner rule 2026-11-03: once green, the job arms GitHub auto-merge on its own
+    # PR, so the PR's definition merges the PR and never main's resolver.
+    assert [s.get("name") for s in merge["steps"]] == [
+        "Require the test jobs of this run",
+        "Arm auto-merge, GitHub merges when the required checks pass",
+    ]
     text = yaml.safe_dump(merge)
     for forbidden in ("review", "gh pr view", "headRefOid", "main", "labels", "compare"):
         assert forbidden not in text.replace("pull_request", ""), forbidden
