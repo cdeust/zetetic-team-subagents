@@ -223,6 +223,8 @@ def test_the_native_merge_job_requires_both_reviews(jobs):
     # job alone re-reads a finding resolved since.
     gate = next(s for s in jobs["merge"]["steps"] if s["name"] == "Require complete Codex reviews")
     assert gate["env"]["CODEX_COMPLETION_ONLY"] == "false"
+    # The reader rejects any base but main; a PR into another branch skips it.
+    assert gate["if"] == "github.event.pull_request.base.ref == 'main'"
     assert gate["env"]["HEAD_SHA"] == "${{ github.event.pull_request.head.sha }}"
     reader = next(s for s in jobs["review"]["steps"] if s.get("id") == "evidence")
     assert gate["run"] == reader["run"]  # the same YAML-anchored reader
