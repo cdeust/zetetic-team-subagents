@@ -173,6 +173,12 @@
       "evidence": "GraphQL author of cdeust/claude-mods PR51 comment6494419619: login claude, __typename Bot, id BOT_kgDODIGtWg (REST claude[bot], comment6491944909).",
       "reason": "A head merges only when both native reviewers conclude for it: Codex code and security (flags or the native receipt) and the latest claude-review-verdict:v1 marker of the Claude App for that head with merge true. A missing reviewer keeps the gate pending under a named cause (codex_<kind>_verdict_missing, claude_verdict_missing); merge false blocks as claude_refused and a verdict edited by another account as claude_verdict_unreadable. hold and autopilot:hold mean reviews incomplete, as in the Cortex convergence planner: the merge job no longer fails on them, and the resolve job (main's definition, after workflow authorization) deletes them before the protected merge, re-reads the PR and refuses if any hold or a new head appears. do-not-merge and a do not merge title remain owner holds, never touched. Resumption no longer skips PRs with review holds, so a receipt or verdict that completes the reviews reruns the gate."
     },
+    "review-holds-not-read": {
+      "rule": "Owner rule 2026-11-03, verbatim: Retire les holds. With the review job no longer required (#231, owner rule 2026-10-29: a green Pipeline merges), the resolve job reads no review hold.",
+      "supersedes": "reviewer-agreement-lifts-review-holds, for the resolve job only: the review job still concludes on Codex and Claude and names its causes, but its verdict is not a merge condition.",
+      "evidence": "Claude review of cdeust/cortex-viz PR216, comment 6508578491, blocking finding 1: after #231 nothing in the merge path read review state, so _merge_open_pr deleted hold and autopilot:hold on green tests alone, before the PUT merge, overriding a human hold at the next green run.",
+      "reason": "hold and autopilot:hold are neither read, blocking nor deleted by the resolve job; the pinned source blocks on hold, the native job does not. do-not-merge and a do not merge title stay the owner's holds and refuse the merge before any API call. The urllib.parse quote import of the lift is removed with it."
+    },
     "dependabot-claude-not-applicable": {
       "sources": [
         "https://github.com/cdeust/zetetic-team-subagents/pull/224",
@@ -272,10 +278,11 @@
     },
     "scripts/ci_codex_review_event_source.py": {
       "source_sha256": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
-      "sha256": "f53fd0bc69ebcec585dc4c5fd06e2e3eb0afa32da68405edd933bf33768257d0",
+      "sha256": "c74fa178751cefd38135f2e91e246911069cb77a88acc0952bc4b511ebdc7cd7",
       "adaptation": [
         "receipt-event-resumption",
-        "reviewer-agreement-lifts-review-holds"
+        "reviewer-agreement-lifts-review-holds",
+        "review-holds-not-read"
       ]
     }
   },
@@ -290,7 +297,7 @@
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "c3db009959c5be8c6a886cc1692073d4ba53ce5ac13a6c63ebff08def0a7f149",
     "scripts/tests/test_ci_codex_review_reconcile.py": "34643fa26fa6e5bd1e87e868fa6c72e783a8043a877752849fb321a9a5a40d2e",
     "scripts/tests/test_ci_codex_review_resume.py": "922d4767be2b6e8a591f24b56e6b0f2881586cf3384688525f4b830b64269183",
-    "scripts/ci_codex_review_reconcile.py": "1608a34dab10e46bd952351deb96bba9f88234c3e1b7e770fc8427d349a4c0d9",
+    "scripts/ci_codex_review_reconcile.py": "854f1680450ecc7521165237ee6d921ab99c9d727dc370249e0b190d34ca6d44",
     "scripts/tests/test_ci_codex_review_schedule.py": "bf55cfd7153371b0ccfc108e047fde6a10804f0aa8efe65e8f74f41d49dc7bed",
     "scripts/tests/test_ci_codex_review_schedule_cli.py": "fe2885481d758fa902c46b68b960c31cbc8cce1090f5d9b1495969a35365c58a",
     "scripts/tests/test_ci_codex_review_proof_first.py": "1b046a129447084575e2260b7eac4175342bfdd4fa9ec339d81fc3fb48348403",
@@ -320,9 +327,9 @@
     "resolve": {
       "path": ".github/workflows/pipeline-post-merge.yml",
       "source_sha256": "a835d2c1f884c33896f4fd8a3f6b903385c50ed2ed36b22e98579592f6277209",
-      "sha256": "2025302e78ce1c13ead888bbadb1710d1fef7d8dc0480eddd3ea5921a03554d2",
+      "sha256": "dd1bdc77be5dcb5409c83f60868e2992c137cf2cac813ca59af81ec7c138468e",
       "adaptation": [
-        "reviewer-agreement-lifts-review-holds",
+        "review-holds-not-read",
         "review-never-blocks"
       ]
     }

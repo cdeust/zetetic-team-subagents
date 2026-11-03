@@ -64,10 +64,9 @@ requests a review; a native receipt comment is itself a resumption event, so
 match the observed no-issues receipt exactly, apart from the commit prefix, task
 id and automatic suffix; any other text for the head is unrecognized.
 
-A head merges only when both reviewers conclude for it (owner rule, 2026-10-29:
-"until the review of codex and claude (done autonomously) are there, it cannot
-merge, the hold should be removed after reviewers agree on merging"). Besides
-both Codex kinds, the gate reads the latest `claude-review-verdict:v1` marker that
+The `review` job concludes on both reviewers and names its causes; since #231
+(owner rule, 2026-10-29: a green Pipeline merges) its verdict is not a merge
+condition. Besides both Codex kinds, the job reads the latest `claude-review-verdict:v1` marker that
 the Claude App posted for the head. Without it the gate stays pending as
 `claude_verdict_missing`; `merge:false` blocks as `claude_refused`; a marker edited
 by another account blocks as `claude_verdict_unreadable`. An open PR whose Claude
@@ -81,11 +80,13 @@ When Codex marks a review failed and its latest comment is a usage-limit notice
 stays pending as `codex_quota_exhausted` rather than `review_failed`, and resumes
 once Codex completes the review.
 
-`hold` and `autopilot:hold` mean "reviews incomplete". The `merge` job names them
-and the causes still missing; once Codex and Claude agree, the post-merge resolver
-(main's authorized definition) removes them, re-reads the PR and merges. The
-reconciliation reconsiders such PRs when a receipt or a verdict arrives.
-`do-not-merge` and a "do not merge" title are owner holds: never removed.
+The resolve job reads no review hold (owner rule, 2026-11-03: "Retire les
+holds"): `hold` and `autopilot:hold` are neither blocking nor deleted. Under the
+2026-10-29 rule the resolver lifted them once Codex and Claude agreed; after
+#231 nothing in the merge path read review state, so they were deleted on green
+tests alone, before the merge (Claude review of cortex-viz PR216, comment
+6508578491). `do-not-merge` and a "do not merge" title are the owner's holds and
+refuse the merge before any API call.
 
 Install the Claude GitHub app and configure `CLAUDE_CODE_OAUTH_TOKEN`. The pinned
 Anthropic action supports this OAuth input. Automatic review uses the official
@@ -121,8 +122,8 @@ reviewer definitions remain loaded.
 These copied workflows target a `main` default branch and same-repository,
 non-draft PRs. Partner contributors need repository branch access for this path;
 fork PRs do not receive this privileged automatic review or protected merge.
-Owner holds remain effective. Changing code does not clear a hold; only the
-review holds above are lifted, and only by reviewer agreement.
+Owner holds remain effective: nothing in the pipeline removes `do-not-merge` or
+a "do not merge" title.
 
 Keep the required GitHub Actions `merge` check and existing security checks on
 `main`. Do not add a required Claude check during workflow installation; upstream

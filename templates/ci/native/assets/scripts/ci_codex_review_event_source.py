@@ -93,8 +93,8 @@ def live_pr(repo: str, number: int, sha: str | None = None) -> Record | None:
         _eligible(pull, repo, head if sha is None else sha)
     except EvidenceError:
         return None
-    # Owner rule 2026-10-29: hold and autopilot:hold wait for both reviewers, and
-    # the gate lifts them; only the owner's holds end resumption here.
+    # Owner rule 2026-11-03: hold and autopilot:hold are not read anywhere in the
+    # gate; only the owner's holds end resumption here.
     if "do not merge" in title.casefold() or any(
         label["name"].casefold() == "do-not-merge" for label in labels
     ):
