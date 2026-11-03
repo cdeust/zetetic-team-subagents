@@ -113,8 +113,13 @@ def test_merge_gate_reads_nothing_but_the_test_jobs():
     assert arm["name"].startswith("Arm auto-merge")
     assert '--auto --squash --match-head-commit "$HEAD"' in arm["run"]
     assert arm["env"]["HEAD"] == "${{ github.event.pull_request.head.sha }}"
-    assert "headRefOid" not in arm["run"] and "labels" not in arm["run"]
+    # Review holds (hold, autopilot:hold) are not read; only the two owner holds are.
+    assert "headRefOid" not in arm["run"] and "autopilot" not in arm["run"]
+    assert '"hold"' not in arm["run"]
     assert "not allowed|not enabled" in arm["run"]  # disabled setting: warn, resolver merges
+    # Owner holds are read live and leave the PR unarmed (Codex finding, #238 P1).
+    assert 'contains("do not merge")' in arm["run"] and 'index("do-not-merge")' in arm["run"]
+    assert arm["run"].index("--json title,labels") < arm["run"].index("--auto --squash")
 
 
 def test_the_review_job_posts_but_cannot_fail_the_pipeline():

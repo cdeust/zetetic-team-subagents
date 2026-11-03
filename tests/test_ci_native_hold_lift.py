@@ -337,7 +337,9 @@ def test_the_merge_job_waits_for_no_review_and_reads_no_pull_request(jobs):
     # writes PR state; it still reads no review state and no label.
     assert jobs["merge"]["permissions"] == {"contents": "write", "pull-requests": "write"}
     body = "\n".join(step.get("run", "") for step in jobs["merge"]["steps"])
-    assert "labels" not in body and "headRefOid" not in body and "review" not in body
+    # Only the two owner holds (do-not-merge label, "do not merge" title) are read.
+    assert "headRefOid" not in body and "review" not in body
+    assert "autopilot" not in body and '"hold"' not in body
 
 
 # The resolve job (workflow_run, main's definition, pull-requests: write).
