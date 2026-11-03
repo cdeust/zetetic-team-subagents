@@ -720,7 +720,13 @@ jobs:
   # mutation here: the completed-run resolver performs the protected merge.
   merge:
     # The aggregate of the test jobs of this run: green when they all are. It reads
-    # nothing else (no main, no review state, no live PR label).
+    # nothing else (no main, no review state, no live PR label). When they are
+    # green it arms GitHub's native auto-merge on this PR, so the merge happens
+    # with this PR's own definition in the path and nothing from main's: a PR
+    # that fixes the pipeline is merged by the pipeline it fixes (owner rule
+    # 2026-11-03: a CI that blocks itself and cannot correct itself is not
+    # autonomous). Branch protection stays the only gate: GitHub squashes as
+    # soon as the required checks pass, this job included.
     needs: [contract, unit, regression, e2e, environment, install]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
@@ -728,7 +734,8 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     steps:
       - name: Require the test jobs of this run
         env:
@@ -751,6 +758,44 @@ jobs:
             exit 1
           fi
           echo "## Merge: the test jobs are green on this commit" >> "$GITHUB_STEP_SUMMARY"
+
+      # This job is itself a required check and still running, so a direct merge
+      # here would be refused; auto-merge lets GitHub perform the squash the
+      # moment branch protection is satisfied. --match-head-commit binds the
+      # arming to this head: a later push disarms it until its own run passes.
+      # source: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request
+      # and https://cli.github.com/manual/gh_pr_merge (--auto, --match-head-commit).
+      - name: Arm auto-merge, GitHub merges when the required checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Owner holds stay owner holds: a do-not-merge label or a "do not merge"
+          # title is read live before arming, the same two the resolve job reads.
+          # Codex finding on #238 (P1).
+          held="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,labels \
+            --jq '[(.title | ascii_downcase | contains("do not merge")), ([.labels[].name | ascii_downcase] | index("do-not-merge") != null)] | any')"
+          if [ "$held" = "true" ]; then
+            echo "## Merge: tests green, owner hold on the PR (do-not-merge label or title), auto-merge not armed" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash --match-head-commit "$HEAD" >arm.log 2>&1; then
+            echo "## Merge: auto-merge armed for $HEAD, GitHub merges when the required checks pass" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat arm.log
+          if grep -qiE "already enabled|clean status|already (been )?merged" arm.log; then
+            echo "## Merge: auto-merge was already armed or the PR is already merged" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if grep -qiE "not allowed|not enabled" arm.log; then
+            echo "::warning::auto-merge is disabled in this repository's settings (Allow auto-merge); the completion resolver merges instead"
+            echo "## Merge: auto-merge is disabled in Settings, the completion resolver merges" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::error::arming auto-merge failed"
+          exit 1
 
 
   # Decision 1: the release gate of Cortex (.github/workflows/ci.yml, ADR-0802)

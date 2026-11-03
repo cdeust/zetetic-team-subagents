@@ -44,7 +44,11 @@ checks nothing out: it holds the write-enabled `RELEASE_TAG_SSH_KEY` after a
 commit is fetched by its 40-hex SHA into a bare repository under `runner.temp`,
 GitHub's SSH host keys come from `api.github.com/meta` over TLS with
 `StrictHostKeyChecking=yes`, and the publish step runs in that bare repository
-(`tag-fetch-without-checkout` adaptation, `tests/test_ci_tag_no_checkout.py`). The renderer delivers the three Pipeline workflows,
+(`tag-fetch-without-checkout` adaptation, `tests/test_ci_tag_no_checkout.py`). The `merge`
+job arms GitHub auto-merge on its own PR once the test jobs are green
+(`merge-arms-auto-merge` adaptation): the PR's definition merges the PR, and a
+fix to the pipeline is merged by the pipeline it fixes; the completion resolver
+on `main` remains the fallback where "Allow auto-merge" is off. The renderer delivers the three Pipeline workflows,
 `Codex.yml`, `claude-review.yml`, `claude.yml`, the Codex reader scripts and the
 Anthropic review command with its five reviewers. Existing `ci.json` and
 unrelated files are preserved. Every destination is preflighted; a failed file
