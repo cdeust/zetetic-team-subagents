@@ -572,8 +572,42 @@ def original_claude_review(original):
     return original
 
 
+def without_claude_completion(delivered):
+    # Inverse of source.json adaptation "claude-verdict-completion" (owner rule
+    # 2026-11-03 23:29): a Claude verdict comment resumes the gate like a Codex one.
+    text = delivered.decode()
+    start = text.index("\n\n\ndef claude_verdict(item: Any) -> bool:")
+    end = text.index("\n\n\ndef canonical(", start)
+    text = text[:start] + text[end:]
+    text = text.replace("from ci_codex_review_agreement import CLAUDE, VERDICT\n", "")
+    text = text.replace(
+        '    if event.get("action") not in ("created", "edited"):\n'
+        "        return None\n"
+        "    completion = canonical if canonical(item) else (claude_verdict if claude_verdict(item) else None)\n"
+        "    if completion is None:\n"
+        "        return None\n",
+        '    if event.get("action") not in ("created", "edited") or not canonical(item):\n'
+        "        return None\n",
+    ).replace("    if not completion(actual):\n", "    if not canonical(actual):\n")
+    text = text.replace(
+        '    sender = event.get("sender")\n'
+        '    if name in ("issue_comment", "pull_request_review") and not (\n'
+        "        bot(sender)\n"
+        "        or (\n"
+        "            isinstance(sender, dict)\n"
+        '            and sender.get("login") == CLAUDE\n'
+        '            and sender.get("type") == "Bot"\n'
+        "        )\n"
+        "    ):\n",
+        '    if name in ("issue_comment", "pull_request_review") and not bot(\n'
+        '        event.get("sender")\n'
+        "    ):\n",
+    )
+    return text.encode()
+
+
 def original_event_source(delivered):
-    delivered = without_agreement(delivered, [AGREEMENT_EVENT_SOURCE])
+    delivered = without_agreement(without_claude_completion(delivered), [AGREEMENT_EVENT_SOURCE])
     # Inverse of source.json adaptation "receipt-event-resumption".
     return delivered.replace(
         b"from ci_codex_review_comments import RECEIPT\n", b""
@@ -619,6 +653,15 @@ def original_asset(delivered, relative):
     if relative.endswith(("/claude-review.yml", "/claude.yml")):
         delivered = without_fetch_authorization(delivered)
     if relative == ".github/workflows/Codex.yml":
+        # Inverse of "claude-verdict-completion": the Codex-only sender test.
+        delivered = delivered.replace(
+            b"       && github.event.comment.user.type == 'Bot'\n"
+            b"       && (github.event.comment.user.login == 'chatgpt-codex-connector[bot]'\n"
+            b"        || (github.event.comment.user.login == 'claude[bot]'\n"
+            b"         && contains(github.event.comment.body, 'claude-review-verdict:v1'))))\n",
+            b"       && github.event.comment.user.login == 'chatgpt-codex-connector[bot]'\n"
+            b"       && github.event.comment.user.type == 'Bot')\n",
+        )
         original = delivered.replace(
             b"    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.\n",
             b"",

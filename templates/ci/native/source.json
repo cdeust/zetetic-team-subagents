@@ -260,6 +260,14 @@
         "tests/test_ci_pr_safety.py",
         "tests/test_ci_native_hold_lift.py"
       ]
+    },
+    "claude-verdict-completion": {
+      "rule": "Owner rule 2026-11-03 (23:29): the merge gate needs both verdicts, so a Claude verdict landing after the pipeline must resume the gate the way a Codex completion does.",
+      "evidence": "Codex finding on #240 (P2): a native consumer rendered with --no-schedule had no automatic completion path when Claude concluded after the Pipeline; Codex.yml accepted Codex comments only and event_pr() rejected the Claude sender.",
+      "reason": "Codex.yml identify accepts a claude[bot] Bot comment whose body carries claude-review-verdict:v1; event_pr() accepts that sender and _comment() re-reads the comment from the API and requires exactly one verdict marker from claude[bot] (type Bot). A user posting the marker, a Claude progress comment or two markers are ignored.",
+      "tests": [
+        "templates/ci/native/assets/scripts/tests/test_ci_codex_review_event.py"
+      ]
     }
   },
   "adapted_assets": {
@@ -321,20 +329,22 @@
     },
     ".github/workflows/Codex.yml": {
       "source_sha256": "884416dc8bd5b7a409684c0daffe3a1e478232d1e5d6aee7eb9d6c3d3b21671a",
-      "sha256": "3f6c9d7a58570ce410d794367ac9dfcfddfe68413d539c0e8a20e130cf59a1f6",
+      "sha256": "d574c6d1169f528794e818aef9f4622a8c47f8e783fe760ea1c619ad51dbc108",
       "adaptation": [
         "scheduled-reconciliation",
         "reconciliation-checks-read",
-        "bounded-completion-jobs"
+        "bounded-completion-jobs",
+        "claude-verdict-completion"
       ]
     },
     "scripts/ci_codex_review_event_source.py": {
       "source_sha256": "e2dde242badb80bd76d7d1e09fdd8d097bfa2ee516424d4c6da0a05b61b2597e",
-      "sha256": "c74fa178751cefd38135f2e91e246911069cb77a88acc0952bc4b511ebdc7cd7",
+      "sha256": "539e7fcbfcf6397b0dbdfdc95e167188cabbbad33595428fb39437dce5eb5ae6",
       "adaptation": [
         "receipt-event-resumption",
         "reviewer-agreement-lifts-review-holds",
-        "review-holds-not-read"
+        "review-holds-not-read",
+        "claude-verdict-completion"
       ]
     }
   },
@@ -345,7 +355,7 @@
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
     "scripts/ci_codex_review_comments.py": "5b2a3e73a5aa7a29e51a89c348123fca87a0ba35e27e067020a3e39fe1675f9b",
     "scripts/tests/codex_resume_fixtures.py": "3259d5d6049f9a72e3e1adc4f72e7021a72c67c82a1fae842f6b8e4242f58ad3",
-    "scripts/tests/test_ci_codex_review_event.py": "4f4fb694130571e4d570280c87becc8ad07ae02d11dcee1c90aaed35fc758c35",
+    "scripts/tests/test_ci_codex_review_event.py": "502e454a85242d76a32831e29806af63c98dfaad8cde3be38f865817bbf01ffd",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
     "scripts/tests/test_ci_codex_review_event_cli.py": "046e5dc369508d0b4641148b4e6dbf20bba8690af66247b601286cbf440c9f43",
     "scripts/tests/test_ci_codex_review_event_fixtures.py": "c3db009959c5be8c6a886cc1692073d4ba53ce5ac13a6c63ebff08def0a7f149",
