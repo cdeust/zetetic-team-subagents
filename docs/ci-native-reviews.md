@@ -64,6 +64,19 @@ requests a review; a native receipt comment is itself a resumption event, so
 match the observed no-issues receipt exactly, apart from the commit prefix, task
 id and automatic suffix; any other text for the head is unrecognized.
 
+Since 2026-10-31 Codex posts no receipt and reacts 👍 on the PR once both reviews
+finish with no findings (its summary says so; observed on cortex-viz PR216,
+PR218, PR219, PR220 and Cortex PR838, PR840, PR846, PR847; absent on every PR
+reviewed before, cortex-viz PR207, PR212, PR217). When the receipt is missing,
+`scripts/ci_codex_review_reaction.py` (port of Cortex PR847) accepts the Codex
+Bot's +1 as the verdict if it is not earlier than both Completed rows of the
+summary for this head (to the second), no 👀 remains, the summary carries no
+finding text and no native finding thread is unresolved by the owner. A
+malformed reaction payload or stamp blocks as `protocol`; anything short of the
+rule keeps `codex_security_verdict_missing`. A reaction is not a resumption
+event: `Codex.yml`'s schedule re-runs the gate when the 👍 lands after the
+Pipeline.
+
 The `review` job concludes on both reviewers and names its causes; since #231
 (owner rule, 2026-10-29: a green Pipeline merges) its verdict is not a merge
 condition. Besides both Codex kinds, the job reads the latest `claude-review-verdict:v1` marker that

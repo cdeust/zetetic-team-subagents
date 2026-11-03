@@ -236,9 +236,23 @@ def original_security_receipt(original):
     )
 
 
+def without_reaction_verdict(text):
+    # Inverse of source.json adaptation "codex-reaction-verdict".
+    return without_agreement(text, (
+        ("from ci_codex_review_reaction import reaction_verdict  # noqa: E402\n", ""),
+        (
+            "            proof = reaction_verdict(\n"
+            '                proof, (repo, pr, expected_sha), latest["body"], reviews[kind], security\n'
+            "            )\n",
+            "",
+        ),
+    ))
+
+
 def original_security_reader(delivered):
     original = original_owner_resolution(
-        without_agreement(delivered.decode(), AGREEMENT_READER), "scripts/ci_codex_reviews.py"
+        without_agreement(without_reaction_verdict(delivered.decode()), AGREEMENT_READER),
+        "scripts/ci_codex_reviews.py",
     )
     original = original_security_receipt(original_reader_api(original))
     imported = (
@@ -304,6 +318,14 @@ def original_review_job(delivered):
     anchored = "        run: |\n          set -euo pipefail\n          args=("
     assert original.count(anchored) == 1
     original = original.replace(anchored, anchored.replace("run: |", "run: &codex_review_reader |"))
+    first = original.index("          REACTION_SOURCE = r'''\n")
+    last = original.index("          AGREEMENT_SOURCE = r'''\n", first)
+    original = without_agreement(original[:first] + original[last:], [(
+        '          _reaction = ModuleType("ci_codex_review_reaction")\n'
+        '          exec(compile(REACTION_SOURCE, "ci_codex_review_reaction.py", "exec"),'
+        " _reaction.__dict__)\n"
+        "          sys.modules[_reaction.__name__] = _reaction\n", "",
+    )])
     first = original.index("          AGREEMENT_SOURCE = r'''\n")
     last = original.index("          READER_SOURCE = r'''\n", first)
     original = without_agreement(original[:first] + original[last:], [(
@@ -715,6 +737,7 @@ def test_native_inline_codex_readers_match_the_delivered_scripts(tmp_path):
     for variable, filename in (
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
         ("COMMENTS_SOURCE", "ci_codex_review_comments.py"),
+        ("REACTION_SOURCE", "ci_codex_review_reaction.py"),
         ("AGREEMENT_SOURCE", "ci_codex_review_agreement.py"),
         ("READER_SOURCE", "ci_codex_reviews.py"),
     ):
@@ -735,6 +758,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
         for name in (
             "ci_codex_review_runtime",
             "ci_codex_review_comments",
+            "ci_codex_review_reaction",
             "ci_codex_review_agreement",
             "ci_codex_reviews",
         ):
@@ -746,7 +770,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
             exec(compile(source, module.__file__, "exec"), module.__dict__)
             sys.modules[name] = module
             loaded[name] = module
-        runtime, comments, _, reader = loaded.values()
+        runtime, comments, _, _, reader = loaded.values()
         assert comments.EvidenceError is runtime.EvidenceError
         rows = [comment(), claude_row(SHA)]  # Codex and Claude agree on the head.
         assert reader.review_evidence(rows, SHA, REPO, PR)["state"] == "success"
