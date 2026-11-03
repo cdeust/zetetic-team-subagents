@@ -1142,13 +1142,19 @@ jobs:
       - name: Require the review to have run to completion
         env:
           REVIEW: ${{ needs.review.result }}
+          ACTOR: ${{ github.actor }}
         run: |
-          if [ "$REVIEW" != success ]; then
-            echo "::error::review: $REVIEW, requires completion"
-            echo "## Merge: blocked, the review did not complete for this head ($REVIEW)" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "## Review: completed for this head" >> "$GITHUB_STEP_SUMMARY"
+          # A Dependabot PR has no Claude review by design (#224: the review job
+          # excludes that actor); Codex reviews it through its App. Codex finding
+          # on #240 (P2).
+          case "$REVIEW:$ACTOR" in
+            success:*) echo "## Review: completed for this head" >> "$GITHUB_STEP_SUMMARY" ;;
+            "skipped:dependabot[bot]") echo "## Review: not applicable to a Dependabot PR (#224)" >> "$GITHUB_STEP_SUMMARY" ;;
+            *)
+              echo "::error::review: $REVIEW, requires completion"
+              echo "## Merge: blocked, the review did not complete for this head ($REVIEW)" >> "$GITHUB_STEP_SUMMARY"
+              exit 1 ;;
+          esac
 
       # This job is itself a required check and still running, so a direct merge
       # here would be refused; auto-merge lets GitHub perform the squash the

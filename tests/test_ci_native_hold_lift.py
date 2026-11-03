@@ -336,10 +336,11 @@ def test_the_merge_job_waits_for_no_review_and_reads_no_pull_request(jobs):
     # Owner rule 2026-11-03: the merge job arms auto-merge on its own PR, so it
     # writes PR state; it still reads no review state and no label.
     assert jobs["merge"]["permissions"] == {"contents": "write", "pull-requests": "write"}
-    body = "\n".join(step.get("run", "") for step in jobs["merge"]["steps"])
-    # Only the two owner holds (do-not-merge label, "do not merge" title) are read.
-    assert "headRefOid" not in body
-    assert "autopilot" not in body and '"hold"' not in body
+    # The live reader shared with the review job runs here; the arm step reads
+    # only the two owner holds (do-not-merge label, "do not merge" title).
+    arm = next(s for s in jobs["merge"]["steps"] if s["name"].startswith("Arm auto-merge"))
+    assert "headRefOid" not in arm["run"]
+    assert "autopilot" not in arm["run"] and '"hold"' not in arm["run"]
 
 
 # The resolve job (workflow_run, main's definition, pull-requests: write).

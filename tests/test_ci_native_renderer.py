@@ -333,9 +333,11 @@ def original_review_job(delivered):
     )
     # Inverse of source.json adaptation "merge-is-the-test-aggregate": the merge job no
     # longer reuses the reader, so its YAML anchor is gone.
-    anchored = "        run: |\n          set -euo pipefail\n          args=("
+    # merge-requires-both-reviews: the merge job reuses the reader again, so the
+    # YAML anchor is back in the delivered text (merge-is-the-test-aggregate had
+    # removed it); the pinned source carries it too.
+    anchored = "        run: &codex_review_reader |\n          set -euo pipefail\n          args=("
     assert original.count(anchored) == 1
-    original = original.replace(anchored, anchored.replace("run: |", "run: &codex_review_reader |"))
     first = original.index("          REACTION_SOURCE = r'''\n")
     last = original.index("          AGREEMENT_SOURCE = r'''\n", first)
     original = without_agreement(original[:first] + original[last:], [(

@@ -217,11 +217,15 @@ def test_the_native_merge_job_requires_both_reviews(jobs):
     # job can fail the run again (no continue-on-error) and merge needs it.
     assert "continue-on-error" not in jobs["review"]
     assert "review" in jobs["merge"]["needs"]
-    gate = next(s for s in jobs["merge"]["steps"] if s["name"].startswith("Require both reviews"))
-    assert gate["env"]["STATE"] == "${{ needs.review.outputs.state }}"
-    for state in ("success)", "pending)"):
-        assert state in gate["run"]
-    assert gate["run"].count("exit 1") == 2
+    # The merge job re-runs the reader live on the head (CODEX_COMPLETION_ONLY
+    # false: pending exits 2, blocked exits 1), under the step name the
+    # resumption plan pins (ci_codex_review_resume.MERGE), so a re-run of this
+    # job alone re-reads a finding resolved since.
+    gate = next(s for s in jobs["merge"]["steps"] if s["name"] == "Require complete Codex reviews")
+    assert gate["env"]["CODEX_COMPLETION_ONLY"] == "false"
+    assert gate["env"]["HEAD_SHA"] == "${{ github.event.pull_request.head.sha }}"
+    reader = next(s for s in jobs["review"]["steps"] if s.get("id") == "evidence")
+    assert gate["run"] == reader["run"]  # the same YAML-anchored reader
     assert all("review" not in job.get("needs", []) for name, job in jobs.items() if name != "merge")
 
 
