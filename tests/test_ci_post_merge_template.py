@@ -41,8 +41,11 @@ def test_only_resolver_and_existing_review_tag_jobs_can_write():
         "pull-requests": "write",
         "actions": "read",
     }
-    for name in ("contract", "merge", *CATEGORIES):
+    for name in ("contract", *CATEGORIES):
         assert "write" not in jobs[name].get("permissions", {}).values()
+    # Owner rule 2026-11-03: the merge job arms GitHub auto-merge on its own PR
+    # (the PR's definition merges, never main's), so it writes PR state only.
+    assert jobs["merge"]["permissions"] == {"contents": "write", "pull-requests": "write"}
 
 
 def test_contract_allows_normal_events_but_requires_successful_resolve_for_completion():
@@ -102,9 +105,16 @@ def test_review_checkout_explicitly_excludes_completion_events_and_forks():
 
 def test_merge_gate_reads_nothing_but_the_test_jobs():
     job = workflow()["jobs"]["merge"]
-    body = "\n".join(step.get("run", "") for step in job["steps"])
-    assert "gh " not in body and "headRefOid" not in body
+    gate, arm = job["steps"]
+    assert "gh " not in gate["run"] and "headRefOid" not in gate["run"]
     assert "review" not in job["needs"]
+    # The second step only arms auto-merge for this head; it reads no review,
+    # no main and no label, and GitHub's branch protection decides the merge.
+    assert arm["name"].startswith("Arm auto-merge")
+    assert '--auto --squash --match-head-commit "$HEAD"' in arm["run"]
+    assert arm["env"]["HEAD"] == "${{ github.event.pull_request.head.sha }}"
+    assert "headRefOid" not in arm["run"] and "labels" not in arm["run"]
+    assert "not allowed|not enabled" in arm["run"]  # disabled setting: warn, resolver merges
 
 
 def test_the_review_job_posts_but_cannot_fail_the_pipeline():
