@@ -26,6 +26,7 @@ import ci_codex_review_runtime as runtime  # noqa: E402
 from ci_codex_review_runtime import _outputs  # noqa: E402
 from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 from ci_codex_review_comments import security_receipt  # noqa: E402
+from ci_codex_review_reaction import reaction_verdict  # noqa: E402
 from ci_codex_review_agreement import conclude  # noqa: E402
 
 Record = dict[str, Any]
@@ -163,6 +164,9 @@ def _reviews(latest, target, comments):
                 (repo, pr, expected_sha), latest["body"], reviews[kind], security
             ) or security_receipt(
                 comments, (repo, pr, expected_sha), reviews[kind], security
+            )
+            proof = reaction_verdict(
+                proof, (repo, pr, expected_sha), latest["body"], reviews[kind], security
             )
         if proof is not None:
             state = proof.pop("state")
