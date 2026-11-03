@@ -56,6 +56,9 @@ jobs:
           echo "tested_sha=$actual" >> "$GITHUB_OUTPUT"
 
 
+      - name: Test no comparison with main
+        run: python3 -m unittest discover -s scripts/tests -p test_no_main_comparison.py -v
+
       - name: Validate ci.json
         id: commands
         run: |
@@ -496,7 +499,10 @@ jobs:
           ref: ${{ needs.contract.outputs.tested_sha }}
 
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.306
+        # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"
+          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Scratch directory and OS name
         run: |
@@ -529,7 +535,10 @@ jobs:
           ref: ${{ needs.contract.outputs.tested_sha }}
 
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.306
+        # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"
+          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Scratch directory and OS name
         run: |
@@ -547,183 +556,1211 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ env.CI_WORK }}/claude
         run: bash -eo pipefail -c "$CI_COMMAND"
 
-  # The bot (design, "The bot step"): runs whether install passed or failed,
-  # on same-repo, non-draft pull requests. Dependabot remains out of scope.
-  # Claude commits skip duplicate review, but failing tests still need repair.
-  # Owner-authored workflow PRs are repairable; other workflow PRs keep bootstrap isolation.
-  # Cancellation stops mutation; ordinary failed tests still reach repair.
   review:
     # Owner rule 2026-11-03 (23:29): the merge job requires this job. A blocking
     # finding fails it and the run; a missing verdict leaves it green with
     # state pending, and the completion workflow re-runs it when a verdict lands.
     needs: [unit, regression, e2e, environment, install]
+    outputs:
+      state: ${{ steps.evidence.outputs.state }}
+      causes: ${{ steps.evidence.outputs.causes }}
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.head.repo.full_name == github.repository
-      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
+      contents: read
+      pull-requests: read
+      issues: read
       actions: read
     steps:
-      # No GITHUB_TOKEN in git config: the Fix push must leave with the Claude
-      # App token. checkout v7 links its token by includeIf, which the action
-      # does not clear, and a GITHUB_TOKEN push leaves pull_request runs
-      # waiting for approval (PR #171, ae628d6). Every later git call is local.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: >-
-          github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Review guard
-        id: guard
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          TEST_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          if [ -z "$HEAD_REF" ] || [ "$HEAD_REF" = "$DEFAULT_BRANCH" ]; then
-            echo "::error::Automatic fixes require a non-default PR head branch."
-            exit 1
-          fi
-          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
-            echo "::error::The branch advanced after this run started; use its new run."
-            exit 1
-          fi
-          changed="$(git diff --name-only "origin/$BASE_REF...$HEAD_SHA")"
-          author="$(git log -1 --format=%ae "$HEAD_SHA")"
-          review=true
-          fix=true
-          if grep -qx '.github/workflows/pipeline.yml' <<<"$changed" \
-            && { [ -z "$PR_AUTHOR" ] || [ "$PR_AUTHOR" != "$REPO_OWNER" ]; }; then
-            review=false
-            fix=false
-            echo "## Review: bootstrap workflow change, bot steps skipped" >> "$GITHUB_STEP_SUMMARY"
-          else
-            case "$author" in
-              *'+claude[bot]@users.noreply.github.com'|'claude[bot]@users.noreply.github.com')
-                review=false
-                fix="$(jq -r 'any(.[]; .result != "success")' <<<"$TEST_RESULTS")"
-                echo "## Review: Claude head; duplicate review skipped, repair=$fix" >> "$GITHUB_STEP_SUMMARY"
-                ;;
-            esac
-          fi
-          { echo "review=$review"; echo "fix=$fix"; } >> "$GITHUB_OUTPUT"
-
-      - name: Collect the failed jobs of this run
-        id: failed
-        if: steps.guard.outputs.fix == 'true'
+      - name: Require completed Codex reviews
+        id: evidence
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "list<<EOF_JOBS"
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
-              --jq '.jobs[] | select(.conclusion == "failure") | "- \(.name): \(.html_url)"'
-            echo "EOF_JOBS"
-          } >> "$GITHUB_OUTPUT"
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CODEX_COMPLETION_ONLY: 'true'
+        run: &codex_review_reader |
+          set -euo pipefail
+          args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA" --github-output)
+          # Owner rule 2026-11-03 (23:29): a missing verdict fails this job (exit 2),
+          # so the completion workflow re-runs it, and its dependent merge job, when
+          # the verdict lands; --allow-pending (#205) kept a pending head green.
+          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete); fi
+          python3 -I - "${args[@]}" <<'CODEX_REVIEW_PY'
+          import sys
+          from types import ModuleType
 
-      # The reviewer runs the tests that cover the change; a repository that
-      # declares hashed dev dependencies gets them on PATH for that.
-      - name: Install the test dependencies for the review
-        if: steps.guard.outputs.review == 'true' && hashFiles('requirements-dev.lock') != ''
-        run: |
-          python3 -m venv "$RUNNER_TEMP/review-venv"
-          "$RUNNER_TEMP/review-venv/bin/python" -m pip install --disable-pip-version-check --require-hashes -r requirements-dev.lock
-          echo "$RUNNER_TEMP/review-venv/bin" >> "$GITHUB_PATH"
+          RUNTIME_SOURCE = r'''
+          """Trusted Codex review I/O and nullable security-resolution proof.
 
-      # The documented review (https://code.claude.com/docs/en/github-actions,
-      # "Run a skill"): read-only, findings as inline comments. The skill reads
-      # the diff, the CLAUDE.md files and the changed code through subagents and
-      # gh; given only the inline-comment tool it skipped those steps and still
-      # posted "No issues found" (PR #207: 3 turns, 9 s). Its tools are the ones
-      # its procedure uses (commands/code-review.md of the plugin), plus reading
-      # the code and running the tests; nothing that edits.
-      - name: Review
-        id: claude_review
-        if: steps.guard.outputs.review == 'true'
-        uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
-          plugins: "code-review@claude-code-plugins"
-          display_report: true
-          show_full_output: false
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
-          prompt: |
-            /code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
-            Review head ${{ github.event.pull_request.head.sha }}, checked out in the working directory. A Claude comment already on this pull request, if there is one, reviewed an earlier commit: it is no reason to stop.
-            Before any verdict: read the whole diff (gh pr diff), read every changed file in full and the tests that cover it, read the test job logs of run ${{ github.run_id }} (gh run view ${{ github.run_id }} --log), and run the tests that cover the changed code (python3 -m pytest, pytest, cargo test or npm test, whichever this repository uses).
-            Launch the subagents the procedure names. Post "No issues found. Checked for bugs and CLAUDE.md compliance." only when every step ran; when a step could not run, the comment names that step and why instead.
-          claude_args: >-
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Task,Read,Glob,Grep,LS,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh run view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(python3 -m pytest:*),Bash(python -m pytest:*),Bash(pytest:*),Bash(cargo test:*),Bash(npm test:*)"
+          Sources: PR805 summary6442631163 on0134b085 and authenticated GraphQL
+          reviewThreads.isResolved, resolvedBy, author.__typename and comment.databaseId.
+          https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
+          https://cli.github.com/manual/gh_api
+          """
 
-      # show_full_output stays false (the output can quote the code under
-      # review), so a failed review names only its error class: the result
-      # fields of the execution file the action writes even on failure
-      # (base-action/src/execution-file.ts). PR #191 and #192 failed in 434 ms
-      # at no cost with nothing else in the log (runs 40186210241, 40201492297).
-      - name: Name the review failure
-        if: failure() && steps.claude_review.outcome == 'failure'
-        env:
-          EXECUTION_FILE: ${{ steps.claude_review.outputs.execution_file }}
-        run: |
-          if [ -z "$EXECUTION_FILE" ] || [ ! -f "$EXECUTION_FILE" ]; then
-            echo "::error::Review: no execution file; the action failed before Claude returned a result"
-            exit 1
-          fi
-          jq -r 'map(select(.type == "result")) | last // {}
-            | "::error::Review result: subtype=\(.subtype) is_error=\(.is_error) api_error_status=\(.api_error_status) terminal_reason=\(.terminal_reason) stop_reason=\(.stop_reason) num_turns=\(.num_turns)"' "$EXECUTION_FILE"
-          exit 1
+          from __future__ import annotations
 
-      # The fix: every review finding and every failed job, on the branch.
-      # It pushes with the action's Claude App token, so the synchronize event
-      # starts the pipeline on the new head without an approval
-      # (docs.github.com, "Triggering a workflow from a workflow").
-      - name: Fix
-        if: steps.guard.outputs.fix == 'true'
-        uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
-        with:
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            You own pull request #${{ github.event.pull_request.number }} of ${{ github.repository }}
-            (branch ${{ github.event.pull_request.head.ref }}, checked out here).
-            1. Read every review comment on the pull request (gh pr view --comments, gh api for inline comments) and apply each finding.
-            2. Fix every failed job of pipeline run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}:
-            ${{ steps.failed.outputs.list }}
-            Read each job's log (gh run view ${{ github.run_id }} --log-failed), correct the underlying fault, and preserve every required check. If the fault is in a generated workflow, fix its canonical source.
-            3. Run the tests you touched, commit on this branch with a message that names what was fixed, and git push.
-            Change nothing when there is nothing to fix. For generated GitHub workflows, edit their canonical source and run render-ci; never hand-edit generated workflows.
-            Work only on this PR branch; never push main or bypass a review or merge gate.
-          claude_args: >-
-            --permission-mode acceptEdits
-            --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(cargo:*),Bash(bash:*)"
+          import json
+          import os
+          import re
+          import subprocess
+          from http import HTTPStatus
+          from pathlib import Path
+          from typing import Any
+
+          Record = dict[str, Any]
+
+
+          class EvidenceError(ValueError):
+              """Only fixed diagnostic categories may cross the CLI boundary."""
+
+
+          class APIError(EvidenceError):
+              """Sanitized transport category; the existing public reason remains api."""
+
+              def __init__(self, category="unknown"):
+                  super().__init__("api")
+                  allowed = ("not_found", "forbidden", "rate_limited")
+                  self.category = category if category in allowed else "unknown"
+
+
+          def _api_category(output):
+              # source: GitHub REST errors expose status; GraphQL errors expose type.
+              # https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api
+              try:
+                  payload = _json(output)
+              except (EvidenceError, TypeError):
+                  return "unknown"
+              # gh --paginate --slurp wraps a first-page error in one array element.
+              if isinstance(payload, list) and len(payload) == 1:
+                  payload = payload[0]
+              if not isinstance(payload, dict):
+                  return "unknown"
+              try:
+                  status = HTTPStatus(int(payload.get("status", "")))
+              except (ValueError, TypeError):
+                  status = None
+              if status in (HTTPStatus.FORBIDDEN, HTTPStatus.TOO_MANY_REQUESTS):
+                  return "forbidden" if status == HTTPStatus.FORBIDDEN else "rate_limited"
+              errors = payload.get("errors", [])
+              if not isinstance(errors, list) or any(not isinstance(row, dict) for row in errors):
+                  return "unknown"
+              types = {row.get("type") for row in errors if isinstance(row.get("type"), str)}
+              if "RATE_LIMITED" in types:
+                  return "rate_limited"
+              if status == HTTPStatus.NOT_FOUND or (
+                  errors and all(row.get("type") == "NOT_FOUND" for row in errors)
+              ):
+                  return "not_found"
+              return "unknown"
+
+
+          def _pairs(items: list[tuple[str, Any]]) -> Record:
+              value: Record = {}
+              for key, item in items:
+                  if key in value:
+                      raise EvidenceError("protocol")
+                  value[key] = item
+              return value
+
+
+          def _invalid_constant(value: str) -> None:
+              raise EvidenceError("protocol")
+
+
+          def _json(text: str) -> Any:
+              try:
+                  return json.loads(
+                      text, object_pairs_hook=_pairs, parse_constant=_invalid_constant
+                  )
+              except (ValueError, RecursionError, TypeError) as exc:
+                  raise EvidenceError("protocol") from exc
+
+
+          def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None) -> Any:
+              # https://cli.github.com/manual/gh_api: --slurp wraps all paginated pages.
+              command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), endpoint]
+              for key, value in (fields or {}).items():
+                  flag = "--field" if type(value) is int else "--raw-field"
+                  command.extend((flag, f"{key}={value}"))
+              try:
+                  done = subprocess.run(command, text=True, capture_output=True, check=True)
+              except subprocess.CalledProcessError as exc:
+                  raise APIError(_api_category(exc.stdout)) from exc
+              except (OSError, subprocess.SubprocessError) as exc:
+                  raise APIError() from exc
+              return _json(done.stdout)
+
+
+          def _outputs(result: Record) -> None:
+              path = os.environ.get("GITHUB_OUTPUT")
+              if not path:
+                  raise EvidenceError("output")
+              text = (
+                  f"ready={str(result['state'] == 'success').lower()}\n"
+                  f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
+                  # Fixed identifiers only: the merge job names why a head cannot merge yet.
+                  f"reason={result['reason']}\ncauses={','.join(result.get('causes', [result['reason']]))}\n"
+              )
+              try:
+                  with Path(path).open("a", encoding="utf-8") as output:
+                      output.write(text)
+              except OSError as exc:
+                  raise EvidenceError("output") from exc
+
+
+          # first:100 is GitHub's documented maximum connection page, not a score threshold.
+          THREAD_QUERY = """
+          query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                headRefOid
+                reviewThreads(first:100, after:$endCursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    isResolved
+                    resolvedBy { login __typename }
+                    comments(first:1) { nodes { databaseId body author { login __typename } } }
+                  }
+                }
+              }
+            }
+          }
+          """
+          FINDING = "<!-- codex-security-review-finding:v1 -->"
+
+
+          def _announced(body: str, repo: str, pr: int) -> set[int]:
+              """Require a nonempty, fully enumerated native security finding list."""
+              heading = "\n### Security findings\n"
+              if body.count(heading) != 1:
+                  return set()
+              section = body.split(heading, 1)[1].split("\n<details>", 1)[0]
+              counts = re.findall(
+                  r"^#### (?:Blocking|Advisory) findings \(([0-9]+)\)$", section, re.M
+              )
+              prefix = re.escape(f"https://github.com/{repo}/pull/{pr}#discussion_r")
+              ids = re.findall(prefix + r"([1-9][0-9]*)\)", section)
+              try:
+                  expected = {int(identity) for identity in ids}
+                  total = sum(int(count) for count in counts)
+              except ValueError as exc:
+                  raise EvidenceError("protocol") from exc
+              return expected if expected and len(expected) == len(ids) == total else set()
+
+
+          def _trusted_resolver(resolver: Any, owner: str) -> bool:
+              """Only the repository owner's user account may dismiss a finding.
+
+              source: claude.yml tag-mode rule (ADR-1116, findings4389808387 and
+              4390480666) trusts github.repository_owner alone; PR805 finding4391948358
+              forbids a PR author resolving their own findings. A missing resolver
+              (deleted account, unknown actor) is never trusted.
+              """
+              if resolver is None:
+                  return False
+              if not isinstance(resolver, dict) or type(resolver.get("login")) is not str:
+                  raise EvidenceError("protocol")
+              return resolver["login"] == owner and resolver.get("__typename") == "User"
+
+
+          def _native_thread(thread: Record, owner: str) -> tuple[int, bool] | None:
+              resolved = thread["isResolved"]
+              if type(resolved) is not bool:
+                  raise EvidenceError("protocol")
+              root = thread["comments"]["nodes"][0]
+              author = root.get("author") or {}
+              if (
+                  author.get("login") != "chatgpt-codex-connector"
+                  or author.get("__typename") != "Bot"
+                  or not root["body"].startswith(FINDING)
+              ):
+                  return None
+              identity = root["databaseId"]
+              if type(identity) is not int or identity <= 0:
+                  raise EvidenceError("protocol")
+              return identity, resolved and _trusted_resolver(thread["resolvedBy"], owner)
+
+
+          def _native_states(nodes, owner: str) -> dict[int, bool]:
+              states = {}
+              for thread in nodes:
+                  native = _native_thread(thread, owner)
+                  if native is None:
+                      continue
+                  identity, resolved = native
+                  if identity in states:
+                      raise EvidenceError("protocol")
+                  states[identity] = resolved
+              return states
+
+
+          def _thread_states(pages: Any, sha: str, owner: str) -> dict[int, bool]:
+              if not isinstance(pages, list) or not pages:
+                  raise EvidenceError("protocol")
+              states = {}
+              try:
+                  for index, page in enumerate(pages):
+                      if page.get("errors"):
+                          raise EvidenceError("protocol")
+                      pull = page["data"]["repository"]["pullRequest"]
+                      if pull["headRefOid"] != sha:
+                          raise EvidenceError("head_moved")
+                      connection = pull["reviewThreads"]
+                      more = connection["pageInfo"]["hasNextPage"]
+                      if type(more) is not bool or more != (index < len(pages) - 1):
+                          raise EvidenceError("protocol")
+                      current = _native_states(connection["nodes"], owner)
+                      if states.keys() & current.keys():
+                          raise EvidenceError("protocol")
+                      states.update(current)
+              except (KeyError, TypeError, IndexError, AttributeError) as exc:
+                  raise EvidenceError("protocol") from exc
+              return states
+
+
+          def resolve_security(target, body, review, metadata):
+              """Prove findings resolved by the trusted owner, thread by thread.
+
+              Two verdicts come here: an unknown one (null flags), and an explicit clean
+              one over findings (has_any_findings true, has_unresolved_findings false).
+              Only resolvedBy attributes a resolution, never the summary flag (PR87
+              discussion_r4412261213): an explicit clean verdict without that proof is
+              unresolved, while an unknown one without it stays None for the receipt.
+              """
+              proof = _owner_proof(target, body, review, metadata)
+              if proof is None and review.get("has_unresolved_findings") is False:
+                  return {"state": "unresolved", "source": "owner_resolution_unproven"}
+              return proof
+
+
+          def _owner_proof(target, body, review, metadata):
+              """Raw flags remain unchanged; incomplete pages or identities prove nothing."""
+              repo, pr, sha = target
+              if (
+                  review.get("status") != "completed"
+                  or review.get("commit_sha") != sha
+                  or review.get("has_any_findings") is not True
+                  or review.get("has_unresolved_findings") not in (None, False)
+                  or not isinstance(metadata, dict)
+                  or metadata.get("repository") != repo
+                  or metadata.get("pullRequestNumber") != pr
+                  or metadata.get("headSha") != sha
+                  or metadata.get("status") != "completed"
+              ):
+                  return None
+              expected = _announced(body, repo, pr)
+              if not expected:
+                  return None
+              owner, name = repo.split("/")
+              fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
+              pages = _api("graphql", paginate=True, fields=fields)
+              states = _thread_states(pages, sha, owner)
+              if not expected.issubset(states):
+                  raise EvidenceError("protocol")
+              return {
+                  "state": (
+                      "success"
+                      if all(states[identity] for identity in expected)
+                      else "unresolved"
+                  ),
+                  "source": "github_review_threads",
+                  "finding_ids": sorted(expected),
+              }
+
+
+          # Body and edit attribution live in the shared comment boundary.
+          def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+              from ci_codex_review_comments import _comment_pages as normalize  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
+
+              return normalize(pages, sha, pr)
+
+
+          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+              from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
+
+              return fetch(repo, pr, sha, request)
+          '''
+
+          COMMENTS_SOURCE = r'''
+          """Authenticated GitHub comment metadata and native Bot edit attribution.
+
+          Sources: IssueComment.editor/lastEditedAt and Bot.id, returned with the body.
+          https://docs.github.com/en/graphql/reference/issues#issuecomment
+          """
+
+          from __future__ import annotations
+
+          from datetime import datetime
+          import re
+          from typing import Any
+
+          Record = dict[str, Any]
+          # Source: native Codex summary6456275844 on2026-10-28.
+          BOT = "chatgpt-codex-connector[bot]"
+          SUMMARY = "<!-- codex-pull-request-review-summary -->"
+          STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+          def _runtime():
+              """The runtime module, resolved on use: runtime imports this module lazily too."""
+              import ci_codex_review_runtime as runtime  # noqa: PLC0415 - keeps the import graph acyclic
+
+              return runtime
+
+
+          def _api(*args: Any, **kwargs: Any) -> Any:
+              return _runtime()._api(*args, **kwargs)
+
+
+          def __getattr__(name: str) -> Any:
+              if name == "EvidenceError":
+                  return _runtime().EvidenceError
+              raise AttributeError(name)
+
+
+          def _canonical(comment: Any) -> bool:
+              if not isinstance(comment, dict):
+                  return False
+              user, body = comment.get("user"), comment.get("body")
+              return (
+                  isinstance(user, dict)
+                  and user.get("login") == BOT
+                  and user.get("type") == "Bot"
+                  and isinstance(body, str)
+                  and body.startswith(SUMMARY)
+              )
+
+
+          def _bot_author(comment: Record) -> bool:
+              user = comment.get("user")
+              return (
+                  isinstance(user, dict)
+                  and user.get("login") == BOT
+                  and user.get("type") == "Bot"
+              )
+
+
+          def _authenticate_editor(comment: Record, login: str = "chatgpt-codex-connector") -> None:
+              # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
+              if "editor" not in comment or "lastEditedAt" not in comment:
+                  raise _runtime().EvidenceError("editor")
+              identity = comment.get("user", {}).get("node_id")
+              if not isinstance(identity, str) or not identity:
+                  raise _runtime().EvidenceError("editor")
+              editor, edited = comment["editor"], comment["lastEditedAt"]
+              if edited is None:
+                  if editor is not None:
+                      raise _runtime().EvidenceError("editor")
+                  return
+              if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
+                  raise _runtime().EvidenceError("editor")
+              try:
+                  datetime.fromisoformat(edited.replace("Z", "+00:00"))
+              except ValueError as exc:
+                  raise _runtime().EvidenceError("editor") from exc
+              if (
+                  not isinstance(editor, dict)
+                  or editor.get("__typename") != "Bot"
+                  or editor.get("login") != login
+                  or editor.get("id") != identity
+              ):
+                  raise _runtime().EvidenceError("editor")
+
+
+          # Source: native receipts6491350304 (cortex-viz PR213) and6491478435 (Cortex
+          # PR829), 2026-10-29: posted with the summary's security flags still null.
+          # Survey of 13 security receipts in 36 cdeust PRs on 2026-10-29: all state no
+          # issues; two automatic ones (spec PR163 receipt6491660443) add the suffix below.
+          RECEIPT = "<!-- codex-review-receipt:v1 -->\n"
+          SECURITY_HEADING = re.compile(
+              r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n"
+          )
+          RECEIPT_COMMIT = re.compile(r"\n\*\*Reviewed commit:\*\* `([0-9a-f]{10,40})`\n")
+          # The whole no-issues receipt, byte-identical across the six captured ones up to
+          # the commit prefix, task id and automatic suffix (Codex finding4411675624: the
+          # verdict is the exact text, never a sentence found somewhere in the body).
+          NO_ISSUES_RECEIPT = re.compile(
+              re.escape(RECEIPT)
+              + r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n\n"
+              r"Security review completed\. No security issues were found in this pull request\.\n\n"
+              r"\*\*Reviewed commit:\*\* `[0-9a-f]{10,40}`\n\n"
+              r"\[View security finding report\]"
+              r"\(https://chatgpt\.com/codex/cloud/tasks/task_e_[0-9a-f]+\)\n\n"
+              r"_Only the user who started this review can view the report in Codex\._\n\n"
+              + re.escape(
+                  "<details> <summary>ℹ️ About Codex security reviews in GitHub</summary>\n<br/>\n\n"
+                  "This is an experimental Codex feature. Security reviews are triggered when:\n"
+                  '- You comment "@codex security review"\n'
+                  '- A regular code review gets triggered (for example, "@codex review" or when a'
+                  " PR is opened), and you’re opted in so security review runs alongside code review\n\n"
+                  "Once complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n"
+                  "</details>"
+              )
+          )
+          # A completed null verdict without a receipt, or a receipt whose wording no
+          # observed receipt has, blocks under its own name (the gate never relaunches).
+          MISSING, UNRECOGNIZED = "verdict_missing", "receipt_unrecognized"
+          BLOCKING = ("failed", "unresolved", MISSING, UNRECOGNIZED)
+          BLOCKED_REASONS = (
+              ("failed", "review_failed"),
+              (MISSING, "codex_security_verdict_missing"),
+              (UNRECOGNIZED, "codex_security_receipt_unrecognized"),
+          )
+
+
+          def _receipt_head(repo: str, named: str) -> str | None:
+              """The full commit a receipt names, never a prefix match on the head.
+
+              A 10-hex prefix is 40 bits: a branch writer can make two commits share it
+              (Codex finding Cortex PR836 discussion_r4412420778). 40 hex compares exactly;
+              a shorter prefix counts only when the repository resolves it to one commit.
+              A 404, an ambiguous prefix (422) or any API failure proves nothing.
+              https://docs.github.com/en/rest/commits/commits#get-a-commit
+              """
+              if len(named) == 40:
+                  return named
+              try:
+                  commit = _api(f"repos/{repo}/commits/{named}")  # late-bound runtime API
+              except _runtime().EvidenceError:
+                  return None
+              full = commit.get("sha") if isinstance(commit, dict) else None
+              if not isinstance(full, str) or re.fullmatch(r"[0-9a-f]{40}", full) is None:
+                  return None
+              return full if full.startswith(named) else None
+
+
+          def security_receipt(comments, target, review, metadata):
+              """Native verdict for a completed security review whose flags stayed null.
+
+              Codex documents an empty result as no proof; its authenticated receipt is the
+              report it points to. Every security receipt for this head must state no
+              issues; no receipt or any other wording blocks under a named state.
+              """
+              repo, pr, sha = target
+              if (
+                  review.get("status") != "completed"
+                  or review.get("commit_sha") != sha
+                  or review.get("has_any_findings") is not None
+                  or review.get("has_unresolved_findings") is not None
+                  or not isinstance(metadata, dict)
+                  or (metadata.get("repository"), metadata.get("pullRequestNumber")) != (repo, pr)
+                  or (metadata.get("headSha"), metadata.get("status")) != (sha, "completed")
+              ):
+                  return None
+              receipts = []
+              for comment in comments:
+                  body = comment.get("body")
+                  if not (_bot_author(comment) and isinstance(body, str)):
+                      continue
+                  if not body.startswith(RECEIPT) or len(SECURITY_HEADING.findall(body)) != 1:
+                      continue
+                  commits = RECEIPT_COMMIT.findall(body)
+                  if len(commits) != 1 or _receipt_head(repo, commits[0]) != sha:
+                      continue
+                  _authenticate_editor(comment)
+                  if NO_ISSUES_RECEIPT.fullmatch(body) is None:
+                      return {"state": UNRECOGNIZED, "source": "codex_security_receipt",
+                              "receipt_ids": [comment["id"]]}
+                  receipts.append(comment["id"])
+              return {
+                  "state": "success" if receipts else MISSING,
+                  "source": "codex_security_receipt",
+                  "receipt_ids": sorted(receipts),
+              }
+
+
+          # Rule D5, 2026-10-29: Claude skips Dependabot (no Actions secrets, PR #224), so an absent
+          # marker agrees on a PR by GraphQL author dependabot/Bot on dependabot/* (prD evidence, PR212).
+          DEPENDABOT = {"login": "dependabot", "__typename": "Bot"}
+
+
+          class Comments(list):
+              """Comment rows of one PR, read with its author from the same GraphQL node."""
+              dependabot = False
+
+
+          # Body and edit attribution must come from the same authenticated API node.
+          # https://docs.github.com/en/graphql/reference/issues#issuecomment
+          COMMENTS_QUERY = """
+          query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                number headRefOid headRefName author { login __typename }
+                comments(first:100, after:$endCursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    databaseId body updatedAt lastEditedAt
+                    author { login __typename ... on Bot { id } ... on User { id } }
+                    editor { login __typename ... on Bot { id } ... on User { id } }
+                  }
+                }
+              }
+            }
+          }
+          """
+
+
+          def _comment_row(node: Any) -> Record:
+              keys = ("databaseId", "body", "updatedAt", "author", "editor", "lastEditedAt")
+              if not isinstance(node, dict) or any(key not in node for key in keys):
+                  raise _runtime().EvidenceError("protocol")
+              identity = node["databaseId"]
+              if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
+                  raise _runtime().EvidenceError("protocol")
+              author = node["author"] or {}
+              if not isinstance(author, dict):
+                  raise _runtime().EvidenceError("protocol")
+              login, kind = author.get("login"), author.get("__typename")
+              if login in ("chatgpt-codex-connector", "claude") and kind == "Bot":
+                  login += "[bot]"  # REST form; GraphQL Bot logins omit it (prD evidence).
+              return {
+                  "id": identity,
+                  "body": node["body"],
+                  "updated_at": node["updatedAt"],
+                  "user": {"login": login, "type": kind, "node_id": author.get("id")},
+                  "editor": node["editor"],
+                  "lastEditedAt": node["lastEditedAt"],
+              }
+
+
+          def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+              if not isinstance(pages, list) or not pages:
+                  raise _runtime().EvidenceError("protocol")
+              rows, identities, cursors = Comments(), set(), set()
+              try:
+                  for index, page in enumerate(pages):
+                      if page.get("errors"):
+                          raise _runtime().EvidenceError("protocol")
+                      pull = page["data"]["repository"]["pullRequest"]
+                      if index == 0:  # Same node as the comments; absent fields mean not Dependabot.
+                          who, ref = pull.get("author"), str(pull.get("headRefName"))
+                          rows.dependabot = who == DEPENDABOT and ref.startswith("dependabot/")
+                      if pull["headRefOid"] != sha:
+                          raise _runtime().EvidenceError("head_moved")
+                      if type(pull["number"]) is not int or pull["number"] != pr:
+                          raise _runtime().EvidenceError("protocol")
+                      connection = pull["comments"]
+                      more, cursor = (
+                          connection["pageInfo"][key] for key in ("hasNextPage", "endCursor")
+                      )
+                      if type(more) is not bool or more != (index < len(pages) - 1):
+                          raise _runtime().EvidenceError("protocol")
+                      if cursor is not None and (not isinstance(cursor, str) or not cursor):
+                          raise _runtime().EvidenceError("protocol")
+                      if more and (cursor is None or cursor in cursors):
+                          raise _runtime().EvidenceError("protocol")
+                      cursors.add(cursor)
+                      if not isinstance(connection["nodes"], list):
+                          raise _runtime().EvidenceError("protocol")
+                      current = [_comment_row(node) for node in connection["nodes"]]
+                      current_ids = [row["id"] for row in current]
+                      if len(set(current_ids)) != len(current_ids) or identities.intersection(
+                          current_ids
+                      ):
+                          raise _runtime().EvidenceError("protocol")
+                      identities.update(current_ids)
+                      rows.extend(current)
+              except (KeyError, TypeError, AttributeError) as exc:
+                  raise _runtime().EvidenceError("protocol") from exc
+              return rows
+
+
+          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+              owner, name = repo.split("/")
+              fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
+              return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
+          '''
+
+          REACTION_SOURCE = r'''
+          """Codex's 👍 reaction as the verdict of a clean security review with null flags.
+
+          Source: the Codex summary text, "Codex reacts with 👀 while any review is running,
+          comments if it has suggestions, and reacts with 👍 once all reviews finish with
+          no findings." Observed from 2026-10-31 on: the 👍 is present on every PR Codex
+          reviewed since then with no findings (cortex-viz PR218 06:13:28Z, PR219 and
+          PR220 07:38:47Z, PR216; Cortex PR838, PR840, PR846, PR847) and absent on every
+          PR reviewed before (cortex-viz PR207, PR212, PR217 of 2026-10-29). The
+          no-issues receipt comment that `security_receipt` reads was not posted on any
+          of them, so a clean review left `codex_security_verdict_missing` on every one
+          (cortex-viz PR216 run of 2026-11-03). Port of cdeust/Cortex PR847
+          (scripts/ci_codex_review_comments.py resolve_no_findings), 2026-11-03.
+          """
+
+          from __future__ import annotations
+
+          from datetime import datetime
+          import re
+          from typing import Any
+
+          Record = dict[str, Any]
+
+
+          def _runtime():
+              """The runtime module, resolved on use (the reader preloads its exact copy)."""
+              import ci_codex_review_runtime as runtime  # noqa: PLC0415 - keeps the import graph acyclic
+
+              return runtime
+
+
+          def _comments():
+              import ci_codex_review_comments as comments  # noqa: PLC0415 - same reason
+
+              return comments
+
+          # source: Codex summary 6600075171 (Cortex PR848): one table row per review on
+          # the reviewed head, each with a Completed stamp and the short commit.
+          COMPLETED_ROW = re.compile(
+              r"^\|[^|\n]*\*\*(Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
+              r'<relative-time datetime="([^"]+)"[^|\n]*\| `([0-9a-f]{7,40})` \|',
+              re.M,
+          )
+          # source: the summary lists one Code Review row and one Security Review row.
+          REVIEW_KINDS = ("Code", "Security")
+          # source: runtime.FINDING and runtime._announced; any finding text voids the clean path.
+          FINDING_TEXT = ("\n### Security findings\n", "<!-- codex-security-review-finding:v1 -->")
+
+
+          def _stamp(value: Any) -> datetime:
+              if not isinstance(value, str) or _comments().STAMP_PATTERN.fullmatch(value) is None:
+                  raise _runtime().EvidenceError("protocol")
+              try:
+                  return datetime.fromisoformat(value)
+              except ValueError as exc:  # shape-valid, calendar-invalid (month 13)
+                  raise _runtime().EvidenceError("protocol") from exc
+
+
+          def _completed_here(target, review, metadata) -> bool:
+              """The review and the security metadata both name this PR's reviewed head."""
+              repo, pr, sha = target
+              found = (review.get("status"), review.get("commit_sha")) + tuple(
+                  metadata.get(k) if isinstance(metadata, dict) else None
+                  for k in ("repository", "pullRequestNumber", "headSha", "status")
+              )
+              return found == ("completed", sha, repo, pr, sha, "completed")
+
+
+          # source: Cortex PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
+          # Review row of 00:23:45.38Z and five pushes: Codex re-dates its +1 per head. The
+          # reactions API reports that user with type "User", so only the login is read.
+          # https://docs.github.com/en/rest/reactions/reactions#list-reactions-for-an-issue
+          def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
+              pages = _runtime()._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
+              if not isinstance(pages, list) or any(not isinstance(p, list) for p in pages):
+                  raise _runtime().EvidenceError("protocol")
+              rows = [row for page in pages for row in page]
+              if any(
+                  not isinstance(row, dict)
+                  or not isinstance(row.get("content"), str)
+                  or not isinstance(row.get("user"), dict)
+                  or not isinstance(row["user"].get("login"), str)
+                  for row in rows
+              ):
+                  raise _runtime().EvidenceError("protocol")
+              return {
+                  row["content"]: _stamp(row.get("created_at"))
+                  for row in rows
+                  if row["user"]["login"] == _comments().BOT
+              }
+
+
+          def _unresolved_findings(repo: str, pr: int, sha: str) -> bool:
+              """Native Codex finding threads of the PR that the owner has not resolved."""
+              if repo.count("/") != 1:
+                  raise _runtime().EvidenceError("protocol")
+              owner, name = repo.split("/")
+              fields = dict(query=_runtime().THREAD_QUERY, owner=owner, name=name, number=pr)
+              pages = _runtime()._api("graphql", paginate=True, fields=fields)
+              return not all(_runtime()._thread_states(pages, sha, owner).values())
+
+
+          def resolve_no_findings(target, body, review, metadata):
+              """A null verdict after completion is clean only with Codex's +1 not earlier
+              than both Completed rows of this summary for this head (second precision:
+              reactions carry seconds, rows microseconds), no 👀 left, no finding text in
+              the summary and no unresolved native finding thread. A commit date would
+              not do: a later push of an older commit keeps its date (Cortex PR847 review).
+              """
+              repo, pr, sha = target
+              flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
+              if flags != (None, None) or not _completed_here(target, review, metadata):
+                  return None
+              if any(marker in body for marker in FINDING_TEXT):
+                  return None
+              rows = COMPLETED_ROW.findall(body)
+              if sorted(kind for kind, _, _ in rows) != sorted(REVIEW_KINDS):
+                  return None
+              if any(not sha.startswith(short) for _, _, short in rows):
+                  return None
+              finished = max(_stamp(stamp) for _, stamp, _ in rows).replace(microsecond=0)
+              marks = _codex_reactions(repo, pr)
+              if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
+                  return None
+              if _unresolved_findings(repo, pr, sha):
+                  return None
+              return {
+                  "state": "success",
+                  "source": "github_reaction",
+                  "reacted_at": marks["+1"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+              }
+
+
+          def reaction_verdict(proof, target, body, review, metadata):
+              """The receipt's `verdict_missing` yields to the reaction; anything else stands."""
+              if proof is None or proof.get("state") != _comments().MISSING:
+                  return proof
+              return resolve_no_findings(target, body, review, metadata) or proof
+          '''
+
+          AGREEMENT_SOURCE = r'''
+          """Gate state for one head: both native Codex kinds, then the Claude verdict.
+
+          Owner rule 2026-10-29 (verbatim): "until the review of codex and claude (done
+          autonomously) are there, it cannot merge, the hold should be removed after
+          reviewers agree on merging". Rules of the Cortex convergence planner
+          (https://github.com/cdeust/Cortex/pull/834, scripts/ci_autopilot_converge_plan.py).
+          The Claude verdict is the marker claude-review.yml asks for (source.json adaptation
+          claude-review-verdict-marker); GraphQL author claude/Bot, prD evidence. Pure: no I/O.
+          """
+
+          from __future__ import annotations
+
+          import re
+          from typing import Any
+
+          from ci_codex_review_runtime import EvidenceError, _json
+          from ci_codex_review_comments import BLOCKED_REASONS, BLOCKING, BOT, MISSING
+          from ci_codex_review_comments import STAMP_PATTERN, UNRECOGNIZED, _authenticate_editor
+
+          Record = dict[str, Any]
+          CLAUDE = "claude[bot]"
+          VERDICT = re.compile(r"^<!-- claude-review-verdict:v1 (\{.*\}) -->$", re.MULTILINE)
+          CLAUDE_CAUSES = {"missing": "claude_verdict_missing", "refused": "claude_refused",
+                           "unreadable": "claude_verdict_unreadable"}
+          # Rule D5 (ci_codex_review_comments.DEPENDABOT): no Claude review exists there.
+          AGREED = ("merge", "not_applicable_dependabot")
+          # Rule D6, 2026-10-29: a failed kind whose latest Codex Bot comment is a usage-limit
+          # notice waits for quota, it is no finding. Real notices: cdeust/ci-autonome PR9
+          # comment6497426761 ("has reached its Codex usage limits"), cdeust/ai-architect-
+          # mcp-spec PR164 comment6497379059 and ai-architect-mcp-codebase PR469
+          # comment6497357065 ("You have reached your Codex usage limits for code reviews").
+          QUOTA = re.compile(r"\breached (?:its|your) Codex usage limits\b")
+          CODEX_CAUSES = {
+              "pending": "codex_{}_verdict_missing", "failed": "codex_{}_review_failed",
+              "unresolved": "codex_{}_findings_unresolved", MISSING: "codex_{}_verdict_missing",
+              UNRECOGNIZED: "codex_{}_receipt_unrecognized", "quota": "codex_quota_exhausted",
+          }
+
+
+          def _verdict(comment: Record, sha: str) -> bool | None:
+              """The merge flag of one Claude App marker for this head, else None."""
+              user, body, stamp = comment.get("user"), comment.get("body"), comment.get("updated_at")
+              if not isinstance(user, dict) or (user.get("login"), user.get("type")) != (CLAUDE, "Bot"):
+                  return None
+              if not isinstance(body, str) or body.count("claude-review-verdict:v1") != 1:
+                  return None
+              found = VERDICT.findall(body)
+              if len(found) != 1 or not isinstance(stamp, str) or not STAMP_PATTERN.fullmatch(stamp):
+                  return None
+              try:
+                  value = _json(found[0])
+              except EvidenceError:
+                  return None  # A malformed marker reads as absent, never as a verdict.
+              if not isinstance(value, dict) or set(value) != {"head", "merge"}:
+                  return None
+              return value["merge"] if value["head"] == sha and type(value["merge"]) is bool else None
+
+
+          def claude_verdict(comments: list[Record], sha: str) -> Record:
+              """Latest Claude verdict for this head; one edited by anyone else is unreadable."""
+              marked = [(c, merge) for c in comments if (merge := _verdict(c, sha)) is not None]
+              if not marked:
+                  verdict = "not_applicable_dependabot" if getattr(comments, "dependabot", False) is True else "missing"
+                  return {"verdict": verdict, "comment_id": 0}
+              comment, merge = max(marked, key=lambda row: (row[0]["updated_at"], row[0]["id"]))
+              try:
+                  _authenticate_editor(comment, "claude")
+              except EvidenceError:
+                  return {"verdict": "unreadable", "comment_id": comment["id"]}
+              return {"verdict": "merge" if merge else "refused", "comment_id": comment["id"]}
+
+
+          def _quota(comments: list[Record]) -> bool:
+              """True when the latest comment of the Codex Bot is a usage-limit notice."""
+              stamped = [
+                  c for c in comments
+                  if (c.get("user") or {}).get("login") == BOT and (c.get("user") or {}).get("type") == "Bot"
+                  and isinstance(c.get("updated_at"), str) and STAMP_PATTERN.fullmatch(c["updated_at"])
+              ]
+              if not stamped:
+                  return False
+              latest = max(stamped, key=lambda c: (c["updated_at"], c["id"]))
+              return isinstance(latest.get("body"), str) and QUOTA.search(latest["body"]) is not None
+
+
+          def conclude(states: list[str] | None, comments: list[Record], sha: str) -> Record:
+              """Gate state for the head: both Codex kinds (None: no summary), then Claude."""
+              claude = claude_verdict(comments, sha)
+              verdict, codex = claude["verdict"], list(states or ["pending", "pending"])
+              if "failed" in codex and _quota(comments):
+                  codex = ["quota" if state == "failed" else state for state in codex]
+              causes = list(dict.fromkeys(
+                  CODEX_CAUSES[state].format(kind)
+                  for kind, state in zip(("code", "security"), codex)
+                  if state != "success"
+              )) + ([CLAUDE_CAUSES[verdict]] if verdict not in AGREED else [])
+              if any(s in BLOCKING for s in codex):
+                  state = "blocked", next((r for s, r in BLOCKED_REASONS if s in codex), "review_unresolved")
+              elif verdict in ("refused", "unreadable"):
+                  state = "blocked", CLAUDE_CAUSES[verdict]
+              elif "quota" in codex:
+                  state = "pending", CODEX_CAUSES["quota"]
+              elif "pending" in codex:
+                  state = "pending", "review_pending" if states else "review_missing"
+              elif verdict == "missing":
+                  state = "pending", CLAUDE_CAUSES[verdict]
+              else:
+                  state = "success", "reviews_complete"
+              complete = all(s in ("success", "unresolved") for s in codex)
+              return dict(state=state[0], reason=state[1], causes=causes, claude=claude,
+                          reviews_complete=complete and verdict in (*AGREED, "refused"))
+          '''
+
+          READER_SOURCE = r'''
+          #!/usr/bin/env python3
+          """Read authenticated native Codex review evidence for one immutable PR head.
+
+          Protocol: Cortex PR797 bot comment6428675514, captured in
+           tasks/ci-review-evidence-codex-{711f0ede,57e4c1d}.json. Native automation:
+          https://learn.chatgpt.com/docs/third-party/github
+          https://learn.chatgpt.com/docs/security/security-review
+          This validates completion metadata, not semantic review quality.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import json
+          import re
+          import sys
+          from datetime import datetime
+          from pathlib import Path
+          from typing import Any
+
+          # CLI callers execute this trusted file; the isolated workflow preloads its
+          # exact embedded runtime, so candidate checkout imports are never consulted.
+          if "ci_codex_review_runtime" not in sys.modules:
+              sys.path.insert(0, str(Path(__file__).resolve().parent))
+          import ci_codex_review_runtime as runtime  # noqa: E402
+          from ci_codex_review_runtime import _outputs  # noqa: E402
+          from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
+          from ci_codex_review_comments import security_receipt  # noqa: E402
+          from ci_codex_review_reaction import reaction_verdict  # noqa: E402
+          from ci_codex_review_agreement import conclude  # noqa: E402
+
+          Record = dict[str, Any]
+          SUMMARY = "<!-- codex-pull-request-review-summary -->"
+          BOT = "chatgpt-codex-connector[bot]"
+          KINDS = ("code_review", "security_review")
+          FAILED = ("failed", "error", "cancelled")
+          SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
+          REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
+          STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+          class EvidenceError(runtime.EvidenceError):
+              """Preserve the evidence-reader exception interface for its event callers."""
+
+
+          class APIError(runtime.APIError, EvidenceError):
+              """Retain transport category within the reader exception catch boundary."""
+
+
+          def _json(text: str) -> Any:
+              try:
+                  return runtime._json(text)
+              except runtime.EvidenceError as exc:
+                  raise EvidenceError(str(exc)) from exc
+
+
+          def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None) -> Any:
+              try:
+                  options = {"fields": fields} if fields is not None else {}
+                  return runtime._api(endpoint, paginate=paginate, **options)
+              except runtime.APIError as exc:
+                  raise APIError(exc.category) from exc
+              except runtime.EvidenceError as exc:
+                  raise EvidenceError(str(exc)) from exc
+
+
+          class Parser(argparse.ArgumentParser):
+              def error(self, message: str) -> None:
+                  raise EvidenceError("arguments")
+
+
+          def _result(sha: str) -> Record:
+              result = {
+                  "state": "pending",
+                  "reason": "review_missing",
+                  "sha": sha,
+                  "comment_id": 0,
+                  "updated_at": None,
+                  "reviews_complete": False,
+              }
+              for kind in KINDS:
+                  result[kind] = {
+                      "commit_sha": None,
+                      "status": None,
+                      "has_any_findings": None,
+                      "has_unresolved_findings": None,
+                  }
+              return result
+
+
+          def _order(comment: Record) -> tuple[datetime, int]:
+              identity, updated = comment.get("id"), comment.get("updated_at")
+              if type(identity) is not int or identity <= 0:
+                  raise EvidenceError("protocol")
+              if not isinstance(updated, str) or STAMP_PATTERN.fullmatch(updated) is None:
+                  raise EvidenceError("protocol")
+              try:
+                  return datetime.fromisoformat(updated.replace("Z", "+00:00")), identity
+              except ValueError as exc:
+                  raise EvidenceError("protocol") from exc
+
+
+          def _marker(body: str, name: str, required: bool) -> Any:
+              count = body.count("<!-- " + name + ":")
+              if count == 0 and not required:
+                  return None
+              if count != 1:
+                  raise EvidenceError("protocol")
+              pattern = re.escape("<!-- " + name + ":v1") + r"\s+(.*?)\s*-->"
+              match = re.search(pattern, body, re.DOTALL)
+              if match is None:
+                  raise EvidenceError("protocol")
+              value = _json(match.group(1))
+              if not isinstance(value, dict):
+                  raise EvidenceError("protocol")
+              return value
+
+
+          def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
+              clean = _result(expected_sha)["code_review"]
+              if value is None or value == {}:
+                  return "pending", clean
+              if not isinstance(value, dict):
+                  raise EvidenceError("protocol")
+              status, sha = value.get("status"), value.get("commit_sha")
+              if status is not None and status not in ("completed", "running", "queued", *FAILED):
+                  raise EvidenceError("protocol")
+              if sha is not None and (
+                  not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None
+              ):
+                  raise EvidenceError("protocol")
+              clean.update(status=status, commit_sha=sha)
+              for flag in ("has_any_findings", "has_unresolved_findings"):
+                  item = value.get(flag)
+                  if item is not None and type(item) is not bool:
+                      raise EvidenceError("protocol")
+                  if status == "completed" and flag not in value:
+                      raise EvidenceError("protocol")
+                  clean[flag] = item
+              if clean["has_any_findings"] is False and clean["has_unresolved_findings"] is True:
+                  raise EvidenceError("protocol")
+              if status == "completed" and sha is None:
+                  raise EvidenceError("protocol")
+              if status in FAILED:
+                  return "failed", clean
+              # source: PR805 summary6442631163 emitted completed with an unknown verdict.
+              flags = (clean["has_any_findings"], clean["has_unresolved_findings"])
+              if sha != expected_sha or status != "completed" or None in flags:
+                  return "pending", clean
+              return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
+
+
+          def _reviews(latest, target, comments):
+              expected_sha, repo, pr = target
+              reviews = {}
+              data = _marker(latest["body"], "codex-review-state", True)
+              security = _marker(latest["body"], "codex-security-review", False)
+              states = []
+              for kind in KINDS:
+                  state, reviews[kind] = _review(data.get(kind), expected_sha)
+                  proof, attested = None, state == "success" and reviews[kind]["has_any_findings"] is True
+                  if kind == "security_review" and (state == "pending" or attested) and repo and pr:
+                      proof = runtime.resolve_security(
+                          (repo, pr, expected_sha), latest["body"], reviews[kind], security
+                      ) or security_receipt(
+                          comments, (repo, pr, expected_sha), reviews[kind], security
+                      )
+                      proof = reaction_verdict(
+                          proof, (repo, pr, expected_sha), latest["body"], reviews[kind], security
+                      )
+                  if proof is not None:
+                      state = proof.pop("state")
+                      reviews[kind]["resolution"] = proof
+                  states.append(state)
+              return states, reviews
+
+
+          def review_evidence(
+              comments: list[Record], expected_sha: str, repo=None, pr=None
+          ) -> Record:
+              """Require both current reviews; never fall back from a newer invalid summary."""
+              valid_sha = isinstance(expected_sha, str) and SHA_PATTERN.fullmatch(expected_sha)
+              result = _result(expected_sha if valid_sha else "")
+              try:
+                  if not valid_sha or not isinstance(comments, list):
+                      raise EvidenceError("arguments" if not valid_sha else "protocol")
+                  if any(not isinstance(comment, dict) for comment in comments):
+                      raise EvidenceError("protocol")
+                  candidates = [comment for comment in comments if _canonical(comment)]
+                  if not candidates:
+                      return {**result, **conclude(None, comments, expected_sha)}
+                  latest = max(candidates, key=_order)
+                  result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
+                  latest_order = _order(latest)
+                  # A human can remove the marker while retaining the original Bot author.
+                  for item in comments:
+                      if _bot_author(item) and _order(item) >= latest_order:
+                          _authenticate_editor(item)
+                  if latest["body"].count(SUMMARY) != 1:
+                      raise EvidenceError("protocol")
+                  states, details = _reviews(latest, (expected_sha, repo, pr), comments)
+                  result.update(details)
+                  result.update(conclude(states, comments, expected_sha))  # Codex, then Claude.
+              except runtime.EvidenceError as exc:
+                  result.update(state="blocked", reason=str(exc), reviews_complete=False)
+                  if isinstance(exc, runtime.APIError):
+                      result["api_category"] = exc.category
+              return result
+
+
+          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+              try:
+                  return runtime.summary_comments(repo, pr, sha, request)
+              except runtime.APIError as exc:
+                  raise APIError(exc.category) from exc
+              except runtime.EvidenceError as exc:
+                  raise EvidenceError(str(exc)) from exc
+
+
+          def _eligible(pull: Any, repo: str, sha: str) -> None:
+              if not isinstance(pull, dict):
+                  raise EvidenceError("pr_eligibility")
+              head, base = pull.get("head"), pull.get("base")
+              if not isinstance(head, dict) or not isinstance(base, dict):
+                  raise EvidenceError("pr_eligibility")
+              head_repo, base_repo = head.get("repo"), base.get("repo")
+              if not isinstance(head_repo, dict) or not isinstance(base_repo, dict):
+                  raise EvidenceError("pr_eligibility")
+              if any(
+                  not isinstance(item.get("full_name"), str) for item in (head_repo, base_repo)
+              ):
+                  raise EvidenceError("pr_eligibility")
+              if (
+                  pull.get("state") != "open"
+                  or pull.get("draft") is not False
+                  or base.get("ref") != "main"
+                  or head_repo.get("full_name", "").casefold() != repo.casefold()
+                  or base_repo.get("full_name", "").casefold() != repo.casefold()
+              ):
+                  raise EvidenceError("pr_eligibility")
+              if head.get("sha") != sha:
+                  raise EvidenceError("head_moved")
+
+
+          def _fetch(args: argparse.Namespace) -> Record:
+              endpoint = f"repos/{args.repo}/pulls/{args.pr}"
+              _eligible(_api(endpoint), args.repo, args.sha)
+              comments = summary_comments(args.repo, args.pr, args.sha, _api)
+              result = review_evidence(comments, args.sha, args.repo, args.pr)
+              _eligible(_api(endpoint), args.repo, args.sha)
+              return result
+
+
+          def _arguments(argv: list[str] | None) -> argparse.Namespace:
+              parser = Parser(description=__doc__)
+              parser.add_argument("--repo", required=True)
+              parser.add_argument("--pr", required=True, type=int)
+              parser.add_argument("--sha", required=True)
+              parser.add_argument("--github-output", action="store_true")
+              parser.add_argument("--require-complete", action="store_true")
+              parser.add_argument("--allow-pending", action="store_true")
+              args = parser.parse_args(argv)
+              if (
+                  REPO_PATTERN.fullmatch(args.repo) is None
+                  or args.repo.split("/")[1] in (".", "..")
+                  or args.pr <= 0
+                  or SHA_PATTERN.fullmatch(args.sha) is None
+              ):
+                  raise EvidenceError("arguments")
+              return args
+
+
+          def main(argv: list[str] | None = None) -> int:
+              try:
+                  args = _arguments(argv)
+                  result = _fetch(args)
+                  if args.github_output:
+                      _outputs(result)
+                  print(json.dumps(result, sort_keys=True))
+                  if args.allow_pending and result["state"] == "pending":
+                      return 0
+                  if (
+                      args.require_complete
+                      and result["reviews_complete"]
+                      and result["reason"] in ("reviews_complete", "review_unresolved")
+                  ):
+                      return 0
+                  return {"success": 0, "pending": 2, "blocked": 1}[result["state"]]
+              except runtime.EvidenceError as exc:
+                  print(f"codex reviews: {exc}", file=sys.stderr)
+                  return 1
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          '''
+
+          _runtime = ModuleType("ci_codex_review_runtime")
+          exec(compile(RUNTIME_SOURCE, "ci_codex_review_runtime.py", "exec"), _runtime.__dict__)
+          sys.modules[_runtime.__name__] = _runtime
+          _comments = ModuleType("ci_codex_review_comments")
+          exec(compile(COMMENTS_SOURCE, "ci_codex_review_comments.py", "exec"), _comments.__dict__)
+          sys.modules[_comments.__name__] = _comments
+          _reaction = ModuleType("ci_codex_review_reaction")
+          exec(compile(REACTION_SOURCE, "ci_codex_review_reaction.py", "exec"), _reaction.__dict__)
+          sys.modules[_reaction.__name__] = _reaction
+          _agreement = ModuleType("ci_codex_review_agreement")
+          exec(compile(AGREEMENT_SOURCE, "ci_codex_review_agreement.py", "exec"), _agreement.__dict__)
+          sys.modules[_agreement.__name__] = _agreement
+          exec(compile(READER_SOURCE, "ci_codex_reviews.py", "exec"))
+          CODEX_REVIEW_PY
 
   # Decision 4, hardened after claude-mods #38 and session-optimizer #73 merged
   # on a red pipeline: GitHub treats a skipped required check as satisfied, so
   # merge runs even after failure on a non-cancelled same-repo PR, and fails if a
-  # test job did not succeed or the review was incomplete. No checkout or merge
+  # test job did not succeed. Pending reviews keep the required name expected.
+  # No checkout or merge
   # mutation here: the completed-run resolver performs the protected merge.
   merge:
     # Owner rule 2026-11-03 (23:29): a PR is fit to merge when the test jobs of
-    # this run are green and the review job has run to completion for this head.
-    # In this profile the review job is the Claude review itself; Codex posts
-    # through its App. When it passes it arms GitHub's native auto-merge on this
-    # PR, so the merge happens with this PR's own definition in the path and
-    # nothing from main's. Branch protection stays the only gate GitHub applies.
+    # this run are green and both reviews, Codex and Claude, have concluded for
+    # this head with no blocking finding from either. The review job reads both
+    # verdicts (state: success, pending or blocked); this job is red while a
+    # verdict is missing, and the Codex completion workflow re-runs the review
+    # job of this run when a verdict lands (re-run-a-job re-runs its dependents,
+    # this job included). When it passes it arms GitHub's native auto-merge on
+    # this PR, so the merge happens with this PR's own definition in the path
+    # and nothing from main's: a PR that fixes the pipeline is merged by the
+    # pipeline it fixes. Branch protection stays the only gate GitHub applies.
     needs: [contract, unit, regression, e2e, environment, install, review]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
@@ -756,22 +1793,23 @@ jobs:
           fi
           echo "## Merge: the test jobs are green on this commit" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Require the review to have run to completion
+      # The reader runs again here, live, on this head (CODEX_COMPLETION_ONLY
+      # false: pending exits 2, blocked exits 1, both with the causes in the
+      # JSON line). The review job's state is advisory; this step decides, so a
+      # re-run of this job alone (Codex completion, MERGE resumption) re-reads a
+      # finding resolved since. Step name pinned by ci_codex_review_resume.MERGE.
+      # Only PRs into main are merged by this path, and the reader's eligibility
+      # rejects any other base (ci_codex_reviews._eligible), so it runs for main
+      # only; a PR into another branch keeps its green tests (Codex on #240, P2).
+      - name: Require complete Codex reviews
+        if: github.event.pull_request.base.ref == 'main'
         env:
-          REVIEW: ${{ needs.review.result }}
-          ACTOR: ${{ github.actor }}
-        run: |
-          # A Dependabot PR has no Claude review by design (#224: the review job
-          # excludes that actor); Codex reviews it through its App. Codex finding
-          # on #240 (P2).
-          case "$REVIEW:$ACTOR" in
-            success:*) echo "## Review: completed for this head" >> "$GITHUB_STEP_SUMMARY" ;;
-            "skipped:dependabot[bot]") echo "## Review: not applicable to a Dependabot PR (#224)" >> "$GITHUB_STEP_SUMMARY" ;;
-            *)
-              echo "::error::review: $REVIEW, requires completion"
-              echo "## Merge: blocked, the review did not complete for this head ($REVIEW)" >> "$GITHUB_STEP_SUMMARY"
-              exit 1 ;;
-          esac
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CODEX_COMPLETION_ONLY: 'false'
+        run: *codex_review_reader
 
       # This job is itself a required check and still running, so a direct merge
       # here would be refused; auto-merge lets GitHub perform the squash the
@@ -827,6 +1865,7 @@ jobs:
   # with validated versions from ci.json. Missing tags are pushed atomically over
   # the deploy key so the tag-triggered release workflows fire.
   tag:
+    # Publish only after all five categories pass on the actual merge commit.
     needs: [contract, unit, regression, e2e, environment, install]
     if: >-
       !cancelled()

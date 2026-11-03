@@ -160,12 +160,9 @@ jobs:
 
 
           def _validate_jobs(jobs):
-              # Source: templates/ci/pipeline.yml. Owner rule 2026-10-29: the required jobs
-              # are the tests and their aggregate `merge`; the `review` job may run and post
-              # but is never read here. Overall success alone accepts skipped jobs.
-              # Returns True when `merge` was skipped: on a validated same-repository
-              # pull_request run that succeeded, the only condition `merge` can fail is
-              # `!github.event.pull_request.draft`.
+              # Owner rule 2026-10-29: the required jobs are the tests and their
+              # aggregate `merge`; the `review` job may run and post but is never
+              # read here. Overall success alone accepts skipped jobs.
               required = ["contract", "unit", "regression", "e2e", "merge"]
               for category in ("environment", "install"):
                   expected = {
@@ -182,27 +179,17 @@ jobs:
                       f"source merge gate requires the exact {category} matrix",
                   )
                   required.extend(sorted(expected))
-              found = {}
               for name in required:
                   matching = [job for job in jobs if job.get("name") == name]
                   require(
                       len(matching) == 1, f"source merge gate requires exactly one {name} job"
                   )
-                  found[name] = matching[0]
-              unrequested = (
-                  found["merge"].get("status") == "completed"
-                  and found["merge"].get("conclusion") == "skipped"
-              )
-              for name in required:
-                  job = found[name]
-                  allowed = job.get("conclusion") == "success" or (
-                      unrequested and name == "merge"
-                  )
+                  job = matching[0]
+                  allowed = job.get("conclusion") == "success"
                   require(
                       job.get("status") == "completed" and allowed,
                       f"source merge gate requires completed {name}",
                   )
-              return unrequested
 
 
           def _pr_identity(pr, repository, head):
@@ -216,6 +203,28 @@ jobs:
                   "PR base is not this main",
               )
               require(pr.get("head", {}).get("sha") == head, "PR head advanced after testing")
+
+
+          def _effective_jobs(rows, run):
+              # GitHub list-jobs filter=all includes jobs retained from earlier attempts.
+              # source: https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run
+              indexed, identities = {}, set()
+              for job in rows:
+                  attempt, identity, name = job.get("run_attempt"), job.get("id"), job.get("name")
+                  require(type(attempt) is int and 0 < attempt <= run["run_attempt"],
+                          "invalid job attempt")
+                  require(type(identity) is int and identity > 0 and identity not in identities,
+                          "invalid or duplicate job identity")
+                  require(job.get("run_id") == run["id"] and job.get("head_sha") == run["head_sha"],
+                          "job source identity differs")
+                  require(isinstance(name, str), "invalid job name")
+                  identities.add(identity)
+                  previous = indexed.get(name)
+                  require(previous is None or previous["run_attempt"] != attempt,
+                          "duplicate job name in one attempt")
+                  if previous is None or attempt > previous["run_attempt"]:
+                      indexed[name] = job
+              return list(indexed.values())
 
 
           def _source_run(event, repository, api):
@@ -240,10 +249,10 @@ jobs:
                   run.get("run_attempt") == source.get("run_attempt"),
                   "source run has a newer attempt",
               )
-              jobs = list(api.records(f"{prefix}/actions/runs/{run['id']}/jobs", "jobs"))
-              if _validate_jobs(jobs):
-                  run["merge_unrequested"] = True
-
+              jobs = _effective_jobs(
+                  api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
+              )
+              _validate_jobs(jobs)
               return run
 
 
@@ -298,19 +307,19 @@ jobs:
               return any(_push_covers_commit(push, sha) for push in pushes)
 
 
+          # Owner rule 2026-11-03 ("Retire les holds"): the gate reads no review hold.
+          # `hold` and `autopilot:hold` neither block nor get deleted; a green Pipeline
+          # merges (owner rule 2026-10-29). `do-not-merge` and a "do not merge" title
+          # stay the owner's holds. Lifting holds on green tests alone was the blocking
+          # finding of the Claude review on cortex-viz PR216 (comment 6508578491).
           def _merge_open_pr(pr, merge_path, head, api):
               require(
                   pr.get("state") == "open" and pr.get("draft") is False,
                   "PR is closed or draft",
               )
               require("do not merge" not in pr.get("title", "").lower(), "PR title holds merge")
-              require(
-                  not any(
-                      label.get("name", "").lower() in ("hold", "do-not-merge")
-                      for label in pr.get("labels", [])
-                  ),
-                  "PR label holds merge",
-              )
+              names = [label.get("name", "").lower() for label in pr.get("labels", [])]
+              require("do-not-merge" not in names, "PR label holds merge")
               result = api.request(
                   "PUT",
                   merge_path,
@@ -336,19 +345,6 @@ jobs:
           def resolve(event, repository: str, api: GitHub):
               run = _source_run(event, repository, api)
               number, pr = _pull_request(run, repository, api)
-              if run.get("merge_unrequested"):
-                  # A draft's Pipeline succeeds with `merge` skipped: it never asked for a
-                  # merge, so declining one is not a failure. No API write.
-                  require(
-                      pr.get("draft") is True,
-                      "source merge gate skipped merge on a PR that is not a draft",
-                  )
-                  return {
-                      "tested_sha": run["head_sha"],
-                      "run_tests": "false",
-                      "pr_number": str(number),
-                      "reason": "Draft PR: its Pipeline skipped merge; nothing to merge",
-                  }
               pr_path = f"/repos/{repository}/pulls/{number}"
               already_merged = pr.get("merged") is True
               if already_merged:
@@ -439,6 +435,9 @@ jobs:
           test "$actual" = "$EXPECTED_SHA"
           echo "tested_sha=$actual" >> "$GITHUB_OUTPUT"
 
+
+      - name: Test no comparison with main
+        run: python3 -m unittest discover -s scripts/tests -p test_no_main_comparison.py -v
 
       - name: Validate ci.json
         id: commands
@@ -880,7 +879,10 @@ jobs:
           ref: ${{ needs.contract.outputs.tested_sha }}
 
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.306
+        # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"
+          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Scratch directory and OS name
         run: |
@@ -913,7 +915,10 @@ jobs:
           ref: ${{ needs.contract.outputs.tested_sha }}
 
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.306
+        # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"
+          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Scratch directory and OS name
         run: |
@@ -931,12 +936,8 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ env.CI_WORK }}/claude
         run: bash -eo pipefail -c "$CI_COMMAND"
 
-  # The bot (design, "The bot step"): runs whether install passed or failed,
-  # on same-repo, non-draft pull requests. Dependabot remains out of scope.
-  # Claude commits skip duplicate review, but failing tests still need repair.
-  # Owner-authored workflow PRs are repairable; other workflow PRs keep bootstrap isolation.
-  # Cancellation stops mutation; ordinary failed tests still reach repair.
   tag:
+    # Publish only after all five categories pass on the actual merge commit.
     needs: [contract, unit, regression, e2e, environment, install]
     if: >-
       !cancelled()

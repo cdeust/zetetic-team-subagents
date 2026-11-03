@@ -234,9 +234,9 @@ def test_mutating_jobs_handle_failures_but_stop_on_workflow_cancellation(workflo
     assert "success()" not in condition
 
 
-@pytest.mark.parametrize(
-    "path", ["templates/ci/pipeline.yml", ".github/workflows/pipeline.yml"]
-)
+# This repository's own pipeline.yml is the native profile since 2026-11-04 (no
+# embedded claude-code-action step); the legacy template keeps the steps.
+@pytest.mark.parametrize("path", ["templates/ci/pipeline.yml"])
 @pytest.mark.parametrize("name", ["Review", "Fix"])
 def test_only_review_publishes_the_official_report_without_full_output(path, name):
     # claude-code-action at the pinned SHA writes the redacted Step Summary
