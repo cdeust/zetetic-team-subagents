@@ -120,6 +120,10 @@ def test_merge_gate_reads_nothing_but_the_test_jobs():
     # Owner holds are read live and leave the PR unarmed (Codex finding, #238 P1).
     assert 'contains("do not merge")' in arm["run"] and 'index("do-not-merge")' in arm["run"]
     assert arm["run"].index("--json title,labels") < arm["run"].index("--auto --squash")
+    # A hold found on a later run revokes an earlier arming; only PRs into main arm.
+    assert "--disable-auto" in arm["run"]
+    assert arm["env"]["BASE"] == "${{ github.event.pull_request.base.ref }}"
+    assert arm["run"].index('"$BASE" != "main"') < arm["run"].index("--json title,labels")
 
 
 def test_the_review_job_posts_but_cannot_fail_the_pipeline():

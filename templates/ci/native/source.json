@@ -234,7 +234,7 @@
     "merge-arms-auto-merge": {
       "rule": "Owner rule 2026-11-03: a CI that blocks itself and cannot correct itself is not autonomous; the PR's own definition merges the PR.",
       "evidence": "spec PR168, Cortex PR839, codebase PR471 (2026-11-03): each PR fixes the merge gate, and main's completion resolver, running main's definition, refused them (source merge gate requires completed review); a human merge was the only exit.",
-      "reason": "The merge job, once the test jobs of the run are green, runs gh pr merge --auto --squash --match-head-commit on its own PR. GitHub performs the squash when branch protection is satisfied (the merge check included), with the PR's definition as the only code in the path. Already armed, already merged and a disabled Allow auto-merge setting are not failures; the completion resolver stays as the fallback merger. A do-not-merge label or a 'do not merge' title, read live before arming, leaves the PR unarmed (owner holds stay owner holds; Codex finding on #238).",
+      "reason": "The merge job, once the test jobs of the run are green, runs gh pr merge --auto --squash --match-head-commit on its own PR. GitHub performs the squash when branch protection is satisfied (the merge check included), with the PR's definition as the only code in the path. Already armed, already merged and a disabled Allow auto-merge setting are not failures; the completion resolver stays as the fallback merger. A do-not-merge label or a 'do not merge' title, read live before arming, leaves the PR unarmed (owner holds stay owner holds; Codex finding on #238). Only PRs into main are armed (the resolve job's boundary), and a hold found on a later run revokes an earlier arming (gh pr merge --disable-auto), since GitHub keeps an armed request across a writer's push.",
       "sources": [
         "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request",
         "https://cli.github.com/manual/gh_pr_merge"
@@ -414,6 +414,6 @@
     }
   },
   "authored_jobs": {
-    "merge": "65a98f1ba2fd01927357f19324b82106aa2af63becdd4f9b16c55d3280fa0887"
+    "merge": "752bb3a698c1ab368ae782be0dc3771233575d7c0fdc22942fe3ed4fd19715a6"
   }
 }

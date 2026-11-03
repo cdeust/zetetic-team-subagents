@@ -196,8 +196,11 @@ def test_merge_is_the_aggregate_of_the_test_jobs_of_the_run(workflow):
     ]
     text = yaml.safe_dump(merge)
     # gh pr view reads only the two owner holds (do-not-merge label, held title)
-    # before arming auto-merge; no review state, no main, no review hold.
-    for forbidden in ("review", "headRefOid", "main", "compare", "autopilot", '"hold"'):
+    # before arming auto-merge; no review state, no read of main's content or
+    # history (the base.ref == main guard names the branch, reads nothing from
+    # it), no review hold.
+    for forbidden in ("review", "headRefOid", "origin/main", "refs/heads/main",
+                      "git fetch", "git diff", "compare", "autopilot", '"hold"'):
         assert forbidden not in text.replace("pull_request", ""), forbidden
 
 
