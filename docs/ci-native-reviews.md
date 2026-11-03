@@ -37,7 +37,14 @@ existing commands.
 Its tag job pins `actions/setup-python` v7.1.0 at
 `6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`, matching the copied Cortex source and
 Spec main `616eb04`; the legacy profile retains v7.0.0. This prevents opting in
-from downgrading that consumer's existing action. The renderer delivers the three Pipeline workflows,
+from downgrading that consumer's existing action. The tag job of both profiles
+checks nothing out: it holds the write-enabled `RELEASE_TAG_SSH_KEY` after a
+`workflow_run` event, and a checkout there is the CodeQL finding
+`actions/untrusted-checkout` (Cortex PR839, codebase PR471, high). The tested
+commit is fetched by its 40-hex SHA into a bare repository under `runner.temp`,
+GitHub's SSH host keys come from `api.github.com/meta` over TLS with
+`StrictHostKeyChecking=yes`, and the publish step runs in that bare repository
+(`tag-fetch-without-checkout` adaptation, `tests/test_ci_tag_no_checkout.py`). The renderer delivers the three Pipeline workflows,
 `Codex.yml`, `claude-review.yml`, `claude.yml`, the Codex reader scripts and the
 Anthropic review command with its five reviewers. Existing `ci.json` and
 unrelated files are preserved. Every destination is preflighted; a failed file

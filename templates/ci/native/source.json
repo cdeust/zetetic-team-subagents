@@ -115,7 +115,7 @@
         "https://github.com/cdeust/ai-architect-mcp-spec/pull/163#issuecomment-6491660443",
         "https://learn.chatgpt.com/docs/security/security-review"
       ],
-      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '\u00b7 _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
+      "reason": "A Codex security review can complete with both verdict flags null while Codex posts an authenticated receipt 'No security issues were found' for the head (cortex-viz PR213 receipt6491350304, Cortex PR829 receipt6491478435); the gate stayed pending with no exit. A survey of 36 cdeust PRs on 2026-10-29 found 13 security receipts, all with that sentence, two automatic ones with the heading suffix '· _Automatically triggered_'. For a completed, current-head, null/null security review whose metadata names this repository, PR, head and completed status: a no-issues receipt from the native Bot with an authenticated editor and a head commit prefix is the verdict (success); no such receipt blocks as codex_security_verdict_missing; any other security receipt for the head blocks as codex_security_receipt_unrecognized (no observed receipt reports findings; findings arrive as explicit flags and keep the thread path). The gate names the cause and never relaunches a review; resume re-runs the failed review job once the proof succeeds."
     },
     "receipt-event-resumption": {
       "sources": [
@@ -216,6 +216,20 @@
     },
     "review-never-blocks": {
       "reason": "Owner rule 2026-10-29: the review is not a required job. The review job keeps running and posting but cannot fail the Pipeline (continue-on-error), because the completion caller fires only on a successful run. The completion resolver requires the tests and their aggregate merge, never the review job, and the merge-pending-review state is gone."
+    },
+    "tag-fetch-without-checkout": {
+      "rule": "Owner rule 2026-11-03: CodeQL findings are fixed, not dismissed. The tag job never checks out the tested commit.",
+      "evidence": "CodeQL actions/untrusted-checkout on Cortex PR839 (pipeline-post-merge.yml:971, high) and ai-architect-mcp-codebase PR471 (pipeline-post-merge.yml:972 high, pipeline.yml:1822 medium): checkout of untrusted code in a privileged workflow (workflow_run) with later potential execution, while the job holds the write-enabled RELEASE_TAG_SSH_KEY.",
+      "reason": "The publish script needs only the commit object and an authenticated origin. The step fetches the 40-hex tested_sha by SHA into a bare repository under runner.temp (git init --bare, fetch --depth=1), installs GitHub's SSH host keys from api.github.com/meta over TLS with StrictHostKeyChecking=yes, and the publish step runs there; nothing from the commit is checked out or executed.",
+      "sources": [
+        "https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout/",
+        "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints",
+        "https://docs.github.com/en/rest/meta/meta#get-github-meta-information"
+      ],
+      "tests": [
+        "tests/test_ci_tag_no_checkout.py",
+        "tests/test_ci_post_merge_template.py"
+      ]
     }
   },
   "adapted_assets": {

@@ -73,11 +73,18 @@ def test_every_checkout_is_the_contract_sha_and_the_release_tags_that_commit():
             if step.get("uses", "").startswith("actions/checkout@")
         )
         assert checkout["with"]["ref"] == "${{ needs.contract.outputs.tested_sha }}"
-    checkout = next(step for step in jobs["tag"]["steps"] if "uses" in step)
-    assert checkout["with"]["ref"] == "${{ needs.contract.outputs.tested_sha }}"
-    assert checkout["with"]["fetch-depth"] == 0
-    assert checkout["with"]["ssh-key"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    # The tag job holds the write-enabled deploy key after a workflow_run event,
+    # so it checks nothing out (CodeQL actions/untrusted-checkout, Cortex PR839):
+    # the tested commit is fetched by SHA into a bare repository.
+    assert not any(
+        step.get("uses", "").startswith("actions/checkout@") for step in jobs["tag"]["steps"]
+    )
+    fetch = next(step for step in jobs["tag"]["steps"] if step.get("name", "").startswith("Fetch the tested commit"))
+    assert fetch["env"]["TESTED_SHA"] == "${{ needs.contract.outputs.tested_sha }}"
+    assert fetch["env"]["SSH_KEY"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    assert 'fetch --quiet --depth=1 origin "$TESTED_SHA"' in fetch["run"]
     publish = next(step for step in jobs["tag"]["steps"] if step.get("id") == "publish")
+    assert publish["working-directory"] == "${{ runner.temp }}/release-repo"
     assert publish["env"]["TESTED_SHA"] == "${{ needs.contract.outputs.tested_sha }}"
     assert "$GITHUB_SHA" not in publish["run"]
 
