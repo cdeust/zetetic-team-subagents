@@ -1,12 +1,13 @@
-"""A review hold is lifted only when Codex and Claude both conclude to merge.
+"""The gate reads no review hold; only the owner's holds stop a merge.
 
-Owner rule, 2026-10-29 (verbatim): "until the review of codex and claude (done
-autonomously) are there, it cannot merge, the hold should be removed after
-reviewers agree on merging". `hold` and `autopilot:hold` mean "reviews
-incomplete"; `do-not-merge` and a "do not merge" title stay the owner's holds.
-These are the rules of the Cortex convergence planner (cdeust/Cortex PR834,
-scripts/ci_autopilot_converge_plan.py REVIEW_HOLDS, OWNER_HOLDS, _claude),
-carried into the native template.
+Owner rule, 2026-11-03 (verbatim): "Retire les holds". `hold` and
+`autopilot:hold` are neither read, blocking nor deleted by the resolve job: a
+green Pipeline merges (owner rule 2026-10-29). `do-not-merge` and a "do not
+merge" title stay the owner's holds. This replaces the 2026-10-29 rule under
+which the gate lifted review holds once Codex and Claude agreed (Cortex PR834),
+whose remaining effect after #231 (review no longer required) was to delete a
+human hold on green tests alone (Claude review of cortex-viz PR216, comment
+6508578491, blocking finding 1).
 
 State table: one row per test below. Codex code, Codex security (flags or a
 native receipt), the Claude marker for the head, then labels and title.
@@ -43,13 +44,12 @@ D5 (coordinator, 2026-10-29): the Claude review skips Dependabot PRs by design
 whose branch is dependabot/*, an absent marker reads `not_applicable_dependabot`
 and counts as agreement; Codex and the tests decide. Any other PR needs the marker.
 
-| reader state | labels / title              | merge job              | resolve                         |
-|--------------|-----------------------------|------------------------|---------------------------------|
-| success      | hold, autopilot:hold        | merge, green           | DELETE both, GET, PUT (merged)  |
-| pending      | hold                        | merge pending review   | nothing: hold kept, cause named |
-| success      | do-not-merge (+ hold)       | red, held by label     | refused before any DELETE       |
-| success      | "do not merge" title + hold | red, held by title     | refused before any DELETE       |
-| success      | hold re-added after DELETE  | merge, green           | refused before PUT              |
+| labels / title              | resolve                                   |
+|-----------------------------|-------------------------------------------|
+| hold, autopilot:hold        | PUT (merged); labels never read or deleted |
+| bug                         | PUT (merged)                              |
+| do-not-merge (+ hold)       | refused, no API call                      |
+| "do not merge" title + hold | refused, no API call                      |
 
 Claude identity: GraphQL author `claude`/Bot, id BOT_kgDODIGtWg, of
 cdeust/claude-mods PR51 comment 6494419619 (REST user claude[bot], comment
@@ -61,7 +61,6 @@ import json
 from pathlib import Path
 import sys
 from unittest.mock import patch
-from urllib.parse import unquote
 
 import pytest
 import yaml
@@ -339,21 +338,13 @@ def test_the_merge_job_waits_for_no_review_and_reads_no_pull_request(jobs):
 
 # The resolve job (workflow_run, main's definition, pull-requests: write).
 class LabelAPI:
-    """REST double: labels removed by DELETE, then the PR re-read and merged."""
+    """REST double: records every call; only the PUT merge is expected."""
 
-    def __init__(self, pr, after_get=None):
-        self.pr, self.after_get, self.calls = pr, after_get, []
+    def __init__(self, pr):
+        self.pr, self.calls = pr, []
 
     def request(self, method, path, body=None):
         self.calls.append((method, path))
-        if method == "DELETE":
-            name = unquote(path.rsplit("/", 1)[1])
-            self.pr["labels"] = [x for x in self.pr["labels"] if x["name"] != name]
-            return self.pr["labels"]
-        if method == "GET":
-            if self.after_get:
-                self.after_get(self.pr)
-            return self.pr
         if method == "PUT":
             return {"merged": True, "sha": "c" * 40}
         raise AssertionError(f"unexpected request {method} {path}")
@@ -375,17 +366,13 @@ def held_pr(labels, title="fix"):
 MERGE_PATH = "/repos/o/r/pulls/7/merge"  # source: resolve() passes pr_path + "/merge".
 
 
-def test_agreement_lifts_review_holds_then_merges(jobs, tmp_path):
+def test_review_holds_are_neither_read_nor_deleted(jobs, tmp_path):
     module = resolver(jobs, tmp_path)
     api = LabelAPI(held_pr(["hold", "bug", "Autopilot:Hold"]))
     assert module._merge_open_pr(api.pr, MERGE_PATH, SHA, api) == "c" * 40
-    assert api.calls == [
-        ("DELETE", "/repos/o/r/issues/7/labels/hold"),
-        ("DELETE", "/repos/o/r/issues/7/labels/Autopilot%3AHold"),
-        ("GET", "/repos/o/r/pulls/7"),
-        ("PUT", MERGE_PATH),
-    ]
-    assert [x["name"] for x in api.pr["labels"]] == ["bug"]
+    assert api.calls == [("PUT", MERGE_PATH)]
+    assert [x["name"] for x in api.pr["labels"]] == ["hold", "bug", "Autopilot:Hold"]
+    assert not hasattr(module, "REVIEW_HOLDS") and not hasattr(module, "_review_holds")
 
 
 def test_unheld_pr_merges_without_label_calls(jobs, tmp_path):
@@ -409,20 +396,3 @@ def test_owner_holds_are_never_touched(jobs, tmp_path, pr, message):
     with pytest.raises(module.PostMergeError, match=message):
         module._merge_open_pr(api.pr, MERGE_PATH, SHA, api)
     assert api.calls == []
-
-
-@pytest.mark.parametrize(
-    "change, message",
-    [
-        (lambda pr: pr["labels"].append(dict(name="hold")), "PR label holds merge"),
-        (lambda pr: pr["labels"].append(dict(name="do-not-merge")), "PR label holds merge"),
-        (lambda pr: pr["head"].update(sha=OLD), "PR head advanced after testing"),
-    ],
-    ids=["hold-readded", "owner-hold-added", "head-moved"],
-)
-def test_change_during_the_lift_refuses_the_merge(jobs, tmp_path, change, message):
-    module = resolver(jobs, tmp_path)
-    api = LabelAPI(held_pr(["hold"]), after_get=change)
-    with pytest.raises(module.PostMergeError, match=message):
-        module._merge_open_pr(api.pr, MERGE_PATH, SHA, api)
-    assert ("PUT", MERGE_PATH) not in api.calls

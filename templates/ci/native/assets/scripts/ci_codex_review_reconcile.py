@@ -109,7 +109,7 @@ def _possible_wait(repo, row):
             return False
         if row["headRepository"]["nameWithOwner"].casefold() != repo.casefold():
             return False
-        # Review holds (hold, autopilot:hold) wait for both reviewers: queue them.
+        # Review holds (hold, autopilot:hold) are not read by the gate: queue them.
         if "do not merge" in row["title"].casefold() or any(
             item["name"].casefold() == "do-not-merge" for item in row["labels"]["nodes"]
         ):

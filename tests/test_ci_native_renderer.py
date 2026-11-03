@@ -146,8 +146,8 @@ AGREEMENT_READER = (
     ),
 )
 AGREEMENT_EVENT_SOURCE = (
-    b"    # Owner rule 2026-10-29: hold and autopilot:hold wait for both reviewers, and\n"
-    b"    # the gate lifts them; only the owner's holds end resumption here.\n"
+    b"    # Owner rule 2026-11-03: hold and autopilot:hold are not read anywhere in the\n"
+    b"    # gate; only the owner's holds end resumption here.\n"
     b'    if "do not merge" in title.casefold() or any(\n'
     b'        label["name"].casefold() == "do-not-merge" for label in labels\n',
     b'    if "do not merge" in title.casefold() or any(\n'
@@ -344,43 +344,25 @@ def _resolve_block(text):
 
 
 AGREEMENT_RESOLVE = (
-    (
-        b"          from urllib.error import HTTPError, URLError\n"
-        b"          from urllib.parse import quote\n",
-        b"          from urllib.error import HTTPError, URLError\n",
-    ),
+    # Inverse of source.json adaptation "review-holds-not-read" (owner rule
+    # 2026-11-03): the source blocks on `hold`; the native job reads only the
+    # owner's `do-not-merge` label and "do not merge" title.
     (
         _resolve_block(
             """\
-# Owner rule 2026-10-29: hold and autopilot:hold mean "reviews incomplete";
-# the source merge job read Codex and Claude agreeing on this head, so the
-# gate lifts them. do-not-merge and a "do not merge" title stay the owner's.
-# source: docs.github.com/en/rest/authentication/permissions-required-for-
-# fine-grained-personal-access-tokens lists issues labels DELETE under Pull requests (write).
-REVIEW_HOLDS = ("hold", "autopilot:hold")
-
-
-def _review_holds(pr):
+# Owner rule 2026-11-03 ("Retire les holds"): the gate reads no review hold.
+# `hold` and `autopilot:hold` neither block nor get deleted; a green Pipeline
+# merges (owner rule 2026-10-29). `do-not-merge` and a "do not merge" title
+# stay the owner's holds. Lifting holds on green tests alone was the blocking
+# finding of the Claude review on cortex-viz PR216 (comment 6508578491).
+def _merge_open_pr(pr, merge_path, head, api):
     require(
         pr.get("state") == "open" and pr.get("draft") is False,
         "PR is closed or draft",
     )
     require("do not merge" not in pr.get("title", "").lower(), "PR title holds merge")
-    names = [label.get("name", "") for label in pr.get("labels", [])]
-    require("do-not-merge" not in map(str.lower, names), "PR label holds merge")
-    return [name for name in names if name.lower() in REVIEW_HOLDS]
-
-
-def _merge_open_pr(pr, merge_path, head, api):
-    held = _review_holds(pr)
-    if held:
-        pr_path = merge_path.removesuffix("/merge")
-        labels = pr_path.replace("/pulls/", "/issues/") + "/labels/"
-        for name in held:
-            api.request("DELETE", labels + quote(name, safe=""))
-        pr = api.request("GET", pr_path)
-        require(pr.get("head", {}).get("sha") == head, "PR head advanced after testing")
-        require(not _review_holds(pr), "PR label holds merge")
+    names = [label.get("name", "").lower() for label in pr.get("labels", [])]
+    require("do-not-merge" not in names, "PR label holds merge")
 """
         ),
         _resolve_block(
