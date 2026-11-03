@@ -244,6 +244,22 @@
         "tests/test_ci_post_merge_template.py",
         "tests/test_ci_native_renderer.py"
       ]
+    },
+    "merge-requires-both-reviews": {
+      "rule": "Owner rule 2026-11-03 (23:29), verbatim: Le CI doit avoir une revue de codex et une revue de Claude, et il ne doit plus y avoir de bloquer remonte ni par l'un ni par l'autre pour que ca soit ok pour etre merge.",
+      "supersedes": "review-never-blocks (owner rule 2026-10-29) for the merge condition: the review job is required again; the completion resolver on main still never reads it, the PR's own merge job does.",
+      "reason": "The merge job needs the review job and reads its state output: success (Codex and Claude concluded for the head, no blocking finding) arms auto-merge; pending (a verdict missing) and blocked (a blocking finding or an unreadable verdict) fail the merge job with the causes named. The review job runs without continue-on-error, so a blocking finding fails the run. The Codex completion workflow re-runs the review job of the PR's run when a verdict lands, and re-run-a-job re-runs its dependents, the merge job included: the PR's own definition stays the only code in the merge path. The review step runs without --allow-pending (#205): a missing verdict exits 2 and fails the review job, the state the resumption plan (READINESS) re-runs.",
+      "sources": [
+        "https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run",
+        "https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/using-jobs-in-a-workflow#defining-prerequisite-jobs"
+      ],
+      "tests": [
+        "tests/test_ci_native_gate.py",
+        "tests/test_ci_post_merge_template.py",
+        "tests/test_ci_template.py",
+        "tests/test_ci_pr_safety.py",
+        "tests/test_ci_native_hold_lift.py"
+      ]
     }
   },
   "adapted_assets": {
@@ -347,7 +363,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "b226b9886e55f13d96bba95c4eb87bc264b37042642757bee2dba19d0d6f34fe",
+      "sha256": "c94b1511fed45ef38cdce31b04527efc81f1f0e5687df4a48fa2ca5fb31ab8bc",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
@@ -360,7 +376,7 @@
         "security-owner-resolution",
         "codex-reaction-verdict",
         "receipt-head-binding",
-        "review-never-blocks"
+        "merge-requires-both-reviews"
       ]
     },
     "resolve": {
@@ -414,6 +430,6 @@
     }
   },
   "authored_jobs": {
-    "merge": "752bb3a698c1ab368ae782be0dc3771233575d7c0fdc22942fe3ed4fd19715a6"
+    "merge": "337ebea5c8eaf87a340cecdb7e8173f6226d32c88fed8ed118241d5d7ff315a7"
   }
 }

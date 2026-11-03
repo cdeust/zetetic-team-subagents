@@ -330,15 +330,15 @@ def jobs():
 
 
 def test_the_merge_job_waits_for_no_review_and_reads_no_pull_request(jobs):
-    """Owner rule 2026-10-29: merge is the aggregate of the test jobs; review states stay with the review job."""
-    assert "review" not in jobs["merge"]["needs"]
+    """Owner rule 2026-11-03 (23:29): merge needs the review job's state (both verdicts); review holds are not read."""
+    assert "review" in jobs["merge"]["needs"]
     assert jobs["review"]["outputs"]["causes"] == "${{ steps.evidence.outputs.causes }}"
     # Owner rule 2026-11-03: the merge job arms auto-merge on its own PR, so it
     # writes PR state; it still reads no review state and no label.
     assert jobs["merge"]["permissions"] == {"contents": "write", "pull-requests": "write"}
     body = "\n".join(step.get("run", "") for step in jobs["merge"]["steps"])
     # Only the two owner holds (do-not-merge label, "do not merge" title) are read.
-    assert "headRefOid" not in body and "review" not in body
+    assert "headRefOid" not in body
     assert "autopilot" not in body and '"hold"' not in body
 
 

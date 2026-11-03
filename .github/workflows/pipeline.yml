@@ -553,10 +553,9 @@ jobs:
   # Owner-authored workflow PRs are repairable; other workflow PRs keep bootstrap isolation.
   # Cancellation stops mutation; ordinary failed tests still reach repair.
   review:
-    # Owner rule 2026-10-29: the review posts but never blocks. A failed job
-    # fails the run, and the completion caller fires only on a successful run;
-    # the required jobs are the tests and their aggregate `merge`.
-    continue-on-error: true
+    # Owner rule 2026-11-03 (23:29): the merge job requires this job. A blocking
+    # finding fails it and the run; a missing verdict leaves it green with
+    # state pending, and the completion workflow re-runs it when a verdict lands.
     needs: [unit, regression, e2e, environment, install]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
@@ -719,15 +718,13 @@ jobs:
   # test job did not succeed or the review was incomplete. No checkout or merge
   # mutation here: the completed-run resolver performs the protected merge.
   merge:
-    # The aggregate of the test jobs of this run: green when they all are. It reads
-    # nothing else (no main, no review state, no live PR label). When they are
-    # green it arms GitHub's native auto-merge on this PR, so the merge happens
-    # with this PR's own definition in the path and nothing from main's: a PR
-    # that fixes the pipeline is merged by the pipeline it fixes (owner rule
-    # 2026-11-03: a CI that blocks itself and cannot correct itself is not
-    # autonomous). Branch protection stays the only gate: GitHub squashes as
-    # soon as the required checks pass, this job included.
-    needs: [contract, unit, regression, e2e, environment, install]
+    # Owner rule 2026-11-03 (23:29): a PR is fit to merge when the test jobs of
+    # this run are green and the review job has run to completion for this head.
+    # In this profile the review job is the Claude review itself; Codex posts
+    # through its App. When it passes it arms GitHub's native auto-merge on this
+    # PR, so the merge happens with this PR's own definition in the path and
+    # nothing from main's. Branch protection stays the only gate GitHub applies.
+    needs: [contract, unit, regression, e2e, environment, install, review]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
@@ -758,6 +755,17 @@ jobs:
             exit 1
           fi
           echo "## Merge: the test jobs are green on this commit" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require the review to have run to completion
+        env:
+          REVIEW: ${{ needs.review.result }}
+        run: |
+          if [ "$REVIEW" != success ]; then
+            echo "::error::review: $REVIEW, requires completion"
+            echo "## Merge: blocked, the review did not complete for this head ($REVIEW)" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "## Review: completed for this head" >> "$GITHUB_STEP_SUMMARY"
 
       # This job is itself a required check and still running, so a direct merge
       # here would be refused; auto-merge lets GitHub perform the squash the

@@ -185,13 +185,14 @@ def test_merge_accepts_green_test_jobs(workflow, tmp_path):
 
 
 def test_merge_is_the_aggregate_of_the_test_jobs_of_the_run(workflow):
-    """Owner rule 2026-10-29: green pipeline, merge; nothing else is waited for or read."""
+    """Owner rule 2026-11-03 (23:29): green tests and a completed review, then the PR arms its merge."""
     merge = workflow["jobs"]["merge"]
-    assert set(merge["needs"]) == {"contract", *CATEGORIES}
+    assert set(merge["needs"]) == {"contract", *CATEGORIES, "review"}
     # Owner rule 2026-11-03: once green, the job arms GitHub auto-merge on its own
     # PR, so the PR's definition merges the PR and never main's resolver.
     assert [s.get("name") for s in merge["steps"]] == [
         "Require the test jobs of this run",
+        "Require the review to have run to completion",
         "Arm auto-merge, GitHub merges when the required checks pass",
     ]
     text = yaml.safe_dump(merge)
@@ -199,7 +200,7 @@ def test_merge_is_the_aggregate_of_the_test_jobs_of_the_run(workflow):
     # before arming auto-merge; no review state, no read of main's content or
     # history (the base.ref == main guard names the branch, reads nothing from
     # it), no review hold.
-    for forbidden in ("review", "headRefOid", "origin/main", "refs/heads/main",
+    for forbidden in ("headRefOid", "origin/main", "refs/heads/main",
                       "git fetch", "git diff", "compare", "autopilot", '"hold"'):
         assert forbidden not in text.replace("pull_request", ""), forbidden
 

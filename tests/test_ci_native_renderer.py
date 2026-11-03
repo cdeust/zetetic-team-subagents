@@ -299,19 +299,37 @@ def original_security_reader(delivered):
 
 def without_review_never_blocks(delivered):
     # Inverse of source.json adaptation "review-never-blocks".
+    # Inverse of "merge-requires-both-reviews" (owner rule 2026-11-03 23:29), which
+    # replaced that block: the merge job needs this job, so it fails the run again.
     block = (
-        "    # Owner rule 2026-10-29: the review posts but never blocks. A failed job\n"
-        "    # fails the run, and the completion caller fires only on a successful run;\n"
-        "    # the required jobs are the tests and their aggregate `merge`.\n"
-        "    continue-on-error: true\n"
+        "    # Owner rule 2026-11-03 (23:29): the merge job requires this job. A blocking\n"
+        "    # finding fails it and the run; a missing verdict leaves it green with\n"
+        "    # state pending, and the completion workflow re-runs it when a verdict lands.\n"
     )
     assert delivered.count(block) == 1
     return delivered.replace(block, "")
 
 
+def without_pending_failure(delivered):
+    # Inverse of "merge-requires-both-reviews": the pinned source kept a pending
+    # head green with --allow-pending (#205); a missing verdict now fails the job.
+    block = (
+        "          # Owner rule 2026-11-03 (23:29): a missing verdict fails this job (exit 2),\n"
+        "          # so the completion workflow re-runs it, and its dependent merge job, when\n"
+        "          # the verdict lands; --allow-pending (#205) kept a pending head green.\n"
+        '          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete); fi\n'
+    )
+    assert delivered.count(block) == 1
+    return delivered.replace(
+        block,
+        '          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete --allow-pending); fi\n',
+    )
+
+
 def original_review_job(delivered):
     original = without_agreement(
-        without_review_never_blocks(delivered.decode()), [("      causes: ${{ steps.evidence.outputs.causes }}\n", "")]
+        without_pending_failure(without_review_never_blocks(delivered.decode())),
+        [("      causes: ${{ steps.evidence.outputs.causes }}\n", "")],
     )
     # Inverse of source.json adaptation "merge-is-the-test-aggregate": the merge job no
     # longer reuses the reader, so its YAML anchor is gone.

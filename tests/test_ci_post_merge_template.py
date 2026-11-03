@@ -103,11 +103,13 @@ def test_review_checkout_explicitly_excludes_completion_events_and_forks():
         assert guard in checkout["if"]
 
 
-def test_merge_gate_reads_nothing_but_the_test_jobs():
+def test_merge_gate_reads_the_test_jobs_and_the_review_state():
     job = workflow()["jobs"]["merge"]
-    gate, arm = job["steps"]
+    gate, reviews, arm = job["steps"]
     assert "gh " not in gate["run"] and "headRefOid" not in gate["run"]
-    assert "review" not in job["needs"]
+    assert "review" in job["needs"]
+    # Legacy profile: the review job is the Claude review itself; its result is read.
+    assert reviews["env"]["REVIEW"] == "${{ needs.review.result }}"
     # The second step only arms auto-merge for this head; it reads no review,
     # no main and no label, and GitHub's branch protection decides the merge.
     assert arm["name"].startswith("Arm auto-merge")
@@ -126,11 +128,13 @@ def test_merge_gate_reads_nothing_but_the_test_jobs():
     assert arm["run"].index('"$BASE" != "main"') < arm["run"].index("--json title,labels")
 
 
-def test_the_review_job_posts_but_cannot_fail_the_pipeline():
-    # A failed job fails the run and the caller only fires on a successful run.
+def test_the_merge_job_requires_the_review():
+    # Owner rule 2026-11-03 (23:29): both reviews concluded without a blocking
+    # finding before the merge is armed; only merge depends on review.
     jobs = workflow()["jobs"]
-    assert jobs["review"]["continue-on-error"] is True
-    assert all("review" not in job.get("needs", []) for job in jobs.values())
+    assert "continue-on-error" not in jobs["review"]
+    assert "review" in jobs["merge"]["needs"]
+    assert all("review" not in job.get("needs", []) for name, job in jobs.items() if name != "merge")
 
 
 def test_completion_and_push_runs_cannot_replace_other_heads_pending_tests():

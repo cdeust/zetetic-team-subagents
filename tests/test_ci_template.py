@@ -71,7 +71,7 @@ def test_the_jobs_chain_in_dependency_order(workflow):
     for previous, job in zip(chain, chain[1:]):
         assert jobs[job]["needs"] == ["contract", previous], job
     assert jobs["review"]["needs"] == chain
-    assert sorted(jobs["merge"]["needs"]) == sorted(["contract", "unit", "regression", "e2e", "environment", "install"])
+    assert sorted(jobs["merge"]["needs"]) == sorted(["contract", "unit", "regression", "e2e", "environment", "install", "review"])
     assert jobs["tag"]["needs"] == ["contract", *chain]
 
 
@@ -257,8 +257,11 @@ def test_the_merge_checks_failed_jobs_unless_the_run_is_cancelled(workflow):
     assert "gh " not in gate["run"] and "headRefOid" not in gate["run"]
     # Owner rule 2026-11-03: the PR's own pipeline arms GitHub auto-merge once the
     # tests are green, so a fix to the pipeline is merged by the pipeline it fixes.
-    assert len(steps) == 2 and steps[1]["name"].startswith("Arm auto-merge")
-    assert "--match-head-commit" in steps[1]["run"]
+    # Owner rule 2026-11-03 (23:29): the review must have completed for the head.
+    assert len(steps) == 3 and steps[1]["name"].startswith("Require the review")
+    assert steps[1]["env"]["REVIEW"] == "${{ needs.review.result }}"
+    assert steps[2]["name"].startswith("Arm auto-merge")
+    assert "--match-head-commit" in steps[2]["run"]
 
 
 def test_the_tag_runs_on_push_or_resolved_merge_over_the_deploy_key(workflow):

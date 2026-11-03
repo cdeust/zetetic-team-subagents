@@ -48,7 +48,12 @@ GitHub's SSH host keys come from `api.github.com/meta` over TLS with
 job arms GitHub auto-merge on its own PR once the test jobs are green
 (`merge-arms-auto-merge` adaptation): the PR's definition merges the PR, and a
 fix to the pipeline is merged by the pipeline it fixes; the completion resolver
-on `main` remains the fallback where "Allow auto-merge" is off. The renderer delivers the three Pipeline workflows,
+on `main` remains the fallback where "Allow auto-merge" is off. Since 2026-11-03
+(23:29) the `merge` job needs the `review` job and arms only on its `success`
+state: Codex and Claude both concluded for the head with no blocking finding.
+A missing verdict fails the review job and the Codex completion workflow
+re-runs it, and its dependent `merge`, when the verdict lands
+(`merge-requires-both-reviews` adaptation). The renderer delivers the three Pipeline workflows,
 `Codex.yml`, `claude-review.yml`, `claude.yml`, the Codex reader scripts and the
 Anthropic review command with its five reviewers. Existing `ci.json` and
 unrelated files are preserved. Every destination is preflighted; a failed file

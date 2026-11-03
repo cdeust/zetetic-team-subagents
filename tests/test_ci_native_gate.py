@@ -211,10 +211,18 @@ def test_duplicate_job_names_in_one_attempt_are_rejected(jobs, tmp_path):
     assert api.merges() == []
 
 
-def test_the_native_review_job_posts_but_cannot_fail_the_pipeline(jobs):
-    # A failed job fails the run and the caller only fires on a successful run.
-    assert jobs["review"]["continue-on-error"] is True
-    assert all("review" not in job.get("needs", []) for job in jobs.values())
+def test_the_native_merge_job_requires_both_reviews(jobs):
+    # Owner rule 2026-11-03 (23:29): Codex and Claude must both conclude for the
+    # head with no blocking finding before the PR is fit to merge. The review
+    # job can fail the run again (no continue-on-error) and merge needs it.
+    assert "continue-on-error" not in jobs["review"]
+    assert "review" in jobs["merge"]["needs"]
+    gate = next(s for s in jobs["merge"]["steps"] if s["name"].startswith("Require both reviews"))
+    assert gate["env"]["STATE"] == "${{ needs.review.outputs.state }}"
+    for state in ("success)", "pending)"):
+        assert state in gate["run"]
+    assert gate["run"].count("exit 1") == 2
+    assert all("review" not in job.get("needs", []) for name, job in jobs.items() if name != "merge")
 
 
 def test_the_native_resolver_source_names_no_review_job(jobs, tmp_path):
