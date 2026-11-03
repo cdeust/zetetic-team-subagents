@@ -183,6 +183,7 @@
       "rule": "Owner decision 2026-11-03 (\"Oui pour le resolver\"): port cdeust/Cortex PR847 into the native reader so a clean security review with null flags is proven by Codex's thumbs-up reaction when no receipt comment exists.",
       "reference": "https://github.com/cdeust/Cortex/pull/847",
       "evidence": "From 2026-10-31 Codex posts no no-issues receipt and reacts +1 on the PR once both reviews finish with no findings: cortex-viz PR218 (06:13:28Z), PR219 and PR220 (07:38:47Z), PR216 (11:13:00Z); Cortex PR838, PR840, PR846, PR847. PRs reviewed before (cortex-viz PR207, PR212, PR217) carry neither. cortex-viz PR216 run of 2026-11-03: review job red with the single cause codex_security_verdict_missing while Claude and Codex code were clean.",
+      "shipped_tests": "scripts/tests/test_ci_codex_review_reaction.py: 14 contract tests, 100 % of the module's lines (the consumers' unit job fails under 90 % of lines: claude-mods PR61 run with the module and no test read 88.86 %).",
       "reason": "security_receipt keeps precedence; its verdict_missing yields to resolve_no_findings: both Completed rows of the summary name this head, no finding text in the summary, the Codex Bot's +1 (reactions API reports it as type User, the login is read) is not earlier than the later row to the second, no eyes reaction remains, and no native finding thread is unresolved by the owner (runtime THREAD_QUERY and _thread_states). Any malformed reaction payload or stamp blocks as protocol. New authored asset scripts/ci_codex_review_reaction.py, embedded as REACTION_SOURCE after the comments module; the reader imports reaction_verdict."
     },
     "dependabot-claude-not-applicable": {
@@ -294,6 +295,7 @@
     }
   },
   "authored_assets": {
+    "scripts/tests/test_ci_codex_review_reaction.py": "9785bfc2c0ce1156c428f9c85df028436759375ce0ee3f9da3346be292b644f4",
     "scripts/ci_codex_review_reaction.py": "4879edcd9d9194187f3c2e4448f7b1a43a4075e5e17d482ca1d128e608902ae2",
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
