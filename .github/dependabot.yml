@@ -32,3 +32,12 @@ updates:
       github-actions:
         patterns:
           - "*"
+    ignore:
+      # The rendered .github/workflows/claude-review.yml and claude.yml pin this
+      # action to the SHA the native template verified (tests cite upstream source
+      # lines at that commit: tests/test_ci_completion_caller.py,
+      # tests/test_ci_native_claude_fix.py). A Dependabot bump of the rendered copy
+      # alone fails `unit` every time (PR #232, run 41572355914; same rule as
+      # cdeust/Cortex PR #848). The pin moves by hand, in the template, after
+      # re-verification; its security alerts still show in the Security tab.
+      - dependency-name: "anthropics/claude-code-action"
