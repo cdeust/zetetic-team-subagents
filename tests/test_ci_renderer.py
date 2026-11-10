@@ -145,3 +145,14 @@ def test_default_profile_delivers_the_review_its_resolver_waits_for(tmp_path):
 def test_native_profile_keeps_its_own_review_assets(tmp_path):
     files = renderer.prepare_files(tmp_path, native_review=True)
     assert tmp_path / "scripts/ci_review_budget.py" not in files
+
+
+def test_native_caller_wakes_on_the_pipeline_only(tmp_path):
+    # The native resolver refuses any source but the Pipeline ("source workflow
+    # differs"), so a review completion there would only start a failing run
+    # (Codex P2 on #244). The default resolver handles both completions.
+    name = tmp_path / ".github/workflows/pipeline-after-merge.yml"
+    native = yaml.safe_load(renderer.prepare_files(tmp_path, native_review=True)[name])
+    default = yaml.safe_load(renderer.prepare_files(tmp_path)[name])
+    assert native[True]["workflow_run"]["workflows"] == ["Pipeline"]
+    assert default[True]["workflow_run"]["workflows"] == ["Pipeline", "PR Review"]

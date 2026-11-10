@@ -180,6 +180,19 @@ def completion_caller(text):
     return text
 
 
+def caller_events(text, native_review):
+    """The native resolver accepts a Pipeline completion only: no review wake-up there."""
+    wake = (
+        "# The review and the Pipeline finish in either order: each completion wakes the\n"
+        "# resolver, which merges once both are there (ADR-1127).\n"
+    )
+    both = "    workflows: [Pipeline, PR Review]\n"
+    if not native_review:
+        replace_exact(text, both, both)
+        return text
+    return replace_exact(replace_exact(text, wake, ""), both, "    workflows: [Pipeline]\n")
+
+
 def artifacts(root=ROOT, native_review=False):
     profile = "native/pipeline.yml" if native_review else "pipeline.yml"
     source = root / "templates/ci" / profile
@@ -191,7 +204,8 @@ def artifacts(root=ROOT, native_review=False):
     result = {
         "pipeline.yml": header + workflow(text, False),
         "pipeline-post-merge.yml": header + workflow(text, True),
-        "pipeline-after-merge.yml": header + completion_caller(caller.read_text()),
+        "pipeline-after-merge.yml": header
+        + completion_caller(caller_events(caller.read_text(), native_review)),
     }
     return result
 
