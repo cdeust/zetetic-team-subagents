@@ -20,7 +20,7 @@ def test_completion_trigger_ignores_main_and_cannot_recurse():
         (ROOT / "templates/ci/pipeline-after-merge.yml").read_text()
     )
     assert caller[True]["workflow_run"] == {
-        "workflows": ["Pipeline"],
+        "workflows": ["Pipeline", "PR Review"],
         "types": ["completed"],
         "branches-ignore": ["main"],
     }
@@ -34,7 +34,7 @@ def test_completion_trigger_ignores_main_and_cannot_recurse():
     assert not any("uses" in step for step in resolve["steps"])
 
 
-def test_only_resolver_and_existing_review_tag_jobs_can_write():
+def test_only_the_resolver_the_issue_closer_and_the_tag_job_can_write():
     jobs = workflow()["jobs"]
     assert jobs["resolve"]["permissions"] == {
         "contents": "write",
@@ -43,9 +43,9 @@ def test_only_resolver_and_existing_review_tag_jobs_can_write():
     }
     for name in ("contract", *CATEGORIES):
         assert "write" not in jobs[name].get("permissions", {}).values()
-    # Owner rule 2026-11-03: the merge job arms GitHub auto-merge on its own PR
-    # (the PR's definition merges, never main's), so it writes PR state only.
-    assert jobs["merge"]["permissions"] == {"contents": "write", "pull-requests": "write"}
+    assert jobs["close-issues"]["permissions"] == {"issues": "write", "pull-requests": "read"}
+    # The aggregate merges nothing: the resolver does, on the Claude verdict.
+    assert jobs["merge"]["permissions"] == {"contents": "read"}
 
 
 def test_contract_allows_normal_events_but_requires_successful_resolve_for_completion():
@@ -92,45 +92,28 @@ def test_every_checkout_is_the_contract_sha_and_the_release_tags_that_commit():
     assert "$GITHUB_SHA" not in publish["run"]
 
 
-def test_review_checkout_explicitly_excludes_completion_events_and_forks():
-    review = workflow()["jobs"]["review"]
-    checkout = next(step for step in review["steps"] if "uses" in step)
-    for guard in (
-        "github.event_name == 'pull_request'",
-        "github.event.pull_request.head.repo.full_name == github.repository",
-    ):
-        assert guard in review["if"]
-        assert guard in checkout["if"]
-
-
 def test_merge_gate_reads_nothing_but_the_test_jobs():
     job = workflow()["jobs"]["merge"]
-    gate, arm = job["steps"]
+    (gate,) = job["steps"]
     assert "gh " not in gate["run"] and "headRefOid" not in gate["run"]
     assert "review" not in job["needs"]
-    # The second step only arms auto-merge for this head; it reads no review,
-    # no main and no label, and GitHub's branch protection decides the merge.
-    assert arm["name"].startswith("Arm auto-merge")
-    assert '--auto --squash --match-head-commit "$HEAD"' in arm["run"]
-    assert arm["env"]["HEAD"] == "${{ github.event.pull_request.head.sha }}"
-    # Review holds (hold, autopilot:hold) are not read; only the two owner holds are.
-    assert "headRefOid" not in arm["run"] and "autopilot" not in arm["run"]
-    assert '"hold"' not in arm["run"]
-    assert "not allowed|not enabled" in arm["run"]  # disabled setting: warn, resolver merges
-    # Owner holds are read live and leave the PR unarmed (Codex finding, #238 P1).
-    assert 'contains("do not merge")' in arm["run"] and 'index("do-not-merge")' in arm["run"]
-    assert arm["run"].index("--json title,labels") < arm["run"].index("--auto --squash")
-    # A hold found on a later run revokes an earlier arming; only PRs into main arm.
-    assert "--disable-auto" in arm["run"]
-    assert arm["env"]["BASE"] == "${{ github.event.pull_request.base.ref }}"
-    assert arm["run"].index('"$BASE" != "main"') < arm["run"].index("--json title,labels")
+    # No auto-merge is armed here: it would merge on green tests alone.
+    assert "--auto" not in gate["run"]
 
 
-def test_the_review_job_posts_but_cannot_fail_the_pipeline():
-    # A failed job fails the run and the caller only fires on a successful run.
+def test_no_job_of_the_pipeline_is_a_review():
+    # The review runs as its own workflow; its completion wakes the resolver.
     jobs = workflow()["jobs"]
-    assert jobs["review"]["continue-on-error"] is True
+    assert "review" not in jobs
     assert all("review" not in job.get("needs", []) for job in jobs.values())
+
+
+def test_the_issue_closer_runs_only_after_a_resolved_completion():
+    job = workflow()["jobs"]["close-issues"]
+    assert job["needs"] == "resolve"
+    for guard in ("github.event_name == 'workflow_run'", "needs.resolve.result == 'success'"):
+        assert guard in job["if"]
+    assert not any("uses" in step for step in job["steps"])
 
 
 def test_completion_and_push_runs_cannot_replace_other_heads_pending_tests():

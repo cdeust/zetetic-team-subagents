@@ -109,12 +109,9 @@ def _validate_run(run, repository):
 
 
 def _validate_jobs(jobs):
-    # Source: templates/ci/pipeline.yml. Owner rule 2026-10-29: the required jobs
-    # are the tests and their aggregate `merge`; the `review` job may run and post
-    # but is never read here. Overall success alone accepts skipped jobs.
-    # Returns True when `merge` was skipped: on a validated same-repository
-    # pull_request run that succeeded, the only condition `merge` can fail is
-    # `!github.event.pull_request.draft`.
+    # Owner rule 2026-10-29: the required jobs are the tests and their
+    # aggregate `merge`; the Claude verdict is read by
+    # _review_approves. Overall success alone accepts skipped jobs.
     required = ["contract", "unit", "regression", "e2e", "merge"]
     for category in ("environment", "install"):
         expected = {
@@ -131,27 +128,17 @@ def _validate_jobs(jobs):
             f"source merge gate requires the exact {category} matrix",
         )
         required.extend(sorted(expected))
-    found = {}
     for name in required:
         matching = [job for job in jobs if job.get("name") == name]
         require(
             len(matching) == 1, f"source merge gate requires exactly one {name} job"
         )
-        found[name] = matching[0]
-    unrequested = (
-        found["merge"].get("status") == "completed"
-        and found["merge"].get("conclusion") == "skipped"
-    )
-    for name in required:
-        job = found[name]
-        allowed = job.get("conclusion") == "success" or (
-            unrequested and name == "merge"
-        )
+        job = matching[0]
+        allowed = job.get("conclusion") == "success"
         require(
             job.get("status") == "completed" and allowed,
             f"source merge gate requires completed {name}",
         )
-    return unrequested
 
 
 def _pr_identity(pr, repository, head):
@@ -167,6 +154,65 @@ def _pr_identity(pr, repository, head):
     require(pr.get("head", {}).get("sha") == head, "PR head advanced after testing")
 
 
+def _effective_jobs(rows, run):
+    # GitHub list-jobs filter=all includes jobs retained from earlier attempts.
+    # source: https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run
+    indexed, identities = {}, set()
+    for job in rows:
+        attempt, identity, name = job.get("run_attempt"), job.get("id"), job.get("name")
+        require(type(attempt) is int and 0 < attempt <= run["run_attempt"],
+                "invalid job attempt")
+        require(type(identity) is int and identity > 0 and identity not in identities,
+                "invalid or duplicate job identity")
+        require(job.get("run_id") == run["id"] and job.get("head_sha") == run["head_sha"],
+                "job source identity differs")
+        require(isinstance(name, str), "invalid job name")
+        identities.add(identity)
+        previous = indexed.get(name)
+        require(previous is None or previous["run_attempt"] != attempt,
+                "duplicate job name in one attempt")
+        if previous is None or attempt > previous["run_attempt"]:
+            indexed[name] = job
+    return list(indexed.values())
+
+
+# source: .github/workflows/claude-review.yml, `name: PR Review`.
+REVIEW_WORKFLOW_NAME = "PR Review"
+
+
+def _pipeline_of_review(review, repository, api):
+    """The successful Pipeline run of the head a completed review ran on.
+
+    The review and the Pipeline finish in either order (ADR-1127). When the
+    review ends last, its completion wakes the resolver, which then needs the
+    Pipeline run of the same head: the newest one that succeeded. Without one
+    the merge is held, and the Pipeline's own completion will wake the resolver.
+    """
+    require(
+        review.get("path") == ".github/workflows/claude-review.yml"
+        and review.get("event") == "pull_request"
+        and review.get("status") == "completed"
+        and review.get("conclusion") == "success",
+        "source review did not complete successfully",
+    )
+    require(
+        review.get("head_repository", {}).get("full_name") == repository,
+        "source head repository differs",
+    )
+    head = full_sha(review.get("head_sha"))
+    path = f"/repos/{repository}/actions/workflows/pipeline.yml/runs"
+    runs = [
+        run
+        for run in api.records(
+            f"{path}?head_sha={head}&event=pull_request&status=success",
+            "workflow_runs",
+        )
+        if run.get("head_sha") == head and type(run.get("id")) is int
+    ]
+    require(runs, "merge held: Pipeline has not succeeded on this head")
+    return max(runs, key=lambda run: run["id"])
+
+
 def _source_run(event, repository, api):
     require(
         re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository),
@@ -177,8 +223,12 @@ def _source_run(event, repository, api):
         "event repository differs",
     )
     source = event.get("workflow_run")
-    _validate_run(source, repository)
+    require(isinstance(source, dict), "missing workflow_run")
     prefix = f"/repos/{repository}"
+    woken_by_review = source.get("name") == REVIEW_WORKFLOW_NAME
+    if woken_by_review:
+        source = _pipeline_of_review(source, repository, api)
+    _validate_run(source, repository)
     run = api.request("GET", f"{prefix}/actions/runs/{source['id']}")
     _validate_run(run, repository)
     require(
@@ -189,10 +239,11 @@ def _source_run(event, repository, api):
         run.get("run_attempt") == source.get("run_attempt"),
         "source run has a newer attempt",
     )
-    jobs = list(api.records(f"{prefix}/actions/runs/{run['id']}/jobs", "jobs"))
-    if _validate_jobs(jobs):
-        run["merge_unrequested"] = True
-
+    run["woken_by_review"] = woken_by_review
+    jobs = _effective_jobs(
+        api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
+    )
+    _validate_jobs(jobs)
     return run
 
 
@@ -247,7 +298,123 @@ def _has_push_pipeline(repository, sha, api):
     return any(_push_covers_commit(push, sha) for push in pushes)
 
 
-def _merge_open_pr(pr, merge_path, head, api):
+def _ran_the_review(run, prefix, api):
+    """True when this run's `Claude review` job executed the `PR Review` step."""
+    jobs = api.records(f"{prefix}/actions/runs/{run['id']}/jobs", "jobs")
+    return any(
+        job.get("name") == "Claude review"
+        and any(
+            step.get("name") == "PR Review" and step.get("conclusion") == "success"
+            for step in job.get("steps") or []
+        )
+        for job in jobs
+    )
+
+
+def _review_approves(number, head, repository, api):
+    """The Claude review of this exact head decides the merge (ADR-1121).
+
+    A verdict counts only when its comment links the run id of a claude-review.yml
+    run of this head whose `PR Review` step succeeded. A review of an older head
+    links another run, and a run that skipped the review (past the cap) has no
+    such step, so neither can approve a newer head. The latest verdict wins.
+    """
+    prefix = f"/repos/{repository}"
+    runs = [
+        run
+        for run in api.records(
+            f"{prefix}/actions/workflows/claude-review.yml/runs?head_sha={head}",
+            "workflow_runs",
+        )
+        if run.get("head_sha") == head and run.get("conclusion") == "success"
+    ]
+    reviewed = [run for run in runs if _ran_the_review(run, prefix, api)]
+    require(reviewed, "merge held: no Claude review ran on this head")
+    links = [f"/actions/runs/{run['id']}" for run in reviewed]
+    verdicts = []
+    for comment in api.records(f"{prefix}/issues/{number}/comments"):
+        user = comment.get("user") or {}
+        body = comment.get("body") or ""
+        if user.get("login") != "claude[bot]" or user.get("type") != "Bot":
+            continue
+        if not any(re.search(re.escape(link) + r"(?!\d)", body) for link in links):
+            continue
+        found = re.findall(r"^Verdict: (approve|block)\s*$", body, re.M)
+        if found:
+            verdicts.append((comment["updated_at"], found[-1]))
+    require(verdicts, "merge held: Claude has not posted a verdict on this head")
+    require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
+
+
+# Files a low-risk dependency update may touch (ADR-1126). Anything else, a
+# workflow file first of all, keeps the PR on the reviewed path.
+# source: the dependency manifests and locks of the ecosystems the consumers
+# declare in .github/dependabot.yml (uv, npm, pnpm, cargo), matched by file
+# name because each package carries its own manifest.
+LOW_RISK_FILES = frozenset({
+    "uv.lock", "pyproject.toml", "package-lock.json", "pnpm-lock.yaml",
+    "package.json", "Cargo.lock", "Cargo.toml",
+})
+# source: the `update-type` values Dependabot writes in its commit message,
+# https://github.com/dependabot/fetch-metadata#outputs
+LOW_RISK_UPDATES = frozenset(
+    {"version-update:semver-minor", "version-update:semver-patch"}
+)
+
+
+def _declared_updates(commit):
+    """Update types of one Dependabot commit, or None when it is not one.
+
+    A git author is only a declared e-mail, and `verified` vouches for the
+    committer's key. Dependabot's commits are committed and signed by GitHub
+    itself (`web-flow`), where the author is the acting account and cannot be
+    chosen. Every dependency the commit names must declare its update type.
+    source: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification
+    """
+    detail = commit.get("commit") or {}
+    signed = (detail.get("verification") or {}).get("verified") is True
+    author = (commit.get("author") or {}).get("login")
+    committer = (commit.get("committer") or {}).get("login")
+    if author != "dependabot[bot]" or committer != "web-flow" or not signed:
+        return None
+    message = detail.get("message") or ""
+    updates = re.findall(r"^\s*update-type: (\S+)\s*$", message, re.M)
+    names = re.findall(r"^\s*- dependency-name: ", message, re.M)
+    return updates if updates and len(updates) == len(names) else None
+
+
+def _is_low_risk(pr, repository, api):
+    """True for a Dependabot minor or patch update of the dependency files.
+
+    The tier comes from the change, not from a label or a title (ADR-1126): the
+    PR is Dependabot's single commit (committed and signed by GitHub), every
+    update it declares is minor or patch, and it touches nothing outside
+    LOW_RISK_FILES. Such a PR merges on green required checks without a review.
+    """
+    user = pr.get("user") or {}
+    if user.get("login") != "dependabot[bot]" or user.get("type") != "Bot":
+        return False
+    path = f"/repos/{repository}/pulls/{pr['number']}"
+    commits = list(api.records(path + "/commits"))
+    # Dependabot opens and rebases a PR as one commit; a second one is
+    # someone else's work on its branch.
+    if len(commits) != 1:
+        return False
+    updates = _declared_updates(commits[0])
+    if updates is None or not set(updates) <= LOW_RISK_UPDATES:
+        return False
+    files = set()
+    for row in api.records(path + "/files"):
+        # A rename counts under both of its names.
+        files |= {row.get("filename"), row.get("previous_filename")} - {None}
+    names = {name.rsplit("/", 1)[-1] for name in files}
+    # A workflow or action directory never holds a dependency manifest.
+    if any(name.startswith(".github/") for name in files):
+        return False
+    return bool(files) and names <= LOW_RISK_FILES
+
+
+def _merge_open_pr(pr, merge_path, head, api, repository):
     require(
         pr.get("state") == "open" and pr.get("draft") is False,
         "PR is closed or draft",
@@ -260,6 +427,10 @@ def _merge_open_pr(pr, merge_path, head, api):
         ),
         "PR label holds merge",
     )
+    if _is_low_risk(pr, repository, api):
+        print("post-merge: low-risk dependency update, no review required")
+    else:
+        _review_approves(pr["number"], head, repository, api)
     result = api.request(
         "PUT",
         merge_path,
@@ -285,25 +456,12 @@ def _confirm_pr_merge(pr_path, original_pr, sha, api):
 def resolve(event, repository: str, api: GitHub):
     run = _source_run(event, repository, api)
     number, pr = _pull_request(run, repository, api)
-    if run.get("merge_unrequested"):
-        # A draft's Pipeline succeeds with `merge` skipped: it never asked for a
-        # merge, so declining one is not a failure. No API write.
-        require(
-            pr.get("draft") is True,
-            "source merge gate skipped merge on a PR that is not a draft",
-        )
-        return {
-            "tested_sha": run["head_sha"],
-            "run_tests": "false",
-            "pr_number": str(number),
-            "reason": "Draft PR: its Pipeline skipped merge; nothing to merge",
-        }
     pr_path = f"/repos/{repository}/pulls/{number}"
     already_merged = pr.get("merged") is True
     if already_merged:
         sha = full_sha(pr.get("merge_commit_sha"))
     else:
-        sha = _merge_open_pr(pr, pr_path + "/merge", run["head_sha"], api)
+        sha = _merge_open_pr(pr, pr_path + "/merge", run["head_sha"], api, repository)
     _confirm_pr_merge(pr_path, pr, sha, api)
     if already_merged and _has_push_pipeline(repository, sha, api):
         return {
@@ -311,6 +469,14 @@ def resolve(event, repository: str, api: GitHub):
             "run_tests": "false",
             "pr_number": str(number),
             "reason": "An exact-SHA main push Pipeline already exists",
+        }
+    if already_merged and run.get("woken_by_review"):
+        # The Pipeline's completion merged this PR and tests the merge commit.
+        return {
+            "tested_sha": sha,
+            "run_tests": "false",
+            "pr_number": str(number),
+            "reason": "Already merged when the review completed",
         }
     return {
         "tested_sha": sha,

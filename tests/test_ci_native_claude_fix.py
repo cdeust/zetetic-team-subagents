@@ -83,16 +83,3 @@ def test_untrusted_review_gets_no_ssh_or_write_tools(tmp_path):
     tools = set(args[args.index("--allowedTools") + 1].split(","))
     assert not tools & {"Edit", "Write", "MultiEdit", "Bash", "Bash(git:*)"}
 
-
-def test_automatic_fix_has_workspace_permission_and_can_render_workflows():
-    workflow = yaml.safe_load((renderer.ROOT / "templates/ci/pipeline.yml").read_text())
-    step = next(s for s in workflow["jobs"]["review"]["steps"] if s.get("name") == "Fix")
-    args = shlex.split(step["with"]["claude_args"])
-    assert args[args.index("--permission-mode") + 1] == "acceptEdits"
-    prompt = step["with"]["prompt"]
-    assert "Never edit .github/workflows/pipeline.yml" not in prompt
-    assert "correct the product, not the pipeline" not in prompt
-    assert "preserve every required check" in prompt
-    assert "render-ci" in prompt
-    assert "canonical" in prompt
-    assert "never push main" in prompt

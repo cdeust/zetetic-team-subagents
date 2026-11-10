@@ -26,7 +26,8 @@ def test_completion_listener_has_a_distinct_name_and_no_self_listener():
     assert "workflow_run" not in pipeline[True]
     assert caller[True] == {
         "workflow_run": {
-            "workflows": ["Pipeline"],
+            # Either completion wakes the resolver (Cortex ADR-1127).
+            "workflows": ["Pipeline", "PR Review"],
             "types": ["completed"],
             "branches-ignore": ["main"],
         }
@@ -45,10 +46,13 @@ def test_completion_caller_uses_same_commit_and_inherits_required_permissions():
     }
     assert "concurrency" not in caller and "concurrency" not in job
     assert "concurrency" in pipeline
+    # issues: write is the close-issues job's: a GITHUB_TOKEN merge does not fire
+    # GitHub's closing keywords, so the resolver closes the linked issues.
     assert job["permissions"] == {
         "contents": "write",
         "pull-requests": "write",
         "actions": "read",
+        "issues": "write",
     }
     assert set(job) == {"if", "uses", "secrets", "permissions"}
     assert "github.event.workflow_run.event == 'pull_request'" in job["if"]

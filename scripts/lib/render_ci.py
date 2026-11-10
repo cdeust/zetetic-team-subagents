@@ -49,7 +49,10 @@ NATIVE_ASSETS = (
     ".claude/agents/security-code-reviewer.md",
     ".claude/agents/test-coverage-reviewer.md",
 )
-JOB_ORDER = ("resolve", "contract", *CATEGORIES, "review", "merge", "tag")
+# The default profile follows Cortex: the review is its own workflow (claude-review.yml)
+# and the resolver reads its verdict, so the Pipeline carries no review job (ADR-1121).
+JOB_ORDER = ("resolve", "close-issues", "contract", *CATEGORIES, "merge", "tag")
+NATIVE_JOB_ORDER = ("resolve", "contract", *CATEGORIES, "review", "merge", "tag")
 SOURCE_SHA = "${{ github.event_name == 'workflow_run' && needs.resolve.outputs.tested_sha || github.sha }}"
 CONTRACT_GATE = """    needs: resolve
     if: >-
@@ -70,7 +73,7 @@ def split_jobs(text):
     if not separator or re.search(r"^jobs:", body, re.MULTILINE):
         raise ValueError("Canonical template needs exactly one jobs mapping")
     matches = list(re.finditer(r"^  ([a-z][a-z0-9_-]*):\n", body, re.MULTILINE))
-    if tuple(match[1] for match in matches) != JOB_ORDER:
+    if tuple(match[1] for match in matches) not in (JOB_ORDER, NATIVE_JOB_ORDER):
         raise ValueError("Canonical job names/order differ from the explicit contract")
     jobs = {}
     for index, match in enumerate(matches):
@@ -131,11 +134,11 @@ def workflow(text, completion):
         else "github.event_name == 'push' && github.ref == 'refs/heads/main'"
     )
     jobs["tag"] = replace_exact(jobs["tag"], TAG_EVENT, event)
-    order = (
-        ("resolve", "contract", *CATEGORIES, "tag")
-        if completion
-        else ("contract", *CATEGORIES, "review", "merge", "tag")
-    )
+    # resolve and close-issues exist only where a completed run is resolved.
+    resolver_only = ("resolve", "close-issues")
+    pull_request_only = ("review", "merge")
+    skipped = pull_request_only if completion else resolver_only
+    order = tuple(name for name in jobs if name not in skipped)
     rendered = event_header(header, completion) + "".join(jobs[name] for name in order)
     if completion and (
         "claude-code-action@" in rendered
@@ -157,11 +160,9 @@ def completion_caller(text):
         "    secrets:\n      RELEASE_TAG_SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}\n"
     )
     replace_exact(text, secret, secret)
-    if (
-        "secrets: inherit" in text
-        or "issues: write" in text
-        or "id-token: write" in text
-    ):
+    # issues: write is the close-issues job's: a GITHUB_TOKEN merge does not
+    # trigger GitHub's closing keywords, so the resolver closes the issues itself.
+    if "secrets: inherit" in text or "id-token: write" in text:
         raise ValueError("Completion caller exposes unnecessary privileges")
     return text
 

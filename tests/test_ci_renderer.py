@@ -61,11 +61,8 @@ def test_injected_review_action_in_common_tests_cannot_enter_completion(source):
     template = source / "templates/ci/pipeline.yml"
     original = template.read_text()
     jobs = yaml.safe_load(original)["jobs"]
-    action = next(
-        step["uses"]
-        for step in jobs["review"]["steps"]
-        if step.get("uses", "").startswith("anthropics/claude-code-action@")
-    )
+    # source: the pin of .github/workflows/claude-review.yml.
+    action = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb"
     unit = renderer.split_jobs(original)[1]["unit"]
     injected = unit.replace(jobs["unit"]["steps"][0]["uses"], action, 1)
     template.write_text(original.replace(unit, injected, 1))

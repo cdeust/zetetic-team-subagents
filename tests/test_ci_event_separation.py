@@ -34,7 +34,7 @@ def test_direct_receipt_remains_pipeline_without_a_reusable_entry(generated):
     direct = generated[DIRECT]
     assert direct["name"] == "Pipeline"
     assert set(direct[True]) == {"push", "pull_request"}
-    assert list(direct["jobs"]) == ["contract", *CATEGORIES, "review", "merge", "tag"]
+    assert list(direct["jobs"]) == ["contract", *CATEGORIES, "merge", "tag"]
     contract = direct["jobs"]["contract"]
     assert "needs" not in contract
     assert contract["if"] == "!cancelled()"
@@ -46,7 +46,7 @@ def test_completion_has_no_path_to_review_or_merge(generated):
     assert engine[True] == {
         "workflow_call": {"secrets": {"RELEASE_TAG_SSH_KEY": {"required": False}}}
     }
-    assert list(engine["jobs"]) == ["resolve", "contract", *CATEGORIES, "tag"]
+    assert list(engine["jobs"]) == ["resolve", "close-issues", "contract", *CATEGORIES, "tag"]
     for job in engine["jobs"].values():
         assert "uses" not in job
         assert not any(
@@ -61,6 +61,7 @@ def test_completion_has_no_path_to_review_or_merge(generated):
         "contents": "write",
         "pull-requests": "write",
         "actions": "read",
+        "issues": "write",
     }
 
 
