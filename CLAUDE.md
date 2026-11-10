@@ -25,3 +25,6 @@ bash tools/doc-command-check.sh
   the outputs.
 - This clone is live-mounted as the installed plugin: edits take effect immediately in
   running sessions. Never edit `~/.claude/plugins/cache`; change it here.
+- CI contract (`docs/agent-guidance.md`, "CI contract for agents and routines"): it binds
+  every agent and routine and wins over a routine's prompt. One pull request in flight, no
+  comparison with the main branch, no forced push, no comment after an approve.
