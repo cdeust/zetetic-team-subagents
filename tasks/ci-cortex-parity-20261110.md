@@ -17,6 +17,9 @@ reviews Cortex has.
   categories, merge, tag`; the native profile keeps `review`; the completion caller may
   hold `issues: write`.
 - `.github/workflows/claude-review.yml` and `scripts/ci_review_budget.py`: Cortex's.
+- `templates/ci/review/`: the same review workflow, budget script, `/review-pr` command and
+  five reviewers, delivered by `render-ci` with the default profile (Codex P1 on #244: a
+  consumer rendered without them is held forever).
 - Tests: review-job tests removed, resolver fixtures give each head a review run and a
   verdict, six Cortex test files added under `tests/`.
 
@@ -31,7 +34,7 @@ and merges whichever of the review and the Pipeline ends last (ADR-1127).
 
 ## Result
 
-- `python3 -m pytest tests/ -q`: 3994 passed (3975 before the change). The tests of the
+- `python3 -m pytest tests/ -q`: 3996 passed (3975 before the change). The tests of the
   deleted review job are removed and six Cortex test files are added.
 - `tools/ci_post_merge.py`: 99 % line coverage (222 statements, 2 missed) from
   `tests/test_ci_*.py`.

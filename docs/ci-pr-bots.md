@@ -7,6 +7,8 @@ the default renderer.
 Edit `templates/ci/pipeline.yml` and `templates/ci/pipeline-after-merge.yml`, then
 run `bash scripts/setup.sh render-ci .`. The renderer copies both templates under a fixed
 header without a hash and preserves the repository's `ci.json`.
+It also delivers the review the resolver waits for, from `templates/ci/review/`:
+`claude-review.yml`, `scripts/ci_review_budget.py`, the `/review-pr` command and its reviewers.
 
 The five test categories, the 90 percent line-coverage gate, and the three bare
 runner environments remain the existing CI contract. The common Claude CLI pin

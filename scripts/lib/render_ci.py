@@ -49,6 +49,19 @@ NATIVE_ASSETS = (
     ".claude/agents/security-code-reviewer.md",
     ".claude/agents/test-coverage-reviewer.md",
 )
+# The default profile's resolver merges on the verdict of the PR Review workflow, so the
+# render delivers that workflow with what it runs: the review budget, the /review-pr
+# command and its five reviewers (templates/ci/review, Cortex's files byte for byte).
+REVIEW_ASSETS = (
+    ".github/workflows/claude-review.yml",
+    "scripts/ci_review_budget.py",
+    ".claude/commands/review-pr.md",
+    ".claude/agents/code-quality-reviewer.md",
+    ".claude/agents/documentation-accuracy-reviewer.md",
+    ".claude/agents/performance-reviewer.md",
+    ".claude/agents/security-code-reviewer.md",
+    ".claude/agents/test-coverage-reviewer.md",
+)
 # The default profile follows Cortex: the review is its own workflow (claude-review.yml)
 # and the resolver reads its verdict, so the Pipeline carries no review job (ADR-1121).
 JOB_ORDER = ("resolve", "close-issues", "contract", *CATEGORIES, "merge", "tag")
@@ -211,6 +224,9 @@ def prepare_files(target, root=ROOT, native_review=False, no_schedule=False):
         files.update(
             {target / name: native_asset(assets / name, no_schedule) for name in NATIVE_ASSETS}
         )
+    else:
+        review = root / "templates/ci/review"
+        files.update({target / name: (review / name).read_bytes() for name in REVIEW_ASSETS})
     example = (root / "templates/ci/ci.example.json").read_bytes()
     if not (target / "ci.json").exists():
         files[target / "ci.json"] = example

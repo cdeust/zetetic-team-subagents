@@ -122,3 +122,26 @@ def test_dry_run_creates_no_destination_files(source, tmp_path):
     target.mkdir()
     renderer.deliver(renderer.prepare_files(target, source), dry_run=True)
     assert list(target.iterdir()) == []
+
+
+def test_default_profile_delivers_the_review_its_resolver_waits_for(tmp_path):
+    # The default resolver holds every merge without an approving verdict of
+    # claude-review.yml: a consumer rendered without that workflow, its budget
+    # script and its reviewers could never merge (Codex P1 on #244).
+    files = renderer.prepare_files(tmp_path)
+    for name in renderer.REVIEW_ASSETS:
+        # One source: what a consumer receives is what this repository runs.
+        assert files[tmp_path / name] == (ROOT / name).read_bytes(), name
+    workflow = yaml.safe_load(files[tmp_path / ".github/workflows/claude-review.yml"])
+    assert workflow["name"] == "PR Review"
+    caller = yaml.safe_load(files[tmp_path / ".github/workflows/pipeline-after-merge.yml"])
+    assert workflow["name"] in caller[True]["workflow_run"]["workflows"]
+    review = workflow["jobs"]["review"]["steps"][-1]["with"]["prompt"]
+    assert review.startswith("/review-pr ") and "Verdict: approve" in review
+    budget = workflow["jobs"]["budget"]["steps"][-1]["run"]
+    assert "scripts/ci_review_budget.py" in budget
+
+
+def test_native_profile_keeps_its_own_review_assets(tmp_path):
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    assert tmp_path / "scripts/ci_review_budget.py" not in files
