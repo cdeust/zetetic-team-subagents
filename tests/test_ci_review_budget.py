@@ -13,10 +13,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import unittest.mock
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+import unittest.mock
 
 import yaml
 
@@ -192,6 +192,15 @@ class WorkflowWiringTests(unittest.TestCase):
             step
             for step in self.jobs["review"]["steps"]
             if step.get("uses", "").startswith("anthropics/claude-code-action@")
+        )
+
+    def test_reviews_of_one_pr_are_admitted_one_at_a_time(self):
+        self.assertEqual(
+            self.workflow["concurrency"],
+            {
+                "group": "claude-review-${{ github.event.pull_request.number }}",
+                "cancel-in-progress": False,
+            },
         )
 
     def test_the_counted_step_name_is_the_action_step(self):
