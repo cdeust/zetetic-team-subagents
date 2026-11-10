@@ -23,7 +23,7 @@ repository runs under. Python tooling, Markdown agent definitions.
 ## Etiquette
 
 Conventional commits, staged file-by-file. One PR per concern. A pull request merges when
-CI is green and a review verdict is posted on it; the owner does not gate merges by hand.
+CI is green and the review's last verdict on its head is an approve; the owner does not gate merges by hand.
 CI is the authority: it exists to catch regressions and enforce the engineering standards.
 
 ## CI contract for agents and routines
@@ -39,12 +39,12 @@ the prompt was written before the contract, and the repository's own standards a
    checks are green. Two cases differ: a Dependabot minor or patch update merges on green
    required checks alone, and a title that contains "do not merge" is never merged. No
    agent merges by hand or enables auto-merge.
-2. **Three reviews per branch.** The budget counts the successful review runs of the
-   branch (a new pull request on the same branch inherits them), so a push to an open
-   pull request spends one. The `claude-rereview` label grants a fourth; it is the
-   owner's to set. Push once per verdict, with every blocker of
-   that verdict fixed, and never while a `PR Review` run is in progress on the pull
-   request: the review would land on a commit that is no longer the head.
+2. **Three reviews per pull request.** The budget counts the successful review runs of
+   the pull request, so a push to an open pull request spends one. The `claude-rereview`
+   label grants a fourth; it is the owner's to set, and the next push uses it. Push once
+   per verdict, with every blocker of that verdict fixed, and never while a `PR Review`
+   run is in progress on the pull request: the review would land on a commit that is no
+   longer the head.
 3. **Budget spent without an approve on the head: a new branch.** Push the same commits to
    `<branch>-r<N>`, open a pull request with the same title and body plus a "Continuation"
    section naming the old one, leave one "Continued in #n" line on the old one, close it.
