@@ -99,6 +99,8 @@ class LowRiskTierTests(unittest.TestCase):
     def test_a_manifest_counts_wherever_the_package_lives(self):
         self.assertTrue(self.low(files=("uv.lock", "packages/x/pyproject.toml")))
         self.assertFalse(self.low(files=(".github/actions/x/package.json",)))
+        self.assertTrue(self.low(files=("requirements-dev.in", "requirements-dev.txt")))
+        self.assertFalse(self.low(files=("requirements-dev.txt", "plugins/x/hook.py")))
 
     def test_another_author_or_an_unsigned_commit_is_not(self):
         self.assertFalse(self.low(pr=pull(login="cdeust", kind="User")))

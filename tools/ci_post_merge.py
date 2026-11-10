@@ -350,10 +350,12 @@ def _review_approves(number, head, repository, api):
 # workflow file first of all, keeps the PR on the reviewed path.
 # source: the dependency manifests and locks of the ecosystems the consumers
 # declare in .github/dependabot.yml (uv, npm, pnpm, cargo), matched by file
-# name because each package carries its own manifest.
+# name because each package carries its own manifest. requirements-dev.in/.txt
+# is session-optimizer's uv-compiled pair (its dependabot.yml, uv ecosystem).
 LOW_RISK_FILES = frozenset({
     "uv.lock", "pyproject.toml", "package-lock.json", "pnpm-lock.yaml",
     "package.json", "Cargo.lock", "Cargo.toml",
+    "requirements-dev.in", "requirements-dev.txt",
 })
 # source: the `update-type` values Dependabot writes in its commit message,
 # https://github.com/dependabot/fetch-metadata#outputs
