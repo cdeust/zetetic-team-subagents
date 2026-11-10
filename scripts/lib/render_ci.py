@@ -49,7 +49,23 @@ NATIVE_ASSETS = (
     ".claude/agents/security-code-reviewer.md",
     ".claude/agents/test-coverage-reviewer.md",
 )
-JOB_ORDER = ("resolve", "contract", *CATEGORIES, "review", "merge", "tag")
+# The default profile's resolver merges on the verdict of the PR Review workflow, so the
+# render delivers that workflow with what it runs: the review budget, the /review-pr
+# command and its five reviewers (templates/ci/review, Cortex's files byte for byte).
+REVIEW_ASSETS = (
+    ".github/workflows/claude-review.yml",
+    "scripts/ci_review_budget.py",
+    ".claude/commands/review-pr.md",
+    ".claude/agents/code-quality-reviewer.md",
+    ".claude/agents/documentation-accuracy-reviewer.md",
+    ".claude/agents/performance-reviewer.md",
+    ".claude/agents/security-code-reviewer.md",
+    ".claude/agents/test-coverage-reviewer.md",
+)
+# The default profile follows Cortex: the review is its own workflow (claude-review.yml)
+# and the resolver reads its verdict, so the Pipeline carries no review job (ADR-1121).
+JOB_ORDER = ("resolve", "close-issues", "contract", *CATEGORIES, "merge", "tag")
+NATIVE_JOB_ORDER = ("resolve", "contract", *CATEGORIES, "review", "merge", "tag")
 SOURCE_SHA = "${{ github.event_name == 'workflow_run' && needs.resolve.outputs.tested_sha || github.sha }}"
 CONTRACT_GATE = """    needs: resolve
     if: >-
@@ -70,7 +86,7 @@ def split_jobs(text):
     if not separator or re.search(r"^jobs:", body, re.MULTILINE):
         raise ValueError("Canonical template needs exactly one jobs mapping")
     matches = list(re.finditer(r"^  ([a-z][a-z0-9_-]*):\n", body, re.MULTILINE))
-    if tuple(match[1] for match in matches) != JOB_ORDER:
+    if tuple(match[1] for match in matches) not in (JOB_ORDER, NATIVE_JOB_ORDER):
         raise ValueError("Canonical job names/order differ from the explicit contract")
     jobs = {}
     for index, match in enumerate(matches):
@@ -131,11 +147,11 @@ def workflow(text, completion):
         else "github.event_name == 'push' && github.ref == 'refs/heads/main'"
     )
     jobs["tag"] = replace_exact(jobs["tag"], TAG_EVENT, event)
-    order = (
-        ("resolve", "contract", *CATEGORIES, "tag")
-        if completion
-        else ("contract", *CATEGORIES, "review", "merge", "tag")
-    )
+    # resolve and close-issues exist only where a completed run is resolved.
+    resolver_only = ("resolve", "close-issues")
+    pull_request_only = ("review", "merge")
+    skipped = pull_request_only if completion else resolver_only
+    order = tuple(name for name in jobs if name not in skipped)
     rendered = event_header(header, completion) + "".join(jobs[name] for name in order)
     if completion and (
         "claude-code-action@" in rendered
@@ -157,13 +173,24 @@ def completion_caller(text):
         "    secrets:\n      RELEASE_TAG_SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}\n"
     )
     replace_exact(text, secret, secret)
-    if (
-        "secrets: inherit" in text
-        or "issues: write" in text
-        or "id-token: write" in text
-    ):
+    # issues: write is the close-issues job's: a GITHUB_TOKEN merge does not
+    # trigger GitHub's closing keywords, so the resolver closes the issues itself.
+    if "secrets: inherit" in text or "id-token: write" in text:
         raise ValueError("Completion caller exposes unnecessary privileges")
     return text
+
+
+def caller_events(text, native_review):
+    """The native resolver accepts a Pipeline completion only: no review wake-up there."""
+    wake = (
+        "# The review and the Pipeline finish in either order: each completion wakes the\n"
+        "# resolver, which merges once both are there (ADR-1127).\n"
+    )
+    both = "    workflows: [Pipeline, PR Review]\n"
+    if not native_review:
+        replace_exact(text, both, both)
+        return text
+    return replace_exact(replace_exact(text, wake, ""), both, "    workflows: [Pipeline]\n")
 
 
 def artifacts(root=ROOT, native_review=False):
@@ -177,7 +204,8 @@ def artifacts(root=ROOT, native_review=False):
     result = {
         "pipeline.yml": header + workflow(text, False),
         "pipeline-post-merge.yml": header + workflow(text, True),
-        "pipeline-after-merge.yml": header + completion_caller(caller.read_text()),
+        "pipeline-after-merge.yml": header
+        + completion_caller(caller_events(caller.read_text(), native_review)),
     }
     return result
 
@@ -210,6 +238,9 @@ def prepare_files(target, root=ROOT, native_review=False, no_schedule=False):
         files.update(
             {target / name: native_asset(assets / name, no_schedule) for name in NATIVE_ASSETS}
         )
+    else:
+        review = root / "templates/ci/review"
+        files.update({target / name: (review / name).read_bytes() for name in REVIEW_ASSETS})
     example = (root / "templates/ci/ci.example.json").read_bytes()
     if not (target / "ci.json").exists():
         files[target / "ci.json"] = example

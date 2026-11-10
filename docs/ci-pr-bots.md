@@ -7,45 +7,42 @@ the default renderer.
 Edit `templates/ci/pipeline.yml` and `templates/ci/pipeline-after-merge.yml`, then
 run `bash scripts/setup.sh render-ci .`. The renderer copies both templates under a fixed
 header without a hash and preserves the repository's `ci.json`.
+It also delivers the review the resolver waits for, from `templates/ci/review/`:
+`claude-review.yml`, `scripts/ci_review_budget.py`, the `/review-pr` command and its reviewers.
 
 The five test categories, the 90 percent line-coverage gate, and the three bare
 runner environments remain the existing CI contract. The common Claude CLI pin
 is 2.1.306, measured passing in [claude-mods PR45's unit job](https://github.com/cdeust/claude-mods/actions/runs/39773059845/job/119805310369).
 
-## Review and repair
+## Review
 
-The review uses the official [Claude Code review plugin invocation](https://code.claude.com/docs/en/github-actions#run-a-skill).
-The action's [allowed_bots input](https://github.com/anthropics/claude-code-action/blob/a5a423f75c251dcbff8a74e99f83b2cb03c72bfa/action.yml)
-permits only `claude[bot]` and `chatgpt-codex-connector[bot]` as bot actors. The
-existing scoped tool permissions stay unchanged. This does not add a Codex job.
+The default profile follows Cortex, the source of truth for the CI of the eight
+repositories (owner direction 2026-11-09). The Pipeline carries no review job. The
+review is its own workflow, `.github/workflows/claude-review.yml` (`PR Review`): at
+most three automatic reviews per pull request (`scripts/ci_review_budget.py`), each
+ending with one line, `Verdict: approve` or `Verdict: block`. Draft, fork and
+Dependabot-triggered runs are not reviewed. The Pipeline no longer repairs a red head
+itself; a repair is asked for with an `@claude` comment (`.github/workflows/claude.yml`).
 
-For an eligible human-authored head, Claude reviews and then fixes findings or
-failed tests. A Claude-authored head skips duplicate review; it still runs the
-fix step if any of the five test jobs did not succeed. When those jobs are all
-green, it runs neither action. The guard refuses a checkout that has advanced
-beyond the event's head, and a Git diff failure fails the guard.
-
-The repair job and read-only merge gate use `always() && !cancelled()`: normal
-test failures still reach repair and the explicit merge gate, but cancelling
-the workflow prevents further repair or merge work. GitHub re-evaluates job
-conditions during cancellation; `always()` alone keeps a job running
+The read-only merge aggregate uses `always() && !cancelled()`: test failures still
+reach it, and cancelling the workflow stops it. GitHub re-evaluates job conditions
+during cancellation; `always()` alone keeps a job running
 ([cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)).
-
-The existing bootstrap exception remains: a PR changing
-`.github/workflows/pipeline.yml` skips both bot actions. Dependabot remains
-outside Claude's review scope. Draft and fork PRs remain ineligible.
 
 ## Merge and release
 
-Merge requires the contract and all five test jobs to succeed. Review must
-complete successfully; its only permitted skipped-job result is the existing
-Dependabot exception. Failure, cancellation, timeout, and missing results block
-the merge. A skipped bot step inside a successful review job preserves the
-bootstrap and Claude-head behavior described above.
+The `merge` job requires the contract and the five test jobs to succeed, and reads
+nothing else. It merges nothing and arms no auto-merge. The resolver merges a head
+when its Pipeline succeeded and the latest Claude verdict bound to a review run of
+that same head approves; a verdict of an older head, a missing verdict or `block`
+holds the merge. A Dependabot pull request made of one GitHub-signed commit, whose
+declared updates are all minor or patch and whose files are dependency manifests or
+locks outside `.github/`, merges on green checks without a review. A change to a
+workflow file never takes that path.
 
 The PR merge job validates eligibility without mutating the PR. A separate
-`Pipeline after merge` workflow listens for successful PR Pipeline completion
-and calls the same local Pipeline through `workflow_call`. GitHub rejects a
+`Pipeline after merge` workflow listens for the completion of the PR Pipeline and
+of the review, which finish in either order, and calls the same local Pipeline through `workflow_call`. GitHub rejects a
 workflow listening to itself; source run40017492191 demonstrated that restriction.
 The [reusable-workflow context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context)
 preserves the caller's workflow_run event. Its permission union allows the called
@@ -71,11 +68,14 @@ atomically through the existing SSH key path.
 
 ## Regression evidence
 
-`tests/test_ci_pr_safety.py` executes the template's shell guards with fixture
-Git and GitHub responses. It covers red Claude heads in every category, workflow
-bootstrap skips, stale checkout rejection, unsuccessful job states, live PR
-holds and eligibility rejection. Resolver tests cover exact API merge arguments
-and server rejection. They perform no remote write.
+`tests/test_ci_pr_safety.py` executes the merge aggregate's shell with every
+unsuccessful job state. `tests/test_ci_post_merge.py` drives the resolver through
+its HTTP boundary: exact merge arguments, server rejection, live PR holds, and a
+merge held without an approving verdict of the tested head. The verdict binding,
+the low-risk tier, the review wake-up and the issue closer have their own files
+(`tests/test_ci_review_dictates_merge.py`, `tests/test_ci_low_risk_tier.py`,
+`tests/test_ci_review_wakes_resolver.py`, `tests/test_ci_resolver_closes_issues.py`).
+They perform no remote write.
 Before the initial change, this suite reported 31 failures and 27 passes.
 The two added cancellation-source regressions failed before the cancellation
 veto was added and pass afterward; hosted cancellation remains a runtime

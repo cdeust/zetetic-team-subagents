@@ -61,11 +61,8 @@ def test_injected_review_action_in_common_tests_cannot_enter_completion(source):
     template = source / "templates/ci/pipeline.yml"
     original = template.read_text()
     jobs = yaml.safe_load(original)["jobs"]
-    action = next(
-        step["uses"]
-        for step in jobs["review"]["steps"]
-        if step.get("uses", "").startswith("anthropics/claude-code-action@")
-    )
+    # source: the pin of .github/workflows/claude-review.yml.
+    action = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb"
     unit = renderer.split_jobs(original)[1]["unit"]
     injected = unit.replace(jobs["unit"]["steps"][0]["uses"], action, 1)
     template.write_text(original.replace(unit, injected, 1))
@@ -125,3 +122,37 @@ def test_dry_run_creates_no_destination_files(source, tmp_path):
     target.mkdir()
     renderer.deliver(renderer.prepare_files(target, source), dry_run=True)
     assert list(target.iterdir()) == []
+
+
+def test_default_profile_delivers_the_review_its_resolver_waits_for(tmp_path):
+    # The default resolver holds every merge without an approving verdict of
+    # claude-review.yml: a consumer rendered without that workflow, its budget
+    # script and its reviewers could never merge (Codex P1 on #244).
+    files = renderer.prepare_files(tmp_path)
+    for name in renderer.REVIEW_ASSETS:
+        # One source: what a consumer receives is what this repository runs.
+        assert files[tmp_path / name] == (ROOT / name).read_bytes(), name
+    workflow = yaml.safe_load(files[tmp_path / ".github/workflows/claude-review.yml"])
+    assert workflow["name"] == "PR Review"
+    caller = yaml.safe_load(files[tmp_path / ".github/workflows/pipeline-after-merge.yml"])
+    assert workflow["name"] in caller[True]["workflow_run"]["workflows"]
+    review = workflow["jobs"]["review"]["steps"][-1]["with"]["prompt"]
+    assert review.startswith("/review-pr ") and "Verdict: approve" in review
+    budget = workflow["jobs"]["budget"]["steps"][-1]["run"]
+    assert "scripts/ci_review_budget.py" in budget
+
+
+def test_native_profile_keeps_its_own_review_assets(tmp_path):
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    assert tmp_path / "scripts/ci_review_budget.py" not in files
+
+
+def test_native_caller_wakes_on_the_pipeline_only(tmp_path):
+    # The native resolver refuses any source but the Pipeline ("source workflow
+    # differs"), so a review completion there would only start a failing run
+    # (Codex P2 on #244). The default resolver handles both completions.
+    name = tmp_path / ".github/workflows/pipeline-after-merge.yml"
+    native = yaml.safe_load(renderer.prepare_files(tmp_path, native_review=True)[name])
+    default = yaml.safe_load(renderer.prepare_files(tmp_path)[name])
+    assert native[True]["workflow_run"]["workflows"] == ["Pipeline"]
+    assert default[True]["workflow_run"]["workflows"] == ["Pipeline", "PR Review"]

@@ -1,9 +1,8 @@
 """Exercise the protected resolver through actual urllib Request/JSON boundaries."""
 
+import json
 from copy import deepcopy
 from io import BytesIO
-import json
-import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
@@ -14,8 +13,7 @@ from tools import ci_post_merge as resolver
 REPO = "cdeust/example"
 HEAD = "a" * 40
 MERGED = "b" * 40
-# Owner rule 2026-10-29: the required jobs are the tests and their aggregate. The
-# review job may run and post; it is never required (see the review tests below).
+# Owner rule 2026-10-29: the required jobs are the tests and their aggregate.
 JOB_NAMES = ["contract", "unit", "regression", "e2e", "merge"] + [
     f"{category} ({runner})"
     for category in ("environment", "install")
@@ -23,7 +21,35 @@ JOB_NAMES = ["contract", "unit", "regression", "e2e", "merge"] + [
 ]
 PREFIX = f"/repos/{REPO}"
 RUN_PATH = f"{PREFIX}/actions/runs/71"
-JOBS_PATH = RUN_PATH + "/jobs?per_page=100&page=1"
+JOBS_PATH = RUN_PATH + "/jobs?filter=all&per_page=100&page=1"
+# The Claude review of this head (claude-review.yml) and its verdict comment: the
+# resolver merges only on an approving verdict bound to that run (Cortex ADR-1121).
+REVIEW_RUN = 90
+REVIEW_RUNS_PATH = (
+    PREFIX + f"/actions/workflows/claude-review.yml/runs?head_sha={HEAD}&per_page=100&page=1"
+)
+REVIEW_JOBS_PATH = PREFIX + f"/actions/runs/{REVIEW_RUN}/jobs?per_page=100&page=1"
+COMMENTS_PATH = PREFIX + "/issues/42/comments?per_page=100&page=1"
+
+
+def job_row(name, identity, conclusion="success"):
+    return {
+        "id": identity,
+        "run_id": 71,
+        "run_attempt": 1,
+        "head_sha": HEAD,
+        "name": name,
+        "status": "completed",
+        "conclusion": conclusion,
+    }
+
+
+def verdict(word, run=REVIEW_RUN, updated="2026-11-10T00:00:00Z"):
+    return {
+        "user": {"login": "claude[bot]", "type": "Bot"},
+        "updated_at": updated,
+        "body": f"Review of https://github.com/{REPO}/actions/runs/{run}\n\nVerdict: {word}\n",
+    }
 PR_PATH = PREFIX + "/pulls/42"
 COMPARE_PATH = PREFIX + f"/compare/main...{MERGED}"
 PUSH_PATH = (
@@ -55,18 +81,24 @@ def scenario(monkeypatch):
         "merged": False,
         "head": {"sha": HEAD, "repo": {"full_name": REPO}},
         "base": {"ref": "main", "repo": {"full_name": REPO}},
+        "user": {"login": "owner", "type": "User"},
         "title": "Fix feature",
         "labels": [],
     }
     event = {"repository": {"full_name": REPO}, "workflow_run": deepcopy(run)}
-    jobs = [
-        {"name": name, "status": "completed", "conclusion": "success"}
-        for name in JOB_NAMES
+    jobs = [job_row(name, 500 + index) for index, name in enumerate(JOB_NAMES)]
+    review_jobs = [
+        {"name": "Claude review", "steps": [{"name": "PR Review", "conclusion": "success"}]}
     ]
     responses = {
         ("GET", RUN_PATH): run,
         ("GET", JOBS_PATH): {"jobs": jobs},
         ("GET", PR_PATH): pr,
+        ("GET", REVIEW_RUNS_PATH): {
+            "workflow_runs": [{"id": REVIEW_RUN, "head_sha": HEAD, "conclusion": "success"}]
+        },
+        ("GET", REVIEW_JOBS_PATH): {"jobs": review_jobs},
+        ("GET", COMMENTS_PATH): [verdict("approve")],
         ("PUT", PR_PATH + "/merge"): {"merged": True, "sha": MERGED},
         ("GET", PUSH_PATH): {"workflow_runs": []},
     }
@@ -164,14 +196,14 @@ def test_live_source_run_must_still_be_the_successful_attempt(scenario, changes)
     "jobs",
     [
         [],
-        [{"name": "merge", "conclusion": "skipped"}],
-        [{"name": "merge", "conclusion": "failure"}],
-        [{"name": "merge", "conclusion": "success"}] * 2,
+        [job_row("merge", 1, "skipped")],
+        [job_row("merge", 1, "failure")],
+        [job_row("merge", 1), job_row("merge", 2)],
     ],
 )
 def test_missing_or_incomplete_merge_gate_fails(scenario, jobs):
     scenario[3][("GET", JOBS_PATH)] = {"jobs": jobs}
-    with pytest.raises(resolver.PostMergeError, match="merge gate"):
+    with pytest.raises(resolver.PostMergeError):
         execute(scenario)
     assert_no_merge(scenario)
 
@@ -298,11 +330,7 @@ def test_merge_gate_on_second_jobs_page_is_checked(scenario):
     complete_jobs = scenario[3][("GET", JOBS_PATH)]
     scenario[3][("GET", JOBS_PATH)] = {
         "jobs": [
-            {
-                "name": f"unrelated {index}",
-                "status": "completed",
-                "conclusion": "success",
-            }
+            job_row(f"unrelated {index}", 1000 + index)
             for index in range(100)
         ]
     }
@@ -408,44 +436,46 @@ def test_run_attempt_requires_a_positive_integer(scenario, attempt):
     assert_no_merge(scenario)
 
 
-def add_review(scenario, **fields):
-    scenario[3][("GET", JOBS_PATH)]["jobs"].append(
-        {"name": "review", "status": "completed", "conclusion": "success", **fields}
-    )
-
-
-@pytest.mark.parametrize(
-    "fields",
-    [
-        {"conclusion": "failure"},
-        {"conclusion": "cancelled"},
-        {"conclusion": "skipped"},
-        {"status": "in_progress", "conclusion": None},
-        {"status": "queued", "conclusion": None},
-    ],
-)
-@pytest.mark.parametrize("actor", ["owner", "dependabot[bot]"])
-def test_the_review_job_never_blocks_a_merge(scenario, fields, actor):
-    scenario[1]["actor"] = {"login": actor}
-    add_review(scenario, **fields)
+# The review is claude-review.yml's own run, never a job of the Pipeline: the
+# resolver reads its verdict comment, bound to the run that reviewed this head.
+def test_an_approving_verdict_of_this_head_merges(scenario):
     assert execute(scenario)["tested_sha"] == MERGED
     assert [m for m, _, _ in scenario[-1] if m == "PUT"] == ["PUT"]
 
 
-def test_a_run_without_any_review_job_merges(scenario):
-    names = [job["name"] for job in scenario[3][("GET", JOBS_PATH)]["jobs"]]
-    assert "review" not in names
-    assert execute(scenario)["run_tests"] == "true"
+@pytest.mark.parametrize(
+    "comments, reason",
+    [
+        ([], "has not posted a verdict"),
+        ([verdict("block")], "verdict is block"),
+        ([verdict("approve", run=89)], "has not posted a verdict"),
+        (
+            [verdict("approve"), verdict("block", updated="2026-11-10T00:05:00Z")],
+            "verdict is block",
+        ),
+        (
+            [dict(verdict("approve"), user={"login": "owner", "type": "User"})],
+            "has not posted a verdict",
+        ),
+    ],
+)
+def test_anything_but_an_approving_verdict_of_this_head_holds_the_merge(
+    scenario, comments, reason
+):
+    scenario[3][("GET", COMMENTS_PATH)] = comments
+    with pytest.raises(resolver.PostMergeError, match="merge held: .*" + reason):
+        execute(scenario)
+    assert_no_merge(scenario)
 
 
-def test_two_review_jobs_do_not_block_a_merge(scenario):
-    add_review(scenario)
-    add_review(scenario, conclusion="failure")
-    assert execute(scenario)["run_tests"] == "true"
+def test_a_head_no_review_ran_on_is_held(scenario):
+    scenario[3][("GET", REVIEW_RUNS_PATH)] = {"workflow_runs": []}
+    with pytest.raises(resolver.PostMergeError, match="no Claude review ran on this head"):
+        execute(scenario)
+    assert_no_merge(scenario)
 
 
-def test_a_test_job_still_blocks_when_the_review_is_green(scenario):
-    add_review(scenario)
+def test_a_test_job_still_blocks_when_the_verdict_approves(scenario):
     next(
         job for job in scenario[3][("GET", JOBS_PATH)]["jobs"] if job["name"] == "unit"
     )["conclusion"] = "failure"
@@ -454,78 +484,17 @@ def test_a_test_job_still_blocks_when_the_review_is_green(scenario):
     assert_no_merge(scenario)
 
 
-def test_the_resolver_names_no_review_job():
-    source = open(resolver.__file__).read()
-    assert '"review"' not in source and "'review'" not in source
-
-
 def test_extra_environment_variant_is_rejected(scenario):
     scenario[3][("GET", JOBS_PATH)]["jobs"].append(
-        {
-            "name": "environment (other)",
-            "status": "completed",
-            "conclusion": "success",
-        }
+        job_row("environment (other)", 900)
     )
     with pytest.raises(resolver.PostMergeError):
         execute(scenario)
     assert_no_merge(scenario)
 
 
-def skip_jobs(scenario, *names):
-    for job in scenario[3][("GET", JOBS_PATH)]["jobs"]:
-        if job["name"] in names:
-            job["conclusion"] = "skipped"
-
-
-# Draft PR #219 runs 40864421520 and 40874010475 succeeded with the gate jobs
-# skipped; the resolver then failed main runs 40865808090 and 40875336583. The
-# merge aggregate is skipped on a draft; the review job is not part of the gate.
-def test_draft_pipeline_without_merge_request_declines_without_failing(scenario):
-    skip_jobs(scenario, "merge")
+def test_a_draft_is_never_merged(scenario):
     scenario[2]["draft"] = True
-    result = execute(scenario)
-    assert result == {
-        "tested_sha": HEAD,
-        "run_tests": "false",
-        "pr_number": "42",
-        "reason": "Draft PR: its Pipeline skipped merge; nothing to merge",
-    }
-    assert_no_merge(scenario)
-    assert not any(path == COMPARE_PATH for _, path, _ in scenario[-1])
-
-
-def test_skipped_merge_on_a_ready_pr_still_fails(scenario):
-    skip_jobs(scenario, "merge")
-    with pytest.raises(resolver.PostMergeError, match="not a draft"):
+    with pytest.raises(resolver.PostMergeError, match="closed or draft"):
         execute(scenario)
-    assert_no_merge(scenario)
-
-
-@pytest.mark.parametrize("name", [n for n in JOB_NAMES if n != "merge"])
-def test_draft_decline_still_requires_every_test_job(scenario, name):
-    skip_jobs(scenario, "merge", name)
-    scenario[2]["draft"] = True
-    with pytest.raises(resolver.PostMergeError, match=re.escape(f"completed {name}")):
-        execute(scenario)
-    assert_no_merge(scenario)
-
-
-def test_cli_draft_decline_exits_zero_without_tests(scenario, tmp_path, monkeypatch):
-    skip_jobs(scenario, "merge")
-    scenario[2]["draft"] = True
-    event_file = tmp_path / "event.json"
-    output = tmp_path / "output"
-    event_file.write_text(json.dumps(scenario[0]))
-    for key, value in {
-        "GITHUB_EVENT_NAME": "workflow_run",
-        "GITHUB_EVENT_PATH": str(event_file),
-        "GITHUB_REPOSITORY": REPO,
-        "GH_TOKEN": "fixture-token",
-        "GITHUB_OUTPUT": str(output),
-    }.items():
-        monkeypatch.setenv(key, value)
-    assert resolver.main() == 0
-    assert "run_tests=false\n" in output.read_text()
-    assert f"tested_sha={HEAD}\n" in output.read_text()
     assert_no_merge(scenario)

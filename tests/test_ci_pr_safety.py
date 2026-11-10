@@ -1,10 +1,8 @@
 """Execute generated CI guards against PR and job-state fixtures.
 
-Sources: PR45's passing Claude 2.1.306 unit job; gh pr merge's documented
---match-head-commit; claude-code-action/action.yml allowed_bots input.
+Source: Cortex ADR-1121, the resolver merges on the verdict of the reviewed head.
 """
 
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -15,17 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 CATEGORIES = ("unit", "regression", "e2e", "environment", "install")
 HEAD = "a" * 40
-GIT_STUB = r"""
-git() {
-  case "$1" in
-    cat-file) return 0 ;;
-    rev-parse) printf '%s\n' "${FIXTURE_CHECKOUT:-$HEAD_SHA}" ;;
-    log) printf '%s\n' "${FIXTURE_AUTHOR:-person@example.invalid}" ;;
-    diff) printf '%s\n' "${FIXTURE_CHANGED:-src/product.py}"; return "${FIXTURE_DIFF_RC:-0}" ;;
-    *) return 91 ;;
-  esac
-}
-"""
+# Shared with tests/test_ci_native_gate.py, whose native profile still calls gh.
 GH_STUB = r"""
 gh() {
   case "$1 $2" in
@@ -69,105 +57,6 @@ def execute(script, tmp_path, overrides=None, stub=""):
     )
 
 
-def guard(
-    workflow,
-    tmp_path,
-    author="person@example.invalid",
-    changed="src/product.py",
-    **extra,
-):
-    env = {
-        "FIXTURE_AUTHOR": author,
-        "FIXTURE_CHANGED": changed,
-        "TEST_RESULTS": json.dumps(
-            {name: {"result": "success"} for name in CATEGORIES}
-        ),
-    }
-    env.update(extra)
-    result = execute(
-        step(workflow, "review", "Review guard")["run"], tmp_path, env, GIT_STUB
-    )
-    output = tmp_path / "output"
-    values = (
-        dict(line.split("=", 1) for line in output.read_text().splitlines())
-        if output.exists()
-        else {}
-    )
-    return result, values
-
-
-def test_human_head_runs_native_review_and_fix(workflow, tmp_path):
-    result, values = guard(workflow, tmp_path)
-    assert result.returncode == 0, result.stderr
-    assert values == {"review": "true", "fix": "true"}
-
-
-def test_green_claude_head_does_not_repeat_review_or_fix(workflow, tmp_path):
-    result, values = guard(
-        workflow, tmp_path, "41898282+claude[bot]@users.noreply.github.com"
-    )
-    assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "false"}
-
-
-@pytest.mark.parametrize("failed", CATEGORIES)
-def test_red_claude_head_still_runs_fix(workflow, tmp_path, failed):
-    results = {
-        name: {"result": "failure" if name == failed else "success"}
-        for name in CATEGORIES
-    }
-    result, values = guard(
-        workflow,
-        tmp_path,
-        "209825114+claude[bot]@users.noreply.github.com",
-        TEST_RESULTS=json.dumps(results),
-    )
-    assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "true"}
-
-
-@pytest.mark.parametrize(
-    "author",
-    ["person@example.invalid", "41898282+claude[bot]@users.noreply.github.com"],
-)
-def test_workflow_bootstrap_skips_review_and_fix(workflow, tmp_path, author):
-    result, values = guard(workflow, tmp_path, author, ".github/workflows/pipeline.yml")
-    assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "false"}
-
-
-def test_owner_workflow_pr_runs_review_and_fix(workflow, tmp_path):
-    result, values = guard(workflow, tmp_path, changed=".github/workflows/pipeline.yml",
-                           PR_AUTHOR="owner", REPO_OWNER="owner")
-    assert result.returncode == 0, result.stderr
-    assert values == {"review": "true", "fix": "true"}
-
-
-def test_owner_workflow_bot_head_still_repairs_failed_checks(workflow, tmp_path):
-    result, values = guard(
-        workflow, tmp_path, "41898282+claude[bot]@users.noreply.github.com",
-        ".github/workflows/pipeline.yml", PR_AUTHOR="owner", REPO_OWNER="owner",
-        TEST_RESULTS=json.dumps({"unit": {"result": "failure"}}),
-    )
-    assert result.returncode == 0, result.stderr
-    assert values == {"review": "false", "fix": "true"}
-
-
-@pytest.mark.parametrize("branch", ["main", ""])
-def test_automatic_fix_refuses_default_or_missing_head_branch(workflow, tmp_path, branch):
-    result, values = guard(workflow, tmp_path, HEAD_REF=branch)
-    assert result.returncode != 0
-    assert values == {}
-
-
-@pytest.mark.parametrize(
-    "extra", [{"FIXTURE_CHECKOUT": "b" * 40}, {"FIXTURE_DIFF_RC": "128"}]
-)
-def test_guard_rejects_stale_checkout_or_unreadable_diff(workflow, tmp_path, extra):
-    result, _ = guard(workflow, tmp_path, **extra)
-    assert result.returncode != 0
-
-
 def gate(workflow, tmp_path, **overrides):
     env = {name.upper(): "success" for name in (*CATEGORIES, "contract")}
     env.update(overrides)
@@ -185,66 +74,34 @@ def test_merge_accepts_green_test_jobs(workflow, tmp_path):
 
 
 def test_merge_is_the_aggregate_of_the_test_jobs_of_the_run(workflow):
-    """Owner rule 2026-10-29: green pipeline, merge; nothing else is waited for or read."""
+    """Owner rule 2026-10-29: the aggregate reads the test jobs and nothing else."""
     merge = workflow["jobs"]["merge"]
     assert set(merge["needs"]) == {"contract", *CATEGORIES}
-    # Owner rule 2026-11-03: once green, the job arms GitHub auto-merge on its own
-    # PR, so the PR's definition merges the PR and never main's resolver.
-    assert [s.get("name") for s in merge["steps"]] == [
-        "Require the test jobs of this run",
-        "Arm auto-merge, GitHub merges when the required checks pass",
-    ]
+    # The job merges nothing: the resolver merges once the Claude verdict of this
+    # head approves (Cortex ADR-1121), so it holds no write permission and never
+    # arms GitHub auto-merge, which would merge on green tests without a verdict.
+    assert [s.get("name") for s in merge["steps"]] == ["Require the test jobs of this run"]
+    assert merge["permissions"] == {"contents": "read"}
     text = yaml.safe_dump(merge)
-    # gh pr view reads only the two owner holds (do-not-merge label, held title)
-    # before arming auto-merge; no review state, no read of main's content or
-    # history (the base.ref == main guard names the branch, reads nothing from
-    # it), no review hold.
-    for forbidden in ("review", "headRefOid", "origin/main", "refs/heads/main",
-                      "git fetch", "git diff", "compare", "autopilot", '"hold"'):
+    for forbidden in ("review", "gh pr", "headRefOid", "origin/main", "refs/heads/main",
+                      "git fetch", "git diff", "compare", "autopilot", '"hold"', "--auto"):
         assert forbidden not in text.replace("pull_request", ""), forbidden
 
 
-def test_action_permissions_and_fix_condition_preserve_bot_repairs(workflow):
-    review = workflow["jobs"]["review"]
-    assert set(CATEGORIES) <= set(review["needs"])
-    actions = [
-        s for s in review["steps"] if s.get("uses", "").startswith("anthropics/")
-    ]
-    assert [s["if"] for s in actions] == [
-        "steps.guard.outputs.review == 'true'",
-        "steps.guard.outputs.fix == 'true'",
-    ]
-    for action in actions:
-        assert (
-            action["with"]["allowed_bots"] == "claude[bot],chatgpt-codex-connector[bot]"
-        )
-        assert '"Bash"' not in action["with"]["claude_args"]
+def test_the_pipeline_carries_no_review_or_fix_job(workflow):
+    """The review is claude-review.yml's; the Pipeline never holds the OAuth secret."""
+    assert "review" not in workflow["jobs"]
+    text = (ROOT / "templates/ci/pipeline.yml").read_text()
+    assert "claude-code-action@" not in text
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in text
     assert set(CATEGORIES) <= set(workflow["jobs"]["tag"]["needs"])
 
 
-@pytest.mark.parametrize("job", ["review", "merge"])
-def test_mutating_jobs_handle_failures_but_stop_on_workflow_cancellation(workflow, job):
+def test_merge_handles_failures_but_stops_on_workflow_cancellation(workflow):
     # GitHub re-evaluates job conditions on cancellation: always() alone
     # keeps the job alive. Keep failure handling, but veto cancellation.
     # Source: docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation
-    condition = workflow["jobs"][job]["if"]
+    condition = workflow["jobs"]["merge"]["if"]
     assert condition.startswith("always() && !cancelled() && ")
     assert "needs." not in condition
     assert "success()" not in condition
-
-
-@pytest.mark.parametrize(
-    "path", ["templates/ci/pipeline.yml", ".github/workflows/pipeline.yml"]
-)
-@pytest.mark.parametrize("name", ["Review", "Fix"])
-def test_only_review_publishes_the_official_report_without_full_output(path, name):
-    # claude-code-action at the pinned SHA writes the redacted Step Summary
-    # even on failure; raw SDK output is a separate, broader opt-in.
-    workflow = yaml.safe_load((ROOT / path).read_text())
-    inputs = step(workflow, "review", name)["with"]
-    if name == "Review":
-        assert inputs.get("display_report") is True
-        assert inputs.get("show_full_output") is False
-    else:
-        assert inputs.get("display_report", False) is False
-        assert inputs.get("show_full_output", False) is False
