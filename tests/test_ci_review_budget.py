@@ -13,10 +13,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest import mock
 
 import yaml
 
@@ -160,8 +160,8 @@ class CliTests(unittest.TestCase):
             gh = fake_gh(runs, jobs)
             stdout = StringIO()
             with (
-                mock.patch.dict(os.environ, env),
-                mock.patch.object(budget, "gh_api", gh),
+                unittest.mock.patch.dict(os.environ, env),
+                unittest.mock.patch.object(budget, "gh_api", gh),
                 redirect_stdout(stdout),
             ):
                 self.assertEqual(budget.main(), 0)
