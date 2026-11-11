@@ -9,7 +9,8 @@ import pytest
 
 from tools import ci_contract
 
-COMMANDS = {key: "true" for key in ci_contract.KEYS}
+# low_risk_files is required beside the commands (Cortex ADR-1131); empty is valid.
+COMMANDS = {**{key: "true" for key in ci_contract.KEYS}, "low_risk_files": []}
 
 
 def manifest(root, name="plugin.json", content='{"version":"1.2.3"}'):

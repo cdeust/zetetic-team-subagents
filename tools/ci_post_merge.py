@@ -10,6 +10,7 @@ https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from pathlib import Path
@@ -346,22 +347,48 @@ def _review_approves(number, head, repository, api):
     require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
 
 
-# Files a low-risk dependency update may touch (ADR-1126). Anything else, a
-# workflow file first of all, keeps the PR on the reviewed path.
-# source: the dependency manifests and locks of the ecosystems the consumers
-# declare in .github/dependabot.yml (uv, npm, pnpm, cargo), matched by file
-# name because each package carries its own manifest. requirements-dev.in/.txt
-# is session-optimizer's uv-compiled pair (its dependabot.yml, uv ecosystem).
-LOW_RISK_FILES = frozenset({
-    "uv.lock", "pyproject.toml", "package-lock.json", "pnpm-lock.yaml",
-    "package.json", "Cargo.lock", "Cargo.toml",
-    "requirements-dev.in", "requirements-dev.txt",
-})
+# The ci.json key that names the files a low-risk dependency update may touch
+# (ADR-1126): the manifests and locks of the ecosystems the repository
+# declares in .github/dependabot.yml. The names differ per repository, so
+# they live in ci.json and not in this file (ADR-1131).
+# source: the contract step's validator below, LOW_RISK_KEY.
+LOW_RISK_KEY = "low_risk_files"
 # source: the `update-type` values Dependabot writes in its commit message,
 # https://github.com/dependabot/fetch-metadata#outputs
 LOW_RISK_UPDATES = frozenset(
     {"version-update:semver-minor", "version-update:semver-patch"}
 )
+
+
+def _low_risk_files(repository, api):
+    """The file names ci.json lists under `low_risk_files`, or a failure.
+
+    Read from the default branch, which no pull request can change before it
+    is merged. A missing file, a missing key or a malformed list fails the
+    resolver: no built-in list stands in for it.
+    source: https://docs.github.com/en/rest/repos/contents#get-repository-content
+    (no `ref`: the default branch; a file's content is base64).
+    """
+    document = api.request("GET", f"/repos/{repository}/contents/ci.json")
+    require(
+        isinstance(document, dict) and document.get("encoding") == "base64",
+        "ci.json: not a file on the default branch",
+    )
+    try:
+        data = json.loads(base64.b64decode(document.get("content") or ""))
+    except ValueError as exc:
+        raise PostMergeError("ci.json: not valid JSON") from exc
+    require(
+        isinstance(data, dict) and LOW_RISK_KEY in data,
+        f"ci.json: {LOW_RISK_KEY}: missing",
+    )
+    names = data[LOW_RISK_KEY]
+    require(
+        isinstance(names, list)
+        and all(isinstance(name, str) and name and "/" not in name for name in names),
+        f"ci.json: {LOW_RISK_KEY}: must be a list of file names",
+    )
+    return frozenset(names)
 
 
 def _declared_updates(commit):
@@ -390,12 +417,14 @@ def _is_low_risk(pr, repository, api):
 
     The tier comes from the change, not from a label or a title (ADR-1126): the
     PR is Dependabot's single commit (committed and signed by GitHub), every
-    update it declares is minor or patch, and it touches nothing outside
-    LOW_RISK_FILES. Such a PR merges on green required checks without a review.
+    update it declares is minor or patch, and every file it touches is named
+    in ci.json's `low_risk_files` and lies outside `.github/`. Such a PR merges
+    on green required checks without a review.
     """
     user = pr.get("user") or {}
     if user.get("login") != "dependabot[bot]" or user.get("type") != "Bot":
         return False
+    allowed = _low_risk_files(repository, api)
     path = f"/repos/{repository}/pulls/{pr['number']}"
     commits = list(api.records(path + "/commits"))
     # Dependabot opens and rebases a PR as one commit; a second one is
@@ -409,11 +438,12 @@ def _is_low_risk(pr, repository, api):
     for row in api.records(path + "/files"):
         # A rename counts under both of its names.
         files |= {row.get("filename"), row.get("previous_filename")} - {None}
-    names = {name.rsplit("/", 1)[-1] for name in files}
     # A workflow or action directory never holds a dependency manifest.
     if any(name.startswith(".github/") for name in files):
         return False
-    return bool(files) and names <= LOW_RISK_FILES
+    # By file name: a workspace carries one manifest per package.
+    names = {name.rsplit("/", 1)[-1] for name in files}
+    return bool(files) and names <= allowed
 
 
 def _merge_open_pr(pr, merge_path, head, api, repository):

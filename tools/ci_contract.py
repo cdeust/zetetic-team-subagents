@@ -5,7 +5,9 @@ The contract (docs/superpowers/specs/2026-10-22-single-ci-design.md, "Repository
 contract: ci.json"): exactly the keys ``unit``, ``regression``, ``e2e``,
 ``environment`` and ``install``, each a non-empty shell command, plus an
 optional ``version_file`` (default ``.claude-plugin/plugin.json``), or exclusive
-``release_packages`` entries with version_file and tag_prefix. Every manifest
+``release_packages`` entries with version_file and tag_prefix, plus the
+required ``low_risk_files``: the file names (no directory) a low-risk
+dependency update may touch, read by the merge resolver. Every manifest
 version and tag ref is validated before exporting commands or release tags.
 A missing file, a missing key or an empty command fails the pipeline here, so a step that
 has nothing to run never passes (the design's first anti-goal).
@@ -34,7 +36,8 @@ KEYS = ("unit", "regression", "e2e", "environment", "install")
 VERSION_KEY = "version_file"
 DEFAULT_VERSION_FILE = ".claude-plugin/plugin.json"
 RELEASE_KEY = "release_packages"
-ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY)
+LOW_RISK_KEY = "low_risk_files"
+ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY, LOW_RISK_KEY)
 ALLOWED = ", ".join(ALLOWED_KEYS)
 
 
@@ -161,6 +164,18 @@ def _version_faults(data: dict, root: Path) -> List[str]:
     return []
 
 
+def _low_risk_faults(data: dict) -> List[str]:
+    """An empty list is valid: no dependency update skips the review."""
+    if LOW_RISK_KEY not in data:
+        return [f"{LOW_RISK_KEY}: missing"]
+    names = data[LOW_RISK_KEY]
+    if not isinstance(names, list) or not all(
+        isinstance(name, str) and name and "/" not in name for name in names
+    ):
+        return [f"{LOW_RISK_KEY}: must be a list of file names"]
+    return []
+
+
 def faults(root: Path) -> List[str]:
     """Every fault of ``root/ci.json``, in key order then unknown keys; empty
     when the file honours the contract."""
@@ -180,6 +195,7 @@ def faults(root: Path) -> List[str]:
         for key in data
         if key not in ALLOWED_KEYS
     )
+    found.extend(_low_risk_faults(data))
     found.extend(_version_faults(data, root))
     return found
 
