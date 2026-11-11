@@ -1,6 +1,6 @@
 {
   "name": "zetetic-gates",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "Shared source, craftsmanship, secret, prose and fail-before checks for Claude Code and Codex.",
   "hooks": "./hooks/gates.json",
   "author": {

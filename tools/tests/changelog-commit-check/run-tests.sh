@@ -141,5 +141,34 @@ else
 fi
 rm -rf "$d7"
 
+# ── Case 8: a fix: commit with no (#NNN), cited by the first 9 hex digits of
+# its own hash, is represented (a direct push has no other reference). ─────
+d8="$(mktemp -d)"
+make_repo "$d8"
+commit "$d8" "fix: correct a typo with no PR reference"
+sha9="$(cd "$d8" && git rev-parse HEAD | cut -c1-9)"
+(cd "$d8" && sed -i.bak "s/## \\[Unreleased\\]/## [Unreleased]\\n\\n### Fixed\\n- A typo, pushed without a pull request (${sha9})./" CHANGELOG.md && git add CHANGELOG.md && git commit -q -m "docs(changelog): cite ${sha9}")
+out="$(run_checker "$d8" 2>&1)"; rc=$?
+if [[ $rc -eq 0 ]] && grep -qi 'PASSED' <<<"$out"; then
+  ok "fix: commit with no (#NNN), cited by 9 hex digits of its hash, passes"
+else
+  bad "hash-cited commit did not pass (rc=$rc): $out"
+fi
+rm -rf "$d8"
+
+# ── Case 9: fewer than 9 hex digits of the hash do not represent it ────────
+d9="$(mktemp -d)"
+make_repo "$d9"
+commit "$d9" "fix: correct a typo with no PR reference"
+sha6="$(cd "$d9" && git rev-parse HEAD | cut -c1-6)"
+(cd "$d9" && sed -i.bak "s/## \\[Unreleased\\]/## [Unreleased]\\n\\n### Fixed\\n- A typo, pushed without a pull request (${sha6})./" CHANGELOG.md && git add CHANGELOG.md && git commit -q -m "docs(changelog): cite ${sha6}")
+out="$(run_checker "$d9" 2>&1)"; rc=$?
+if [[ $rc -eq 1 ]] && grep -qi 'DRIFT' <<<"$out" && grep -q 'does not cite' <<<"$out"; then
+  ok "a 6-digit prefix of the hash does not represent the commit"
+else
+  bad "short hash prefix was accepted (rc=$rc): $out"
+fi
+rm -rf "$d9"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

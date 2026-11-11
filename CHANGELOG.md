@@ -127,6 +127,52 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - The leak guard (#168) now runs only for tests that can start processes: those marked `spawns` (the task, worker, memory-daemon and worktree-sweep modules) and those using the `spawning` fixture (the task `state` fixtures); scanning every process after every one of the 1858 tests cost about 38 s on macOS (200.8 s against 162.9 s without the guard; 166.6 s scoped). The guard matches the test's `tmp_path` only as a whole path component (`test_x1` no longer matches `test_x10/`) and reads macOS `ps -ww`, because plain `ps` cuts argv at the terminal width. The PII daemon that `memory-tool.sh` starts for a `MEMORY_ROOT` is long-lived by design (idle exit after 30 s, SIGTERM stops it and removes its socket and pid sidecar); `test_acl_check_gates_writes_through_the_tool` left it running on CI, where the socket path is short enough to bind (beyond the 104-byte AF_UNIX limit of macOS's long tmp paths the daemon never starts, so the leak did not show locally). It now stops the daemon through SIGTERM to the pid sidecar and waits for its exit as an OS event.
 
+### Also in this release, one line per commit not cited by number above
+
+Added on 2026-11-11 so that `tools/changelog-commit-check.sh` passes: each line is written from the commit's own subject, message and diff. A commit that reached main without a pull request number in its subject is cited by the first 9 hex digits of its hash: the check now accepts that citation, where it used to fail such a commit whatever the changelog said (two cases added to `tools/tests/changelog-commit-check/run-tests.sh`).
+
+- The `merge` job disarms GitHub's auto-merge when an owner hold (`do-not-merge` label, "do not merge" title) appears after the arming, and arms only pull requests whose base is `main` (#239).
+- The `tag` job fetches the tested commit by SHA into a bare repository and publishes from there; it no longer checks out a working tree while it holds `RELEASE_TAG_SSH_KEY` (#237).
+- The native render ships `scripts/tests/test_ci_codex_review_reaction.py`, the contract tests of the reaction verdict (#236).
+- The native review reader accepts the Codex bot's +1 reaction as the clean security verdict when both reviews completed for the head with no finding, through the new `scripts/ci_codex_review_reaction.py` (#234).
+- The native resolve job no longer reads, blocks on or deletes the `hold` and `autopilot:hold` labels; `do-not-merge` and a "do not merge" title still refuse the merge (#233).
+- The templates and the gates no longer read or compare with `main`, and the `merge` job is the aggregate of the test jobs of its run (#230).
+- The workflow-definition comparison against `main` (`tools/ci_workflow_proof.py`, its probe workflow, tests and docs) and the per-render hash of the generated header are removed, and `tests/test_no_main_comparison.py` guards against their return (4b8b30c2f, pushed without a pull request).
+- A clean security verdict that follows announced findings passes only when each finding thread was resolved by the repository owner (#227).
+- The native gate merged only when Codex and Claude both concluded for the head, read through a `claude-review-verdict:v1` marker at the end of the native Claude review, and lifted review holds; #231 and #233 later removed the review requirement and the hold handling (#229).
+- "Pipeline after merge" exits 0 without a merge call when a draft pull request's Pipeline succeeds with `review` and `merge` skipped (#226).
+- A native Codex security receipt must match the observed no-issues receipt in full, and a receipt comment is declared as an event that resumes the review (#225).
+- The native Claude workflows can fetch the pull request head on a private repository (#222).
+- The native post-merge resolver folds the `merge` and `merge pending review` display names into one job before it keeps the newest attempt (#220).
+- The native owner workflow `claude.yml` no longer overrides the action's edit approval with `--permission-mode auto`, approves the project's validation and git tools, and checks the pull request target before checkout (#218).
+- The `Fix` step of the review job pushes with the Claude App token, so the pipeline runs on the commit it pushes (#217).
+- The native event reader folds the two display names of the `merge` job as one job across reruns (#215).
+- The native resolver authenticated the executed workflow definition before a merge (`tools/ci_workflow_proof.py`); 4b8b30c2f removed it again (#214).
+- `hooks/pre-tool-secret-shield.py` allows the one keychain read the owner authorized, matched word for word (#213).
+- The `Review` step gets the tools its `code-review` skill uses, and a failed review is named as failed (#211).
+- `scripts/setup.sh render-ci <target> --native-review --no-schedule` renders the native profile without the Codex `schedule` trigger (#210).
+- The native `merge` job passes its eligibility step only on the explicit value `eligible` (#208).
+- Native discovery no longer rejects a complete unresolved proof when `review` succeeded, so a waiting gate is found (#205).
+- The native discovery prefilter groups CheckRun nodes only, so duplicate gate names and a StatusContext of the same name no longer hide a waiting gate (#204).
+- Native discovery authenticates the current-head summaries through GraphQL before it reads any REST run, skips only the pull request whose resource is missing, and the four `Codex.yml` jobs get a five-minute timeout (#203).
+- The `reconcile-identify` job of the native `Codex.yml` declares `checks: read` (#202).
+- Native review discovery prefilters candidate pull requests without vetoing a repair (#201).
+- The native `Codex.yml` reconciles waiting review gates on a schedule (`ci_codex_review_reconcile.py`) (#200).
+- The native reader accepts a review summary only when its last editor is the bot that wrote it, read from the `IssueComment` GraphQL node (#197).
+- `certifi` moves from 2026.7.22 to 2026.10.19 in `requirements-dev.txt` and `requirements-dev.lock`, which drops the compromised `emSign ECC Root CA - G3` (GHSA-6q48-6c7w-9gw2) (#196).
+- Native security resolution is evaluated on the findings the current summary announces, not on every historical thread of the pull request (#195).
+- `scripts/setup.sh render-ci <target> --native-review` installs an opt-in native review profile (Codex readers, protected completion resolver, a locked Claude CLI under `.github/claude-cli/`); the default render is unchanged (#194).
+- The review step of `templates/ci/pipeline.yml` sets `display_report: true` and `show_full_output: false` (#190).
+- Privileged completion runs in a separate rendered workflow, `pipeline-post-merge.yml`, apart from the pull request review, and `scripts/lib/render_ci.py` validates the whole workflow set before it writes (902bb4714, merged through #189).
+- The tag publication verifies that the tested commit is in the merged ancestry before it publishes (`tools/ci_tag.py`, `tools/ci_post_merge.py`) (36f09fa18, merged through #189).
+- The test jobs run when the merge resolution was skipped (b6809f67a, merged through #189).
+- The post-merge pipeline is invoked through its own caller workflow, `pipeline-after-merge.yml` (4f9532950, merged through #189).
+- Package tags are published after the protected merge validation, with `release_packages` in `ci.json` (`tools/ci_contract.py`, `tools/ci_tag.py`, `tools/ci_post_merge.py`) (e592fd2fe, merged through #189).
+- A cancelled repair stops, and a merge is bound to the head that was tested (#188).
+- The `merge` job sets `GH_REPO`, so `gh pr merge` works without a checkout (#184).
+- `templates/ci/pipeline.yml`, `scripts/setup.sh render-ci` and this repository's own `ci.json` and rendered Pipeline: phase 1 of the single CI (#183).
+- The gate's `{top}` is the canonical path of the private checkout (#179).
+
 ## [2.45.1]: session start only reports stale branches and the sweep deletes only what is provably preserved, at a fraction of the boot cost
 
 ### Fixed
