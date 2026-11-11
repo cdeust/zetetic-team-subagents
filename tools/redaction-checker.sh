@@ -37,7 +37,16 @@
 # The pattern inventory itself, agent definitions, skills, templates, and test
 # fixtures quote these patterns as examples and are always excluded.
 #
-# Exit codes: 0 clean (or warnings in default profile), 1 findings in strict, 2 usage error.
+# Exit codes: 0 clean (or warnings in default profile), 1 findings in strict,
+#   2 usage error (unknown mode), 3 the host has no UTF-8 locale: nothing was
+#   scanned. 3 is its own code because a caller must not read it as "this
+#   checker has no --stdin" (2) and carry on: tools/redaction_gate.py refuses
+#   the text on 3.
+#
+# Test injection point (tools/tests/redaction-checker, tests/test_redaction_gate.py):
+#   REDACTION_CHECKER_LOCALES  space-separated locale names tried in place of
+#                              the built-in list. It can only take locales away:
+#                              the probe below still decides.
 #
 # Rule provenance: skills/writing/redaction.md (vendored from blader/humanizer
 # v2.9.1 + petergyang/no-ai-slop, MIT; house deltas). Issue: #43.
@@ -53,24 +62,30 @@ shopt -s extglob   # inline-code-span stripping in scan_file uses *(...)
 # went unreported (measured 2026-11-11: 2 of the 40 cases of
 # tools/tests/redaction-checker failed with LANG unset, 0 under C.UTF-8). The
 # checker therefore sets its own UTF-8 locale, whatever the caller's is, and
-# proves it took: one two-byte character must match one dot. No UTF-8 locale on
-# the host is an environment error (exit 2), never a scan with fewer detectors.
+# proves it took: one two-byte character must match one dot. It starts from the
+# C locale, which every host has, so that a candidate the host lacks cannot
+# pass the probe on the caller's own locale. No UTF-8 locale on the host is
+# exit 3, never a scan with fewer detectors.
 # source: locale names: C.UTF-8 (glibc >= 2.35, musl), C.utf8 (older glibc
 # spelling), en_US.UTF-8 (macOS, where C.UTF-8 is absent before macOS 15).
+readonly NO_UTF8_LOCALE_RC=3  # source: this file's exit-code list; tools/redaction_gate.py NO_LOCALE_RC
+UTF8_LOCALES="${REDACTION_CHECKER_LOCALES:-C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8}"
 use_utf8_locale() {
   local candidate
-  for candidate in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+  LC_ALL=C
+  for candidate in $UTF8_LOCALES; do
     { LC_ALL="$candidate"; } 2>/dev/null   # bash warns on stderr about a locale the host lacks
     if [[ "é" =~ ^.$ ]]; then
       export LC_ALL
       return 0
     fi
+    LC_ALL=C
   done
   return 1
 }
 if ! use_utf8_locale; then
-  echo "redaction-checker: no UTF-8 locale on this host (tried C.UTF-8, C.utf8, en_US.UTF-8, en_US.utf8); the detectors cannot read UTF-8 copy without one." >&2
-  exit 2
+  echo "redaction-checker: no UTF-8 locale on this host (tried: $UTF8_LOCALES); the detectors cannot read UTF-8 copy without one, so nothing was scanned. Install or generate one of them (for example C.UTF-8)." >&2
+  exit "$NO_UTF8_LOCALE_RC"
 fi
 
 # ── Scope ──────────────────────────────────────────────────────────────

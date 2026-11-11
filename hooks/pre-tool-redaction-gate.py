@@ -195,11 +195,15 @@ def main() -> int:
     checker = gate.resolve_checker(os.path.dirname(os.path.abspath(__file__)))
     if not checker:
         return 0
-    findings = gate.run_checker(checker, text)
+    subject = subject_of(event)
+    try:
+        findings = gate.run_checker(checker, text)
+    except gate.CannotScan as exc:  # FAILS_ON: the checker has no UTF-8 locale; the prose was not scanned
+        print(gate.refusal_text(exc, subject), file=sys.stderr)
+        return 2
     if not findings:
         return 0
 
-    subject = subject_of(event)
     if gate.block_opt_in():
         print(gate.reason_text(findings, True, subject), file=sys.stderr)
         return 2

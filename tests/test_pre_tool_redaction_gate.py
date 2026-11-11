@@ -162,6 +162,19 @@ def test_main_blocks_under_marker(monkeypatch, capsys, tmp_path):
     assert "EM_DASH" in capsys.readouterr().err
 
 
+def test_main_refuses_when_the_host_has_no_utf8_locale_whatever_the_opt_in(monkeypatch, capsys):
+    # No block opt-in, warnings silenced, and prose that carries no pattern at all: the gate still
+    # refuses, because the checker (the real one, its locale list narrowed to a name no host has)
+    # scanned nothing. Before, its exit code was read as a usage error and the call passed.
+    monkeypatch.setenv("REDACTION_CHECKER_LOCALES", "absent.UTF-8")
+    monkeypatch.setenv("LC_ALL", "POSIX")
+    monkeypatch.setenv("REDACTION_STOP_WARN", "off")
+    rc = _run_main(monkeypatch, _bash_event('git commit -m "The suite passed."'))
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "was NOT scanned and is refused" in err and "no UTF-8 locale on this host" in err
+
+
 def test_main_mcp_subject_names_the_tool(monkeypatch, capsys):
     monkeypatch.setenv("REDACTION_STOP_BLOCK", "on")
     event = {"tool_name": "mcp__github__add_issue_comment",

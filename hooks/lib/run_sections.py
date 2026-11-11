@@ -256,7 +256,12 @@ def _write_in_order(scratch, names, out):
     for name in names:
         with open(os.path.join(scratch, name), "rb") as written:
             data = written.read()
-        with _interruptible():  # a reader that stopped reading must not hold the runner past a signal
+        # A signal that arrives while this write is stalled on a reader that stopped reading ends
+        # the write and starts the cleanup of the sections. It does not guarantee the exit: `_report`
+        # then writes to the same pipe with SIGTERM and SIGINT already ignored, and stays there for
+        # as long as the reader does not read (the host's SIGKILL ends the runner then). A signal
+        # recorded once the last write is done is not reported: the output was complete.
+        with _interruptible():
             out.write(data)
             out.flush()
 

@@ -14,6 +14,7 @@
 #       label, mid-sentence bold and a table row → NOT flagged
 #   T19 French renderings of the filler / leftover phrases → WEASEL / PUFFERY / SETUP
 #   T20 the findings are the same whatever the caller's locale (POSIX, C, unset, C.UTF-8)
+#   T21 no UTF-8 locale on the host → exit 3, distinct from the usage error (2)
 set -uo pipefail
 
 CHECKER="$(cd "$(dirname "$0")/../.." && pwd)/redaction-checker.sh"
@@ -202,6 +203,17 @@ done
 out_unset=$(env -u LC_ALL -u LANG -u LC_CTYPE "$CHECKER" --stdin < locale.txt 2>&1)
 out_utf8=$(LC_ALL=C.UTF-8 "$CHECKER" --stdin < locale.txt 2>&1)
 run_case "T20 no locale in the environment: same output as under C.UTF-8" test "$out_unset" = "$out_utf8"
+
+# T21 a host with no UTF-8 locale: exit 3 (not 2, the usage error), nothing on
+# stdout, the reason on stderr. The locale list is narrowed to a name no host has.
+out=$(printf 'We leverage it.\n' | LC_ALL=POSIX REDACTION_CHECKER_LOCALES="absent.UTF-8" "$CHECKER" --stdin 2>locale.err); rc=$?
+run_case "T21 no UTF-8 locale: exit 3" test "$rc" -eq 3
+run_case "T21 no UTF-8 locale: no finding printed" test -z "$out"
+run_case "T21 no UTF-8 locale: stderr says so" grep -q "no UTF-8 locale on this host" locale.err
+out=$(printf 'We leverage it.\n' | LC_ALL=C.UTF-8 REDACTION_CHECKER_LOCALES="absent.UTF-8" "$CHECKER" --stdin 2>/dev/null); rc=$?
+run_case "T21 a caller in a UTF-8 locale does not make an absent candidate pass: exit 3" test "$rc" -eq 3
+"$CHECKER" --no-such-mode >/dev/null 2>&1; rc=$?
+run_case "T21 an unknown mode is still exit 2" test "$rc" -eq 2
 
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"

@@ -41,17 +41,29 @@ def wait_exit(pid: int) -> None:
 
 
 def wait_group_exit(pgid: int) -> None:
-    """Block until process group ``pgid`` holds no live process. Call it after SIGKILLing the group.
+    """SIGKILL process group ``pgid`` until it holds no live process, and return only then.
 
-    SIGKILL is a request: a member stays a running process until the kernel has taken it down, and
-    the exit of the group's leader says nothing about the others. Each member's own exit is awaited
-    as an OS event (``wait_exit``); the members are read again afterwards because a member that
-    was inside fork() when the signal went out can leave one more child behind (macOS).
+    One kill is not enough, and a wait without a kill can last for ever. SIGKILL is a request: a
+    member stays a running process until the kernel has taken it down. And a member can appear
+    after a kill went out: a child of a member that was inside fork() when the signal was sent
+    (measured on macOS, hooks/lib/run_sections.py), or a process of the session that joins the group
+    later. Nothing would ever signal that one, so waiting for its exit would block for ever where it
+    holds a fifo open (the held ``cat`` of the gate tests).
+
+    Each pass therefore reads the live members, signals the group again, and only then waits for
+    the exit of the members it read. Every process waited for was in the group when a SIGKILL went
+    out after it was read, so each wait ends; a member that appeared later is read by the next pass.
+    ``signal`` is imported here because only this helper kills.
     """
+    import signal
     while True:
         live = [pid for pid, state in task_proc._group_members(pgid) if not state.startswith("Z")]
         if not live:
             return
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass  # the members read above exited meanwhile (EPERM: macOS, a group of zombies only); the waits return at once
         for pid in live:
             wait_exit(pid)
 
