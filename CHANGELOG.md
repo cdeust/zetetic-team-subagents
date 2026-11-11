@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.46.0]: only the 97 genius agents remain and every delegation names a genius pattern, the commit and push gate runs as an async task keyed by the tree hash, one CI Pipeline rendered into every repository
+
 ### Changed
 
 - The resolver reads the file names of the low-risk Dependabot tier from the new required `ci.json` key `low_risk_files` on the default branch, and fails when the key is missing (Cortex ADR-1131, amends Cortex ADR-1126). The nine names the resolver held (`uv.lock`, `pyproject.toml`, `package-lock.json`, `pnpm-lock.yaml`, `package.json`, `Cargo.lock`, `Cargo.toml`, `requirements-dev.in`, `requirements-dev.txt`) are now this repository's `ci.json` value, and no longer every consumer's: a repository lists its own. A file is still matched by its name in any directory, and a path under `.github/` is never low risk. `tools/ci_contract.py` accepts the key and reports its absence (an empty list is valid), so the `contract` job of both profiles requires it, the native one included, whose resolver does not read it; `templates/ci/ci.example.json` carries an empty list. `tools/ci_post_merge.py`, `templates/ci/pipeline.yml` and this repository's rendered workflows carry the same text. A consumer must add `low_risk_files` to its `ci.json` in the pull request that takes the new render, or its `contract` job fails.
