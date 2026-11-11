@@ -209,7 +209,9 @@ the build red (issue #71).
 by its own `(#NNN)` PR number somewhere in `CHANGELOG.md`'s not-yet-released
 content. That gate exists because the v2.36.0 -> v2.37.0 changelog stopped
 being updated per-PR after a point and 14 of 30 commits went unrecorded before
-anything noticed. `docs:`/`chore:`/`ci:`/`test:` commits are not required.
+anything noticed. `docs:`/`chore:`/`ci:`/`test:` commits are not required. A
+required commit with no `(#NNN)` in its subject is cited by the first 9 hex
+digits of its hash.
 
 ---
 

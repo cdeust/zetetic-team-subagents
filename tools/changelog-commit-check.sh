@@ -20,9 +20,17 @@
 # ride along inside a combined bullet with no number at all, which is fine —
 # they are not the class this gate exists to catch).
 #
+# A required commit with no `(#NNN)` in its own subject (a direct push, or a
+# commit a true merge brought in under the merge commit's number) has one
+# reference left that names it: its hash. It is represented when the unreleased
+# content cites the first 9 hex digits of that hash, the form the DRIFT line
+# prints. Before 2.46.0 such a commit failed whatever the changelog said, and
+# since history is not rewritten the check could never pass again once one was
+# on main (six of them between v2.45.1 and 2.46.0).
+#
 # FAIL CLOSED, deliberately, on every "cannot verify" path: no tag found, no
 # section header for that tag, and a required commit with no `(#NNN)` in its
-# own subject to check against are all exit 1, not a skip. A gate that lets
+# own subject and no citation of its hash are all exit 1, not a skip. A gate that lets
 # an unmeasurable commit through silently is the exact failure mode this gate
 # exists to close (§ the redaction/doc-count gates already fail this way).
 #
@@ -83,8 +91,13 @@ while IFS='|' read -r sha subject; do
 
   pr="$(printf '%s' "$subject" | grep -oE '\(#[0-9]+\)' | tail -n1)"
   if [[ -z "$pr" ]]; then
-    echo "DRIFT: ${sha:0:9} ($type) has no (#NNN) in its own subject, cannot verify changelog coverage: $subject" >&2
-    missing=$((missing + 1))
+    # No pull request number to look for: the commit's own hash is the only
+    # reference that names it, so the entry must cite its first 9 hex digits
+    # (the form the DRIFT line prints). Anything shorter or absent is DRIFT.
+    if ! grep -qF "${sha:0:9}" <<<"$unreleased_region"; then
+      echo "DRIFT: ${sha:0:9} ($type) has no (#NNN) in its own subject and ${CHANGELOG}'s unreleased content does not cite ${sha:0:9}: $subject" >&2
+      missing=$((missing + 1))
+    fi
     continue
   fi
   pr_number="${pr//[()#]/}"

@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Zetetic Agents — 97 reasoning patterns from history's greatest minds under one epistemic standard, with shared quality gates for Claude Code and Codex",
-    "version": "2.45.1"
+    "version": "2.46.0"
   },
   "plugins": [
     {
       "name": "zetetic-team-subagents",
       "source": "./",
       "description": "Complete system: 15 problem-shaped skills backed by 97 genius agents, 86 skills total, 30 commands, 71 tools, 36 hooks, authoritative coding-standards rules, goal-driven and autonomous build loops, and the shared Claude Code and Codex gates",
-      "version": "2.45.1",
+      "version": "2.46.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -40,7 +40,7 @@
       "name": "zetetic-gates",
       "source": "./plugins/zetetic-gates",
       "description": "Shared source, craftsmanship, secret, prose and fail-before checks for Claude Code and Codex.",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
