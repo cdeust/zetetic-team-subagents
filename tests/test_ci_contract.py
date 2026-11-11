@@ -1,6 +1,7 @@
 """The ci.json contract validator (tools/ci_contract.py): five non-empty commands,
-no other keys, a version file that exists. Design: docs/superpowers/specs/
-2026-10-22-single-ci-design.md, "Repository contract: ci.json" and decision 9."""
+the list of low-risk file names (Cortex ADR-1131), no other keys, a version file
+that exists. Design: docs/superpowers/specs/2026-10-22-single-ci-design.md,
+"Repository contract: ci.json" and decision 9."""
 from __future__ import annotations
 
 import json
@@ -9,8 +10,10 @@ import pytest
 
 from tools import ci_contract
 
-VALID = {"unit": "pytest", "regression": "bash t.sh", "e2e": "bash e.sh",
-         "environment": "bash env.sh", "install": "bash i.sh"}
+COMMANDS = {"unit": "pytest", "regression": "bash t.sh", "e2e": "bash e.sh",
+            "environment": "bash env.sh", "install": "bash i.sh"}
+# An empty list is valid: no dependency update skips the review (Cortex ADR-1131).
+VALID = {**COMMANDS, "low_risk_files": []}
 
 
 @pytest.fixture
@@ -28,7 +31,7 @@ def test_a_valid_file_prints_the_five_commands_and_the_version_file(repo, capsys
     write(repo, VALID)
     assert ci_contract.main([str(repo)]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out == [f"{k}: {v}" for k, v in VALID.items()] + ["version_file: .claude-plugin/plugin.json"]
+    assert out == [f"{k}: {v}" for k, v in COMMANDS.items()] + ["version_file: .claude-plugin/plugin.json"]
 
 
 def test_a_missing_file_is_one_fault(repo, capsys):
@@ -64,14 +67,32 @@ def test_an_empty_or_non_string_command_names_the_key(repo, bad, reason):
 
 def test_an_extra_key_is_a_fault(repo):
     write(repo, {**VALID, "lint": "ruff"})
-    assert ci_contract.faults(repo) == ["lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file, release_packages)"]
+    assert ci_contract.faults(repo) == ["lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file, release_packages, low_risk_files)"]
 
 
 def test_every_fault_is_reported_at_once(repo):
     write(repo, {"unit": "", "lint": "x"})
     assert ci_contract.faults(repo) == [
         "unit: empty command", "regression: missing", "e2e: missing", "environment: missing",
-        "install: missing", "lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file, release_packages)"]
+        "install: missing", "lint: unknown key (allowed: unit, regression, e2e, environment, install, version_file, release_packages, low_risk_files)",
+        "low_risk_files: missing"]
+
+
+def test_the_low_risk_file_names_are_required(repo):
+    write(repo, COMMANDS)
+    assert ci_contract.faults(repo) == ["low_risk_files: missing"]
+
+
+def test_a_list_of_file_names_is_valid_and_so_is_an_empty_one(repo):
+    for listed in (["uv.lock", "pyproject.toml"], []):
+        write(repo, {**COMMANDS, "low_risk_files": listed})
+        assert ci_contract.faults(repo) == []
+
+
+@pytest.mark.parametrize("bad", ["uv.lock", ["sub/uv.lock"], [""], [1], None, {"uv.lock": True}])
+def test_a_path_or_a_non_list_of_low_risk_files_is_a_fault(repo, bad):
+    write(repo, {**COMMANDS, "low_risk_files": bad})
+    assert ci_contract.faults(repo) == ["low_risk_files: must be a list of file names"]
 
 
 def test_the_default_version_file_must_exist(tmp_path):

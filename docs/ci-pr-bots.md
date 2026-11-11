@@ -74,6 +74,7 @@ its HTTP boundary: exact merge arguments, server rejection, live PR holds, and a
 merge held without an approving verdict of the tested head. The verdict binding,
 the low-risk tier, the review wake-up and the issue closer have their own files
 (`tests/test_ci_review_dictates_merge.py`, `tests/test_ci_low_risk_tier.py`,
+`tests/test_ci_low_risk_files_from_ci_json.py`,
 `tests/test_ci_review_wakes_resolver.py`, `tests/test_ci_resolver_closes_issues.py`).
 They perform no remote write.
 Before the initial change, this suite reported 31 failures and 27 passes.
