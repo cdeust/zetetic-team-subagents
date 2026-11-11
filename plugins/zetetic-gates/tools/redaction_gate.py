@@ -14,6 +14,11 @@ cannot drift apart (coding-standards.md §1.2, §3.3).
 Every function here degrades open: a checker that cannot run, a subprocess
 error or a missing git binary yields "no findings" plus a stderr note, never an
 exception, because a hook that crashes enforces nothing and hides why.
+
+One case is not degraded: a checker that ran and reported that the host has no
+UTF-8 locale (its exit 3) scanned nothing, and "no findings" would be a pass
+the text did not earn. ``run_checker`` raises ``CannotScan`` for it and each
+hook refuses the text with ``refusal_text``.
 """
 import os
 import re
@@ -33,9 +38,17 @@ MAX_QUOTED = 8
 # The checker's ``--stdin`` finding line: ``<stdin>:LINE: RULE: detail``.
 FINDING_RE = re.compile(r"^<stdin>:(\d+): ([A-Z_]+): (.*)$")
 
+# The checker's exit code for "no UTF-8 locale on this host, nothing scanned".
+# source: tools/redaction-checker.sh, exit-code list and NO_UTF8_LOCALE_RC.
+NO_LOCALE_RC = 3
+
 MARKER_FILE = ".redaction-gate.json"
 BLOCK_ENV = "REDACTION_STOP_BLOCK"
 WARN_ENV = "REDACTION_STOP_WARN"
+
+
+class CannotScan(Exception):
+    """The checker ran and said it cannot read the text: the hook refuses it."""
 
 
 def note(what: str, exc: BaseException) -> None:
@@ -76,6 +89,8 @@ def run_checker(checker: str, text: str) -> List[str]:
 
     ZETETIC_PROFILE is pinned to ``standard`` so the checker always exits 0 and
     reports: the WARN/BLOCK decision belongs to the hook, not the checker.
+    Raises CannotScan when the checker exits NO_LOCALE_RC: it scanned nothing,
+    which is not "no findings".
     """
     env = dict(os.environ, ZETETIC_PROFILE="standard")
     try:
@@ -84,6 +99,8 @@ def run_checker(checker: str, text: str) -> List[str]:
     except (OSError, subprocess.SubprocessError) as exc:
         note("checker could not run; text not scanned", exc)
         return []
+    if proc.returncode == NO_LOCALE_RC:
+        raise CannotScan(proc.stderr.strip()[:300] or "the checker found no UTF-8 locale on this host")
     if proc.returncode == 2:  # usage error: a checker without --stdin
         note("checker rejected --stdin; text not scanned",
              RuntimeError(proc.stderr.strip()[:200]))
@@ -102,6 +119,13 @@ def quote_findings(findings: List[str]) -> str:
     if extra > 0:
         parts.append(f"+{extra} more")
     return "; ".join(parts)
+
+
+def refusal_text(exc: CannotScan, subject: str) -> str:
+    """The message a hook reports when the text could not be scanned at all."""
+    return ("Redaction gate: %s was NOT scanned and is refused: %s "
+            "This refusal does not depend on %s or %s: a text nobody read is not a clean text."
+            % (subject, exc, BLOCK_ENV, MARKER_FILE))
 
 
 def block_opt_in() -> bool:

@@ -13,6 +13,8 @@
 #   T18 bold label + colon opening a line or list item → BOLD_LABEL; a code-span
 #       label, mid-sentence bold and a table row → NOT flagged
 #   T19 French renderings of the filler / leftover phrases → WEASEL / PUFFERY / SETUP
+#   T20 the findings are the same whatever the caller's locale (POSIX, C, unset, C.UTF-8)
+#   T21 no UTF-8 locale on the host → exit 3, distinct from the usage error (2)
 set -uo pipefail
 
 CHECKER="$(cd "$(dirname "$0")/../.." && pwd)/redaction-checker.sh"
@@ -185,6 +187,33 @@ out=$(printf 'En conclusion, tout passe.\n' | "$CHECKER" --stdin)
 run_case "T19 'en conclusion' → SETUP" grep -q "SETUP" <<<"$out"
 out=$(printf 'Le hook est enregistr\xc3\xa9 et les tests passent.\n' | "$CHECKER" --stdin)
 run_case "T19 plain French sentence NOT flagged" test -z "$out"
+
+# T20 the verdict does not depend on the caller's locale: the same UTF-8 copy
+# gives byte-identical findings under POSIX, C, an unset locale and C.UTF-8.
+# Before the checker set its own locale, the POSIX caller lost the phrases whose
+# pattern holds a non-ASCII character or a dot standing for one.
+printf 'N\xe2\x80\x99h\xc3\xa9sitez pas \xc3\xa0 revenir.\nIt\xe2\x80\x99s worth noting that it passes.\nJ\xe2\x80\x99esp\xc3\xa8re que cela aide.\n' > locale.txt
+expected=$'<stdin>:1: PUFFERY: N\xe2\x80\x99h\xc3\xa9sitez pas (redaction \xc2\xa71/\xc2\xa74/\xc2\xa78/\xc2\xa720-22)'
+for loc in POSIX C C.UTF-8; do
+  out=$(LC_ALL="$loc" LANG="$loc" "$CHECKER" --stdin < locale.txt 2>&1)
+  run_case "T20 LC_ALL=$loc: typographic French phrase → PUFFERY, whole characters in the excerpt" grep -qxF "$expected" <<<"$out"
+  run_case "T20 LC_ALL=$loc: typographic English apostrophe → WEASEL" grep -q '^<stdin>:2: WEASEL' <<<"$out"
+  run_case "T20 LC_ALL=$loc: 3 findings" grep -q '^redaction: 3 candidate' <<<"$out"
+done
+out_unset=$(env -u LC_ALL -u LANG -u LC_CTYPE "$CHECKER" --stdin < locale.txt 2>&1)
+out_utf8=$(LC_ALL=C.UTF-8 "$CHECKER" --stdin < locale.txt 2>&1)
+run_case "T20 no locale in the environment: same output as under C.UTF-8" test "$out_unset" = "$out_utf8"
+
+# T21 a host with no UTF-8 locale: exit 3 (not 2, the usage error), nothing on
+# stdout, the reason on stderr. The locale list is narrowed to a name no host has.
+out=$(printf 'We leverage it.\n' | LC_ALL=POSIX REDACTION_CHECKER_LOCALES="absent.UTF-8" "$CHECKER" --stdin 2>locale.err); rc=$?
+run_case "T21 no UTF-8 locale: exit 3" test "$rc" -eq 3
+run_case "T21 no UTF-8 locale: no finding printed" test -z "$out"
+run_case "T21 no UTF-8 locale: stderr says so" grep -q "no UTF-8 locale on this host" locale.err
+out=$(printf 'We leverage it.\n' | LC_ALL=C.UTF-8 REDACTION_CHECKER_LOCALES="absent.UTF-8" "$CHECKER" --stdin 2>/dev/null); rc=$?
+run_case "T21 a caller in a UTF-8 locale does not make an absent candidate pass: exit 3" test "$rc" -eq 3
+"$CHECKER" --no-such-mode >/dev/null 2>&1; rc=$?
+run_case "T21 an unknown mode is still exit 2" test "$rc" -eq 2
 
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"

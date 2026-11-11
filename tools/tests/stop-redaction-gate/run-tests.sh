@@ -15,6 +15,7 @@
 #   H9  pattern only inside a fenced block  → silent (checker fence rule reused)
 #   H10 SubagentStop payload                → same contract as Stop (block works)
 #   H11 checker absent                      → exit 0, silent (fail-open)
+#   H12 host with no UTF-8 locale           → block without opt-in, reason given (fail closed)
 #
 # Self-contained: throwaway tmpdir, no writes to the working tree.
 set -uo pipefail   # NOT -e: hooks are expected to exit 0 in every arm.
@@ -115,6 +116,16 @@ run_case "H10 SubagentStop: decision block" grep -q '"decision": *"block"' <<<"$
 mkdir -p isolated/hooks && cp "$HOOK" isolated/hooks/
 OUT=$(printf '%s' "$(payload "$DASH")" | env -u CLAUDE_PLUGIN_ROOT REDACTION_STOP_BLOCK=on python3 isolated/hooks/stop-redaction-gate.py 2>"$tmp/err"); RC=$?
 run_case "H11 checker absent: exit 0, no block" test "$RC" -eq 0 -a -z "$OUT"
+
+# H12 the host has no UTF-8 locale (the checker's locale list narrowed to a name
+# no host has): the checker scans nothing and exits 3. The gate refuses a clean
+# message with no opt-in set, and says why; a forced continuation is told, not
+# blocked again.
+run_hook "$(payload 'The suite passed. Two files changed.')" LC_ALL=POSIX REDACTION_CHECKER_LOCALES=absent.UTF-8
+run_case "H12 no UTF-8 locale: block decision without any opt-in" grep -q '"decision": "block"' <<<"$OUT"
+run_case "H12 no UTF-8 locale: the reason says the text was not scanned, and why" grep -q 'was NOT scanned and is refused.*no UTF-8 locale on this host' <<<"$OUT"
+run_hook "$(payload 'The suite passed.' '{"stop_hook_active": true}')" LC_ALL=POSIX REDACTION_CHECKER_LOCALES=absent.UTF-8
+run_case "H12 no UTF-8 locale + stop_hook_active: not blocked again, told on stderr" test -z "$OUT" -a -n "$(grep 'was NOT scanned' <<<"$ERR")"
 
 echo "----------------------------------------"
 echo "stop-redaction-gate suite: $PASS passed, $FAIL failed"

@@ -9,6 +9,8 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
+
 from tools import redaction_gate as rg
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +70,35 @@ def test_run_checker_usage_error_is_no_findings(tmp_path, capsys):
     old.chmod(old.stat().st_mode | stat.S_IXUSR)
     assert rg.run_checker(str(old), "We leverage it.") == []
     assert "rejected --stdin" in capsys.readouterr().err
+
+
+def test_run_checker_without_a_utf8_locale_refuses_instead_of_reporting_no_findings(monkeypatch):
+    # The real checker, with its locale list narrowed to a name no host has: it exits 3 having
+    # scanned nothing. Read as "no findings", that was a pass for a text nobody read.
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    monkeypatch.setenv("REDACTION_CHECKER_LOCALES", "absent.UTF-8")
+    monkeypatch.setenv("LC_ALL", "POSIX")
+    checker = rg.resolve_checker(str(HOOKS_DIR))
+    with pytest.raises(rg.CannotScan, match="no UTF-8 locale on this host"):
+        rg.run_checker(checker, "We leverage it.\n")
+
+
+def test_exit_3_is_a_refusal_and_exit_2_stays_the_usage_error(tmp_path, capsys):
+    for code, name in ((3, "no-locale.sh"), (2, "old.sh")):
+        script = tmp_path / name
+        script.write_text(f"#!/bin/sh\necho 'reason {code}' >&2\nexit {code}\n")
+        script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    with pytest.raises(rg.CannotScan, match="reason 3"):
+        rg.run_checker(str(tmp_path / "no-locale.sh"), "text")
+    assert rg.run_checker(str(tmp_path / "old.sh"), "text") == []
+    assert "rejected --stdin" in capsys.readouterr().err
+
+
+def test_refusal_text_names_the_subject_the_cause_and_that_no_opt_in_lifts_it():
+    text = rg.refusal_text(rg.CannotScan("no UTF-8 locale on this host"), "the message being returned")
+    assert "the message being returned was NOT scanned and is refused" in text
+    assert "no UTF-8 locale on this host" in text
+    assert rg.BLOCK_ENV in text and rg.MARKER_FILE in text
 
 
 def test_run_checker_unrunnable_is_no_findings(tmp_path, capsys):
