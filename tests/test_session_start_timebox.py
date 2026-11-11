@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "hooks" / "lib"))
 
 import run_sections  # noqa: E402
+from task_support import wait_exit  # noqa: E402
 
 RUNNER = ROOT / "hooks" / "lib" / "run_sections.py"
 BUDGET_S = 1  # source: product budget handed to the runner; short so the test is quick
@@ -54,6 +55,11 @@ section_leaves_child() {      # exits at once; the child keeps this section's st
   exec 3>"$GROUP_FIFO"
   ( exec 4<>"$NEVER_FIFO"; echo up >&3; read -r -u 4; echo alive >&3 ) &
   echo main-done
+}
+section_gated() {             # announces itself, then exits only when the test says so
+  exec 3>"$GROUP_FIFO"; echo "$$" >&3; exec 3>&-
+  read -r _ < "$RELEASE_FIFO"
+  echo released
 }
 section_fail() { echo before-fail; exit 3; }
 section_slow_first() { echo first; }
@@ -411,16 +417,204 @@ def test_a_second_signal_during_the_cleanup_does_not_reenter_it(tmp_path):
         fifos.close()
 
 
-def test_the_handler_ignores_further_signals_once_it_has_fired():
+@pytest.fixture
+def delivery():
+    """The handler's own state, restored with the dispositions it replaces."""
     saved = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+    state = run_sections._Delivery
+    before = (state.interruptible, state.held)
     try:
-        with pytest.raises(run_sections._Interrupted):
-            run_sections._raise_interrupted(signal.SIGTERM, None)
-        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
-        assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN
+        yield state
     finally:
+        state.interruptible, state.held = before
         for sig, handler in saved.items():
             signal.signal(sig, handler)
+
+
+def test_the_handler_ignores_further_signals_once_it_has_fired(delivery):
+    with pytest.raises(run_sections._Interrupted):
+        with run_sections._interruptible():
+            run_sections._raise_interrupted(signal.SIGTERM, None)
+    assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+    assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN
+
+
+def test_a_signal_outside_a_wait_is_held_and_raised_at_the_next_wait(delivery):
+    run_sections._raise_interrupted(signal.SIGINT, None)  # outside a wait: returns, raises nothing
+    assert delivery.held == "SIGINT"
+    assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+    reached = []
+    with pytest.raises(run_sections._Interrupted, match="SIGINT"):
+        with run_sections._interruptible():
+            reached.append("body")
+    assert reached == [], "the wait started although a signal was already held"
+    assert delivery.interruptible is False
+
+
+def test_a_signal_landing_between_a_sections_fork_and_its_registration_still_kills_its_group(tmp_path):
+    # The handler used to raise wherever the main thread was. Raised on the
+    # instruction after the fork, it dropped the Popen object before the cleanup
+    # list had it, and the section's group outlived the runner. Here the signal
+    # is delivered at exactly that point: inside the Popen call of the first
+    # section, once the section has announced itself on the fifo (so the kill
+    # cannot beat its start). Once `main` has returned, the wrapper releases the
+    # token and reports what the group fifo yielded.
+    lib = tmp_path / "sections.sh"
+    lib.write_text(HANG_SECTIONS)
+    fifos = Fifos(tmp_path)
+    proc = _popen_main_with(
+        "import signal\n"
+        "announced, group = threading.Event(), []\n"
+        "def watch():\n"
+        "    group.append(open(os.environ['GROUP_FIFO'], 'rb'))\n"
+        "    group[0].readline()\n"
+        "    announced.set()\n"
+        "threading.Thread(target=watch, daemon=True).start()\n"
+        "real, calls = subprocess.Popen, []\n"
+        "def popen(*a, **k):\n"
+        "    child = real(*a, **k)\n"
+        "    calls.append(1)\n"
+        "    if len(calls) == 1:\n"
+        "        announced.wait()\n"
+        "        os.kill(os.getpid(), signal.SIGTERM)\n"
+        "    return child\n"
+        "subprocess.Popen = popen",
+        [str(lib), str(LONG_BUDGET_S), "hang", "after"], fifos.env,
+        epilogue=(
+            "os.write(os.open(os.environ['NEVER_FIFO'], os.O_RDWR), b'go\\n')\n"
+            "print('SURVIVORS=' + repr(group[0].read()))"
+        ))
+    try:
+        out = proc.stdout.read().decode()
+        assert proc.wait() == 0
+        assert "interrupted by SIGTERM" in out
+        assert "SURVIVORS=b''" in out, "a section forked just before the signal outlived the runner"
+    finally:
+        fifos.release_token()
+        proc.stdout.close()
+        proc.wait()
+        fifos.close()
+
+
+LOCK_WINDOW_PATCH = """
+import signal
+class Watched:
+    # Stands for Popen._waitpid_lock. The signal is delivered once, right after
+    # the first acquisition: where a handler that raises leaves the lock held.
+    fired = False
+    def __init__(self, lock):
+        self.lock, self.held = lock, False
+    def acquire(self, blocking=True, timeout=-1):
+        if blocking and self.held:
+            print('DEADLOCK: the cleanup waits on a lock the interrupted wait still holds', flush=True)
+            os._exit(3)
+        got = self.lock.acquire(blocking, timeout)
+        if got:
+            self.held = True
+            if not Watched.fired:
+                Watched.fired = True
+                os.kill(os.getpid(), signal.SIGTERM)
+        return got
+    def release(self):
+        self.held = False
+        self.lock.release()
+    def __enter__(self):
+        self.acquire()
+    def __exit__(self, *exc):
+        self.release()
+real = subprocess.Popen
+def popen(*a, **k):
+    child = real(*a, **k)
+    child._waitpid_lock = Watched(child._waitpid_lock)
+    return child
+subprocess.Popen = popen
+"""
+
+
+def test_a_signal_landing_while_the_wait_holds_the_subprocess_lock_does_not_deadlock_the_cleanup(tmp_path):
+    # Popen.wait(timeout) and Popen.poll() take `_waitpid_lock` without blocking
+    # and release it in a `finally` that starts one instruction later. A handler
+    # that raised in between left the lock held, and the cleanup's `proc.wait()`
+    # then slept on it for ever: the runner never exited (observed once in 44
+    # runs of the signal test). The signal is delivered at exactly that
+    # instruction; the stand-in lock turns the sleep into exit status 3.
+    lib = tmp_path / "sections.sh"
+    lib.write_text(HANG_SECTIONS)
+    fifos = Fifos(tmp_path)
+    proc = _popen_main_with(LOCK_WINDOW_PATCH, [str(lib), str(LONG_BUDGET_S), "hang", "after"], fifos.env)
+    try:
+        out = proc.stdout.read().decode()
+        assert "DEADLOCK" not in out
+        assert proc.wait() == 0
+        assert "interrupted by SIGTERM" in out
+    finally:
+        fifos.release_token()
+        proc.stdout.close()
+        proc.wait()
+        fifos.close()
+
+
+WAKEUP_PATCH = """
+import select
+real_select, calls, log = select.select, [], []
+def watched(r, w, x, timeout=None):
+    # First wait of the runner on its wake-up pipe: say so, let the test end the
+    # section, then look at the pipe without waiting. The exit of the section must
+    # already have written to it (SIGCHLD); an empty pipe would make the real wait
+    # last the whole budget, so it is reported and the process ends at once.
+    calls.append(1)
+    if len(calls) == 1:
+        with open(os.environ['INSELECT_FIFO'], 'w') as said:
+            said.write('in select\\n')
+        open(os.environ['GO_FIFO']).readline()
+        if not real_select(r, [], [], 0)[0]:
+            print('NO WAKE-UP: the section exited and the wake-up pipe is empty', flush=True)
+            os._exit(3)
+        log.append('woken by the exit')
+    return real_select(r, w, x, timeout)
+select.select = watched
+"""
+
+
+def test_the_exit_of_a_section_wakes_the_runner_out_of_its_wait(tmp_path):
+    # Every other section of this file exits before the runner reaches its wait,
+    # so a wake-up pipe that no SIGCHLD writes to would cost the whole budget on
+    # every boot and fail nothing. Here the section exits while the runner is in
+    # its wait, and the verdict is the cause, never a duration: at the moment the
+    # section is known to have exited (an OS event), the pipe the runner waits on
+    # is readable, and the runner returns the section's output without killing it.
+    lib = tmp_path / "sections.sh"
+    lib.write_text(HANG_SECTIONS)
+    fifos = Fifos(tmp_path)
+    names = {name: tmp_path / name for name in ("release", "inselect", "go")}
+    for path in names.values():
+        os.mkfifo(path)
+    release = os.open(names["release"], os.O_RDWR)  # the section's read of it never blocks on open
+    env = {**fifos.env, "RELEASE_FIFO": str(names["release"]), "INSELECT_FIFO": str(names["inselect"]),
+           "GO_FIFO": str(names["go"])}
+    proc = _popen_main_with(WAKEUP_PATCH, [str(lib), str(LONG_BUDGET_S), "gated"], env,
+                            epilogue="print('SELECT_LOG=' + repr(log))")
+    pid = None
+    try:
+        with open(fifos.group, "rb") as group:
+            pid = int(group.readline())
+        with open(names["inselect"]) as said:
+            assert said.readline() == "in select\n"  # the runner is in its wait, the section alive
+        os.write(release, b"go\n")
+        wait_exit(pid)  # the section's main process has exited
+        with open(names["go"], "w") as go:
+            go.write("exited\n")
+        out = proc.stdout.read().decode()
+        assert "NO WAKE-UP" not in out
+        assert proc.wait() == 0
+        assert out == "released\nSELECT_LOG=['woken by the exit']\n"
+    finally:
+        os.close(release)
+        if pid is not None:
+            _kill_own_child(pid)
+        proc.stdout.close()
+        proc.wait()
+        fifos.close()
 
 
 # --- no Python: the hook says so on stdout instead of dropping the sections silently ---

@@ -153,7 +153,12 @@ def main() -> None:
     checker = gate.resolve_checker(os.path.dirname(os.path.abspath(__file__)))
     if not checker:
         allow()
-    findings = gate.run_checker(checker, text)
+    try:
+        findings = gate.run_checker(checker, text)
+    except gate.CannotScan as exc:  # FAILS_ON: the checker has no UTF-8 locale; the message was not scanned
+        if data.get("stop_hook_active"):  # forced continuation: report, never re-block
+            warn(gate.refusal_text(exc, SUBJECT))
+        block(gate.refusal_text(exc, SUBJECT))
     if not findings:
         allow()
 
