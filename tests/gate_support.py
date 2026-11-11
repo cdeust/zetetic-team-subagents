@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from task_support import make_fifo, tasks, wait_exit
+from task_support import make_fifo, tasks, wait_exit, wait_group_exit
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks"
@@ -135,20 +135,31 @@ class Gate:
         self.hold_fd = os.open(self.hold, os.O_RDWR)  # armed again, only after the previous reader is gone
         return self.record(tree, verb)
 
-    def _end_if_in_flight(self, path: Path) -> None:
+    def _end(self, path: Path) -> None:
+        """Leave no process of the task of ``path`` behind: kill it if it is in flight, await its exit either way.
+
+        A record that is already terminal can still have its worker alive: the terminal write is the worker's
+        last step before it exits, and nothing else in a test waits for that exit. The worker's argv names the
+        state directory, so a teardown that returned on the record alone left it to the leak guard.
+        """
         rec = tasks.store.read_record(str(path))
-        if not (rec and rec["state"] in ("queued", "running") and tasks.store.record_alive(rec)):
+        if not (rec and rec.get("pid") is not None and tasks.store.record_alive(rec)):
+            return  # no worker was ever recorded, or it has exited
+        if rec["state"] not in ("queued", "running"):
+            wait_exit(rec["pid"])  # terminal: the worker is leaving on its own
             return
+        group = rec["pgid"] or rec["pid"]  # the worker is its own session leader: its pid is its group
         try:
-            os.killpg(rec["pgid"] or rec["pid"], signal.SIGKILL)
+            os.killpg(group, signal.SIGKILL)
         except ProcessLookupError:
             pass  # gone between the liveness read and the kill
         wait_exit(rec["pid"])
+        wait_group_exit(group)  # the worker's exit is not the exit of the check it was running
 
     def close(self) -> None:
-        """Teardown: end every task this test left in flight (its own processes), then wait for each worker."""
+        """Teardown: end every task this test started (its own processes) and wait for every process of each."""
         for path in sorted(self.state.glob("gate-*.json")) if self.state.is_dir() else []:
-            self._end_if_in_flight(path)
+            self._end(path)
         os.close(self.hold_fd)
         os.close(self.ready_fd)
 

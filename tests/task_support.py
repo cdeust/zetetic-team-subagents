@@ -40,6 +40,22 @@ def wait_exit(pid: int) -> None:
         os.close(fd)
 
 
+def wait_group_exit(pgid: int) -> None:
+    """Block until process group ``pgid`` holds no live process. Call it after SIGKILLing the group.
+
+    SIGKILL is a request: a member stays a running process until the kernel has taken it down, and
+    the exit of the group's leader says nothing about the others. Each member's own exit is awaited
+    as an OS event (``wait_exit``); the members are read again afterwards because a member that
+    was inside fork() when the signal went out can leave one more child behind (macOS).
+    """
+    while True:
+        live = [pid for pid, state in task_proc._group_members(pgid) if not state.startswith("Z")]
+        if not live:
+            return
+        for pid in live:
+            wait_exit(pid)
+
+
 def make_fifo(directory: Path, name: str) -> str:
     path = str(directory / name)
     os.mkfifo(path)

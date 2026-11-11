@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from gate_support import Gate, git, payload, run_hook, write_config
-from task_support import tasks, wait_exit
+from task_support import tasks, wait_exit, wait_group_exit
 
 COMMIT = 'git commit -m "wip"'
 
@@ -128,11 +128,25 @@ def test_a_dead_worker_is_requeued_once_and_said_so(gate):
     dead = gate.await_running(tree)
     os.killpg(dead["pgid"], signal.SIGKILL)  # the worker and its check vanish without a terminal state
     wait_exit(dead["pid"])
+    wait_group_exit(dead["pgid"])  # the check too: a killed group with a member still exiting is not yet dead
     rc, _, err = gate.gate(COMMIT)
     assert rc == 2 and "attempt 2" in err and "previous worker died" in err
     assert gate.await_running(tree)["attempt"] == 2
     gate.finish(tree)
     assert gate.gate(COMMIT) == (0, "", "")
+
+
+def test_the_teardown_returns_only_once_every_process_of_a_killed_task_has_exited(gate):
+    # The teardown used to wait for the worker alone. SIGKILL reaches the whole group, but the check
+    # is still a running process until the kernel has taken it down, and the leak guard then found it
+    # (2026-11-11: a `gate_run.py` with SIGKILL pending, reparented to init, its worker already gone).
+    tree = gate.stage("two\n")
+    gate.head_start()
+    group = gate.await_running(tree)["pgid"]  # the worker, gate_run.py and the held check are alive
+    for path in sorted(gate.state.glob("gate-*.json")):
+        gate._end(path)
+    alive = [pid for pid, state in tasks.proc._group_members(group) if not state.startswith("Z")]
+    assert alive == [], "the teardown returned while a process of the killed group was still running"
 
 
 def test_staging_in_the_same_call_or_with_a_flag_is_refused_before_any_task(gate):

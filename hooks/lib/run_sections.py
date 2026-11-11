@@ -16,6 +16,10 @@ wrote before the kill, then a line saying it was killed. Exit status is 0 whatev
 A failure of the runner (bad arguments, no bash, fork or temp-dir error) and a
 SIGTERM or SIGINT are reported on stdout with their real cause, after every
 live section group has been killed and the scratch directory removed.
+A signal never raises inside the start or the wait of a section: the handler
+records it, and the wait, a select on a wake-up pipe, raises it from ordinary
+code. So it can land neither between the creation of a section and its
+registration for the cleanup, nor inside a subprocess call that holds a lock.
 
 A section is complete when its own main process exits with its output written;
 the runner never waits for descendants of a finished section (they hold only the
@@ -28,7 +32,9 @@ Contract:
         section wrote to stdout.
 """
 
+import contextlib
 import os
+import select
 import signal
 import subprocess
 import sys
@@ -77,12 +83,122 @@ class _Interrupted(Exception):
     """SIGTERM or SIGINT reached the runner; raised by the handler of `main`."""
 
 
+class _Delivery:
+    """How a SIGTERM or SIGINT reaches the runner: recorded by the handler, raised by the code that waits.
+
+    Python runs a handler between any two bytecodes of the main thread, and one
+    that raises there breaks what was running. Both breaks were measured on
+    2026-11-11 with the signal test of tests/test_session_start_timebox.py:
+    * raised on the instruction after the fork, it dropped the Popen object
+      before the cleanup list held it and the section's group outlived the
+      runner (the test failed in 8 of 30 runs of its file);
+    * raised inside Popen.wait(timeout), between `_waitpid_lock.acquire(False)`
+      and the `try` that releases it, it left the lock held and the cleanup's
+      `proc.wait()` blocked on it for ever (1 run in 44).
+    So the handler raises only while the runner writes its stdout, where no
+    subprocess call is in progress; elsewhere it records the signal in `held`
+    and `_exited_by` raises it between two system calls of its own.
+    """
+
+    interruptible = False  # True only inside _interruptible()
+    held = None            # name of the signal recorded outside _interruptible()
+    wakeup = None          # read end of the wake-up pipe; None when no handler is installed
+
+
 def _raise_interrupted(signum, _frame):
     # Once fired, further SIGTERM/SIGINT are ignored: a second one must not
     # re-enter the cleanup this exception is about to start.
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    raise _Interrupted(signal.Signals(signum).name)
+    name = signal.Signals(signum).name
+    if not _Delivery.interruptible:
+        _Delivery.held = name
+        return
+    raise _Interrupted(name)
+
+
+@contextlib.contextmanager
+def _interruptible():
+    """Let a signal interrupt the body; raise at once the one held since before it.
+
+    pre : no subprocess call is in progress in the body.
+    post: outside the body a signal is recorded, never raised by the handler.
+    """
+    _Delivery.interruptible = True
+    try:
+        if _Delivery.held is not None:
+            raise _Interrupted(_Delivery.held)
+        yield
+    finally:
+        _Delivery.interruptible = False
+
+
+def _ignore(_signum, _frame):
+    """SIGCHLD needs a Python handler for its arrival to be written to the wake-up pipe."""
+
+
+@contextlib.contextmanager
+def _signals_delivered():
+    """Install the handlers of `main` and the wake-up pipe `_exited_by` selects on.
+
+    A signal with a Python handler writes one byte to the pipe on arrival
+    (signal.set_wakeup_fd): a wait on it ends on a section's exit (SIGCHLD) and
+    on SIGTERM or SIGINT. Windows has neither SIGCHLD nor select on a pipe: no
+    pipe there, and a signal recorded during a wait is raised when it ends.
+    """
+    signal.signal(signal.SIGTERM, _raise_interrupted)
+    signal.signal(signal.SIGINT, _raise_interrupted)
+    if not hasattr(signal, "SIGCHLD"):
+        yield
+        return
+    read_end, write_end = os.pipe()
+    os.set_blocking(read_end, False)
+    os.set_blocking(write_end, False)
+    signal.signal(signal.SIGCHLD, _ignore)
+    previous = signal.set_wakeup_fd(write_end, warn_on_full_buffer=False)
+    _Delivery.wakeup = read_end
+    try:
+        yield
+    finally:
+        _Delivery.wakeup = None
+        signal.set_wakeup_fd(previous)
+        os.close(read_end)
+        os.close(write_end)
+
+
+def _raise_held():
+    if _Delivery.held is not None:
+        raise _Interrupted(_Delivery.held)
+
+
+def _exited_by(proc, deadline):
+    """Wait for the main process of `proc` until `deadline`. True iff it exited.
+
+    Raises _Interrupted, from its own code, for a signal recorded before or
+    during the wait. With the wake-up pipe the wait is a select that a child's
+    exit and a signal both end; without it (library use, Windows) it is the
+    plain timed wait.
+    """
+    while True:
+        _raise_held()
+        if _Delivery.wakeup is None:
+            try:
+                proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                _raise_held()
+                return False
+            _raise_held()
+            return True
+        if proc.poll() is not None:
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        if select.select([_Delivery.wakeup], [], [], remaining)[0]:
+            try:
+                os.read(_Delivery.wakeup, select.PIPE_BUF)  # drain; what arrived is read from poll() and `held`
+            except BlockingIOError:  # FAILS_ON: nothing left to read; the loop decides from poll() and `held`
+                pass
 
 
 def _start(sections_file, name, sink):
@@ -102,12 +218,10 @@ def _wait_or_kill(proc, deadline):
     process that is still running at the budget, not a completion path.
     post: returns True iff the section had to be killed.
     """
-    try:
-        proc.wait(timeout=max(0.0, deadline - time.monotonic()))
-    except subprocess.TimeoutExpired:
-        _kill_group(proc)
-        return True
-    return False
+    if _exited_by(proc, deadline):
+        return False
+    _kill_group(proc)
+    return True
 
 
 def _report_killed(scratch, name, budget_s):
@@ -141,8 +255,10 @@ def _wait_all(sections, scratch, started, budget_s):
 def _write_in_order(scratch, names, out):
     for name in names:
         with open(os.path.join(scratch, name), "rb") as written:
-            out.write(written.read())
-    out.flush()
+            data = written.read()
+        with _interruptible():  # a reader that stopped reading must not hold the runner past a signal
+            out.write(data)
+            out.flush()
 
 
 def run_sections(sections_file, names, budget_s, out):
@@ -164,11 +280,10 @@ def run_sections(sections_file, names, budget_s, out):
 
 def main(argv):
     """Always returns 0; a failure is reported on stdout with its real cause."""
-    signal.signal(signal.SIGTERM, _raise_interrupted)
-    signal.signal(signal.SIGINT, _raise_interrupted)
     try:
-        sections_file, budget, *names = argv
-        run_sections(sections_file, names, float(budget), sys.stdout.buffer)
+        with _signals_delivered():
+            sections_file, budget, *names = argv
+            run_sections(sections_file, names, float(budget), sys.stdout.buffer)
     except _Interrupted as exc:  # FAILS_ON: SIGTERM or SIGINT; groups are already killed and the scratch removed by run_sections
         _report(f"  session-start: boot sections not completed: interrupted by {exc}")
     except Exception as exc:  # FAILS_ON: any other failure (bad arguments, bash missing, fork or temp-dir error); a boot report must never fail the session

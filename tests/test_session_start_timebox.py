@@ -411,16 +411,141 @@ def test_a_second_signal_during_the_cleanup_does_not_reenter_it(tmp_path):
         fifos.close()
 
 
-def test_the_handler_ignores_further_signals_once_it_has_fired():
+@pytest.fixture
+def delivery():
+    """The handler's own state, restored with the dispositions it replaces."""
     saved = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+    state = run_sections._Delivery
+    before = (state.interruptible, state.held)
     try:
-        with pytest.raises(run_sections._Interrupted):
-            run_sections._raise_interrupted(signal.SIGTERM, None)
-        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
-        assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN
+        yield state
     finally:
+        state.interruptible, state.held = before
         for sig, handler in saved.items():
             signal.signal(sig, handler)
+
+
+def test_the_handler_ignores_further_signals_once_it_has_fired(delivery):
+    with pytest.raises(run_sections._Interrupted):
+        with run_sections._interruptible():
+            run_sections._raise_interrupted(signal.SIGTERM, None)
+    assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+    assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN
+
+
+def test_a_signal_outside_a_wait_is_held_and_raised_at_the_next_wait(delivery):
+    run_sections._raise_interrupted(signal.SIGINT, None)  # outside a wait: returns, raises nothing
+    assert delivery.held == "SIGINT"
+    assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+    reached = []
+    with pytest.raises(run_sections._Interrupted, match="SIGINT"):
+        with run_sections._interruptible():
+            reached.append("body")
+    assert reached == [], "the wait started although a signal was already held"
+    assert delivery.interruptible is False
+
+
+def test_a_signal_landing_between_a_sections_fork_and_its_registration_still_kills_its_group(tmp_path):
+    # The handler used to raise wherever the main thread was. Raised on the
+    # instruction after the fork, it dropped the Popen object before the cleanup
+    # list had it, and the section's group outlived the runner. Here the signal
+    # is delivered at exactly that point: inside the Popen call of the first
+    # section, once the section has announced itself on the fifo (so the kill
+    # cannot beat its start). Once `main` has returned, the wrapper releases the
+    # token and reports what the group fifo yielded.
+    lib = tmp_path / "sections.sh"
+    lib.write_text(HANG_SECTIONS)
+    fifos = Fifos(tmp_path)
+    proc = _popen_main_with(
+        "import signal\n"
+        "announced, group = threading.Event(), []\n"
+        "def watch():\n"
+        "    group.append(open(os.environ['GROUP_FIFO'], 'rb'))\n"
+        "    group[0].readline()\n"
+        "    announced.set()\n"
+        "threading.Thread(target=watch, daemon=True).start()\n"
+        "real, calls = subprocess.Popen, []\n"
+        "def popen(*a, **k):\n"
+        "    child = real(*a, **k)\n"
+        "    calls.append(1)\n"
+        "    if len(calls) == 1:\n"
+        "        announced.wait()\n"
+        "        os.kill(os.getpid(), signal.SIGTERM)\n"
+        "    return child\n"
+        "subprocess.Popen = popen",
+        [str(lib), str(LONG_BUDGET_S), "hang", "after"], fifos.env,
+        epilogue=(
+            "os.write(os.open(os.environ['NEVER_FIFO'], os.O_RDWR), b'go\\n')\n"
+            "print('SURVIVORS=' + repr(group[0].read()))"
+        ))
+    try:
+        out = proc.stdout.read().decode()
+        assert proc.wait() == 0
+        assert "interrupted by SIGTERM" in out
+        assert "SURVIVORS=b''" in out, "a section forked just before the signal outlived the runner"
+    finally:
+        fifos.release_token()
+        proc.stdout.close()
+        proc.wait()
+        fifos.close()
+
+
+LOCK_WINDOW_PATCH = """
+import signal
+class Watched:
+    # Stands for Popen._waitpid_lock. The signal is delivered once, right after
+    # the first acquisition: where a handler that raises leaves the lock held.
+    fired = False
+    def __init__(self, lock):
+        self.lock, self.held = lock, False
+    def acquire(self, blocking=True, timeout=-1):
+        if blocking and self.held:
+            print('DEADLOCK: the cleanup waits on a lock the interrupted wait still holds', flush=True)
+            os._exit(3)
+        got = self.lock.acquire(blocking, timeout)
+        if got:
+            self.held = True
+            if not Watched.fired:
+                Watched.fired = True
+                os.kill(os.getpid(), signal.SIGTERM)
+        return got
+    def release(self):
+        self.held = False
+        self.lock.release()
+    def __enter__(self):
+        self.acquire()
+    def __exit__(self, *exc):
+        self.release()
+real = subprocess.Popen
+def popen(*a, **k):
+    child = real(*a, **k)
+    child._waitpid_lock = Watched(child._waitpid_lock)
+    return child
+subprocess.Popen = popen
+"""
+
+
+def test_a_signal_landing_while_the_wait_holds_the_subprocess_lock_does_not_deadlock_the_cleanup(tmp_path):
+    # Popen.wait(timeout) and Popen.poll() take `_waitpid_lock` without blocking
+    # and release it in a `finally` that starts one instruction later. A handler
+    # that raised in between left the lock held, and the cleanup's `proc.wait()`
+    # then slept on it for ever: the runner never exited (observed once in 44
+    # runs of the signal test). The signal is delivered at exactly that
+    # instruction; the stand-in lock turns the sleep into exit status 3.
+    lib = tmp_path / "sections.sh"
+    lib.write_text(HANG_SECTIONS)
+    fifos = Fifos(tmp_path)
+    proc = _popen_main_with(LOCK_WINDOW_PATCH, [str(lib), str(LONG_BUDGET_S), "hang", "after"], fifos.env)
+    try:
+        out = proc.stdout.read().decode()
+        assert "DEADLOCK" not in out
+        assert proc.wait() == 0
+        assert "interrupted by SIGTERM" in out
+    finally:
+        fifos.release_token()
+        proc.stdout.close()
+        proc.wait()
+        fifos.close()
 
 
 # --- no Python: the hook says so on stdout instead of dropping the sections silently ---

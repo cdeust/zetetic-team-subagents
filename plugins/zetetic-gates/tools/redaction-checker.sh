@@ -45,6 +45,34 @@
 set -euo pipefail
 shopt -s extglob   # inline-code-span stripping in scan_file uses *(...)
 
+# ── Locale ─────────────────────────────────────────────────────────────
+# The copy is UTF-8 and the detectors are regular expressions over characters:
+# `h[ée]sitez`, `[Ii]t.s`, `[^*]{1,80}`. bash compiles `=~` in the caller's
+# locale, and in the POSIX locale a bracket or a dot matches one BYTE, so `é`
+# (two bytes) matched neither and the French and typographic-apostrophe phrases
+# went unreported (measured 2026-11-11: 2 of the 40 cases of
+# tools/tests/redaction-checker failed with LANG unset, 0 under C.UTF-8). The
+# checker therefore sets its own UTF-8 locale, whatever the caller's is, and
+# proves it took: one two-byte character must match one dot. No UTF-8 locale on
+# the host is an environment error (exit 2), never a scan with fewer detectors.
+# source: locale names: C.UTF-8 (glibc >= 2.35, musl), C.utf8 (older glibc
+# spelling), en_US.UTF-8 (macOS, where C.UTF-8 is absent before macOS 15).
+use_utf8_locale() {
+  local candidate
+  for candidate in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+    { LC_ALL="$candidate"; } 2>/dev/null   # bash warns on stderr about a locale the host lacks
+    if [[ "é" =~ ^.$ ]]; then
+      export LC_ALL
+      return 0
+    fi
+  done
+  return 1
+}
+if ! use_utf8_locale; then
+  echo "redaction-checker: no UTF-8 locale on this host (tried C.UTF-8, C.utf8, en_US.UTF-8, en_US.utf8); the detectors cannot read UTF-8 copy without one." >&2
+  exit 2
+fi
+
 # ── Scope ──────────────────────────────────────────────────────────────
 COPY_INCLUDE='(^|/)(README[^/]*|CHANGELOG[^/]*|CONTRIBUTING[^/]*|SECURITY[^/]*|PRIVACY[^/]*|CODE_OF_CONDUCT[^/]*)\.md$|^docs/.*\.md$'
 COPY_EXCLUDE='^skills/|^agents/|^templates/|^tools/tests/|^tests/|^memory/|^rules/|node_modules/|^plugins/.*/(skills|agents)/'

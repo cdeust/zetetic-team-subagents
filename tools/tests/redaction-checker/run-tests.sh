@@ -13,6 +13,7 @@
 #   T18 bold label + colon opening a line or list item → BOLD_LABEL; a code-span
 #       label, mid-sentence bold and a table row → NOT flagged
 #   T19 French renderings of the filler / leftover phrases → WEASEL / PUFFERY / SETUP
+#   T20 the findings are the same whatever the caller's locale (POSIX, C, unset, C.UTF-8)
 set -uo pipefail
 
 CHECKER="$(cd "$(dirname "$0")/../.." && pwd)/redaction-checker.sh"
@@ -185,6 +186,22 @@ out=$(printf 'En conclusion, tout passe.\n' | "$CHECKER" --stdin)
 run_case "T19 'en conclusion' → SETUP" grep -q "SETUP" <<<"$out"
 out=$(printf 'Le hook est enregistr\xc3\xa9 et les tests passent.\n' | "$CHECKER" --stdin)
 run_case "T19 plain French sentence NOT flagged" test -z "$out"
+
+# T20 the verdict does not depend on the caller's locale: the same UTF-8 copy
+# gives byte-identical findings under POSIX, C, an unset locale and C.UTF-8.
+# Before the checker set its own locale, the POSIX caller lost the phrases whose
+# pattern holds a non-ASCII character or a dot standing for one.
+printf 'N\xe2\x80\x99h\xc3\xa9sitez pas \xc3\xa0 revenir.\nIt\xe2\x80\x99s worth noting that it passes.\nJ\xe2\x80\x99esp\xc3\xa8re que cela aide.\n' > locale.txt
+expected=$'<stdin>:1: PUFFERY: N\xe2\x80\x99h\xc3\xa9sitez pas (redaction \xc2\xa71/\xc2\xa74/\xc2\xa78/\xc2\xa720-22)'
+for loc in POSIX C C.UTF-8; do
+  out=$(LC_ALL="$loc" LANG="$loc" "$CHECKER" --stdin < locale.txt 2>&1)
+  run_case "T20 LC_ALL=$loc: typographic French phrase → PUFFERY, whole characters in the excerpt" grep -qxF "$expected" <<<"$out"
+  run_case "T20 LC_ALL=$loc: typographic English apostrophe → WEASEL" grep -q '^<stdin>:2: WEASEL' <<<"$out"
+  run_case "T20 LC_ALL=$loc: 3 findings" grep -q '^redaction: 3 candidate' <<<"$out"
+done
+out_unset=$(env -u LC_ALL -u LANG -u LC_CTYPE "$CHECKER" --stdin < locale.txt 2>&1)
+out_utf8=$(LC_ALL=C.UTF-8 "$CHECKER" --stdin < locale.txt 2>&1)
+run_case "T20 no locale in the environment: same output as under C.UTF-8" test "$out_unset" = "$out_utf8"
 
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"
