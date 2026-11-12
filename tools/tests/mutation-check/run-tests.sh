@@ -9,7 +9,7 @@
 #       `mutmut results | grep -iq survived` under pipefail: grep left at its
 #       first match, mutmut died of a broken pipe, the pipeline was non-zero and
 #       the gate printed "0 surviving mutants" over a listing full of them;
-#   (d) pyproject.toml is restored byte for byte after each run.
+#   (d) once the runs are over, pyproject.toml is byte for byte what it was.
 set -euo pipefail
 cd "$(dirname "$0")"
 CHECK="$(cd ../.. && pwd)/mutation_check.sh"
