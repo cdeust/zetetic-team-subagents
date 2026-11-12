@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `/review-pr` (`.claude/commands/review-pr.md`) is Cortex's current file, byte for byte (Cortex ADR-1135, Cortex pull request 1000). Two of its five reviewers, `code-quality-reviewer` and `documentation-accuracy-reviewer`, are also told to try to refute the pull request: every statement it adds against its primary source; for every rule it adds, a case that follows the rule and still fails, or a harmless case the rule forbids; for every change to a workflow, a CI script or a file CI reads, which commit's workflow runs each job before and after the merge. Cortex measured the brief on its evaluation set (`docs/review-eval/` there), three draws per case: on the case with one known defect it was named in 2 draws against 0; on the case with seven, 2, 2 and 3 were named against 0, 0 and 0, short of the criterion of three more; no Blocker on the control. The review of a pull request runs the `/review-pr` of the main branch, so the pull request that brings this file is reviewed with the one it replaces. The copy the default `render-ci` profile delivers (`templates/ci/review/`) changes with it. The native profile's copy stays the one its source receipt pins (`templates/ci/native/source.json`, Cortex `8e7375bf`).
+
 ## [2.46.0]: only the 97 genius agents remain and every delegation names a genius pattern, the commit and push gate runs as an async task keyed by the tree hash, one CI Pipeline rendered into every repository
 
 ### Changed
