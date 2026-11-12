@@ -14,9 +14,11 @@ All write commands follow the same causal order:
 resolve_path → acl_check → (ensure_parent) → with_lock → [[ -e check ]] → atomic_write
 ```
 
-The lock (`mkdir $lockdir`) is the synchronisation point.  Any event in
-`with_lock` on process A causally precedes any event in `with_lock` on process B
-for the same scope, because A's `rmdir` must happen before B's `mkdir` succeeds.
+The lock is the synchronisation point: the directory `$lockdir`, held by the
+one process that created `$lockdir/owner` (see Appendix: Owner file). Any event
+in `with_lock` on process A causally precedes any event in `with_lock` on
+process B for the same scope, because A removes its owner file before B can
+create one.
 
 ---
 
@@ -24,11 +26,13 @@ for the same scope, because A's `rmdir` must happen before B's `mkdir` succeeds.
 
 **Is the TOCTOU inside the critical section sound?**
 Yes. The `[[ -e "$real" ]]` check at line 317 and `atomic_write` at line 324 are
-both inside `with_lock`. The lock is held from `mkdir $lockdir` (line 191) to
-`rmdir $lockdir` (line 199). Because `mkdir(2)` is atomic on local POSIX
-filesystems, at most one process enters the critical section at a time. The
-check-then-act sequence is serialised; there is no TOCTOU window between
-independent processes.
+both inside `with_lock`. The lock is held from the creation of `$lockdir/owner`
+to its removal (`tools/lib/memory-lock.sh`, `_lock_try_acquire` and the release
+in `with_lock`). The owner file is created with `O_CREAT|O_EXCL`, so at most one
+process enters the critical section at a time. The check-then-act sequence is
+serialised; there is no TOCTOU window between independent processes. Until
+2026-11-12 this paragraph rested on `mkdir(2)` being atomic. The system call
+is; the `mkdir` command the tool runs need not be (Appendix: Owner file).
 
 **What if the process is killed while holding the lock?**
 The `trap ... EXIT INT TERM` registered at line 196 does NOT fire on SIGKILL
@@ -182,8 +186,10 @@ input. No patch warranted; the current design is safe for all realistic values.
 ## Invariants
 
 **I-LOCK:** At most one process executes the body of `with_lock` for a given
-scope at any instant. Proof: `mkdir(2)` is atomic on local POSIX FS; exactly
-one caller's `mkdir` succeeds; all others spin or die after 5 s.
+scope at any instant. Proof: the holder is the process that created
+`$lockdir/owner`; bash opens that file with `O_CREAT|O_EXCL` under `noclobber`,
+and POSIX open(2) makes the existence check and the creation one atomic step,
+so exactly one caller creates it; all others spin or die after 5 s.
 
 **I-WRITE:** For any file path P under MEMORY_ROOT, the sequence
 check-then-create is serialised by I-LOCK; no two processes can both observe
@@ -346,3 +352,80 @@ Proof by contradiction: suppose W1 and W2 both reclaim. Both must have executed
 exists returns ENOENT. POSIX guarantees that at most one `rmdir` call removes a
 given directory name from the parent — after the first, the name is gone, and
 the second returns ENOENT (non-zero). Therefore both cannot succeed. QED.
+
+---
+
+## Appendix: Owner file
+
+Patch date: 2026-11-12
+
+### What failed
+
+The `e2e` job of pull request 255 ran on the `ubuntu-26.04` runner image
+(version 20261101.186.1) and C1 reported two successful creates out of ten
+(run 43325391700, job 131560712296). Both successes belong to writers that
+entered the critical section before the file existed, that is, at the first
+acquisition, when the lockdir was not there and several `mkdir` ran at once.
+
+The tool decided the lock with the exit status of the `mkdir` command. That
+status is atomic only if the command is a plain mkdir(2). uutils coreutils
+0.2.2 (`src/uu/mkdir/src/mkdir.rs`) first tests `path.exists()`, which is an
+error without `-p`, then calls `std::fs::create_dir`, and maps its failure to
+success when the path is a directory by then (`Err(_) if path.is_dir() =>
+Ok(())`). Two processes that both pass the first test both exit 0. The main
+branch of uutils guards that arm with `config.recursive` (both files read on
+2026-11-12).
+
+Not established: which `mkdir` that runner image has. The job log does not
+print it. What is established is the decision table of that source, and that a
+`mkdir` with that table breaks the lock as it was.
+
+### Measure
+
+A stand-in `mkdir` with that decision table, first on PATH, ten writers of one
+file, 15 rounds per setting, GNU bash 5.2.21, 4 cores, 2026-11-12:
+
+| Stand-in pauses between check and create | Rounds with more than one success, mkdir decides | With the owner file |
+|---|---|---|
+| no | 12 of 15 | 0 of 15 |
+| 0.05 s | 15 of 15 (10 successes each) | 0 of 15 |
+
+With GNU mkdir 9.4: 0 of 60 before, 0 of 30 after.
+
+### Mechanism
+
+`_lock_try_acquire` runs `mkdir $lockdir`, then creates `$lockdir/owner` in a
+subshell under `set -o noclobber`. bash opens the file itself: measured with
+strace on bash 5.2.21, `openat(..., O_WRONLY|O_CREAT|O_EXCL, 0666)`. A process
+whose `mkdir` reported success without creating anything loses that open and
+goes back to waiting; it has created nothing. The pid file is written after,
+for the liveness check, and decides nothing.
+
+Release removes the pid file, then the owner file, then the directory. A
+verified reclaim of a dead holder removes the dead holder's owner file with
+its pid file: the pid file it claimed named the dead holder, a live process
+creates an owner file only where there is none, and a holder removes its pid
+file before its owner file, so the owner file beside a dead holder's pid file
+is that holder's.
+
+A waiter that claims a newer holder's pid file by mistake (Appendix:
+Stale-Lock-Recovery) discards it and leaves the owner file, so that holder
+keeps the lock.
+
+### Limits
+
+- A holder killed between `mkdir` and its pid write leaves a lockdir with no
+  pid file, with or without an owner file. Writers die after 5 s, as before
+  (C2).
+- A process running the tool as it was before this patch, waiting on a dead
+  holder of this version, cannot remove the lockdir (the owner file is in it)
+  and dies after 5 s.
+- The `trap` on INT and TERM runs the release while the command is still
+  running, and the normal path runs it again when the command returns
+  (measured 2026-11-12, bash 5.2.21, a TERM sent during the command: the
+  release ran twice and the command ran to its end). That was so before this
+  patch and is not changed by it.
+
+Tests: C5 (`scripts/test-memory-concurrency.sh`) runs the ten writers under the
+stand-in; S5 (`scripts/test-memory-stale-lock.sh`) reclaims a dead holder that
+left an owner file.

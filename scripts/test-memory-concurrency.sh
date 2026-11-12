@@ -232,6 +232,69 @@ os.utime(p, (time.time() - 86401, time.time() - 86401))
   fi
 }
 
+# ── C5: the lock does not depend on an atomic external mkdir ──────────────────
+# Invariant: exactly one create succeeds even when `mkdir DIR` reports success
+# to every process that raced the creation of DIR.
+# The stand-in below is first on PATH for the ten writers. It decides as uutils
+# coreutils 0.2.2 does (src/uu/mkdir/src/mkdir.rs: `if path_exists &&
+# !config.recursive` is an error, then `Err(_) if path.is_dir() => Ok(())`):
+# an error when DIR is there at the check, success when its own create fails
+# and DIR is a directory by then. Any other invocation (-p, several operands)
+# goes to the real mkdir. The pause between the check and the create lets the
+# ten writers pass the check before one of them creates the directory.
+# source: measured 2026-11-12 on the lock as it was when mkdir alone decided,
+# 10 writers, 15 rounds per setting: without the pause, 12 rounds had more than
+# one success; with a 0.05 s pause, 15 rounds had 10 successes. With the owner
+# file: 0 round in 15 for each setting.
+test_c5() {
+  local real_mkdir; real_mkdir="$(command -v mkdir)"
+  if [[ "$real_mkdir" != /* ]]; then
+    skip 5 "mkdir is not an external command here ($real_mkdir)"
+    return
+  fi
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN="$ROOT/.standin-bin"
+  "$real_mkdir" -p "$BIN"
+  cat > "$BIN/mkdir" <<'STANDIN'
+#!/usr/bin/env bash
+if [ "$#" -ne 1 ] || [ "${1#-}" != "$1" ]; then exec "$REAL_MKDIR" "$@"; fi
+if [ -e "$1" ]; then echo "mkdir: cannot create directory '$1': File exists" >&2; exit 1; fi
+sleep 0.05
+"$REAL_MKDIR" "$1" 2>/dev/null && exit 0
+[ -d "$1" ] && exit 0
+exit 1
+STANDIN
+  chmod +x "$BIN/mkdir"
+
+  local pids=() outs=()
+  for i in $(seq 1 10); do
+    local f="$ROOT/output-$i"
+    outs+=("$f")
+    ( PATH="$BIN:$PATH" REAL_MKDIR="$real_mkdir" \
+      MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+      "$TOOL" create /memories/testscope/race.md "body-$i" >"$f" 2>&1 ) &
+    pids+=($!)
+  done
+  for pid in "${pids[@]}"; do wait "$pid" || true; done
+
+  local successes=0 duplicates=0
+  for f in "${outs[@]}"; do
+    grep -q "File created successfully" "$f" && successes=$((successes+1)) || true
+    grep -q "already exists"            "$f" && duplicates=$((duplicates+1)) || true
+  done
+  local left=0
+  [[ -e "$ROOT/.locks/testscope.lockd" ]] && left=1
+
+  if [[ $successes -eq 1 && $duplicates -eq 9 && $left -eq 0 ]]; then
+    pass 5 "mkdir that reports success to every racer: exactly 1 success, 9 duplicates, lock released"
+  else
+    fail 5 "10-way parallel create under a check-then-act mkdir" \
+      "successes=$successes duplicates=$duplicates lockdir_left=$left (expected 1+9, 0)"
+    for f in "${outs[@]}"; do cat "$f"; done
+  fi
+}
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 echo "=== Memory Concurrency Audit Tests ==="
@@ -244,6 +307,7 @@ test_c3_without_fix
 test_c3_with_fix
 test_c3_concurrent_drain
 test_c4
+test_c5
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPS skipped ==="
