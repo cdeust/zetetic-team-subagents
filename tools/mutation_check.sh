@@ -139,9 +139,19 @@ PYEOF
 
   echo ">>> mutmut | mutate: ${SOURCES[*]} | tests: $TESTS"
   mutmut run || true   # mutmut's own exit is unreliable; the survivor scan decides
-  if mutmut results | grep -iq 'survived'; then
+  # Read the whole listing, then look for survivors. `mutmut results | grep -q`
+  # is false under pipefail whenever grep leaves at its first match while
+  # mutmut is still writing (BrokenPipeError, non-zero): the gate then printed
+  # "0 surviving mutants" over a listing full of them.
+  # source: measured 2026-11-12 on this script with a stand-in mutmut printing
+  # 2000 survivors: exit 0 in 50 of 50 runs. Cortex's scripts/mutation_check.sh
+  # reads the listing the same way (RESULTS="$(uv run mutmut results)").
+  local results survivors
+  results="$(mutmut results)"
+  survivors="$(grep -i 'survived' <<<"$results" || true)"
+  if [ -n "$survivors" ]; then
     echo ">>> SURVIVORS (triage each — missing test or documented equivalent, §12.1):" >&2
-    mutmut results | grep -i 'survived' >&2
+    printf '%s\n' "$survivors" >&2
     return 1
   fi
   echo ">>> 0 surviving mutants on changed code."
