@@ -31,12 +31,16 @@
 #        mutation_check.sh Sources/App/Auth.swift # Swift/Muter
 #
 # Exit codes (deterministic — this is a gate; the kernel decides, not the model):
-#   0  every mutant on the changed code was killed (or --discover/--list ran)
-#   1  one or more mutants survived -> triage each (missing test or documented
-#      equivalent, §12.1); a gate-failing result, not an error
+#   0  every mutant on the changed code was killed, or the changed code holds no
+#      mutant (or --discover/--list ran)
+#   1  one or more mutants survived, or no test reaches them -> triage each
+#      (missing test or documented equivalent, §12.1); a gate-failing result,
+#      not an error
 #   2  usage error (no sources, mixed/unknown language, missing --tests for Python)
 #   3  the language's tool is not installed in this environment
 #   4  the per-repo config the tool needs is missing (the message points at the fix)
+#   5  no verdict (Python): mutmut left mutants unchecked, or its listing failed;
+#      the message says which
 set -euo pipefail
 
 # ── Registry — the ONE place to add a language ───────────────────────────
@@ -138,21 +142,44 @@ open(path, "w").write(src)
 PYEOF
 
   echo ">>> mutmut | mutate: ${SOURCES[*]} | tests: $TESTS"
-  mutmut run || true   # mutmut's own exit is unreliable; the survivor scan decides
-  # Read the whole listing, then look for survivors. `mutmut results | grep -q`
-  # is false under pipefail whenever grep leaves at its first match while
-  # mutmut is still writing (BrokenPipeError, non-zero): the gate then printed
-  # "0 surviving mutants" over a listing full of them.
-  # source: measured 2026-11-12 on this script with a stand-in mutmut printing
-  # 2000 survivors: exit 0 in 50 of 50 runs. Cortex's scripts/mutation_check.sh
-  # reads the listing the same way (RESULTS="$(uv run mutmut results)").
-  local results survivors
-  results="$(mutmut results)"
-  survivors="$(grep -i 'survived' <<<"$results" || true)"
-  if [ -n "$survivors" ]; then
+  local run_rc=0
+  mutmut run || run_rc=$?
+  mutmut_verdict "$run_rc"
+}
+
+# mutmut_verdict <exit status of mutmut run>: the gate's answer for Python.
+mutmut_verdict() {
+  # The listing of every mutant decides, not the exit status of the run: read it
+  # whole, then look at each status. `mutmut results | grep -q` is false under
+  # pipefail whenever grep leaves at its first match while mutmut is still
+  # writing (BrokenPipeError, non-zero): the gate then printed "0 surviving
+  # mutants" over a listing full of them.
+  # source: measured 2026-11-12 with mutmut 3.8.1. `mutmut results --all true`
+  # lists every mutant with its status and exits 0: "survived"; "no tests" for a
+  # function no test calls; "not checked" for each mutant when the clean test
+  # run fails (mutmut run exits 1); "killed"; nothing when the code holds no
+  # mutant (mutmut run exits 1 there too). Cortex's scripts/mutation_check.sh
+  # reads the listing whole and fails on survivors and on untested mutants
+  # (Cortex ADR-1122).
+  local listing blocking unchecked
+  listing="$(mutmut results --all true)" || {
+    echo "mutation_check: 'mutmut results --all true' failed (mutmut run exited $1) — no verdict" >&2
+    return 5
+  }
+  blocking="$(grep -E ': (survived|no tests)[[:space:]]*$' <<<"$listing" || true)"
+  if [ -n "$blocking" ]; then
     echo ">>> SURVIVORS (triage each — missing test or documented equivalent, §12.1):" >&2
-    printf '%s\n' "$survivors" >&2
+    printf '%s\n' "$blocking" >&2
     return 1
+  fi
+  unchecked="$(grep -cE ': not checked[[:space:]]*$' <<<"$listing" || true)"
+  if [ "$unchecked" -gt 0 ]; then
+    echo "mutation_check: mutmut left $unchecked mutant(s) unchecked (mutmut run exited $1) — no verdict" >&2
+    return 5
+  fi
+  if [ -z "$listing" ]; then
+    echo ">>> no mutant in the changed code (mutmut run exited $1)."
+    return 0
   fi
   echo ">>> 0 surviving mutants on changed code."
 }

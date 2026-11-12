@@ -28,6 +28,7 @@ echo "mutation-gate regression tests"
 # Stub runner: carries the SAME registry() shape mutation-gate parses for ext->lang,
 # and exits per the file name so we can drive each branch:
 #   *survive* -> exit 1 (surviving mutant)   *absent* -> exit 3 (no runner)
+#   *noverdict* -> exit 5 (the runner could not decide)
 #   otherwise -> exit 0 (all killed)
 # NOTE: the inner registry heredoc MUST use the 'EOF' delimiter — the wrapper
 # parses the runner's registry() with `sed -n "/<<'EOF'/,/^EOF/p"`. So the OUTER
@@ -46,6 +47,7 @@ EOF
 for a in "$@"; do
   case "$a" in *survive*) echo ">>> 1 surviving mutant"; exit 1 ;; esac
   case "$a" in *absent*) echo ">>> runner absent"; exit 3 ;; esac
+  case "$a" in *noverdict*) echo ">>> mutants left unchecked"; exit 5 ;; esac
 done
 echo ">>> 0 surviving mutants"; exit 0
 STUBEOF
@@ -63,6 +65,9 @@ check "survivor -> exit 1 (BLOCK)"       "$(is "$(run src/survive.py)" 1)"
 rc_absent="$(run src/absent.py)"
 check "no runner -> exit 0 (degraded)"   "$(is "$rc_absent" 0)"
 check "no runner -> loud UNVERIFIED warning" "$(grep -q UNVERIFIED "$TMP/out" && echo 1 || echo 0)"
+rc_noverdict="$(run src/noverdict.py)"
+check "no verdict -> exit 0 (degraded)"  "$(is "$rc_noverdict" 0)"
+check "no verdict -> names rc=5, UNVERIFIED" "$(grep -q 'no verdict (rc=5).*UNVERIFIED' "$TMP/out" && echo 1 || echo 0)"
 check "mixed langs w/ survivor -> exit 1" "$(is "$(run src/ok.ts src/survive.py)" 1)"
 check "--staged empty -> exit 0"         "$(is "$(run --staged)" 0)"
 
