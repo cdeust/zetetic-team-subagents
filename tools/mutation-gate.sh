@@ -119,6 +119,7 @@ for lang in $langs_seen; do
     2) echo "⚠ mutation-gate[$lang]: mutation_check usage/scope issue (rc=2) — UNVERIFIED (degraded): $out" >&2 ;;
     3) echo "⚠ mutation-gate[$lang]: mutation runner not installed (rc=3) — test-strength UNVERIFIED (degraded, per Move 8 step 2). Install the runner or rely on the human/CI re-gate." >&2 ;;
     4) echo "⚠ mutation-gate[$lang]: per-repo mutation config missing (rc=4) — UNVERIFIED (degraded): $out" >&2 ;;
+    5) echo "⚠ mutation-gate[$lang]: the mutation runner gave no verdict (rc=5) — test-strength UNVERIFIED (degraded): $out" >&2 ;;
     *) echo "⚠ mutation-gate[$lang]: mutation_check exited $rc — UNVERIFIED (degraded): $out" >&2 ;;
   esac
 done
