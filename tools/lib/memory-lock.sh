@@ -109,7 +109,10 @@ _lock_release() {
 # Wait until this shell holds the lock of <scope>: returns once
 # _lock_try_acquire or a reclaim has succeeded. Leaves the tool, nothing held
 # and nothing written, on a signal received while waiting, and with die after
-# 5 s without progress.
+# 5 s without progress. The signal is looked for right after the pause, before
+# the rest of the tick: looked for at the next tick only, a signal let the
+# tick go on to reclaim a dead holder's lock, or to end as the die of a stuck
+# lock (scripts/test-memory-concurrency.sh C9).
 _lock_take() {
   local lockdir="$1" scope="$2"
   local pid_file="$lockdir/pid"
@@ -118,8 +121,9 @@ _lock_take() {
   local spin_start=$SECONDS
   local last_holder=""
   while ! _lock_try_acquire "$lockdir"; do
-    if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
     sleep 0.1  # spin tick; source: memory/concurrency-audit.md §1 (100 ms interval)
+    # Nothing is held here: nothing is written.
+    if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
     if [[ -f "$pid_file" ]]; then
       holder_pid=$(cat "$pid_file" 2>/dev/null || true)
       if [[ -n "$holder_pid" && "$holder_pid" != "$last_holder" ]]; then
@@ -146,8 +150,11 @@ _lock_take() {
 # Usage: with_lock <scope> <command> [args...]  — runs the command in this shell
 # while holding the scope's lock; returns the command's status.
 #
-# INT and TERM are held from before the lock is taken until the command has
-# returned. Taken with their default action while the lock was being taken,
+# INT and TERM sent to this shell are held from before the lock is taken until
+# the command has returned. (Sent to the whole process group, as Ctrl-C is,
+# they also reach mkdir and the subshell that creates the owner file, which
+# take them with their default action: memory/concurrency-audit.md, Appendix:
+# Signals, Limits.) Taken with their default action while the lock was being taken,
 # they ended the shell during mkdir, which went on and left a lockdir with no
 # owner and no pid file: nothing reclaims it, and every later writer of the
 # scope died after the 5 s bound (scripts/test-memory-concurrency.sh C7). Held
