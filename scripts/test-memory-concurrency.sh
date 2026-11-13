@@ -602,14 +602,12 @@ test_c10() {
     cat "$ROOT/out-a"
     return
   fi
-  kill -KILL "$A_PID"
-  wait "$A_PID" 2>/dev/null
+  kill -KILL "$A_PID"; wait "$A_PID" 2>/dev/null
   local left; left="$(ls -A "$lockdir" 2>/dev/null | tr '\n' ' ')"
   if [[ ! -d "$lockdir" || -n "$left" ]]; then
     fail 10 "a writer killed while it takes the lock" "A did not leave an empty lockdir (found: ${left:-no lockdir}): the case was not produced"
     return
   fi
-
   local rc_b=0
   MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
     "$TOOL" create /memories/killscope/b.md "body-b" >"$ROOT/out-b" 2>&1 || rc_b=$?
