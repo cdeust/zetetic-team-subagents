@@ -110,6 +110,20 @@ _lock_release() {
 # while holding the scope's lock; returns the command's status.
 with_lock() {
   local scope="$1"; shift
+  # INT and TERM are held from before the lock is taken until the command has
+  # returned. Taken with their default action while the lock was being taken,
+  # they ended the shell during mkdir, which went on and left a lockdir with
+  # no owner and no pid file: nothing reclaims it, and every later writer of
+  # the scope died after the 5 s bound (scripts/test-memory-concurrency.sh C7).
+  # Held while the command runs, they do not release the lock under it, and
+  # the release runs once: before, the trap released the lock on the signal,
+  # the command ran on without it, and the release ran a second time, on the
+  # next holder's files (C6).
+  _LOCK_HELD=""
+  _LOCK_SIGNAL=0
+  trap '_LOCK_SIGNAL=130' INT   # source: 128 + SIGINT (2), bash manual, "Exit Status"
+  trap '_LOCK_SIGNAL=143' TERM  # source: 128 + SIGTERM (15), same section
+  trap '_lock_release' EXIT     # the command may call exit itself (a duplicate, a die)
   mkdir -p "$LOCK_DIR"
   local lockdir="$LOCK_DIR/$scope.lockd"
   local pid_file="$lockdir/pid"
@@ -118,6 +132,8 @@ with_lock() {
   local spin_start=$SECONDS
   local last_holder=""
   while ! _lock_try_acquire "$lockdir"; do
+    # A signal received while waiting: nothing is held, nothing is written.
+    if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
     sleep 0.1  # spin tick; source: memory/concurrency-audit.md §1 (100 ms interval)
     if [[ -f "$pid_file" ]]; then
       holder_pid=$(cat "$pid_file" 2>/dev/null || true)
@@ -135,20 +151,18 @@ with_lock() {
     fi
     (( SECONDS - spin_start > lock_timeout_s )) && die "could not acquire lock on scope '$scope' after ${lock_timeout_s}s"
   done
-  # INT and TERM are held until the command returns: the lock is not released
-  # while the command runs, and it is released once. The tool then exits with
-  # 128 + the signal number, the status a shell gives a command a signal ended.
-  # Before, the trap released the lock on the signal, the command ran on
-  # without it, and the release ran a second time, on the next holder's files.
   _LOCK_HELD="$lockdir"
-  _LOCK_SIGNAL=0
-  trap '_LOCK_SIGNAL=130' INT   # source: 128 + SIGINT (2), bash manual, "Exit Status"
-  trap '_LOCK_SIGNAL=143' TERM  # source: 128 + SIGTERM (15), same section
-  trap '_lock_release' EXIT     # the command may call exit itself (a duplicate, a die)
+  # A signal received while the lock was being taken: the command is not
+  # started. The EXIT trap releases the lock this shell now holds.
+  if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
   "$@"
   rc=$?
   _lock_release
   trap - EXIT INT TERM
+  # A signal received while the command ran: the tool exits with 128 + the
+  # signal number, the status a shell gives a command a signal ended. A
+  # command that calls exit itself (a duplicate, a die) ends the tool with
+  # its own status instead: this line is not reached.
   if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
   return $rc
 }

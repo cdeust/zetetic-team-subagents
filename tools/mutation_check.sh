@@ -167,7 +167,9 @@ mutmut_verdict() {
     return 5
   }
   # mutmut 3.8.1 prints its statuses in lower case (measured 2026-11-12). The
-  # match ignores case, so that a status printed otherwise blocks, not passes.
+  # match ignores case, so that a status printed otherwise is still read: a
+  # survivor or an untested mutant fails the gate (1), an unchecked one gives
+  # no verdict (5), and none of them passes as killed.
   blocking="$(grep -iE ': (survived|no tests)[[:space:]]*$' <<<"$listing" || true)"
   if [ -n "$blocking" ]; then
     echo ">>> SURVIVORS (triage each — missing test or documented equivalent, §12.1):" >&2

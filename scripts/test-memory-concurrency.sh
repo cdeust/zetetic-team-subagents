@@ -366,6 +366,112 @@ os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/a.md "bod
   fi
 }
 
+# ── C7: INT or TERM while the lock is being taken ────────────────────────────
+# Invariant: a signal that arrives while the tool takes the lock leaves no lock
+# behind. Writer A's mkdir of the lockdir is a stand-in that says it was called
+# and pauses; A receives the signal during that pause. Expected: A exits 128 +
+# the signal number without writing, no lockdir is left, and writer W, started
+# afterwards, writes at once. With the traps set only once the lock was held,
+# the signal took its default action while mkdir ran: the shell ended, mkdir
+# went on and created a lockdir with no owner and no pid file, which no waiter
+# can reclaim, so every later writer of the scope died after the 5 s bound.
+# A is started through python3 for the reason given at C6.
+# The 1 s pause orders the events, it is not tuned: the signal is sent as soon
+# as the stand-in says it was called, and the checks wait for A's exit and for
+# the stand-in's own end before they look at the lockdir.
+test_c7() {
+  local label="$1" signal="$2" expected="$3"
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN_A="$ROOT/.bin-a" called="$ROOT/.mkdir-called" done_mark="$ROOT/.mkdir-done"
+  mkdir -p "$BIN_A"
+  printf '#!/usr/bin/env bash\ncase "${*: -1}" in\n  *.lockd) : > %q; sleep 1; %q "$@"; rc=$?; : > %q; exit $rc ;;\nesac\nexec %q "$@"\n' \
+    "$called" "$(command -v mkdir)" "$done_mark" "$(command -v mkdir)" > "$BIN_A/mkdir"
+  chmod +x "$BIN_A/mkdir"
+  local lockdir="$ROOT/.locks/sigscope.lockd"
+
+  ( export PATH="$BIN_A:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec python3 -c 'import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/a.md "body-a" >"$ROOT/out-a" 2>&1 ) &
+  local A_PID=$! i
+  for i in $(seq 1 50); do
+    [[ -e "$called" ]] && break
+    sleep 0.1
+  done
+  kill -"$signal" "$A_PID"
+  local rc_a=0; wait "$A_PID" || rc_a=$?
+  for i in $(seq 1 30); do
+    [[ -e "$done_mark" ]] && break
+    sleep 0.1
+  done
+
+  local a_written=0 left=0 rc_w=0
+  [[ -f "$ROOT/sigscope/a.md" ]] && a_written=1
+  [[ -e "$lockdir" ]] && left=1
+  local started=$SECONDS
+  MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+    "$TOOL" create /memories/sigscope/w.md "body-w" >"$ROOT/out-w" 2>&1 || rc_w=$?
+  local waited=$(( SECONDS - started ))
+  if [[ $rc_a -eq $expected && $a_written -eq 0 && $left -eq 0 && $rc_w -eq 0 && -f "$ROOT/sigscope/w.md" ]]; then
+    pass "$label" "$signal while taking the lock: exit $expected, nothing written, no lockdir left, next writer wrote"
+  else
+    fail "$label" "$signal while taking the lock" \
+      "exit=$rc_a (expected $expected) a_written=$a_written lockdir_left=$left next_writer_exit=$rc_w after ${waited}s"
+    cat "$ROOT/out-a" "$ROOT/out-w"
+  fi
+}
+
+# ── C8: INT or TERM while waiting for a lock another writer holds ────────────
+# Invariant: a waiter that receives a signal leaves at once, with 128 + the
+# signal number, without writing and without touching the holder's lock.
+# Writer A is slowed inside its critical section (3 s before its rename); W
+# waits on the same scope and receives the signal. Expected: W exits while A
+# still holds the lock, A then finishes its write and releases. With the
+# signals held and no check in the wait, W would go on waiting, take the lock
+# once A released it, and only then leave.
+# W is started through python3 for the reason given at C6.
+test_c8() {
+  local label="$1" signal="$2" expected="$3"
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN_A="$ROOT/.bin-a"
+  mkdir -p "$BIN_A"
+  _slow_standin "$BIN_A/mv" 3 "$(command -v mv)"
+  local lockdir="$ROOT/.locks/sigscope.lockd"
+
+  ( export PATH="$BIN_A:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec "$TOOL" create /memories/sigscope/a.md "body-a" >"$ROOT/out-a" 2>&1 ) &
+  local A_PID=$! i
+  for i in $(seq 1 50); do
+    [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$A_PID" ]] && break
+    sleep 0.1
+  done
+  ( export MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec python3 -c 'import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/w.md "body-w" >"$ROOT/out-w" 2>&1 ) &
+  local W_PID=$!
+  sleep 0.5  # W is in its wait: five of its 0.1 s spin ticks
+  kill -"$signal" "$W_PID"
+  local rc_w=0; wait "$W_PID" || rc_w=$?
+  local a_held_at_w_exit=0
+  [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$A_PID" ]] && a_held_at_w_exit=1
+  local rc_a=0; wait "$A_PID" || rc_a=$?
+
+  local a_written=0 w_written=0 left=0
+  [[ -f "$ROOT/sigscope/a.md" ]] && a_written=1
+  [[ -f "$ROOT/sigscope/w.md" ]] && w_written=1
+  [[ -e "$lockdir" ]] && left=1
+  if [[ $rc_w -eq $expected && $w_written -eq 0 && $a_held_at_w_exit -eq 1 && $rc_a -eq 0 && $a_written -eq 1 && $left -eq 0 ]]; then
+    pass "$label" "$signal while waiting for the lock: exit $expected at once, nothing written, the holder finished"
+  else
+    fail "$label" "$signal while waiting for the lock" \
+      "exit=$rc_w (expected $expected) w_written=$w_written holder_still_held_at_exit=$a_held_at_w_exit holder_exit=$rc_a a_written=$a_written lockdir_left=$left"
+    cat "$ROOT/out-a" "$ROOT/out-w"
+  fi
+}
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 echo "=== Memory Concurrency Audit Tests ==="
@@ -381,6 +487,10 @@ test_c4
 test_c5
 test_c6 6a TERM 143  # source: 128 + SIGTERM (15)
 test_c6 6b INT 130   # source: 128 + SIGINT (2)
+test_c7 7a TERM 143  # source: 128 + SIGTERM (15)
+test_c7 7b INT 130   # source: 128 + SIGINT (2)
+test_c8 8a TERM 143  # source: 128 + SIGTERM (15)
+test_c8 8b INT 130   # source: 128 + SIGINT (2)
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPS skipped ==="
