@@ -544,8 +544,8 @@ when the signal came after that tick's check (Limits).
   the case of a signal sent to the shell alone.
 - KILL is not held. Between the owner file and the pid write it leaves a
   lockdir the next waiter reclaims (Appendix: Owner file without a pid file,
-  C13); between `mkdir` and the owner file, an empty lockdir the next writer
-  takes (C10).
+  C13; Appendix: Empty pid file, C22, once the pid file is opened); between
+  `mkdir` and the owner file, an empty lockdir the next writer takes (C10).
 - A signal sent to the whole process group also reaches the commands the tool
   runs inside the critical section. One of them failing ends the write as any
   failure does, with the lock released on exit.
@@ -662,7 +662,9 @@ owner file kept every writer out; each one died after the 5 s bound until the
 lockdir was removed by hand. Three ways lead to that lockdir:
 
 - a holder ended by KILL between its owner file and its pid write, or one
-  whose release was cut between its two removals;
+  whose release was cut between its two removals (once the holder has
+  opened its pid file, the lockdir holds that file too, empty: Appendix:
+  Empty pid file);
 - a reclaimer ended by KILL after it claimed a dead holder's pid file and
   before it removed that holder's owner file;
 - a waiter running the tool as it was before the owner file, which claims
@@ -741,7 +743,8 @@ before the claim holds only when every process runs this version).
 A waiter ended by KILL while it holds the marker leaves it, and no waiter
 takes a marker over: two waiters that both find the marker's process dead
 and both remove the marker are the race above, one level up (C17 holds that
-a marker is not taken over).
+the marker of a live waiter is not taken over, C25 that the marker of a dead
+one is not either).
 
 If the waiter had already removed the dead holder's owner file, the lockdir
 holds the marker alone and writers take the lock as before. The marker then
@@ -766,10 +769,17 @@ see Limits.
   lock as it was had the same outcome over a wider span: a reclaimer killed
   between its claim of the pid file and its removal of the owner file left
   the owner file alone, which nothing reclaimed.
-- A holder ended by KILL after it took the lock and before it removed a dead
-  waiter's marker leaves its owner and pid files beside that marker, and the
-  scope is locked the same way (last line of the table). It takes two
-  processes killed in two spans of a few commands each.
+- A holder ended by KILL while a dead waiter's marker is in its lockdir
+  leaves its owner and pid files beside that marker, and the scope is locked
+  the same way (last line of the table). The holder removes dead markers
+  once, before its command, so this is not only a holder killed before that
+  removal: a waiter that had read a dead owner file can take the marker
+  after it, and be killed while it holds it; the marker then stays until the
+  next holder, and this holder, killed at any point of its command, locks
+  the scope. It takes two processes killed: the waiter within the few
+  commands it holds the marker for, the holder at any time before it ends
+  (review of pull request 267; an earlier version of this line said "two
+  spans of a few commands each").
 - An owner file with no content is not reclaimed, and a marker with no
   content is not removed: their creator was ended between the creation of
   the file and the write of its pid, by KILL or by a signal sent to the whole
@@ -791,5 +801,64 @@ Tests, in `scripts/test-memory-concurrency.sh`: C13 (reclaimed), C14 to C17
 (kept out: a live owner, an owner file with no content, another process's
 owner file beside a dead holder's pid file, a marker another waiter holds),
 C18 (ten writers on a dead owner file: one success), C19 to C21 (the marker
-after a write). S5 of `scripts/test-memory-stale-lock.sh`, unchanged, holds
-the reclaim of a dead holder that left both files.
+after a write), C25 (kept out: a dead owner file beside the marker of a
+waiter that died, the fourth line of the table). S5 of
+`scripts/test-memory-stale-lock.sh`, unchanged, holds the reclaim of a dead
+holder that left both files.
+
+---
+
+## Appendix: Empty pid file
+
+Patch date: 2026-11-13
+
+### What failed
+
+A holder writes its pid file after its owner file. The shell opens the pid
+file, which creates it empty, and then writes the pid. A holder ended by
+KILL between the two leaves an owner file that names a dead process beside
+an empty pid file, and nothing reclaimed that lockdir: `_lock_take` saw a
+pid file, so it did not try the reclaim of the previous appendix, which ran
+only when there was none; and `_lock_reclaim_dead` has no process to check
+on an empty pid. The previous appendix said that a kill "between its owner
+file and its pid write" is reclaimed. That was true before the pid file is
+opened and false after (review of pull request 267, issue 268).
+
+### Measure
+
+One writer (`memory-tool.sh create`) against a lockdir put in place
+beforehand, bash 5.2.21, 2026-11-13. "Before" is `ee0d1d3`.
+
+| lockdir | before | after |
+|---|---|---|
+| owner file of a dead process, empty pid file | exit 2 after 5.7 s, nothing written, both files left | exit 0 in 0.3 s, written, lockdir removed |
+| owner file of a live process, empty pid file | exit 2 after 6.1 s, nothing written | exit 2 after 5.9 s, nothing written (unchanged: that holder is writing its pid) |
+| empty pid file, no owner file | exit 2 after 5.9 s, nothing written | exit 2 after 6.0 s, nothing written (unchanged, Limits) |
+
+### Mechanism
+
+`_lock_take` reads an empty pid file as it reads a missing one: no pid names
+a holder, so it tries `_lock_reclaim_unfinished`. Under the marker, when the
+owner file holds the pid found dead, `_lock_remove_dead_owner` removes the
+pid file, then the owner file. The lockdir is then empty.
+
+The pid file removed there is the dead holder's: a pid file is written by
+the process that created the owner file beside it and by no other, and
+while a dead holder's owner file is there no process can create an owner
+file. The pid file goes first: a waiter ended between the two removals
+leaves the owner file, which still says who died, where the other order
+would leave an empty pid file alone.
+
+### Limits
+
+- An empty pid file with no owner file is not reclaimed (C24). Nothing says
+  whose it is: a holder running the tool as it was before the owner file
+  looks like this between the opening of its pid file and its write, live or
+  dead, and no process of this version leaves it (a waiter ended between
+  the two removals above leaves the owner file).
+- The order of the two removals is argued above, not tested: no test ends a
+  waiter between them.
+
+Tests, in `scripts/test-memory-concurrency.sh`: C22 (reclaimed), C23 (kept
+out: a live owner file beside an empty pid file, both left), C24 (kept out:
+an empty pid file alone).

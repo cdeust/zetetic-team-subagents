@@ -15,10 +15,12 @@
 #   first on PATH.
 # I-NEW (liveness): a SIGKILL'd holder does not permanently block writers.
 #   Source: kill -0 PID liveness check (POSIX kill(2), signal 0 semantics).
-#   Not held for a holder killed after it created its owner file and before
-#   it wrote its pid in it, nor when a waiter was killed while it removed a
-#   dead holder's owner file: memory/concurrency-audit.md, Appendix: Owner
-#   file without a pid file, Limits.
+#   Not held in three cases (memory/concurrency-audit.md, Appendix: Owner
+#   file without a pid file, Limits, and Appendix: Empty pid file): a holder
+#   killed after it created its owner file and before it wrote its pid in
+#   it; a waiter killed while it held the reclaim marker, when the dead
+#   holder's owner file is still there, or when a holder is then killed
+#   before one has removed that marker; an empty pid file with no owner file.
 # I-NEW-2 (no false reclaim): a slow but live holder is NEVER stolen from.
 #   Source: kill -0 returns 0 for live processes; reclaim requires confirmed death.
 # Portability note: Option A (kill -0) chosen over Option B (proc start-time)
@@ -59,6 +61,13 @@ _lock_remove_dead_owner() {
   local lockdir="$1" dead_pid="$2" removed=1
   ( set -o noclobber; printf '%s' "$$" > "$lockdir/reclaim" ) 2>/dev/null || return 1
   if [[ "$(cat "$lockdir/owner" 2>/dev/null || true)" == "$dead_pid" ]]; then
+    # A holder ended between the opening of its pid file and the write of its
+    # pid left that file empty, and nothing reclaimed the lockdir (issue 268).
+    # Only the creator of the owner file writes the pid file beside it, so a
+    # pid file here is the dead holder's. It goes first: a waiter ended
+    # between the two removals leaves the owner file, which says who died; an
+    # empty pid file left alone would say nothing.
+    rm -f "$lockdir/pid" 2>/dev/null || true
     rm -f "$lockdir/owner" 2>/dev/null && removed=0
   fi
   rm -f "$lockdir/reclaim" 2>/dev/null || true
@@ -72,6 +81,10 @@ _lock_remove_dead_owner() {
 # the marker read is the marker removed. Left in place, it stops every later
 # reclaim of the scope: the next holder to be killed would lock it for good.
 # A marker with no content, or whose process is alive, is a waiter at work.
+# This runs once, before the command. A waiter that takes the marker after
+# it and is then killed leaves a marker that stays until the next holder: if
+# this holder is killed too, at any point of its command, the scope is locked
+# (review of pull request 267).
 _lock_clear_dead_marker() {
   local lockdir="$1" marker_pid
   [[ -e "$lockdir/reclaim" ]] || return 0
@@ -81,9 +94,10 @@ _lock_clear_dead_marker() {
   rm -f "$lockdir/reclaim" 2>/dev/null || true
 }
 
-# Reclaim a lockdir that holds an owner file and no pid file, when the process
-# the owner file names is dead: a holder killed between its owner file and its
-# pid write, or between the two removals of its release.
+# Reclaim a lockdir that holds an owner file and no pid, when the process the
+# owner file names is dead: a holder killed between its owner file and its
+# pid write (the pid file is then missing, or there and empty), or between
+# the two removals of its release.
 # Returns 1: the owner file was removed, the lockdir is free (progress);
 #         2: nothing was touched.
 # An owner file with no content yet, or whose process is alive, is a holder
@@ -210,9 +224,11 @@ _lock_take() {
     sleep 0.1  # spin tick; source: memory/concurrency-audit.md §1 (100 ms interval)
     # Nothing is held here: nothing is written.
     if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
-    if [[ -f "$pid_file" ]]; then
-      holder_pid=$(cat "$pid_file" 2>/dev/null || true)
-      if [[ -n "$holder_pid" && "$holder_pid" != "$last_holder" ]]; then
+    # An empty pid file names no holder: it is read as no pid file is.
+    holder_pid=""
+    if [[ -f "$pid_file" ]]; then holder_pid=$(cat "$pid_file" 2>/dev/null || true); fi
+    if [[ -n "$holder_pid" ]]; then
+      if [[ "$holder_pid" != "$last_holder" ]]; then
         # The lock changed hands — progress. Reset the no-progress deadline.
         last_holder="$holder_pid"
         spin_start=$SECONDS
