@@ -43,8 +43,8 @@
 #         1: the holder is dead but another waiter won the reclaim (progress);
 #         2: the holder is unknown or alive, nothing was touched.
 # Reclaim sequence:
-#   1. Remove the pid file and the dead holder's owner file so lockdir becomes
-#      empty (rmdir requires empty).
+#   1. Remove the pid file, and the dead holder's owner file when it left one,
+#      so lockdir becomes empty (rmdir requires empty).
 #   2. rmdir the now-empty lockdir atomically — only one waiter's rmdir
 #      can succeed (POSIX rmdir(2) atomicity). The loser gets ENOENT.
 #   3. Take the lock as any waiter does (_lock_try_acquire). If that fails,
@@ -59,7 +59,13 @@ _lock_reclaim_dead() {
   # holder: the caller read holder_pid earlier, and that holder may have released
   # and a new one taken the lock since. Deleting the pid file blind would
   # steal that live holder's lock (two creators of one file under 10-way load).
-  local claimed="$lockdir.reclaim.$$" claimed_pid
+  # Whether the holder left an owner file is noted before the claim. While
+  # the pid file is there no process can create an owner file (see
+  # _lock_try_acquire), so an owner file seen now is the holder's. Once the
+  # pid file is moved, a lockdir that had none holds nothing, and a writer may
+  # create its own there: that one is not ours to remove.
+  local claimed="$lockdir.reclaim.$$" claimed_pid had_owner=0
+  [[ -e "$lockdir/owner" ]] && had_owner=1
   mv "$lockdir/pid" "$claimed" 2>/dev/null || return 1
   claimed_pid=$(cat "$claimed" 2>/dev/null || true)
   if [[ "$claimed_pid" != "$holder_pid" ]]; then
@@ -71,10 +77,13 @@ _lock_reclaim_dead() {
     rm -f "$claimed" 2>/dev/null || true
     return 1
   fi
-  # The pid file we claimed named the dead holder, so the owner file beside it
-  # is the dead holder's too: a live process creates owner only where there is
-  # none, and a holder removes its pid file before its owner file.
-  rm -f "$claimed" "$lockdir/owner" 2>/dev/null || true
+  # The pid file we claimed named the dead holder, so the owner file that was
+  # beside it is the dead holder's too. A dead holder of the format before the
+  # owner file left none: an owner file there now is a writer's, created after
+  # our claim, and removing it gave two holders (review of pull request 266,
+  # scripts/test-memory-concurrency.sh C12). Our rmdir then fails, and we wait.
+  rm -f "$claimed" 2>/dev/null || true
+  if (( had_owner )); then rm -f "$lockdir/owner" 2>/dev/null || true; fi
   if rmdir "$lockdir" 2>/dev/null; then
     audit "with_lock" "/memories/$scope" 0 "stale_lock_reclaimed"
     _lock_try_acquire "$lockdir" && return 0
@@ -94,7 +103,7 @@ _lock_reclaim_dead() {
 # each one died after the 5 s bound (scripts/test-memory-concurrency.sh C10).
 # A lockdir that holds a pid file is not taken this way: with no owner file
 # beside it, that pid file is the lock of a holder running the tool as it was
-# before the owner file (scripts/test-memory-stale-lock.sh S2), and liveness
+# before the owner file (scripts/test-memory-concurrency.sh C11), and liveness
 # decides (_lock_reclaim_dead).
 _lock_try_acquire() {
   local lockdir="$1"

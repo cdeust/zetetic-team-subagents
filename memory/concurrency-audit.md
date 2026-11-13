@@ -417,10 +417,12 @@ is written after, for the liveness check, and decides nothing.
 
 Release removes the pid file, then the owner file, then the directory. A
 verified reclaim of a dead holder removes the dead holder's owner file with
-its pid file: the pid file it claimed named the dead holder, a live process
-creates an owner file only where there is none, and a holder removes its pid
-file before its owner file, so the owner file beside a dead holder's pid file
-is that holder's.
+its pid file: the pid file it claimed named the dead holder, no process
+creates an owner file in a lockdir that holds a pid file, and a holder
+removes its pid file before its owner file, so an owner file that was beside
+a dead holder's pid file is that holder's. The reclaimer notes whether there
+was one before it claims the pid file, and removes none otherwise (Appendix:
+Lockdir without an owner file, C12).
 
 A waiter that claims a newer holder's pid file by mistake (Appendix:
 Stale-Lock-Recovery) discards it and leaves the owner file, so that holder
@@ -430,8 +432,9 @@ keeps the lock.
 
 - A holder killed (KILL) between its owner file and its pid write leaves a
   lockdir with an owner file and no pid file. Writers die after 5 s (C2), and
-  so does every later one: nothing reclaims a lockdir without a pid file, and
-  the scope stays locked until the lockdir is removed by hand (measured
+  so does every later one: nothing reclaims a lockdir that has an owner file
+  and no pid file, and the scope stays locked until the lockdir is removed by
+  hand (measured
   2026-11-13: exit 2 after 5.5 s, nothing written, the lockdir left with its
   owner file). Killed one step earlier, between `mkdir` and its owner file, it
   leaves an empty lockdir, which the next writer takes since 2026-11-13
@@ -442,7 +445,8 @@ keeps the lock.
 - A process running the tool as it was before this patch, waiting on a dead
   holder of this version, takes the pid file and cannot remove the lockdir
   (the owner file is in it). It dies after 5 s, and so does every later writer
-  of either version: nothing reclaims a lockdir without a pid file. The scope
+  of either version: nothing reclaims a lockdir that has an owner file and no
+  pid file. The scope
   stays locked until the lockdir is removed by hand (measured 2026-11-13: the
   old waiter, then a writer of this version, both "could not acquire lock",
   the lockdir left with its owner file alone).
@@ -589,6 +593,24 @@ writer that creates the owner file in that instant holds the lock; the
 removes nothing (`_lock_release` and `_lock_reclaim_dead` both ignore that
 failure, the reclaimer goes back to waiting).
 
+A reclaimer leaves an empty lockdir at one more moment: right after it has
+claimed the pid file of a dead holder of the earlier format, which left no
+owner file. The first version of this patch let a writer in at that moment
+and kept the reclaimer's removal of the owner file as it was, whatever the
+file held: the reclaimer removed the writer's owner file. If the writer had
+not yet written its pid file, the reclaimer's `rmdir` then succeeded and it
+took the lock too; if it had, the lockdir was left with the writer's pid
+file alone, and one mistaken claim of that pid file by a third waiter made
+it empty under the writer. Found by the two reviews of pull request 266, one
+of which reproduced it. The reclaimer now notes, before it claims the pid
+file, whether the lockdir holds an owner file, and removes one only then.
+While the pid file is there no process can create an owner file, so the one
+it noted is the dead holder's; an owner file that appears after the claim is
+a writer's, the reclaimer's `rmdir` fails on it, and the reclaimer waits.
+C12 produces the moment with a reclaimer whose `mv` pauses after the claim:
+with the removal as it was, the writer's owner file is gone when the
+reclaimer reaches its `rmdir`.
+
 Measured with the change (2026-11-13): on the empty lockdir, a writer exits 0
 in 0.1 s, the file written, the lockdir removed.
 
@@ -599,17 +621,19 @@ in 0.1 s, the file written, the lockdir removed.
   one step that both checks whose it is and removes it: a waiter that reads
   the owner file, finds a dead process, and then removes it can remove the
   owner file of a holder that took the lock in between. Not solved here.
-- A holder running the tool as it was before the owner file is not protected
-  between its `mkdir` and its pid write: the lockdir is empty for that
-  instant, and a writer of this version that polls then takes the lock beside
-  it. It needs both versions to run on one scope at the same time, which
-  happens only while a call started before an update is still running. Read
-  in the code, not reproduced.
+- A live holder running the tool as it was before the owner file is not
+  protected whenever its lockdir holds no pid file: between its `mkdir` and
+  its pid write, and after a waiter of this version has claimed its pid file
+  by mistake (the claim is discarded, Appendix: Stale-Lock-Recovery, and the
+  lockdir is then empty). A writer of this version that polls then takes the
+  lock beside it. It needs both versions to run on one scope at the same
+  time, which happens only while a call started before an update is still
+  running. Read in the code, not reproduced.
 - A lockdir made by hand to keep writers out of a scope no longer does so
   when it is empty. No script of this repository does that
   (`grep -rn lockd`, 2026-11-13: the lock library and its two test suites
   only).
 
-Tests: C10 and C11 (`scripts/test-memory-concurrency.sh`). C2 of the same
+Tests: C10, C11 and C12 (`scripts/test-memory-concurrency.sh`). C2 of the same
 suite, which timed out on an empty lockdir, now times out on a lockdir with
 an owner file and no pid file.
