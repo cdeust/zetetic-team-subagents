@@ -6,6 +6,7 @@
 #   S2 — Live process not stolen: slow holder → waiter does NOT reclaim
 #   S3 — Two concurrent reclaimers: exactly one wins, other fails cleanly
 #   S4 — PID reuse resistance: SKIPPED (Option A chosen; no proc start-time check)
+#   S5: SIGKILL reclaim when the dead holder left its owner file beside its pid file
 #
 # Exit code = number of failed tests.
 
@@ -200,6 +201,46 @@ test_s4_skip() {
   echo "SKIP  S4: PID-reuse resistance (Option A chosen — no proc start-time check; see concurrency-audit.md §Stale-Lock-Recovery)"
 }
 
+# ── S5: reclaim of a dead holder that left an owner file ─────────────────────
+# Invariants: I-NEW (liveness), I-LOCK.
+# A holder killed inside its critical section leaves what it created: the
+# lockdir, its owner file and its pid file (tools/lib/memory-lock.sh,
+# _lock_try_acquire). The writer must reclaim that lock, not wait out the 5 s
+# deadline: a reclaim that left the owner file could not remove the lockdir.
+# After the write the lockdir is gone, so the next writer is not blocked.
+test_s5() {
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local LOCK_DIR="$ROOT/.locks"
+  mkdir -p "$LOCK_DIR"
+
+  local lockdir="$LOCK_DIR/s5scope.lockd"
+  mkdir "$lockdir"
+  sleep 60 &
+  local holder_pid=$!
+  printf '%s' "$holder_pid" > "$lockdir/owner"
+  printf '%s' "$holder_pid" > "$lockdir/pid"
+  kill -9 "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+
+  local OUT
+  OUT=$(MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+        "$TOOL" create /memories/s5scope/test.md "hello" 2>&1)
+
+  local reclaimed=0 created=0 left=0
+  if [[ -f "$ROOT/.audit.log" ]] && grep -q "stale_lock_reclaimed" "$ROOT/.audit.log"; then
+    reclaimed=1
+  fi
+  echo "$OUT" | grep -q "File created successfully" && created=1 || true
+  [[ -e "$lockdir" ]] && left=1
+
+  if [[ $created -eq 1 && $reclaimed -eq 1 && $left -eq 0 ]]; then
+    pass 5 "SIGKILL reclaim with an owner file: write succeeded, audit shows reclaimed, lock released"
+  else
+    fail 5 "SIGKILL reclaim with an owner file" "created=$created reclaimed=$reclaimed lockdir_left=$left out='$(echo "$OUT" | head -1)'"
+  fi
+}
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 echo "=== Memory Stale-Lock Recovery Tests ==="
@@ -210,6 +251,7 @@ test_s1
 test_s2
 test_s3
 test_s4_skip
+test_s5
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

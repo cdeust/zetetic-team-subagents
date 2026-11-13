@@ -4,7 +4,15 @@
 # executed. Expects LOCK_DIR and the helpers die / audit from memory-guards.sh.
 #
 # I-LOCK (Lamport 1978 §3): at most one process executes the critical section
-#   for a given scope at any instant. Source: POSIX mkdir(2) atomicity.
+#   for a given scope at any instant. Source: POSIX open(2), O_CREAT|O_EXCL: the
+#   holder is the one process that creates $lockdir/owner, and bash opens that
+#   file itself under noclobber (measured 2026-11-12, bash 5.2.21, strace:
+#   `openat(..., O_WRONLY|O_CREAT|O_EXCL, 0666)`). `mkdir $lockdir` only says
+#   that the directory is there: an external mkdir that looks for the directory
+#   and then creates it reports success to every process that raced the
+#   creation (uutils coreutils 0.2.2, src/uu/mkdir/src/mkdir.rs: `Err(_) if
+#   path.is_dir() => Ok(())`), and the lock must not depend on which mkdir is
+#   first on PATH.
 # I-NEW (liveness): a SIGKILL'd holder does not permanently block writers.
 #   Source: kill -0 PID liveness check (POSIX kill(2), signal 0 semantics).
 # I-NEW-2 (no false reclaim): a slow but live holder is NEVER stolen from.
@@ -33,10 +41,12 @@
 #         1: the holder is dead but another waiter won the reclaim (progress);
 #         2: the holder is unknown or alive, nothing was touched.
 # Reclaim sequence:
-#   1. Remove the pid file so lockdir becomes empty (rmdir requires empty).
+#   1. Remove the pid file and the dead holder's owner file so lockdir becomes
+#      empty (rmdir requires empty).
 #   2. rmdir the now-empty lockdir atomically — only one waiter's rmdir
 #      can succeed (POSIX rmdir(2) atomicity). The loser gets ENOENT.
-#   3. mkdir our lock. If it fails, another waiter already re-acquired.
+#   3. Take the lock as any waiter does (_lock_try_acquire). If that fails,
+#      another waiter already re-acquired.
 # Serialization guarantee: at most one rmdir(2) removes the dentry.
 # happens-before witness: rmdir succeeds only after the dead holder's
 # process table entry is gone; our subsequent mkdir is causally after.
@@ -59,15 +69,27 @@ _lock_reclaim_dead() {
     rm -f "$claimed" 2>/dev/null || true
     return 1
   fi
-  rm -f "$claimed" 2>/dev/null || true
+  # The pid file we claimed named the dead holder, so the owner file beside it
+  # is the dead holder's too: a live process creates owner only where there is
+  # none, and a holder removes its pid file before its owner file.
+  rm -f "$claimed" "$lockdir/owner" 2>/dev/null || true
   if rmdir "$lockdir" 2>/dev/null; then
     audit "with_lock" "/memories/$scope" 0 "stale_lock_reclaimed"
-    if mkdir "$lockdir" 2>/dev/null; then
-      printf '%s' "$$" > "$lockdir/pid"
-      return 0
-    fi
+    _lock_try_acquire "$lockdir" && return 0
   fi
   return 1
+}
+
+# Test-and-set of the lock. Returns 0 when this process now holds it.
+# mkdir is not the decision: see I-LOCK in the header. The decision is the
+# creation of $lockdir/owner with O_CREAT|O_EXCL, which only one process can
+# win. A process that loses it has created nothing and goes back to waiting.
+_lock_try_acquire() {
+  local lockdir="$1"
+  mkdir "$lockdir" 2>/dev/null || return 1
+  ( set -o noclobber; printf '%s' "$$" > "$lockdir/owner" ) 2>/dev/null || return 1
+  # Holder PID, so that waiters can check liveness.
+  printf '%s' "$$" > "$lockdir/pid"
 }
 
 # Usage: with_lock <scope> <command> [args...]  — runs the command in this shell
@@ -81,7 +103,7 @@ with_lock() {
   local lock_timeout_s=5  # source: memory/concurrency-audit.md §1 (bounded 5 s die)
   local spin_start=$SECONDS
   local last_holder=""
-  while ! mkdir "$lockdir" 2>/dev/null; do
+  while ! _lock_try_acquire "$lockdir"; do
     sleep 0.1  # spin tick; source: memory/concurrency-audit.md §1 (100 ms interval)
     if [[ -f "$pid_file" ]]; then
       holder_pid=$(cat "$pid_file" 2>/dev/null || true)
@@ -99,13 +121,13 @@ with_lock() {
     fi
     (( SECONDS - spin_start > lock_timeout_s )) && die "could not acquire lock on scope '$scope' after ${lock_timeout_s}s"
   done
-  # Write holder PID so waiters can check liveness.
-  printf '%s' "$$" > "$pid_file"
-  # Release: remove pid file first so lockdir is empty, then rmdir atomically.
-  trap 'rm -f "'"$lockdir"'/pid" 2>/dev/null; rmdir "'"$lockdir"'" 2>/dev/null || true' EXIT INT TERM
+  # Release: the pid file first, then the owner file, then the directory. In
+  # that order a waiter can create owner only once our pid file is gone, so we
+  # never remove the pid file of the next holder.
+  trap 'rm -f "'"$lockdir"'/pid" "'"$lockdir"'/owner" 2>/dev/null; rmdir "'"$lockdir"'" 2>/dev/null || true' EXIT INT TERM
   "$@"
   rc=$?
-  rm -f "$lockdir/pid" 2>/dev/null || true
+  rm -f "$lockdir/pid" "$lockdir/owner" 2>/dev/null || true
   rmdir "$lockdir" 2>/dev/null || true
   trap - EXIT INT TERM
   return $rc
