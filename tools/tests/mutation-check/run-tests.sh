@@ -16,8 +16,8 @@
 #   (h) a listing command that fails -> exit 5, no verdict;
 #   (i) a status printed with a capital ("Survived", "Not checked") is read as
 #       the same status: exit 1 and exit 5, never a pass;
-#   (j) --help prints the whole header, exit codes 4 and 5 included, and stops
-#       before the first line of code.
+#   (j) --help exits 0 and prints the whole header, exit codes 4 and 5
+#       included, and no comment that comes after it.
 # source: the statuses and exit codes are those of mutmut 3.8.1, measured
 # 2026-11-12: "survived", "no tests", "not checked", "killed"; `mutmut results
 # --all true` exits 0 in each case; `mutmut run` exits 1 when the clean test run
@@ -103,10 +103,15 @@ check "capital-no-tests-exit-1" "$([ "$CODE" = 1 ] && echo 1 || echo 0)"
 gate 3 "Not checked" 1
 check "capital-unchecked-exit-5" "$([ "$CODE" = 5 ] && echo 1 || echo 0)"
 
-bash "$CHECK" --help >"$TMP/help" 2>&1 || true
+HELP_CODE=0
+bash "$CHECK" --help >"$TMP/help" 2>&1 || HELP_CODE=$?
+check "help-exit-0" "$([ "$HELP_CODE" = 0 ] && echo 1 || echo 0)"
 check "help-lists-exit-4" "$(grep -q '^  4  the per-repo config' "$TMP/help" && echo 1 || echo 0)"
 check "help-lists-exit-5" "$(grep -q '^  5  no verdict' "$TMP/help" && echo 1 || echo 0)"
-check "help-stops-before-code" "$(grep -q 'set -euo pipefail' "$TMP/help" && echo 0 || echo 1)"
+# The first comment after the header, the one above registry(): a --help that
+# printed every comment of the file would print it. (A line of code can never
+# appear: only comment lines are printed.)
+check "help-stops-at-the-header" "$(grep -q 'the ONE place to add a language' "$TMP/help" && echo 0 || echo 1)"
 
 check "pyproject-restored" "$(cmp -s "$TMP/repo/pyproject.toml" "$TMP/pyproject.before" && echo 1 || echo 0)"
 

@@ -35,8 +35,9 @@ serialised; there is no TOCTOU window between independent processes. Until
 is; the `mkdir` command the tool runs need not be (Appendix: Owner file).
 
 **What if the process is killed while holding the lock?**
-The `trap ... EXIT INT TERM` registered at line 196 does NOT fire on SIGKILL
-(signal 9). The lockdir `$LOCK_DIR/$scope.lockd` persists. If the dead holder
+No handler runs on SIGKILL (signal 9): the ones `with_lock` sets for EXIT, INT
+and TERM (`tools/lib/memory-lock.sh`) are not called. The lockdir
+`$LOCK_DIR/$scope.lockd` persists. If the dead holder
 left a pid file, waiters reclaim the lock (see §Stale-Lock-Recovery). If not
 (killed between `mkdir` and the pid write), subsequent callers spin at 100 ms
 intervals until 5 s of WALL-CLOCK time pass without progress (progress = the
@@ -260,7 +261,8 @@ held: since 2026-11-12 the owner file decides, see Appendix: Owner file), the
 **Case (a): holder alive and making progress**
 
 ```
-Holder H:   mkdir lockdir → write pid → [critical section] → rmdir lockdir
+Holder H:   mkdir lockdir → create owner (O_EXCL) → write pid → [critical section]
+            → remove pid → remove owner → rmdir lockdir
 Waiter W:            spin → kill -0 pid → 0 (alive) → spin → ...
                                                               → acquire after H's rmdir
 ```
@@ -269,13 +271,14 @@ W sees a live PID; reclaim path is skipped; I-NEW-2 preserved.
 **Case (b): holder SIGKILLed**
 
 ```
-Holder H:   mkdir lockdir → write pid → SIGKILL (trap does not fire)
-                            lockdir persists with pid file
+Holder H:   mkdir lockdir → create owner → write pid → SIGKILL (no handler runs)
+                            lockdir persists with its owner and pid files
 Waiter W:   spin → kill -0 dead_pid → non-zero
-            → rmdir lockdir (atomic) → SUCCESS
-            → mkdir lockdir (atomic) → SUCCESS (W wins)
-            → write own pid → proceed
+            → mv pid file aside (atomic) → SUCCESS, and it names dead_pid
+            → remove it and H's owner file → rmdir lockdir (atomic) → SUCCESS
             → audit: stale_lock_reclaimed
+            → take the lock as any waiter: mkdir lockdir → create owner (O_EXCL)
+            → write own pid → proceed
 ```
 happens-before witness: W's `rmdir` is causally after H's death (the process
 table entry is gone before `kill -0` returns non-zero).
@@ -284,21 +287,23 @@ table entry is gone before `kill -0` returns non-zero).
 
 ```
 Holder H:   SIGKILL'd — lockdir persists
-Waiter W1:  kill -0 dead_pid → non-zero → rmdir → SUCCESS
-Waiter W2:  kill -0 dead_pid → non-zero → rmdir → FAIL (already removed by W1)
+Waiter W1:  kill -0 dead_pid → non-zero → mv pid file aside → SUCCESS
+            → remove H's owner file → rmdir → SUCCESS
+Waiter W2:  kill -0 dead_pid → non-zero → mv pid file aside → FAIL (W1 took it)
             → W2 falls through to normal spin
-W1:         mkdir → SUCCESS → proceeds
-W2:         spin → sees no lockdir → mkdir → SUCCESS → proceeds (after W1 releases)
+W1:         mkdir → create owner → SUCCESS → proceeds
+W2:         spin → after W1 releases: mkdir → create owner → SUCCESS → proceeds
 ```
-Serialization is guaranteed: only one `rmdir` can succeed (POSIX rmdir(2) is
-atomic on local FS). The waiter whose `rmdir` succeeds immediately attempts
-`mkdir`; the other falls back to the spin loop. At most one reclaimer wins per
-stale-lock event.
+Serialization is guaranteed: only one rename of the pid file can succeed, and
+only one `rmdir` (POSIX rename(2) and rmdir(2) are atomic on a local FS). The
+waiter whose `rmdir` succeeds then takes the lock as any waiter does, by
+creating the owner file; the other falls back to the spin loop. At most one
+reclaimer wins per stale-lock event.
 
 **Case (d): holder slow (e.g. 30 s write)**
 
 ```
-Holder H:   mkdir lockdir → write pid → [30 s write] → rmdir lockdir
+Holder H:   mkdir lockdir → create owner → write pid → [30 s write] → release
 Waiter W:   100 ms spin: each tick: kill -0 pid → 0 (alive) → continue
             After 5 s wall-clock without progress (holder pid unchanged):
             die "could not acquire lock after 5s"
@@ -325,14 +330,18 @@ degrades to the original bound.
 
 ### Invariants preserved
 
-- **I1 (mutual exclusion):** `mkdir(2)` atomicity is unchanged. The reclaim path
-  uses `rmdir` then `mkdir` as two separate atomic steps; only the winner of
-  `rmdir` can proceed to `mkdir`, and if that `mkdir` also fails, they spin.
-  At most one process holds the lock at any instant.
+- **I1 (mutual exclusion):** the holder is the one process that creates
+  `$lockdir/owner` with `O_CREAT|O_EXCL` (Appendix: Owner file; until
+  2026-11-12 this line rested on the exit status of the `mkdir` command). The
+  reclaim path removes the dead holder's pid and owner files, then the
+  lockdir; only the winner of that `rmdir` goes on, and it takes the lock as
+  any waiter does, by creating the owner file. If another waiter created it
+  first, the reclaimer spins. At most one process holds the lock at any
+  instant.
 
 - **I2 (no lost update):** The check-then-act inside the critical section is
   still serialized by I1. Reclaim does not weaken this: the reclaimer enters
-  the critical section only after acquiring the lock via `mkdir`.
+  the critical section only after it has created the owner file.
 
 - **I3 (atomic observability):** `atomic_write` (rename-based) is unchanged.
 
@@ -416,9 +425,10 @@ keeps the lock.
 
 ### Limits
 
-- A holder killed between `mkdir` and its pid write leaves a lockdir with no
-  pid file, with or without an owner file. Writers die after 5 s, as before
-  (C2).
+- A holder killed (KILL) between `mkdir` and its pid write leaves a lockdir
+  with no pid file, with or without an owner file. Writers die after 5 s, as
+  before (C2). INT and TERM no longer do this: they are held while the lock is
+  taken (Appendix: Signals, C7).
 - A process running the tool as it was before this patch, waiting on a dead
   holder of this version, takes the pid file and cannot remove the lockdir
   (the owner file is in it). It dies after 5 s, and so does every later writer
@@ -454,24 +464,47 @@ runs, same result): writer A, slowed inside its critical section, receives
 TERM; writer W waits on the scope. A exits 0, and W's owner file is gone
 while W is still writing.
 
+That patch set the handlers once the lock was held. A signal received while
+the lock was being taken still had its default action. Measured with C7
+against the lock of that patch (2026-11-13, bash 5.2.21): writer A receives
+TERM while its `mkdir` of the lockdir runs, a stand-in that pauses 1 s. The
+shell ends at once with status 143, the `mkdir` goes on and creates the
+lockdir, which has no owner and no pid file; the next writer of the scope
+dies after 5 s, "could not acquire lock", and so would every later one. With
+INT sent to the shell alone, the shell waits for `mkdir`, sees it end
+normally, and goes on: the write is done and the tool exits 0.
+
 ### Mechanism
 
-INT and TERM are held until the command returns: the handler only records
-the signal. The lock is released once, by `_lock_release`, and the tool then
-exits with 128 + the signal number (130 for INT, 143 for TERM), the status a
-shell gives a command a signal ended. EXIT still runs the release, for a
-command that calls `exit` itself; `_lock_release` removes nothing when no
-lock is held.
+INT and TERM are held from before the lock is taken until the command
+returns: the handler only records the signal. What the tool does with it
+depends on where it was:
+
+- while waiting for a lock another writer holds: it leaves at the next spin
+  tick, nothing held, nothing written (C8);
+- while taking the lock: it finishes taking it, does not start the command,
+  and leaves; the EXIT handler releases the lock (C7);
+- while the command runs: the command finishes under the lock, and the lock
+  is released once, by `_lock_release` (C6).
+
+In the three cases the tool exits with 128 + the signal number (130 for INT,
+143 for TERM), the status a shell gives a command a signal ended. One
+exception: a command that calls `exit` itself after the signal (a duplicate,
+a `die`) ends the tool with its own status. EXIT runs the release for that
+case; `_lock_release` removes nothing when no lock is held.
 
 ### Limits
 
 - A command that never returns keeps the lock, and INT or TERM do not end it;
   KILL does, and the lock is then reclaimed by the next waiter (Appendix:
   Stale-Lock-Recovery).
-- A signal received while the process is still waiting for the lock ends it
-  at once: the handlers are set only once the lock is held.
+- A waiter that receives a signal leaves at its next spin tick, up to 0.1 s
+  later, not at once.
+- KILL is not held. Between `mkdir` and the pid write it leaves a lockdir no
+  waiter can reclaim (Appendix: Owner file, Limits).
 - A signal sent to the whole process group also reaches the commands the tool
   runs inside the critical section. One of them failing ends the write as any
   failure does, with the lock released on exit.
 
-Tests: C6a (TERM) and C6b (INT) in `scripts/test-memory-concurrency.sh`.
+Tests, in `scripts/test-memory-concurrency.sh`, each for TERM (a) and INT
+(b): C6 while the command runs, C7 while the lock is taken, C8 while waiting.
