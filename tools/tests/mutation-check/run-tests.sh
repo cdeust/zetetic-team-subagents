@@ -13,7 +13,11 @@
 #   (e) mutants no test reaches ("no tests") -> exit 1, named;
 #   (f) mutants left "not checked" (the clean test run failed) -> exit 5, no verdict;
 #   (g) an empty listing (no mutant in the changed code) -> exit 0, said as such;
-#   (h) a listing command that fails -> exit 5, no verdict.
+#   (h) a listing command that fails -> exit 5, no verdict;
+#   (i) a status printed with a capital ("Survived", "Not checked") is read as
+#       the same status: exit 1 and exit 5, never a pass;
+#   (j) --help prints the whole header, exit codes 4 and 5 included, and stops
+#       before the first line of code.
 # source: the statuses and exit codes are those of mutmut 3.8.1, measured
 # 2026-11-12: "survived", "no tests", "not checked", "killed"; `mutmut results
 # --all true` exits 0 in each case; `mutmut run` exits 1 when the clean test run
@@ -91,6 +95,18 @@ check "no-mutant-said" "$(grep -q 'no mutant in the changed code' "$TMP/out" && 
 
 gate 3 survived 0 2
 check "listing-failed-exit-5" "$([ "$CODE" = 5 ] && echo 1 || echo 0)"
+
+gate 2 "Survived"
+check "capital-survived-exit-1" "$([ "$CODE" = 1 ] && echo 1 || echo 0)"
+gate 2 "No tests"
+check "capital-no-tests-exit-1" "$([ "$CODE" = 1 ] && echo 1 || echo 0)"
+gate 3 "Not checked" 1
+check "capital-unchecked-exit-5" "$([ "$CODE" = 5 ] && echo 1 || echo 0)"
+
+bash "$CHECK" --help >"$TMP/help" 2>&1 || true
+check "help-lists-exit-4" "$(grep -q '^  4  the per-repo config' "$TMP/help" && echo 1 || echo 0)"
+check "help-lists-exit-5" "$(grep -q '^  5  no verdict' "$TMP/help" && echo 1 || echo 0)"
+check "help-stops-before-code" "$(grep -q 'set -euo pipefail' "$TMP/help" && echo 0 || echo 1)"
 
 check "pyproject-restored" "$(cmp -s "$TMP/repo/pyproject.toml" "$TMP/pyproject.before" && echo 1 || echo 0)"
 

@@ -166,13 +166,15 @@ mutmut_verdict() {
     echo "mutation_check: 'mutmut results --all true' failed (mutmut run exited $1) — no verdict" >&2
     return 5
   }
-  blocking="$(grep -E ': (survived|no tests)[[:space:]]*$' <<<"$listing" || true)"
+  # mutmut 3.8.1 prints its statuses in lower case (measured 2026-11-12). The
+  # match ignores case, so that a status printed otherwise blocks, not passes.
+  blocking="$(grep -iE ': (survived|no tests)[[:space:]]*$' <<<"$listing" || true)"
   if [ -n "$blocking" ]; then
     echo ">>> SURVIVORS (triage each — missing test or documented equivalent, §12.1):" >&2
     printf '%s\n' "$blocking" >&2
     return 1
   fi
-  unchecked="$(grep -cE ': not checked[[:space:]]*$' <<<"$listing" || true)"
+  unchecked="$(grep -ciE ': not checked[[:space:]]*$' <<<"$listing" || true)"
   if [ "$unchecked" -gt 0 ]; then
     echo "mutation_check: mutmut left $unchecked mutant(s) unchecked (mutmut run exited $1) — no verdict" >&2
     return 5
@@ -277,7 +279,9 @@ while [ $# -gt 0 ]; do
     --list) list_langs; exit 0 ;;
     --tests) TESTS="${2:-}"; shift 2 ;;
     --tests=*) TESTS="${1#*=}"; shift ;;
-    -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    # The whole header, up to the first line that is not a comment: a fixed
+    # range of lines stopped before exit codes 4 and 5 once the header grew.
+    -h|--help) awk 'NR > 1 { if (/^#( |$)/) { sub(/^# ?/, ""); print } else exit }' "$0"; exit 0 ;;
     --) shift; while [ $# -gt 0 ]; do SOURCES+=("$1"); shift; done ;;
     -*) echo "mutation_check: unknown flag: $1 (try --help / --list / --discover)" >&2; exit 2 ;;
     *) SOURCES+=("$1"); shift ;;
