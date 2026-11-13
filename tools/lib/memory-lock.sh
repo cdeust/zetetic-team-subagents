@@ -15,8 +15,10 @@
 #   first on PATH.
 # I-NEW (liveness): a SIGKILL'd holder does not permanently block writers.
 #   Source: kill -0 PID liveness check (POSIX kill(2), signal 0 semantics).
-#   Not held for a holder killed between its owner file and its pid write:
-#   memory/concurrency-audit.md, Appendix: Owner file, Limits.
+#   Not held for a holder killed after it created its owner file and before
+#   it wrote its pid in it, nor when a waiter was killed while it removed a
+#   dead holder's owner file: memory/concurrency-audit.md, Appendix: Owner
+#   file without a pid file, Limits.
 # I-NEW-2 (no false reclaim): a slow but live holder is NEVER stolen from.
 #   Source: kill -0 returns 0 for live processes; reclaim requires confirmed death.
 # Portability note: Option A (kill -0) chosen over Option B (proc start-time)
@@ -33,10 +35,69 @@
 # in the pid file changes): each handoff resets the deadline, so N writers
 # legitimately serialized behind short critical sections are not killed by the
 # stuck-lock bound, while a lock that is stuck (holder never changes, or the
-# lockdir has an owner file and no pid file) still dies after 5 s.
+# lockdir has no pid file and an owner file whose process is alive or
+# unknown) still dies after 5 s.
 # $SECONDS (bash 3.2+ builtin) has whole-second granularity, so a >= compare
 # could fire after only timeout-1 s of real time; the strict > guarantees at
 # least lock_timeout_s real seconds of spinning before the die.
+
+# Remove the owner file of a dead holder. Returns 0 when it was removed.
+# This is the one step of a reclaim that two waiters must not do together: a
+# waiter that removes an owner file after another has removed it removes the
+# owner file a writer created in between. Only one waiter at a time holds
+# $lockdir/reclaim, which bash creates with O_CREAT|O_EXCL as it does the
+# owner file, and under it the owner file is removed only when its content is
+# the pid found dead. While a dead holder's owner file is there no process can
+# create one, and its creator cannot remove it: what is read under the marker
+# is what is removed.
+# A waiter killed while it holds the marker leaves it. Another waiter does not
+# take it over: that is the race above, one level up. The next holder removes
+# it (_lock_clear_dead_marker); when the dead holder's owner file is still
+# there, there is no next holder (memory/concurrency-audit.md, Appendix: Owner
+# file without a pid file, Limits).
+_lock_remove_dead_owner() {
+  local lockdir="$1" dead_pid="$2" removed=1
+  ( set -o noclobber; printf '%s' "$$" > "$lockdir/reclaim" ) 2>/dev/null || return 1
+  if [[ "$(cat "$lockdir/owner" 2>/dev/null || true)" == "$dead_pid" ]]; then
+    rm -f "$lockdir/owner" 2>/dev/null && removed=0
+  fi
+  rm -f "$lockdir/reclaim" 2>/dev/null || true
+  return "$removed"
+}
+
+# Remove the reclaim marker of a waiter that died while it held it. Called by
+# the holder of the lock only, so by one process at a time: the lock is what
+# serialises this removal. A marker that names a dead process cannot be
+# removed by its creator, and no waiter can create one while it is there, so
+# the marker read is the marker removed. Left in place, it stops every later
+# reclaim of the scope: the next holder to be killed would lock it for good.
+# A marker with no content, or whose process is alive, is a waiter at work.
+_lock_clear_dead_marker() {
+  local lockdir="$1" marker_pid
+  [[ -e "$lockdir/reclaim" ]] || return 0
+  marker_pid=$(cat "$lockdir/reclaim" 2>/dev/null || true)
+  [[ "$marker_pid" =~ ^[0-9]+$ ]] || return 0
+  if kill -0 "$marker_pid" 2>/dev/null; then return 0; fi
+  rm -f "$lockdir/reclaim" 2>/dev/null || true
+}
+
+# Reclaim a lockdir that holds an owner file and no pid file, when the process
+# the owner file names is dead: a holder killed between its owner file and its
+# pid write, or between the two removals of its release.
+# Returns 1: the owner file was removed, the lockdir is free (progress);
+#         2: nothing was touched.
+# An owner file with no content yet, or whose process is alive, is a holder
+# that is taking or releasing the lock, or one whose pid file a waiter claimed
+# by mistake: it keeps the lock.
+_lock_reclaim_unfinished() {
+  local lockdir="$1" scope="$2" owner_pid
+  owner_pid=$(cat "$lockdir/owner" 2>/dev/null || true)
+  [[ "$owner_pid" =~ ^[0-9]+$ ]] || return 2
+  if kill -0 "$owner_pid" 2>/dev/null; then return 2; fi
+  _lock_remove_dead_owner "$lockdir" "$owner_pid" || return 2
+  audit "with_lock" "/memories/$scope" 0 "unfinished_lock_reclaimed"
+  return 1
+}
 
 # Reclaim the lock of a dead holder.
 # Returns 0: we reclaimed it and now hold it (pid file written);
@@ -80,10 +141,12 @@ _lock_reclaim_dead() {
   # The pid file we claimed named the dead holder, so the owner file that was
   # beside it is the dead holder's too. A dead holder of the format before the
   # owner file left none: an owner file there now is a writer's, created after
-  # our claim, and removing it gave two holders (review of pull request 266,
-  # scripts/test-memory-concurrency.sh C12). Our rmdir then fails, and we wait.
+  # our claim. Removing it took that writer's owner file from under it, which
+  # lets a second holder in (review of pull request 266; C12 of
+  # scripts/test-memory-concurrency.sh shows the removal). Our rmdir then
+  # fails, and we wait.
   rm -f "$claimed" 2>/dev/null || true
-  if (( had_owner )); then rm -f "$lockdir/owner" 2>/dev/null || true; fi
+  if (( had_owner )); then _lock_remove_dead_owner "$lockdir" "$holder_pid" || true; fi
   if rmdir "$lockdir" 2>/dev/null; then
     audit "with_lock" "/memories/$scope" 0 "stale_lock_reclaimed"
     _lock_try_acquire "$lockdir" && return 0
@@ -160,6 +223,11 @@ _lock_take() {
         0) break ;;
         1) spin_start=$SECONDS; continue ;;  # progress was made, don't penalise
       esac
+    else
+      reclaimed=0
+      _lock_reclaim_unfinished "$lockdir" "$scope" || reclaimed=$?
+      # 1: a dead holder's owner file was removed and the lockdir is free.
+      if (( reclaimed == 1 )); then spin_start=$SECONDS; continue; fi
     fi
     (( SECONDS - spin_start > lock_timeout_s )) && die "could not acquire lock on scope '$scope' after ${lock_timeout_s}s"
   done
@@ -200,6 +268,7 @@ with_lock() {
   # A signal received while the lock was being taken: the command is not
   # started. The EXIT trap releases the lock this shell now holds.
   if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
+  _lock_clear_dead_marker "$lockdir"
   "$@"
   rc=$?
   _lock_release

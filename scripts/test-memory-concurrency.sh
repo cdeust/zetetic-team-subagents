@@ -55,12 +55,12 @@ test_c1() {
 }
 
 # ── C2: stale-lock detection — SIGKILL leaves lockdir; tool must time out ─────
-# Invariant: a process killed while holding the lock must not block callers
-# indefinitely. The lockdir here has an owner file and NO pid file (holder died
-# between its owner file and its pid write), so PID-liveness reclaim cannot
-# trigger: the tool must die after its 5 s no-progress wall-clock deadline
-# (concurrency-audit.md §1). Until 2026-11-13 the lockdir of this test was
-# empty; an empty lockdir is now taken by the next writer (C10).
+# Invariant: a lock that makes no progress does not block a caller
+# indefinitely: the tool dies after its 5 s no-progress wall-clock deadline
+# (concurrency-audit.md §1). The lock here is held by a live process that
+# keeps it past the bound, so nothing may reclaim it. Until 2026-11-13 this
+# test timed out on a lockdir left by a killed holder, empty and then with an
+# owner file alone; both are now taken by the next writer (C10, C13).
 # Window [5, 10]:
 #   lower — with_lock guarantees > 5.0 s of real spinning before the die
 #           ($SECONDS whole-second granularity, strict > compare), so the
@@ -75,11 +75,11 @@ test_c2() {
   trap 'rm -rf "$ROOT"' RETURN
   local LOCK_DIR="$ROOT/.locks"
   mkdir -p "$LOCK_DIR"
-  mkdir "$LOCK_DIR/stale.lockd"   # simulate lock left by SIGKILL
-  local dead
-  ( : ) & dead=$!
-  wait "$dead"
-  printf '%s' "$dead" > "$LOCK_DIR/stale.lockd/owner"
+  mkdir "$LOCK_DIR/stale.lockd"
+  sleep 30 &
+  local holder=$!
+  printf '%s' "$holder" > "$LOCK_DIR/stale.lockd/owner"
+  printf '%s' "$holder" > "$LOCK_DIR/stale.lockd/pid"
 
   local START; START=$(python3 -c "import time; print(int(time.time()))")
   local OUT
@@ -87,9 +87,10 @@ test_c2() {
         "$TOOL" create /memories/stale/x.md "body" 2>&1 || true)
   local END; END=$(python3 -c "import time; print(int(time.time()))")
   local ELAPSED=$(( END - START ))
+  kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
 
   if echo "$OUT" | grep -q "could not acquire lock" && (( ELAPSED >= 5 && ELAPSED <= 10 )); then
-    pass 2 "stale lock without a pid file: tool dies after its 5 s no-progress deadline (elapsed=${ELAPSED}s)"
+    pass 2 "lock held by a live process: tool dies after its 5 s no-progress deadline (elapsed=${ELAPSED}s)"
   else
     fail 2 "stale lock timeout" "elapsed=${ELAPSED}s out='$OUT'"
   fi
@@ -681,9 +682,12 @@ _reclaimer_standins() {
 # during the pause and slowed inside its critical section, takes the lock
 # (C10's rule). R resumes. Expected: when R reaches its rmdir, W's owner file
 # is still there; W then finishes, R takes the lock after it, both write. With
-# an rm of the owner file whatever it held, R removed W's: the lockdir was
-# left with W's pid file alone, and one mistaken claim of that pid file by a
-# third waiter made it empty under W (review of pull request 266).
+# an rm of the owner file whatever it held, R removed W's. That removal is
+# what this test shows; it does not show two holders, which follow from it by
+# one more step (a mistaken claim of W's pid file by a third waiter, or R's
+# rmdir before W's pid write: review of pull request 266).
+# W is watched until R reaches its rmdir, not for a fixed time: on a slow
+# machine W may take the lock late in R's pause.
 test_c12() {
   local ROOT; ROOT=$(mktemp -d)
   trap 'rm -rf "$ROOT"' RETURN
@@ -704,11 +708,11 @@ test_c12() {
   ( export PATH="$BIN_W:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
     exec "$TOOL" create /memories/oldscope/w.md "body-w" >"$ROOT/out-w" 2>&1 ) &
   local W_PID=$! w_took=0 w_kept=0
-  for i in $(seq 1 30); do
-    [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$W_PID" ]] && { w_took=1; break; }
+  for i in $(seq 1 160); do
+    [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$W_PID" ]] && w_took=1
+    [[ -e "$rmdir_called" ]] && break
     sleep 0.05
   done
-  for i in $(seq 1 80); do [[ -e "$rmdir_called" ]] && break; sleep 0.05; done
   # R has run its rm and reached its rmdir; W is still inside its critical section.
   kill -0 "$W_PID" 2>/dev/null && [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$W_PID" ]] && w_kept=1
   local rc_w=0 rc_r=0
@@ -727,6 +731,166 @@ test_c12() {
     cat "$ROOT/out-w" "$ROOT/out-r"
   fi
 }
+
+# ── C13: a lockdir with a dead owner file and no pid file is reclaimed ───────
+# Invariant: a holder killed between its owner file and its pid write, or
+# between the two removals of its release, does not block the scope. The
+# lockdir holds an owner file that names a process that has ended, and no pid
+# file. Expected: the writer removes that owner file, takes the lock, writes
+# and removes the lockdir, and the audit log has unfinished_lock_reclaimed.
+# Before, nothing reclaimed a lockdir without a pid file: the writer died
+# after the 5 s bound, as did every writer of the scope after it (measured
+# 2026-11-13: exit 2 after 6.0 s, nothing written).
+test_c13() {
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local lockdir="$ROOT/.locks/deadscope.lockd" dead rc=0
+  ( : ) & dead=$!
+  wait "$dead"
+  mkdir -p "$lockdir"
+  printf '%s' "$dead" > "$lockdir/owner"
+
+  MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+    "$TOOL" create /memories/deadscope/w.md "body-w" >"$ROOT/out-w" 2>&1 || rc=$?
+  local written=0 left=0 logged=0
+  [[ -f "$ROOT/deadscope/w.md" ]] && written=1
+  [[ -e "$lockdir" ]] && left=1
+  if [[ -f "$ROOT/.audit.log" ]] && grep -q "unfinished_lock_reclaimed" "$ROOT/.audit.log"; then logged=1; fi
+  if [[ $rc -eq 0 && $written -eq 1 && $left -eq 0 && $logged -eq 1 ]]; then
+    pass 13 "dead owner file without a pid file: reclaimed, written, lock released, audit entry"
+  else
+    fail 13 "a lockdir with a dead owner file and no pid file" \
+      "exit=$rc written=$written lockdir_left=$left audit_entry=$logged (expected 0, 1, 0, 1)"
+    cat "$ROOT/out-w"
+  fi
+}
+
+# Runs one writer against a lockdir that <fixture> fills (it receives the
+# lockdir, the pid of a process that has ended and the pid of a live one) and
+# expects the writer kept out: it dies with "could not acquire lock", writes
+# nothing, and the owner file and the reclaim marker are what they were.
+_kept_out() {
+  local label="$1" what="$2" fixture="$3"
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local lockdir="$ROOT/.locks/keptscope.lockd" dead live before after rc=0
+  mkdir -p "$lockdir"
+  ( : ) & dead=$!
+  wait "$dead"
+  sleep 30 &
+  live=$!
+  "$fixture" "$lockdir" "$dead" "$live"
+  _owner_and_marker() { local f; for f in owner reclaim; do [[ -e "$lockdir/$f" ]] && printf '%s=%s;' "$f" "$(cat "$lockdir/$f")"; done; }
+  before=$(_owner_and_marker)
+  MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+    "$TOOL" create /memories/keptscope/w.md "body-w" >"$ROOT/out-w" 2>&1 || rc=$?
+  after=$(_owner_and_marker)
+  kill "$live" 2>/dev/null; wait "$live" 2>/dev/null
+  if [[ $rc -ne 0 && ! -f "$ROOT/keptscope/w.md" && "$before" == "$after" ]] && grep -q "could not acquire lock" "$ROOT/out-w"; then
+    pass "$label" "$what: the writer is kept out, nothing written, the owner file untouched"
+  else
+    fail "$label" "$what" "exit=$rc before='$before' after='$after' (expected non-zero, and the same before and after)"
+    cat "$ROOT/out-w"
+  fi
+}
+
+# C14: a holder that is taking or releasing the lock, or whose pid file a
+# waiter claimed by mistake, has an owner file and no pid file, and is alive.
+_fx_live_owner() { printf '%s' "$3" > "$1/owner"; }
+# C15: its creator has not written its pid in it yet; there is no pid to check.
+_fx_empty_owner() { : > "$1/owner"; }
+# C16: a dead holder's pid file beside an owner file that is not that
+# holder's (review 2 of pull request 266: a holder of the earlier format that
+# wrote its pid file between a writer's check and that writer's owner file,
+# then died). The reclaim removes the pid file it claims, not that owner file.
+_fx_foreign_owner() { printf '%s' "$2" > "$1/pid"; printf '%s' "$3" > "$1/owner"; }
+# C17: another waiter holds the reclaim marker. It is not taken over, even
+# with a dead owner file there: two waiters removing one owner file is the
+# race the marker exists for.
+_fx_marker_held() { printf '%s' "$2" > "$1/owner"; printf '%s' "$3" > "$1/reclaim"; }
+
+# ── C18: ten writers on a lockdir with a dead owner file ─────────────────────
+# Invariant: the reclaim of C13 admits one holder. Ten writers of one file
+# start together against the lockdir of C13. Expected: exactly one creates the
+# file, nine find it there, and the lockdir is gone.
+test_c18() {
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local lockdir="$ROOT/.locks/testscope.lockd" dead i f
+  ( : ) & dead=$!
+  wait "$dead"
+  mkdir -p "$lockdir"
+  printf '%s' "$dead" > "$lockdir/owner"
+  local pids=() outs=()
+  for i in $(seq 1 10); do
+    f="$ROOT/output-$i"
+    outs+=("$f")
+    ( MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+      "$TOOL" create /memories/testscope/race.md "body-$i" >"$f" 2>&1 ) &
+    pids+=($!)
+  done
+  for i in "${pids[@]}"; do wait "$i" || true; done
+  local successes=0 duplicates=0 left=0
+  for f in "${outs[@]}"; do
+    grep -q "File created successfully" "$f" && successes=$((successes+1)) || true
+    grep -q "already exists"            "$f" && duplicates=$((duplicates+1)) || true
+  done
+  [[ -e "$lockdir" ]] && left=1
+  if [[ $successes -eq 1 && $duplicates -eq 9 && $left -eq 0 ]]; then
+    pass 18 "ten writers on a dead owner file: exactly 1 success, 9 duplicates, lock released"
+  else
+    fail 18 "10-way parallel create on a lockdir with a dead owner file" \
+      "successes=$successes duplicates=$duplicates lockdir_left=$left (expected 1+9, 0)"
+    for f in "${outs[@]}"; do cat "$f"; done
+  fi
+}
+
+# ── C19 to C21: the holder removes the marker of a waiter that died ───────────
+# Invariant: a waiter killed while it holds the reclaim marker does not end
+# the reclaims of its scope. No waiter takes the marker over (C17), so it is
+# the next holder that removes it, under the lock. Runs one writer against an
+# otherwise free lockdir in which <fixture> puts a marker (it receives the
+# lockdir, the pid of a process that has ended and the pid of a live one).
+# Expected: the write is done; a marker that names a dead process is removed,
+# and the lockdir with it (C19); a marker that names a live process (C20) or
+# has no content yet (C21) is a waiter at work and is left as it was.
+# In the first version of this patch the marker of C19 stayed, and a holder
+# killed after it locked the scope for good (measured 2026-11-13: owner and
+# pid files of a dead holder beside the marker, exit 2 after 6.0 s, where the
+# lock as it was before the marker reclaimed that holder in 0.3 s).
+_marker_after_write() {
+  local label="$1" what="$2" fixture="$3" expected="$4"
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local lockdir="$ROOT/.locks/markscope.lockd" dead live before got rc=0
+  mkdir -p "$lockdir"
+  ( : ) & dead=$!
+  wait "$dead"
+  sleep 30 &
+  live=$!
+  "$fixture" "$lockdir" "$dead" "$live"
+  before=$(cat "$lockdir/reclaim")
+  MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+    "$TOOL" create /memories/markscope/w.md "body-w" >"$ROOT/out-w" 2>&1 || rc=$?
+  kill "$live" 2>/dev/null; wait "$live" 2>/dev/null
+  if [[ -e "$lockdir/reclaim" ]]; then
+    got="kept"
+    [[ "$(cat "$lockdir/reclaim")" == "$before" ]] || got="changed"
+  elif [[ -e "$lockdir" ]]; then
+    got="removed, lockdir left"
+  else
+    got="removed"
+  fi
+  if [[ $rc -eq 0 && -f "$ROOT/markscope/w.md" && "$got" == "$expected" ]]; then
+    pass "$label" "$what: written, the marker $got"
+  else
+    fail "$label" "$what" "exit=$rc marker='$got' (expected exit 0 and '$expected')"
+    cat "$ROOT/out-w"
+  fi
+}
+_fx_dead_marker() { printf '%s' "$2" > "$1/reclaim"; }
+_fx_live_marker() { printf '%s' "$3" > "$1/reclaim"; }
+_fx_empty_marker() { : > "$1/reclaim"; }
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
@@ -752,6 +916,15 @@ test_c9 9b INT 130   # source: 128 + SIGINT (2)
 test_c10
 test_c11
 test_c12
+test_c13
+_kept_out 14 "live owner file without a pid file" _fx_live_owner
+_kept_out 15 "owner file with no content" _fx_empty_owner
+_kept_out 16 "dead holder's pid file beside another process's owner file" _fx_foreign_owner
+_kept_out 17 "reclaim marker held by another waiter" _fx_marker_held
+test_c18
+_marker_after_write 19 "marker of a waiter that died" _fx_dead_marker removed
+_marker_after_write 20 "marker of a live waiter" _fx_live_marker kept
+_marker_after_write 21 "marker with no content" _fx_empty_marker kept
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPS skipped ==="
