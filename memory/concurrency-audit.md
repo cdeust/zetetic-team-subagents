@@ -38,10 +38,13 @@ is; the `mkdir` command the tool runs need not be (Appendix: Owner file).
 No handler runs on SIGKILL (signal 9): the ones `with_lock` sets for EXIT, INT
 and TERM (`tools/lib/memory-lock.sh`) are not called. The lockdir
 `$LOCK_DIR/$scope.lockd` persists. If the dead holder
-left a pid file, waiters reclaim the lock (see §Stale-Lock-Recovery). If not
-(killed between `mkdir` and the pid write), subsequent callers spin at 100 ms
-intervals until 5 s of WALL-CLOCK time pass without progress (progress = the
-holder PID changing hands), then call `die` and exit 2. The deadline is
+left a pid file, waiters reclaim the lock (see §Stale-Lock-Recovery). If not,
+it depends on where it was killed. Between `mkdir` and its owner file, the
+lockdir is empty and the next writer takes it (Appendix: Lockdir without an
+owner file). Between its owner file and its pid write, subsequent callers spin
+at 100 ms intervals until 5 s of WALL-CLOCK time pass without progress
+(progress = the holder PID changing hands), then call `die` and exit 2. The
+deadline is
 wall-clock, not tick-count: tick duration includes per-tick process-spawn
 overhead, which is platform-dependent (measured 2026-07-22: ~5 ms/spawn on
 ubuntu CI vs ~85–250 ms/spawn on macOS Darwin 25.5), so a 50-tick proxy for
@@ -414,10 +417,12 @@ is written after, for the liveness check, and decides nothing.
 
 Release removes the pid file, then the owner file, then the directory. A
 verified reclaim of a dead holder removes the dead holder's owner file with
-its pid file: the pid file it claimed named the dead holder, a live process
-creates an owner file only where there is none, and a holder removes its pid
-file before its owner file, so the owner file beside a dead holder's pid file
-is that holder's.
+its pid file: the pid file it claimed named the dead holder, no process
+creates an owner file in a lockdir that holds a pid file, and a holder
+removes its pid file before its owner file, so an owner file that was beside
+a dead holder's pid file is that holder's. The reclaimer notes whether there
+was one before it claims the pid file, and removes none otherwise (Appendix:
+Lockdir without an owner file, C12).
 
 A waiter that claims a newer holder's pid file by mistake (Appendix:
 Stale-Lock-Recovery) discards it and leaves the owner file, so that holder
@@ -425,15 +430,23 @@ keeps the lock.
 
 ### Limits
 
-- A holder killed (KILL) between `mkdir` and its pid write leaves a lockdir
-  with no pid file, with or without an owner file. Writers die after 5 s, as
-  before (C2). INT and TERM sent to the tool's shell no longer do this: they
-  are held while the lock is taken (Appendix: Signals, C7). Sent to the whole
-  process group, they still can (same appendix, Limits).
+- A holder killed (KILL) between its owner file and its pid write leaves a
+  lockdir with an owner file and no pid file. Writers die after 5 s (C2), and
+  so does every later one: nothing reclaims a lockdir that has an owner file
+  and no pid file, and the scope stays locked until the lockdir is removed by
+  hand (measured
+  2026-11-13: exit 2 after 5.5 s, nothing written, the lockdir left with its
+  owner file). Killed one step earlier, between `mkdir` and its owner file, it
+  leaves an empty lockdir, which the next writer takes since 2026-11-13
+  (Appendix: Lockdir without an owner file, C10). INT and TERM sent to the
+  tool's shell do neither: they are held while the lock is taken (Appendix:
+  Signals, C7). Sent to the whole process group, they can do both (same
+  appendix, Limits).
 - A process running the tool as it was before this patch, waiting on a dead
   holder of this version, takes the pid file and cannot remove the lockdir
   (the owner file is in it). It dies after 5 s, and so does every later writer
-  of either version: nothing reclaims a lockdir without a pid file. The scope
+  of either version: nothing reclaims a lockdir that has an owner file and no
+  pid file. The scope
   stays locked until the lockdir is removed by hand (measured 2026-11-13: the
   old waiter, then a writer of this version, both "could not acquire lock",
   the lockdir left with its owner file alone).
@@ -481,18 +494,20 @@ INT and TERM are held from before the lock is taken until the command
 returns: the handler only records the signal. What the tool does with it
 depends on where it was:
 
-- while waiting for a lock another writer holds: it leaves at the next spin
-  tick, nothing held, nothing written (C8);
+- while waiting for a lock another writer holds: it leaves once its pause of
+  0.1 s is over, nothing held, nothing written (C8, C9);
 - while taking the lock: it finishes taking it, does not start the command,
   and leaves; the EXIT handler releases the lock (C7);
 - while the command runs: the command finishes under the lock, and the lock
   is released once, by `_lock_release` (C6).
 
 In the three cases the tool exits with 128 + the signal number (130 for INT,
-143 for TERM), the status a shell gives a command a signal ended. One
-exception: a command that calls `exit` itself after the signal (a duplicate,
-a `die`) ends the tool with its own status. EXIT runs the release for that
-case; `_lock_release` removes nothing when no lock is held.
+143 for TERM), the status a shell gives a command a signal ended. Two
+exceptions. A command that calls `exit` itself after the signal (a duplicate,
+a `die`) ends the tool with its own status; EXIT runs the release for that
+case, and `_lock_release` removes nothing when no lock is held. A waiter
+whose tick reaches the 5 s bound ends with the `die` of a stuck lock, exit 2,
+when the signal came after that tick's check (Limits).
 
 ### Limits
 
@@ -500,20 +515,29 @@ case; `_lock_release` removes nothing when no lock is held.
   KILL does, and the lock is then reclaimed by the next waiter (Appendix:
   Stale-Lock-Recovery).
 - A waiter that receives a signal leaves once its pause of 0.1 s is over, not
-  at once. The signal is looked for right after the pause, so the tick does
-  not go on to reclaim a lock or to die as on a stuck lock (review of pull
-  request 263, C9). A signal received in the few commands between that check
-  and the next pause is seen after that pause.
+  at once. The signal is looked for once per tick, right after the pause, so
+  a signal received during the pause does not let the tick go on to reclaim a
+  lock or to die as on a stuck lock (review of pull request 263, C9). One
+  received after that check, while the tick reads the pid file or reclaims a
+  dead holder's lock, does not stop the tick. If the tick takes the lock, the
+  tool leaves without starting the command and releases the lock, with 128 +
+  the signal number, and the audit log has the reclaim. If the tick is the
+  one that reaches the 5 s bound, the tool ends with `die`, exit 2. Otherwise
+  the signal is seen after the next pause. Read in the code (review of pull
+  request 264), not measured: the window is the few commands of a tick.
 - A signal sent to the whole process group (Ctrl-C, `kill -- -PGID`) also
   reaches the `mkdir` command and the subshell that creates the owner file.
   They are children: the handlers are not theirs, and the signal ends them
   with its default action. Ended after the directory or the owner file was
-  created and before they returned, they leave a lockdir with no owner or no
-  pid file, which nothing reclaims. Found by reading the code in the review
-  of pull request 263, not reproduced. What C7 shows is the case of a signal
-  sent to the shell alone.
-- KILL is not held. Between `mkdir` and the pid write it leaves a lockdir no
-  waiter can reclaim (Appendix: Owner file, Limits).
+  created and before they returned, they leave a lockdir with no owner file,
+  or with an owner file and no pid file. The first is taken by the next
+  writer since 2026-11-13 (Appendix: Lockdir without an owner file); nothing
+  reclaims the second (Appendix: Owner file, Limits). Found by reading the
+  code in the review of pull request 263, not reproduced. What C7 shows is
+  the case of a signal sent to the shell alone.
+- KILL is not held. Between the owner file and the pid write it leaves a
+  lockdir no waiter can reclaim (Appendix: Owner file, Limits); between
+  `mkdir` and the owner file, an empty lockdir the next writer takes (C10).
 - A signal sent to the whole process group also reaches the commands the tool
   runs inside the critical section. One of them failing ends the write as any
   failure does, with the lock released on exit.
@@ -521,3 +545,95 @@ case; `_lock_release` removes nothing when no lock is held.
 Tests, in `scripts/test-memory-concurrency.sh`, each for TERM (a) and INT
 (b): C6 while the command runs, C7 while the lock is taken, C8 while waiting
 for a live holder, C9 during the pause of a waiter that could reclaim.
+
+---
+
+## Appendix: Lockdir without an owner file
+
+Patch date: 2026-11-13
+
+### What failed
+
+`_lock_try_acquire` ended its attempt when `mkdir $lockdir` failed. A lockdir
+that was there with nothing in it was therefore never taken: no owner file to
+lose to, no pid file to check, and the 5 s bound for every writer of the
+scope, until the lockdir was removed by hand.
+
+Measured against the lock as it was (2026-11-13, bash 5.2.21): with an empty
+lockdir in place, a writer exits 2 after 5.1 s, "could not acquire lock",
+nothing written, the lockdir still there. C10 produces that lockdir the way
+it happens: writer A is ended by KILL while its `mkdir`, a stand-in that
+creates the lockdir and then pauses, has not returned. The writer started
+after A exits 2 and writes nothing.
+
+This is the state header invariant I-NEW excludes ("a SIGKILL'd holder does
+not permanently block writers"). The reclaim of a dead holder covers a holder
+that got as far as its pid file; this one did not get as far as its owner
+file.
+
+### Mechanism
+
+The directory only has to be there. A writer whose `mkdir` fails goes on to
+the owner file when the lockdir holds no pid file. The decision is unchanged:
+the holder is the one process that creates `$lockdir/owner` with
+`O_CREAT|O_EXCL` (Appendix: Owner file). What changed is who may try.
+
+A lockdir that holds a pid file is not taken this way, owner file or not.
+With an owner file the attempt fails at the owner file, as before. Without
+one, the pid file is the lock of a holder running the tool as it was before
+the owner file: it took the lock with `mkdir` and wrote only its pid. Such a
+holder, live, is waited for as before (C11), and reclaimed when dead
+(S1, `scripts/test-memory-stale-lock.sh`).
+
+An empty lockdir is also what a holder leaves for an instant when it
+releases (owner file removed, `rmdir` not yet done) and what a reclaimer
+leaves between removing the dead holder's owner file and its `rmdir`. A
+writer that creates the owner file in that instant holds the lock; the
+`rmdir` of the other process fails on a lockdir that is no longer empty and
+removes nothing (`_lock_release` and `_lock_reclaim_dead` both ignore that
+failure, the reclaimer goes back to waiting).
+
+A reclaimer leaves an empty lockdir at one more moment: right after it has
+claimed the pid file of a dead holder of the earlier format, which left no
+owner file. The first version of this patch let a writer in at that moment
+and kept the reclaimer's removal of the owner file as it was, whatever the
+file held: the reclaimer removed the writer's owner file. If the writer had
+not yet written its pid file, the reclaimer's `rmdir` then succeeded and it
+took the lock too; if it had, the lockdir was left with the writer's pid
+file alone, and one mistaken claim of that pid file by a third waiter made
+it empty under the writer. Found by the two reviews of pull request 266, one
+of which reproduced it. The reclaimer now notes, before it claims the pid
+file, whether the lockdir holds an owner file, and removes one only then.
+While the pid file is there no process can create an owner file, so the one
+it noted is the dead holder's; an owner file that appears after the claim is
+a writer's, the reclaimer's `rmdir` fails on it, and the reclaimer waits.
+C12 produces the moment with a reclaimer whose `mv` pauses after the claim:
+with the removal as it was, the writer's owner file is gone when the
+reclaimer reaches its `rmdir`.
+
+Measured with the change (2026-11-13): on the empty lockdir, a writer exits 0
+in 0.1 s, the file written, the lockdir removed.
+
+### Limits
+
+- A lockdir with an owner file and no pid file is still not reclaimed
+  (Appendix: Owner file, Limits; C2). Removing that owner file safely needs
+  one step that both checks whose it is and removes it: a waiter that reads
+  the owner file, finds a dead process, and then removes it can remove the
+  owner file of a holder that took the lock in between. Not solved here.
+- A live holder running the tool as it was before the owner file is not
+  protected whenever its lockdir holds no pid file: between its `mkdir` and
+  its pid write, and after a waiter of this version has claimed its pid file
+  by mistake (the claim is discarded, Appendix: Stale-Lock-Recovery, and the
+  lockdir is then empty). A writer of this version that polls then takes the
+  lock beside it. It needs both versions to run on one scope at the same
+  time, which happens only while a call started before an update is still
+  running. Read in the code, not reproduced.
+- A lockdir made by hand to keep writers out of a scope no longer does so
+  when it is empty. No script of this repository does that
+  (`grep -rn lockd`, 2026-11-13: the lock library and its two test suites
+  only).
+
+Tests: C10, C11 and C12 (`scripts/test-memory-concurrency.sh`). C2 of the same
+suite, which timed out on an empty lockdir, now times out on a lockdir with
+an owner file and no pid file.

@@ -56,9 +56,11 @@ test_c1() {
 
 # ── C2: stale-lock detection — SIGKILL leaves lockdir; tool must time out ─────
 # Invariant: a process killed while holding the lock must not block callers
-# indefinitely. The lockdir here has NO pid file (holder died between mkdir and
-# the pid write), so PID-liveness reclaim cannot trigger: the tool must die
-# after its 5 s no-progress wall-clock deadline (concurrency-audit.md §1).
+# indefinitely. The lockdir here has an owner file and NO pid file (holder died
+# between its owner file and its pid write), so PID-liveness reclaim cannot
+# trigger: the tool must die after its 5 s no-progress wall-clock deadline
+# (concurrency-audit.md §1). Until 2026-11-13 the lockdir of this test was
+# empty; an empty lockdir is now taken by the next writer (C10).
 # Window [5, 10]:
 #   lower — with_lock guarantees > 5.0 s of real spinning before the die
 #           ($SECONDS whole-second granularity, strict > compare), so the
@@ -74,6 +76,10 @@ test_c2() {
   local LOCK_DIR="$ROOT/.locks"
   mkdir -p "$LOCK_DIR"
   mkdir "$LOCK_DIR/stale.lockd"   # simulate lock left by SIGKILL
+  local dead
+  ( : ) & dead=$!
+  wait "$dead"
+  printf '%s' "$dead" > "$LOCK_DIR/stale.lockd/owner"
 
   local START; START=$(python3 -c "import time; print(int(time.time()))")
   local OUT
@@ -83,7 +89,7 @@ test_c2() {
   local ELAPSED=$(( END - START ))
 
   if echo "$OUT" | grep -q "could not acquire lock" && (( ELAPSED >= 5 && ELAPSED <= 10 )); then
-    pass 2 "stale lock: tool dies after its 5 s no-progress deadline (elapsed=${ELAPSED}s)"
+    pass 2 "stale lock without a pid file: tool dies after its 5 s no-progress deadline (elapsed=${ELAPSED}s)"
   else
     fail 2 "stale lock timeout" "elapsed=${ELAPSED}s out='$OUT'"
   fi
@@ -558,6 +564,170 @@ os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/w.md "bod
   fi
 }
 
+# ── C10: a writer killed while it takes the lock does not block the scope ────
+# Invariant: a lockdir that holds neither an owner file nor a pid file is free.
+# Writer A is ended by KILL between its mkdir and its owner file: its mkdir is
+# a stand-in that creates the lockdir, says so, then pauses, and A is killed
+# during the pause.
+# What A leaves is a lockdir with nothing in it. Expected: writer B, started
+# after, takes the lock, writes and removes the lockdir. When a failed mkdir
+# ended the attempt, B found the directory there, never looked further, and
+# died after the 5 s bound, as did every writer of the scope after it
+# (measured 2026-11-13: exit 2 after 5.1 s, nothing written).
+test_c10() {
+  local real_mkdir; real_mkdir="$(command -v mkdir)"
+  if [[ "$real_mkdir" != /* ]]; then
+    skip 10 "mkdir is not an external command here ($real_mkdir)"
+    return
+  fi
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN_A="$ROOT/.bin-a" made="$ROOT/.a-made-lockdir" i
+  "$real_mkdir" -p "$BIN_A"
+  # Only the lockdir is paused on: mkdir -p of the lock root goes straight through.
+  printf '#!/usr/bin/env bash\ncase "$#:$1" in 1:*.lockd) %q "$1" || exit 1; : > %q; exec %q 2;; esac\nexec %q "$@"\n' \
+    "$real_mkdir" "$made" "$(command -v sleep)" "$real_mkdir" > "$BIN_A/mkdir"
+  chmod +x "$BIN_A/mkdir"
+  local lockdir="$ROOT/.locks/killscope.lockd"
+
+  ( export PATH="$BIN_A:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec "$TOOL" create /memories/killscope/a.md "body-a" >"$ROOT/out-a" 2>&1 ) &
+  local A_PID=$!
+  for i in $(seq 1 50); do
+    [[ -e "$made" ]] && break
+    sleep 0.05
+  done
+  if [[ ! -e "$made" ]]; then
+    kill -KILL "$A_PID" 2>/dev/null; wait "$A_PID" 2>/dev/null
+    fail 10 "a writer killed while it takes the lock" "writer A did not reach its mkdir within 2.5 s: the kill would not have met it"
+    cat "$ROOT/out-a"
+    return
+  fi
+  kill -KILL "$A_PID"; wait "$A_PID" 2>/dev/null
+  local left; left="$(ls -A "$lockdir" 2>/dev/null | tr '\n' ' ')"
+  if [[ ! -d "$lockdir" || -n "$left" ]]; then
+    fail 10 "a writer killed while it takes the lock" "A did not leave an empty lockdir (found: ${left:-no lockdir}): the case was not produced"
+    return
+  fi
+  local rc_b=0
+  MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+    "$TOOL" create /memories/killscope/b.md "body-b" >"$ROOT/out-b" 2>&1 || rc_b=$?
+  local a_written=0 b_written=0 still=0
+  [[ -f "$ROOT/killscope/a.md" ]] && a_written=1
+  [[ -f "$ROOT/killscope/b.md" ]] && b_written=1
+  [[ -e "$lockdir" ]] && still=1
+  if [[ $rc_b -eq 0 && $a_written -eq 0 && $b_written -eq 1 && $still -eq 0 ]]; then
+    pass 10 "writer killed between mkdir and its owner file: the next writer takes the lock, writes, releases"
+  else
+    fail 10 "a writer killed while it takes the lock" \
+      "exit_b=$rc_b a_written=$a_written b_written=$b_written lockdir_left=$still (expected 0, 0, 1, 0)"
+    cat "$ROOT/out-b"
+  fi
+}
+
+# ── C11: a lock held in the format before the owner file is not entered ──────
+# Invariant: a lockdir that holds a pid file is not free, owner file or not.
+# The tool as it was before the owner file took the lock with mkdir and wrote
+# only the pid file; a writer of this version that met such a holder, live,
+# must wait for it as it did before C10's change. The holder here is a live
+# process that keeps the lock past the 5 s bound. Expected: the writer dies
+# with "could not acquire lock", writes nothing, and the holder's lockdir and
+# pid file are as they were. With "a lockdir without an owner file is free",
+# the writer entered beside the live holder.
+test_c11() {
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local lockdir="$ROOT/.locks/oldscope.lockd"
+  mkdir -p "$lockdir"
+  sleep 30 &
+  local holder=$!
+  printf '%s' "$holder" > "$lockdir/pid"
+
+  local rc=0
+  MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1 \
+    "$TOOL" create /memories/oldscope/w.md "body-w" >"$ROOT/out-w" 2>&1 || rc=$?
+  local written=0 kept=0 refused=0
+  [[ -f "$ROOT/oldscope/w.md" ]] && written=1
+  [[ "$(cat "$lockdir/pid" 2>/dev/null)" == "$holder" && ! -e "$lockdir/owner" ]] && kept=1
+  grep -q "could not acquire lock" "$ROOT/out-w" && refused=1
+  kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+
+  if [[ $rc -ne 0 && $written -eq 0 && $kept -eq 1 && $refused -eq 1 ]]; then
+    pass 11 "live holder with a pid file and no owner file: the writer waits, then dies, nothing written, the lock untouched"
+  else
+    fail 11 "a lock held in the format before the owner file" \
+      "exit=$rc written=$written lock_untouched=$kept refused=$refused (expected non-zero, 0, 1, 1)"
+    cat "$ROOT/out-w"
+  fi
+}
+
+# Writes, in <bindir>, an mv that pauses <seconds> after it has moved a lock's
+# pid file (the claim of _lock_reclaim_dead) and says so by creating <claimed>,
+# and an rmdir that says it was called by creating <rmdir_called>. Any other
+# mv goes straight to the real one.
+_reclaimer_standins() {
+  local bindir="$1" seconds="$2" claimed="$3" rmdir_called="$4"
+  printf '#!/usr/bin/env bash\ncase "$#:$1" in 2:*.lockd/pid) %q "$@" || exit 1; : > %q; exec %q %s;; esac\nexec %q "$@"\n' \
+    "$(command -v mv)" "$claimed" "$(command -v sleep)" "$seconds" "$(command -v mv)" > "$bindir/mv"
+  printf '#!/usr/bin/env bash\n: > %q\nexec %q "$@"\n' "$rmdir_called" "$(command -v rmdir)" > "$bindir/rmdir"
+  chmod +x "$bindir/mv" "$bindir/rmdir"
+}
+
+# ── C12: a reclaimer does not remove the owner file of a writer ──────────────
+# Invariant: _lock_reclaim_dead removes an owner file only when it is the dead
+# holder's. The lock is a dead holder's in the format before the owner file: a
+# pid file, no owner file. Reclaimer R claims the pid file, and pauses there
+# (its mv is a stand-in). The lockdir then holds nothing, so writer W, started
+# during the pause and slowed inside its critical section, takes the lock
+# (C10's rule). R resumes. Expected: when R reaches its rmdir, W's owner file
+# is still there; W then finishes, R takes the lock after it, both write. With
+# an rm of the owner file whatever it held, R removed W's: the lockdir was
+# left with W's pid file alone, and one mistaken claim of that pid file by a
+# third waiter made it empty under W (review of pull request 266).
+test_c12() {
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN_R="$ROOT/.bin-r" BIN_W="$ROOT/.bin-w" claimed="$ROOT/.r-claimed" rmdir_called="$ROOT/.r-rmdir" i
+  mkdir -p "$BIN_R" "$BIN_W"
+  _reclaimer_standins "$BIN_R" 2 "$claimed" "$rmdir_called"
+  _slow_standin "$BIN_W/mv" 3 "$(command -v mv)"
+  local lockdir="$ROOT/.locks/oldscope.lockd" dead
+  ( : ) & dead=$!
+  wait "$dead"
+  mkdir -p "$lockdir"
+  printf '%s' "$dead" > "$lockdir/pid"
+
+  ( export PATH="$BIN_R:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec "$TOOL" create /memories/oldscope/r.md "body-r" >"$ROOT/out-r" 2>&1 ) &
+  local R_PID=$!
+  for i in $(seq 1 50); do [[ -e "$claimed" ]] && break; sleep 0.05; done
+  ( export PATH="$BIN_W:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec "$TOOL" create /memories/oldscope/w.md "body-w" >"$ROOT/out-w" 2>&1 ) &
+  local W_PID=$! w_took=0 w_kept=0
+  for i in $(seq 1 30); do
+    [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$W_PID" ]] && { w_took=1; break; }
+    sleep 0.05
+  done
+  for i in $(seq 1 80); do [[ -e "$rmdir_called" ]] && break; sleep 0.05; done
+  # R has run its rm and reached its rmdir; W is still inside its critical section.
+  kill -0 "$W_PID" 2>/dev/null && [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$W_PID" ]] && w_kept=1
+  local rc_w=0 rc_r=0
+  wait "$W_PID" || rc_w=$?
+  wait "$R_PID" || rc_r=$?
+
+  local produced=0 written=0 left=0
+  [[ -e "$claimed" && -e "$rmdir_called" && $w_took -eq 1 ]] && produced=1
+  [[ -f "$ROOT/oldscope/w.md" && -f "$ROOT/oldscope/r.md" ]] && written=1
+  [[ -e "$lockdir" ]] && left=1
+  if [[ $produced -eq 1 && $w_kept -eq 1 && $rc_w -eq 0 && $rc_r -eq 0 && $written -eq 1 && $left -eq 0 ]]; then
+    pass 12 "writer that takes a lock being reclaimed keeps its owner file; both write, lock released"
+  else
+    fail 12 "a reclaimer and a writer on a dead holder's lock of the earlier format" \
+      "case_produced=$produced w_owner_kept=$w_kept exit_w=$rc_w exit_r=$rc_r both_written=$written lockdir_left=$left"
+    cat "$ROOT/out-w" "$ROOT/out-r"
+  fi
+}
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 echo "=== Memory Concurrency Audit Tests ==="
@@ -579,6 +749,9 @@ test_c8 8a TERM 143  # source: 128 + SIGTERM (15)
 test_c8 8b INT 130   # source: 128 + SIGINT (2)
 test_c9 9a TERM 143  # source: 128 + SIGTERM (15)
 test_c9 9b INT 130   # source: 128 + SIGINT (2)
+test_c10
+test_c11
+test_c12
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPS skipped ==="
