@@ -13,10 +13,19 @@ either and are not constrained.
 
 Two copies are held: the one this repository's reviews run, and the one
 `templates/ci/review` carries, Cortex's files byte for byte.
+
+The copy of `templates/ci/native/assets` is not one of them. That template
+is pinned as a whole to an earlier Cortex commit (`templates/ci/native/
+source.json`), whose command file has the header; the last test holds that
+pin, so that the day the native template is brought to a Cortex commit after
+ADR-1139 the header goes with it, and not before, by a hand edit that would
+leave the pin behind.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import shlex
 from pathlib import Path
@@ -62,3 +71,13 @@ def test_the_two_copies_are_the_same_file() -> None:
 def test_the_reader_of_the_frontmatter_sees_a_header() -> None:
     keys = frontmatter_keys("---\nallowed-tools: Bash(gh pr view:*)\ndescription: x\n---\nbody\n")
     assert keys == ["allowed-tools", "description"]
+
+
+def test_the_native_template_copy_is_the_one_its_pin_names() -> None:
+    native = ROOT / "templates/ci/native"
+    pinned = json.loads((native / "source.json").read_text())["assets"][".claude/commands/review-pr.md"]
+    copy = (native / "assets/.claude/commands/review-pr.md").read_bytes()
+    assert hashlib.sha256(copy).hexdigest() == pinned
+    # The pinned file is the one with the header: this is what a review run
+    # from the native template loads.
+    assert "allowed-tools" in frontmatter_keys(copy.decode())
