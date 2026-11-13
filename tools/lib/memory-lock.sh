@@ -15,6 +15,8 @@
 #   first on PATH.
 # I-NEW (liveness): a SIGKILL'd holder does not permanently block writers.
 #   Source: kill -0 PID liveness check (POSIX kill(2), signal 0 semantics).
+#   Not held for a holder killed between its owner file and its pid write:
+#   memory/concurrency-audit.md, Appendix: Owner file, Limits.
 # I-NEW-2 (no false reclaim): a slow but live holder is NEVER stolen from.
 #   Source: kill -0 returns 0 for live processes; reclaim requires confirmed death.
 # Portability note: Option A (kill -0) chosen over Option B (proc start-time)
@@ -31,7 +33,7 @@
 # in the pid file changes): each handoff resets the deadline, so N writers
 # legitimately serialized behind short critical sections are not killed by the
 # stuck-lock bound, while a lock that is stuck (holder never changes, or the
-# lockdir has no pid file at all) still dies after 5 s.
+# lockdir has an owner file and no pid file) still dies after 5 s.
 # $SECONDS (bash 3.2+ builtin) has whole-second granularity, so a >= compare
 # could fire after only timeout-1 s of real time; the strict > guarantees at
 # least lock_timeout_s real seconds of spinning before the die.
@@ -86,9 +88,19 @@ _lock_reclaim_dead() {
 # win. A process that loses it goes back to waiting and removes nothing: if
 # its mkdir was the one that created the directory, the directory is now the
 # winner's.
+# The directory only has to be there, whoever made it. A writer killed
+# between its mkdir and its owner file leaves a lockdir with nothing in it;
+# when a failed mkdir ended the attempt, no writer took that lockdir again and
+# each one died after the 5 s bound (scripts/test-memory-concurrency.sh C10).
+# A lockdir that holds a pid file is not taken this way: with no owner file
+# beside it, that pid file is the lock of a holder running the tool as it was
+# before the owner file (scripts/test-memory-stale-lock.sh S2), and liveness
+# decides (_lock_reclaim_dead).
 _lock_try_acquire() {
   local lockdir="$1"
-  mkdir "$lockdir" 2>/dev/null || return 1
+  if ! mkdir "$lockdir" 2>/dev/null; then
+    [[ -d "$lockdir" && ! -e "$lockdir/pid" ]] || return 1
+  fi
   ( set -o noclobber; printf '%s' "$$" > "$lockdir/owner" ) 2>/dev/null || return 1
   # Holder PID, so that waiters can check liveness.
   printf '%s' "$$" > "$lockdir/pid"
@@ -112,7 +124,9 @@ _lock_release() {
 # 5 s without progress. The signal is looked for right after the pause, before
 # the rest of the tick: looked for at the next tick only, a signal let the
 # tick go on to reclaim a dead holder's lock, or to end as the die of a stuck
-# lock (scripts/test-memory-concurrency.sh C9).
+# lock (scripts/test-memory-concurrency.sh C9). A signal received after that
+# check does not stop the tick it falls in: memory/concurrency-audit.md,
+# Appendix: Signals, Limits.
 _lock_take() {
   local lockdir="$1" scope="$2"
   local pid_file="$lockdir/pid"
@@ -156,7 +170,7 @@ _lock_take() {
 # take them with their default action: memory/concurrency-audit.md, Appendix:
 # Signals, Limits.) Taken with their default action while the lock was being taken,
 # they ended the shell during mkdir, which went on and left a lockdir with no
-# owner and no pid file: nothing reclaims it, and every later writer of the
+# owner and no pid file: no writer took it then, and every later writer of the
 # scope died after the 5 s bound (scripts/test-memory-concurrency.sh C7). Held
 # while the command runs, they do not release the lock under it, and the
 # release runs once: before, the trap released the lock on the signal, the
