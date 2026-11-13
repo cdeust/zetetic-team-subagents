@@ -399,6 +399,12 @@ os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/a.md "bod
     [[ -e "$called" ]] && break
     sleep 0.1
   done
+  if [[ ! -e "$called" ]]; then
+    kill -KILL "$A_PID" 2>/dev/null; wait "$A_PID" 2>/dev/null
+    fail "$label" "$signal while taking the lock" "the mkdir stand-in was not called within 5 s: the race did not take place"
+    cat "$ROOT/out-a"
+    return
+  fi
   kill -"$signal" "$A_PID"
   local rc_a=0; wait "$A_PID" || rc_a=$?
   for i in $(seq 1 30); do
@@ -431,13 +437,21 @@ os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/a.md "bod
 # signals held and no check in the wait, W would go on waiting, take the lock
 # once A released it, and only then leave.
 # W is started through python3 for the reason given at C6.
+# This test guards the check of the signal in the wait; it does not reproduce
+# a defect of the lock as it was, where the default action ended the waiter at
+# once. W's sleep is a stand-in that says when W pauses in its wait: the signal
+# is sent then, and the test fails when A never held the lock or W never
+# waited, where a fixed pause could let it pass without the wait.
 test_c8() {
   local label="$1" signal="$2" expected="$3"
   local ROOT; ROOT=$(mktemp -d)
   trap 'rm -rf "$ROOT"' RETURN
-  local BIN_A="$ROOT/.bin-a"
-  mkdir -p "$BIN_A"
+  local BIN_A="$ROOT/.bin-a" BIN_W="$ROOT/.bin-w" waiting="$ROOT/.w-waiting"
+  mkdir -p "$BIN_A" "$BIN_W"
   _slow_standin "$BIN_A/mv" 3 "$(command -v mv)"
+  printf '#!/usr/bin/env bash\n[[ "${1:-}" == 0.1 ]] && : > %q\nexec %q "$@"\n' \
+    "$waiting" "$(command -v sleep)" > "$BIN_W/sleep"
+  chmod +x "$BIN_W/sleep"
   local lockdir="$ROOT/.locks/sigscope.lockd"
 
   ( export PATH="$BIN_A:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
@@ -447,12 +461,27 @@ test_c8() {
     [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$A_PID" ]] && break
     sleep 0.1
   done
-  ( export MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+  if [[ "$(cat "$lockdir/owner" 2>/dev/null)" != "$A_PID" ]]; then
+    kill -KILL "$A_PID" 2>/dev/null; wait "$A_PID" 2>/dev/null
+    fail "$label" "$signal while waiting for the lock" "writer A did not take the lock within 5 s: there was nothing to wait for"
+    cat "$ROOT/out-a"
+    return
+  fi
+  ( export PATH="$BIN_W:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
     exec python3 -c 'import os, signal, sys
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/w.md "body-w" >"$ROOT/out-w" 2>&1 ) &
   local W_PID=$!
-  sleep 0.5  # W is in its wait: five of its 0.1 s spin ticks
+  for i in $(seq 1 50); do
+    [[ -e "$waiting" ]] && break
+    sleep 0.05
+  done
+  if [[ ! -e "$waiting" ]]; then
+    kill -KILL "$W_PID" "$A_PID" 2>/dev/null; wait "$W_PID" "$A_PID" 2>/dev/null
+    fail "$label" "$signal while waiting for the lock" "writer W did not reach its wait within 2.5 s: the signal would not have met the wait"
+    cat "$ROOT/out-w"
+    return
+  fi
   kill -"$signal" "$W_PID"
   local rc_w=0; wait "$W_PID" || rc_w=$?
   local a_held_at_w_exit=0
@@ -469,6 +498,63 @@ os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/w.md "bod
     fail "$label" "$signal while waiting for the lock" \
       "exit=$rc_w (expected $expected) w_written=$w_written holder_still_held_at_exit=$a_held_at_w_exit holder_exit=$rc_a a_written=$a_written lockdir_left=$left"
     cat "$ROOT/out-a" "$ROOT/out-w"
+  fi
+}
+
+# ── C9: INT or TERM during the pause of a waiter that could reclaim ──────────
+# Invariant: a signal received during a waiter's pause ends the waiter before
+# the rest of its tick. The lock is a dead holder's (a lockdir whose owner and
+# pid files name a process that has ended), so the tick that follows the pause
+# would reclaim it. W's sleep is a stand-in that says when W pauses and makes
+# the pause last 1 s; the signal is sent then. Expected: W exits 128 + the
+# signal number, the dead holder's lock is still there, and the audit log has
+# no stale_lock_reclaimed. With the signal looked for only at the next tick, W
+# reclaimed the lock first (review of pull request 263).
+# W is started through python3 for the reason given at C6.
+test_c9() {
+  local label="$1" signal="$2" expected="$3"
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN_W="$ROOT/.bin-w" pausing="$ROOT/.w-pausing"
+  mkdir -p "$BIN_W"
+  printf '#!/usr/bin/env bash\nif [[ "${1:-}" == 0.1 ]]; then : > %q; exec %q 1; fi\nexec %q "$@"\n' \
+    "$pausing" "$(command -v sleep)" "$(command -v sleep)" > "$BIN_W/sleep"
+  chmod +x "$BIN_W/sleep"
+  local lockdir="$ROOT/.locks/sigscope.lockd" dead i
+  ( : ) & dead=$!
+  wait "$dead"
+  mkdir -p "$lockdir"
+  printf '%s' "$dead" > "$lockdir/owner"
+  printf '%s' "$dead" > "$lockdir/pid"
+
+  ( export PATH="$BIN_W:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec python3 -c 'import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/w.md "body-w" >"$ROOT/out-w" 2>&1 ) &
+  local W_PID=$!
+  for i in $(seq 1 50); do
+    [[ -e "$pausing" ]] && break
+    sleep 0.05
+  done
+  if [[ ! -e "$pausing" ]]; then
+    kill -KILL "$W_PID" 2>/dev/null; wait "$W_PID" 2>/dev/null
+    fail "$label" "$signal during a waiter's pause" "writer W did not reach its pause within 2.5 s: the signal would not have met it"
+    cat "$ROOT/out-w"
+    return
+  fi
+  kill -"$signal" "$W_PID"
+  local rc_w=0; wait "$W_PID" || rc_w=$?
+
+  local w_written=0 kept=0 reclaimed=0
+  [[ -f "$ROOT/sigscope/w.md" ]] && w_written=1
+  [[ "$(cat "$lockdir/pid" 2>/dev/null)" == "$dead" ]] && kept=1
+  if [[ -f "$ROOT/.audit.log" ]] && grep -q "stale_lock_reclaimed" "$ROOT/.audit.log"; then reclaimed=1; fi
+  if [[ $rc_w -eq $expected && $w_written -eq 0 && $kept -eq 1 && $reclaimed -eq 0 ]]; then
+    pass "$label" "$signal during a waiter's pause: exit $expected, nothing written, the dead holder's lock not reclaimed"
+  else
+    fail "$label" "$signal during a waiter's pause" \
+      "exit=$rc_w (expected $expected) w_written=$w_written dead_lock_kept=$kept reclaimed=$reclaimed"
+    cat "$ROOT/out-w"
   fi
 }
 
@@ -491,6 +577,8 @@ test_c7 7a TERM 143  # source: 128 + SIGTERM (15)
 test_c7 7b INT 130   # source: 128 + SIGINT (2)
 test_c8 8a TERM 143  # source: 128 + SIGTERM (15)
 test_c8 8b INT 130   # source: 128 + SIGINT (2)
+test_c9 9a TERM 143  # source: 128 + SIGTERM (15)
+test_c9 9b INT 130   # source: 128 + SIGINT (2)
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPS skipped ==="

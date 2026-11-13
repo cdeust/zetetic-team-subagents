@@ -427,8 +427,9 @@ keeps the lock.
 
 - A holder killed (KILL) between `mkdir` and its pid write leaves a lockdir
   with no pid file, with or without an owner file. Writers die after 5 s, as
-  before (C2). INT and TERM no longer do this: they are held while the lock is
-  taken (Appendix: Signals, C7).
+  before (C2). INT and TERM sent to the tool's shell no longer do this: they
+  are held while the lock is taken (Appendix: Signals, C7). Sent to the whole
+  process group, they still can (same appendix, Limits).
 - A process running the tool as it was before this patch, waiting on a dead
   holder of this version, takes the pid file and cannot remove the lockdir
   (the owner file is in it). It dies after 5 s, and so does every later writer
@@ -498,8 +499,19 @@ case; `_lock_release` removes nothing when no lock is held.
 - A command that never returns keeps the lock, and INT or TERM do not end it;
   KILL does, and the lock is then reclaimed by the next waiter (Appendix:
   Stale-Lock-Recovery).
-- A waiter that receives a signal leaves at its next spin tick, up to 0.1 s
-  later, not at once.
+- A waiter that receives a signal leaves once its pause of 0.1 s is over, not
+  at once. The signal is looked for right after the pause, so the tick does
+  not go on to reclaim a lock or to die as on a stuck lock (review of pull
+  request 263, C9). A signal received in the few commands between that check
+  and the next pause is seen after that pause.
+- A signal sent to the whole process group (Ctrl-C, `kill -- -PGID`) also
+  reaches the `mkdir` command and the subshell that creates the owner file.
+  They are children: the handlers are not theirs, and the signal ends them
+  with its default action. Ended after the directory or the owner file was
+  created and before they returned, they leave a lockdir with no owner or no
+  pid file, which nothing reclaims. Found by reading the code in the review
+  of pull request 263, not reproduced. What C7 shows is the case of a signal
+  sent to the shell alone.
 - KILL is not held. Between `mkdir` and the pid write it leaves a lockdir no
   waiter can reclaim (Appendix: Owner file, Limits).
 - A signal sent to the whole process group also reaches the commands the tool
@@ -507,4 +519,5 @@ case; `_lock_release` removes nothing when no lock is held.
   failure does, with the lock released on exit.
 
 Tests, in `scripts/test-memory-concurrency.sh`, each for TERM (a) and INT
-(b): C6 while the command runs, C7 while the lock is taken, C8 while waiting.
+(b): C6 while the command runs, C7 while the lock is taken, C8 while waiting
+for a live holder, C9 during the pause of a waiter that could reclaim.

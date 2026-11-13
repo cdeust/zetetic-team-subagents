@@ -106,35 +106,24 @@ _lock_release() {
   rmdir "$lockdir" 2>/dev/null || true
 }
 
-# Usage: with_lock <scope> <command> [args...]  — runs the command in this shell
-# while holding the scope's lock; returns the command's status.
-with_lock() {
-  local scope="$1"; shift
-  # INT and TERM are held from before the lock is taken until the command has
-  # returned. Taken with their default action while the lock was being taken,
-  # they ended the shell during mkdir, which went on and left a lockdir with
-  # no owner and no pid file: nothing reclaims it, and every later writer of
-  # the scope died after the 5 s bound (scripts/test-memory-concurrency.sh C7).
-  # Held while the command runs, they do not release the lock under it, and
-  # the release runs once: before, the trap released the lock on the signal,
-  # the command ran on without it, and the release ran a second time, on the
-  # next holder's files (C6).
-  _LOCK_HELD=""
-  _LOCK_SIGNAL=0
-  trap '_LOCK_SIGNAL=130' INT   # source: 128 + SIGINT (2), bash manual, "Exit Status"
-  trap '_LOCK_SIGNAL=143' TERM  # source: 128 + SIGTERM (15), same section
-  trap '_lock_release' EXIT     # the command may call exit itself (a duplicate, a die)
-  mkdir -p "$LOCK_DIR"
-  local lockdir="$LOCK_DIR/$scope.lockd"
+# Wait until this shell holds the lock of <scope>: returns once
+# _lock_try_acquire or a reclaim has succeeded. Leaves the tool, nothing held
+# and nothing written, on a signal received while waiting, and with die after
+# 5 s without progress. The signal is looked for right after the pause, before
+# the rest of the tick: looked for at the next tick only, a signal let the
+# tick go on to reclaim a dead holder's lock, or to end as the die of a stuck
+# lock (scripts/test-memory-concurrency.sh C9).
+_lock_take() {
+  local lockdir="$1" scope="$2"
   local pid_file="$lockdir/pid"
-  local rc=0 holder_pid reclaimed
+  local holder_pid reclaimed
   local lock_timeout_s=5  # source: memory/concurrency-audit.md §1 (bounded 5 s die)
   local spin_start=$SECONDS
   local last_holder=""
   while ! _lock_try_acquire "$lockdir"; do
-    # A signal received while waiting: nothing is held, nothing is written.
-    if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
     sleep 0.1  # spin tick; source: memory/concurrency-audit.md §1 (100 ms interval)
+    # Nothing is held here: nothing is written.
+    if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
     if [[ -f "$pid_file" ]]; then
       holder_pid=$(cat "$pid_file" 2>/dev/null || true)
       if [[ -n "$holder_pid" && "$holder_pid" != "$last_holder" ]]; then
@@ -151,6 +140,39 @@ with_lock() {
     fi
     (( SECONDS - spin_start > lock_timeout_s )) && die "could not acquire lock on scope '$scope' after ${lock_timeout_s}s"
   done
+  # The loop's status is that of the last command of its body, the deadline
+  # test, which is false on every tick but the last: without this line the
+  # function failed once it had waited, and errexit ended the tool, silently
+  # and with the lock taken.
+  return 0
+}
+
+# Usage: with_lock <scope> <command> [args...]  — runs the command in this shell
+# while holding the scope's lock; returns the command's status.
+#
+# INT and TERM sent to this shell are held from before the lock is taken until
+# the command has returned. (Sent to the whole process group, as Ctrl-C is,
+# they also reach mkdir and the subshell that creates the owner file, which
+# take them with their default action: memory/concurrency-audit.md, Appendix:
+# Signals, Limits.) Taken with their default action while the lock was being taken,
+# they ended the shell during mkdir, which went on and left a lockdir with no
+# owner and no pid file: nothing reclaims it, and every later writer of the
+# scope died after the 5 s bound (scripts/test-memory-concurrency.sh C7). Held
+# while the command runs, they do not release the lock under it, and the
+# release runs once: before, the trap released the lock on the signal, the
+# command ran on without it, and the release ran a second time, on the next
+# holder's files (C6).
+with_lock() {
+  local scope="$1"; shift
+  _LOCK_HELD=""
+  _LOCK_SIGNAL=0
+  trap '_LOCK_SIGNAL=130' INT   # source: 128 + SIGINT (2), bash manual, "Exit Status"
+  trap '_LOCK_SIGNAL=143' TERM  # source: 128 + SIGTERM (15), same section
+  trap '_lock_release' EXIT     # the command may call exit itself (a duplicate, a die)
+  mkdir -p "$LOCK_DIR"
+  local lockdir="$LOCK_DIR/$scope.lockd"
+  local rc=0
+  _lock_take "$lockdir" "$scope"
   _LOCK_HELD="$lockdir"
   # A signal received while the lock was being taken: the command is not
   # started. The EXIT trap releases the lock this shell now holds.
