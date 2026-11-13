@@ -295,6 +295,77 @@ STANDIN
   fi
 }
 
+# Writes an executable at <path> that pauses <seconds>, then runs the real <command>.
+_slow_standin() {
+  local path="$1" seconds="$2" real="$3"
+  printf '#!/usr/bin/env bash\nsleep %s\nexec %q "$@"\n' "$seconds" "$real" > "$path"
+  chmod +x "$path"
+}
+
+# ── C6: INT or TERM during the critical section ──────────────────────────────
+# Invariant: a signal does not release the lock while the command runs, and the
+# release runs once. Writer A is slowed inside its critical section and receives
+# the signal while it holds the lock; writer W waits on the same scope. Expected:
+# A finishes its write under the lock and exits 128 + the signal number, then W
+# takes the lock and still holds it. With a trap that released on the signal, A
+# went on without the lock, W took it, and A's second release removed W's owner
+# file, pid file and lockdir while W was inside its own critical section.
+# A is started through python3, which restores the default action of SIGINT: a
+# non-interactive shell starts a background command with SIGINT ignored, and
+# bash cannot trap a signal that was ignored when it started.
+# The pauses order the events, they are not tuned: A pauses 1 s before its
+# rename and 1 s in the checksum after it, ten times W's 0.1 s spin tick, so
+# that in the old behaviour W held the lock before A released a second time;
+# W pauses 3 s before its rename, longer than the 2 s A has left, so that W is
+# still inside its critical section when the check reads the owner file.
+test_c6() {
+  local label="$1" signal="$2" expected="$3"
+  local ROOT; ROOT=$(mktemp -d)
+  trap 'rm -rf "$ROOT"' RETURN
+  local BIN_A="$ROOT/.bin-a" BIN_W="$ROOT/.bin-w" sum
+  mkdir -p "$BIN_A" "$BIN_W"
+  _slow_standin "$BIN_A/mv" 1 "$(command -v mv)"
+  _slow_standin "$BIN_W/mv" 3 "$(command -v mv)"
+  for sum in shasum sha256sum; do
+    if command -v "$sum" >/dev/null 2>&1; then _slow_standin "$BIN_A/$sum" 1 "$(command -v "$sum")"; fi
+  done
+  local lockdir="$ROOT/.locks/sigscope.lockd"
+
+  ( export PATH="$BIN_A:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec python3 -c 'import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.execv(sys.argv[1], sys.argv[1:])' "$TOOL" create /memories/sigscope/a.md "body-a" >"$ROOT/out-a" 2>&1 ) &
+  local A_PID=$! i
+  for i in $(seq 1 50); do
+    [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$A_PID" ]] && break
+    sleep 0.1
+  done
+  ( export PATH="$BIN_W:$PATH" MEMORY_ROOT="$ROOT" MEMORY_REGISTRY="$REGISTRY" MEMORY_NO_SYNC=1 MEMORY_NO_ACL=1
+    exec "$TOOL" create /memories/sigscope/w.md "body-w" >"$ROOT/out-w" 2>&1 ) &
+  local W_PID=$!
+  kill -"$signal" "$A_PID"
+  local rc_a=0; wait "$A_PID" || rc_a=$?
+
+  local w_holds=0
+  for i in $(seq 1 20); do
+    if [[ "$(cat "$lockdir/owner" 2>/dev/null)" == "$W_PID" ]]; then w_holds=1; break; fi
+    sleep 0.1
+  done
+  wait "$W_PID" || true
+
+  local a_written=0 w_written=0 left=0
+  [[ -f "$ROOT/sigscope/a.md" ]] && a_written=1
+  [[ -f "$ROOT/sigscope/w.md" ]] && w_written=1
+  [[ -e "$lockdir" ]] && left=1
+  if [[ $rc_a -eq $expected && $a_written -eq 1 && $w_holds -eq 1 && $w_written -eq 1 && $left -eq 0 ]]; then
+    pass "$label" "$signal while holding the lock: write finished under the lock, exit $expected, next holder kept its lock"
+  else
+    fail "$label" "$signal while holding the lock" \
+      "exit=$rc_a (expected $expected) a_written=$a_written next_holder_kept_lock=$w_holds w_written=$w_written lockdir_left=$left"
+    cat "$ROOT/out-a" "$ROOT/out-w"
+  fi
+}
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 echo "=== Memory Concurrency Audit Tests ==="
@@ -308,6 +379,8 @@ test_c3_with_fix
 test_c3_concurrent_drain
 test_c4
 test_c5
+test_c6 6a TERM 143  # source: 128 + SIGTERM (15)
+test_c6 6b INT 130   # source: 128 + SIGINT (2)
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed, $SKIPS skipped ==="

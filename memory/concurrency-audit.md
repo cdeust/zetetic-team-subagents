@@ -251,8 +251,9 @@ reasonable process creation rate. The consequence of a false negative (treating
 a live process as dead) is protected by I-NEW-2: `rmdir` on an actively held
 lockdir will fail because the holder wrote its PID and holds the dir open
 conceptually — but more critically, the `rmdir` is still atomic; if the
-"live" new PID holder has already re-acquired (impossible since `mkdir` is
-exclusive), the `rmdir` simply fails and we spin again.
+"live" new PID holder has already re-acquired (impossible while the lock is
+held: since 2026-11-12 the owner file decides, see Appendix: Owner file), the
+`rmdir` simply fails and we spin again.
 
 ### Sequence diagrams
 
@@ -397,9 +398,10 @@ With GNU mkdir 9.4: 0 of 60 before, 0 of 30 after.
 `_lock_try_acquire` runs `mkdir $lockdir`, then creates `$lockdir/owner` in a
 subshell under `set -o noclobber`. bash opens the file itself: measured with
 strace on bash 5.2.21, `openat(..., O_WRONLY|O_CREAT|O_EXCL, 0666)`. A process
-whose `mkdir` reported success without creating anything loses that open and
-goes back to waiting; it has created nothing. The pid file is written after,
-for the liveness check, and decides nothing.
+that loses that open goes back to waiting and removes nothing. It may be the
+one whose `mkdir` reported success without creating anything, or the one whose
+`mkdir` created the directory: the directory is then the winner's. The pid file
+is written after, for the liveness check, and decides nothing.
 
 Release removes the pid file, then the owner file, then the directory. A
 verified reclaim of a dead holder removes the dead holder's owner file with
@@ -418,14 +420,58 @@ keeps the lock.
   pid file, with or without an owner file. Writers die after 5 s, as before
   (C2).
 - A process running the tool as it was before this patch, waiting on a dead
-  holder of this version, cannot remove the lockdir (the owner file is in it)
-  and dies after 5 s.
-- The `trap` on INT and TERM runs the release while the command is still
-  running, and the normal path runs it again when the command returns
-  (measured 2026-11-12, bash 5.2.21, a TERM sent during the command: the
-  release ran twice and the command ran to its end). That was so before this
-  patch and is not changed by it.
+  holder of this version, takes the pid file and cannot remove the lockdir
+  (the owner file is in it). It dies after 5 s, and so does every later writer
+  of either version: nothing reclaims a lockdir without a pid file. The scope
+  stays locked until the lockdir is removed by hand (measured 2026-11-13: the
+  old waiter, then a writer of this version, both "could not acquire lock",
+  the lockdir left with its owner file alone).
+- Until 2026-11-13 the `trap` on INT and TERM ran the release while the command
+  was still running, and the normal path ran it again when the command
+  returned. See Appendix: Signals.
 
 Tests: C5 (`scripts/test-memory-concurrency.sh`) runs the ten writers under the
 stand-in; S5 (`scripts/test-memory-stale-lock.sh`) reclaims a dead holder that
 left an owner file.
+
+---
+
+## Appendix: Signals
+
+Patch date: 2026-11-13
+
+### What failed
+
+`with_lock` set one handler for EXIT, INT and TERM: the release. bash runs a
+trap handler and then goes on with the script. A TERM or INT received while
+the command ran therefore released the lock, the command ran to its end
+without it, and the normal path released a second time. If another writer
+had taken the lock in between, that second release removed its owner file,
+its pid file and the lockdir while it was inside its own critical section.
+
+Measured with C6 against the lock as it was (2026-11-13, bash 5.2.21, two
+runs, same result): writer A, slowed inside its critical section, receives
+TERM; writer W waits on the scope. A exits 0, and W's owner file is gone
+while W is still writing.
+
+### Mechanism
+
+INT and TERM are held until the command returns: the handler only records
+the signal. The lock is released once, by `_lock_release`, and the tool then
+exits with 128 + the signal number (130 for INT, 143 for TERM), the status a
+shell gives a command a signal ended. EXIT still runs the release, for a
+command that calls `exit` itself; `_lock_release` removes nothing when no
+lock is held.
+
+### Limits
+
+- A command that never returns keeps the lock, and INT or TERM do not end it;
+  KILL does, and the lock is then reclaimed by the next waiter (Appendix:
+  Stale-Lock-Recovery).
+- A signal received while the process is still waiting for the lock ends it
+  at once: the handlers are set only once the lock is held.
+- A signal sent to the whole process group also reaches the commands the tool
+  runs inside the critical section. One of them failing ends the write as any
+  failure does, with the lock released on exit.
+
+Tests: C6a (TERM) and C6b (INT) in `scripts/test-memory-concurrency.sh`.

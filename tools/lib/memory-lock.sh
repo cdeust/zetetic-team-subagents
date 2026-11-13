@@ -49,7 +49,7 @@
 #      another waiter already re-acquired.
 # Serialization guarantee: at most one rmdir(2) removes the dentry.
 # happens-before witness: rmdir succeeds only after the dead holder's
-# process table entry is gone; our subsequent mkdir is causally after.
+# process table entry is gone; our subsequent acquisition is causally after.
 _lock_reclaim_dead() {
   local lockdir="$1" scope="$2" holder_pid="$3"
   if [[ -z "$holder_pid" ]] || kill -0 "$holder_pid" 2>/dev/null; then return 2; fi
@@ -83,13 +83,27 @@ _lock_reclaim_dead() {
 # Test-and-set of the lock. Returns 0 when this process now holds it.
 # mkdir is not the decision: see I-LOCK in the header. The decision is the
 # creation of $lockdir/owner with O_CREAT|O_EXCL, which only one process can
-# win. A process that loses it has created nothing and goes back to waiting.
+# win. A process that loses it goes back to waiting and removes nothing: if
+# its mkdir was the one that created the directory, the directory is now the
+# winner's.
 _lock_try_acquire() {
   local lockdir="$1"
   mkdir "$lockdir" 2>/dev/null || return 1
   ( set -o noclobber; printf '%s' "$$" > "$lockdir/owner" ) 2>/dev/null || return 1
   # Holder PID, so that waiters can check liveness.
   printf '%s' "$$" > "$lockdir/pid"
+}
+
+# Release the lock this shell holds: the pid file first, then the owner file,
+# then the directory. In that order a waiter can create owner only once our
+# pid file is gone. Only the first call removes anything, so the EXIT trap and
+# the normal path of with_lock can both call it.
+_lock_release() {
+  [[ -n "${_LOCK_HELD:-}" ]] || return 0
+  local lockdir="$_LOCK_HELD"
+  _LOCK_HELD=""
+  rm -f "$lockdir/pid" "$lockdir/owner" 2>/dev/null || true
+  rmdir "$lockdir" 2>/dev/null || true
 }
 
 # Usage: with_lock <scope> <command> [args...]  — runs the command in this shell
@@ -121,14 +135,20 @@ with_lock() {
     fi
     (( SECONDS - spin_start > lock_timeout_s )) && die "could not acquire lock on scope '$scope' after ${lock_timeout_s}s"
   done
-  # Release: the pid file first, then the owner file, then the directory. In
-  # that order a waiter can create owner only once our pid file is gone, so we
-  # never remove the pid file of the next holder.
-  trap 'rm -f "'"$lockdir"'/pid" "'"$lockdir"'/owner" 2>/dev/null; rmdir "'"$lockdir"'" 2>/dev/null || true' EXIT INT TERM
+  # INT and TERM are held until the command returns: the lock is not released
+  # while the command runs, and it is released once. The tool then exits with
+  # 128 + the signal number, the status a shell gives a command a signal ended.
+  # Before, the trap released the lock on the signal, the command ran on
+  # without it, and the release ran a second time, on the next holder's files.
+  _LOCK_HELD="$lockdir"
+  _LOCK_SIGNAL=0
+  trap '_LOCK_SIGNAL=130' INT   # source: 128 + SIGINT (2), bash manual, "Exit Status"
+  trap '_LOCK_SIGNAL=143' TERM  # source: 128 + SIGTERM (15), same section
+  trap '_lock_release' EXIT     # the command may call exit itself (a duplicate, a die)
   "$@"
   rc=$?
-  rm -f "$lockdir/pid" "$lockdir/owner" 2>/dev/null || true
-  rmdir "$lockdir" 2>/dev/null || true
+  _lock_release
   trap - EXIT INT TERM
+  if (( _LOCK_SIGNAL )); then exit "$_LOCK_SIGNAL"; fi
   return $rc
 }
