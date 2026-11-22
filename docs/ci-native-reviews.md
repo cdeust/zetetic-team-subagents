@@ -262,10 +262,17 @@ only those two paths. An incompatible resolver or an attempt to combine this
 option with `--native-review` fails before writing.
 
 The protected resolver reads the default-branch `review-subscription.yml`
-decision for the exact PR, head, review run and attempt. A missing or pending
-decision for the latest run holds the merge. Every provider selected for that
-head by a trusted decision must approve, and each provider's latest current
-admission must have a successful `PR Review` step on the admitted attempt.
+decision for the exact PR, head, review run and attempt. The source attempt's
+successful `Claude review budget` job must report exactly one successful
+`Subscription decision run <id>` step. The resolver reads that route run
+directly and requires its first attempt to have succeeded on the default
+branch. A missing or pending decision for the latest source run holds the
+merge.
+
+Every provider selected for the head by a trusted decision must approve. Each
+provider's latest current admission must have a successful source run,
+`PR Review` job step, and independently successful verdict verification job
+and steps on the admitted attempt.
 
 For native Codex, the resolver reads all GitHub GraphQL comment pages and
 verifies the connector's Bot ID, author and last editor, the open PR's exact

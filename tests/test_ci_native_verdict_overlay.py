@@ -82,6 +82,21 @@ def review_job(name, *, attempt=1, conclusion="success"):
     }
 
 
+VERIFICATION = {
+    "Claude review": ("Verify Claude review verdict", ["Verify the verdict for this run"]),
+    "Codex GitHub review": ("Verify native Codex review verdict",
+                            ["Read the OpenAI verdict from GitHub again", "Enforce the code review"]),
+}
+
+
+def verification_job(job):
+    name, steps = VERIFICATION[job["name"]]
+    return {
+        **job, "id": job["id"] + 100, "name": name,
+        "steps": [{"name": step, "status": "completed", "conclusion": "success"} for step in steps],
+    }
+
+
 def summary(namespace, *, head=HEAD, unresolved=False, author=None, editor=None, status="completed"):
     data = {"code_review": {
         "commit_sha": head, "status": status, "has_any_findings": unresolved,
@@ -124,10 +139,20 @@ def route_job(choice="Request Codex", *, attempt=1, **overrides):
     }
 
 
+def budget_job(attempt, route_id=43, **overrides):
+    return {
+        **review_job("Claude review budget", attempt=attempt), "id": 200 + attempt,
+        "steps": [{"name": f"Subscription decision run {route_id}",
+                   "status": "completed", "conclusion": "success"}],
+        **overrides,
+    }
+
+
 class GitHubFixture:
-    def __init__(self, *, jobs, pages, run=None, routes=None, route_jobs=None, comments=()):
+    def __init__(self, *, jobs, pages, run=None, routes=None, route_jobs=None, comments=(), verifiers=None, budgets=None):
         self.run = run or review_run()
-        self.jobs = jobs
+        self.jobs = jobs + ([verification_job(job) for job in jobs] if verifiers is None else verifiers)
+        self.jobs += [budget_job(self.run["run_attempt"])] if budgets is None else budgets
         self.pages = pages
         self.routes = [route()] if routes is None else routes
         self.route_jobs = {43: [route_job()]} if route_jobs is None else route_jobs
@@ -141,10 +166,6 @@ class GitHubFixture:
         if path == f"/repos/{REPO}/actions/workflows/claude-review.yml/runs?head_sha={HEAD}&event=pull_request":
             assert key == "workflow_runs"
             return iter([self.run])
-        if path.startswith(f"/repos/{REPO}/actions/workflows/review-subscription.yml/runs?"):
-            assert "event=workflow_run&branch=main&created=" in path
-            assert key == "workflow_runs"
-            return iter(self.routes)
         prefix = f"/repos/{REPO}/actions/runs/"
         run_id, endpoint, attempt, resource = path.removeprefix(prefix).split("/")
         assert key == "jobs" and endpoint == "attempts" and resource == "jobs"
@@ -152,7 +173,10 @@ class GitHubFixture:
             return iter(job for job in self.jobs if job["run_attempt"] == int(attempt))
         return iter(self.route_jobs[int(run_id)])
 
-    def request(self, method, path, body):
+    def request(self, method, path, body=None):
+        if method == "GET":
+            route_id = int(path.removeprefix(f"/repos/{REPO}/actions/runs/"))
+            return next((row for row in self.routes if row["id"] == route_id), {})
         if path == "/graphql":
             assert method == "POST"
             self.graphql.append(body["variables"])
@@ -228,7 +252,7 @@ def test_both_admitted_reviewers_remain_required_after_partial_rerun(resolver):
         run=review_run(attempt=2),
         jobs=[review_job("Codex GitHub review"), review_job("Codex GitHub review", attempt=2, conclusion="skipped"),
               review_job("Claude review", attempt=2)],
-        routes=[route(), route(source_attempt=2, id=44)],
+        routes=[route(), route(source_attempt=2, id=44)], budgets=[budget_job(1), budget_job(2, 44)],
         route_jobs={43: [route_job()], 44: [route_job("Select Claude", run_id=44)]},
         comments=[claude_comment("approve", attempt=2)],
         pages=iter([page(summary(resolver))]),
@@ -280,7 +304,8 @@ def test_omitted_native_job_cannot_fall_back_to_claude(resolver):
         ([route(repository={"full_name": "other/repo"})], [route_job()]),
         ([route(source_attempt=2)], [route_job()]),
         ([route(display_title="Route PR Review 143 attempt 1")], [route_job()]),
-        ([route(), route(id=44, status="in_progress")], [route_job()]),
+        ([route(status="in_progress")], [route_job()]),
+        ([route(run_attempt=2)], [route_job()]),
         ([route()], [route_job(name="attacker")]),
         ([route()], [route_job(status="in_progress")]),
     ],
@@ -331,5 +356,73 @@ def test_successful_review_job_cannot_approve_a_failed_run(resolver, provider, c
         pages=iter([page(summary(resolver))] if provider == "codex" else []),
     )
     with pytest.raises(resolver["PostMergeError"], match=rejection):
+        merge(resolver, api)
+    assert not api.merges
+
+
+@pytest.mark.parametrize(
+    ("choice", "job", "rejection"),
+    [
+        ("Select Claude", "Claude review", "no admitted Claude review"),
+        ("Request Codex", "Codex GitHub review", "no admitted native Codex review"),
+    ],
+)
+@pytest.mark.parametrize("defect", ["missing", "job-failure", "step-failure", "step-missing",
+                                    "step-duplicate", "job-duplicate", "old-attempt"])
+def test_approval_requires_unique_independent_verification(resolver, choice, job, rejection, defect):
+    primary = review_job(job, attempt=2)
+    verifier = verification_job(primary)
+    if defect == "job-failure":
+        verifier["conclusion"] = "failure"
+    if defect == "step-failure":
+        verifier["steps"][-1]["conclusion"] = "failure"
+    if defect == "step-missing":
+        verifier["steps"].pop()
+    if defect == "step-duplicate":
+        verifier["steps"].append(verifier["steps"][-1])
+    if defect == "old-attempt":
+        verifier["run_attempt"] = 1
+    verifiers = [] if defect == "missing" else [verifier]
+    if defect == "job-duplicate":
+        verifiers.append({**verifier, "id": verifier["id"] + 1})
+        rejection = "duplicate job name"
+    api = GitHubFixture(
+        run=review_run(attempt=2), jobs=[primary], verifiers=verifiers,
+        routes=[route(source_attempt=2)], route_jobs={43: [route_job(choice)]},
+        comments=[claude_comment("approve", attempt=2)],
+        pages=iter([page(summary(resolver))] if choice == "Request Codex" else []),
+    )
+    with pytest.raises(resolver["PostMergeError"], match=rejection):
+        merge(resolver, api)
+    assert not api.merges
+
+
+def test_only_the_successful_budget_attestation_selects_a_route(resolver):
+    api = GitHubFixture(
+        jobs=[review_job("Codex GitHub review")],
+        routes=[route(), route(id=44)],
+        route_jobs={43: [route_job()], 44: [route_job("Select Claude", run_id=44)]},
+        pages=iter([page(summary(resolver))]),
+    )
+    assert merge(resolver, api) == MERGED
+
+
+@pytest.mark.parametrize("defect", ["missing", "budget-failed", "step-failed", "ambiguous", "zero", "other-id"])
+def test_source_budget_must_attest_one_eligible_exact_route(resolver, defect):
+    budget = budget_job(1)
+    if defect == "budget-failed":
+        budget["conclusion"] = "failure"
+    if defect == "step-failed":
+        budget["steps"][0]["conclusion"] = "failure"
+    if defect == "ambiguous":
+        budget["steps"].extend(budget_job(1, 44)["steps"])
+    if defect in ("zero", "other-id"):
+        budget = budget_job(1, 0 if defect == "zero" else 44)
+    api = GitHubFixture(
+        jobs=[review_job("Codex GitHub review")],
+        budgets=[] if defect == "missing" else [budget],
+        pages=iter([page(summary(resolver))]),
+    )
+    with pytest.raises(resolver["PostMergeError"], match="latest review admission is unverified"):
         merge(resolver, api)
     assert not api.merges

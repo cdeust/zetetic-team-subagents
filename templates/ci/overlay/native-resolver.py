@@ -15,44 +15,45 @@ def _native_pages(number, head, repository, api):
         variables = {**variables, "endCursor": cursor}
 
 
-from urllib.parse import urlencode
+def _attempt_jobs(run, attempt, repository, api):
+    path = f"/repos/{repository}/actions/runs/{run['id']}/attempts/{attempt}/jobs"
+    jobs = list(api.records(path, "jobs"))
+    require(all(job.get("run_attempt") == attempt for job in jobs), "job attempt differs")
+    return _effective_jobs(jobs, run)
 
 
-def _trusted_routes(repository, api, created_at):
-    # Only a default-branch workflow_run can attest the provider selected for
-    # a PR workflow run and attempt. PR job names are controlled by the PR.
-    prefix = f"/repos/{repository}/actions"
-    route_path = ".github/workflows/review-subscription.yml"
-    query = urlencode({"event": "workflow_run", "branch": "main", "created": ">=" + created_at})
-    routes = {}
-    for route in api.records(f"{prefix}/workflows/review-subscription.yml/runs?{query}", "workflow_runs"):
-        if not (
-            route.get("path") == route_path and route.get("event") == "workflow_run"
-            and route.get("head_branch") == "main"
-            and (route.get("head_repository") or {}).get("full_name") == repository
-            and (route.get("repository") or {}).get("full_name") == repository
-            and type(route.get("id")) is int and route["id"] > 0
-        ):
-            continue
-        title = route["display_title"]
-        if title not in routes or route["id"] > routes[title]["id"]:
-            routes[title] = route
-    return routes
-
-
-def _route_provider(repository, api, route):
-    if not route or route.get("status") != "completed" or route.get("conclusion") != "success":
+def _route_provider(repository, api, run, attempt):
+    jobs = _attempt_jobs(run, attempt, repository, api)
+    markers = [
+        (step, re.fullmatch(r"Subscription decision run ([1-9][0-9]*)", step.get("name") or ""))
+        for job in jobs if job["name"] == "Claude review budget" and _succeeded(job)
+        for step in job.get("steps") or []
+        if (step.get("name") or "").startswith("Subscription decision run ")
+    ]
+    if len(markers) != 1:
         return None
-    route_attempt = route.get("run_attempt")
-    if type(route_attempt) is not int or route_attempt < 1:
+    step, match = markers[0]
+    if not match or not _succeeded(step):
+        return None
+    route_id = int(match[1])
+    prefix = f"/repos/{repository}/actions"
+    route = api.request("GET", f"{prefix}/runs/{route_id}")
+    if not (
+        type(route.get("id")) is int and route["id"] == route_id
+        and route.get("path") == ".github/workflows/review-subscription.yml"
+        and route.get("event") == "workflow_run" and route.get("head_branch") == "main"
+        and (route.get("head_repository") or {}).get("full_name") == repository
+        and (route.get("repository") or {}).get("full_name") == repository
+        and route.get("display_title") == f"Route PR Review {run['id']} attempt {attempt}"
+        and type(route.get("run_attempt")) is int and route["run_attempt"] == 1
+        and _succeeded(route)
+    ):
         return None
     full_sha(route.get("head_sha"))
-    prefix = f"/repos/{repository}/actions"
-    jobs = api.records(f"{prefix}/runs/{route['id']}/attempts/{route_attempt}/jobs", "jobs")
     providers = {"Select Claude": "claude", "Request Codex": "codex", "Reuse Codex": "codex"}
     selected = [
-        providers[step["name"]] for job in _effective_jobs(jobs, route)
-        if job["name"] == "select" and job["run_attempt"] == route_attempt and _succeeded(job)
+        providers[step["name"]] for job in _attempt_jobs(route, route["run_attempt"], repository, api)
+        if job["name"] == "select" and _succeeded(job)
         for step in job.get("steps") or [] if step.get("name") in providers and _succeeded(step)
     ]
     return selected[0] if len(selected) == 1 else None
@@ -81,14 +82,12 @@ def _review_runs(number, head, repository, api):
 
 
 def _provider_admissions(runs, repository, api):
-    routes = _trusted_routes(repository, api, min(run["created_at"] for run in runs))
     required, current = set(), {}
     for run in runs:
         attempt = run.get("run_attempt")
         require(type(attempt) is int and attempt > 0, "invalid review run attempt")
         for candidate in range(1, attempt + 1):
-            title = f"Route PR Review {run['id']} attempt {candidate}"
-            provider = _route_provider(repository, api, routes.get(title))
+            provider = _route_provider(repository, api, run, candidate)
             if provider:
                 required.add(provider)
                 if candidate == attempt:
@@ -98,18 +97,36 @@ def _provider_admissions(runs, repository, api):
     return required, current
 
 
+REVIEW_JOBS = {
+    "claude": {
+        "Claude review": ("PR Review",),
+        "Verify Claude review verdict": ("Verify the verdict for this run",),
+    },
+    "codex": {
+        "Codex GitHub review": ("PR Review",),
+        "Verify native Codex review verdict": (
+            "Read the OpenAI verdict from GitHub again", "Enforce the code review",
+        ),
+    },
+}
+
+
+def _verified_job(job, expected_steps):
+    if not job or not _succeeded(job):
+        return False
+    steps = job.get("steps") or []
+    for name in expected_steps:
+        matches = [step for step in steps if step.get("name") == name]
+        if len(matches) != 1 or not _succeeded(matches[0]):
+            return False
+    return True
+
+
 def _successful_review_job(provider, run, repository, api):
     if not _succeeded(run):
         return False
-    job_name = {"claude": "Claude review", "codex": "Codex GitHub review"}[provider]
-    attempt = run["run_attempt"]
-    path = f"/repos/{repository}/actions/runs/{run['id']}/attempts/{attempt}/jobs"
-    jobs = _effective_jobs(api.records(path, "jobs"), run)
-    return any(
-        job["name"] == job_name and job["run_attempt"] == attempt and _succeeded(job)
-        and sum(step.get("name") == "PR Review" and _succeeded(step) for step in job.get("steps") or []) == 1
-        for job in jobs
-    )
+    jobs = {job["name"]: job for job in _attempt_jobs(run, run["run_attempt"], repository, api)}
+    return all(_verified_job(jobs.get(name), steps) for name, steps in REVIEW_JOBS[provider].items())
 
 
 def _admitted_claude_approves(number, run, repository, api):
