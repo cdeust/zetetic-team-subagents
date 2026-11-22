@@ -13,8 +13,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "lib"))
 
 import task_proc  # noqa: E402,F401
-import task_store  # noqa: E402,F401
-import tasks  # noqa: E402,F401
+import tasks  # noqa: E402
+
+# Tests import the same store instance used by the task API.
+task_store = tasks.store
 
 
 def wait_exit(pid: int) -> None:

@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
@@ -146,55 +147,53 @@ HOLDER = (
 class Holds:
     """Two FIFOs a held check blocks on, one per verification, and the READY line each check writes."""
 
-    def __init__(self, root: Path):
-        self.root = root
+    def __init__(self, root: Path, files: ExitStack):
         self.fds = {}
         for name in ("ready", "hold1", "hold2"):
             os.mkfifo(root / name)
-            self.fds[name] = os.open(root / name, os.O_RDWR)
+            self.fds[name] = files.enter_context((root / name).open("r+b", buffering=0))
 
     def ready(self) -> str:
         line = b""
         while not line.endswith(b"\n"):
-            line += os.read(self.fds["ready"], 1)
+            line += self.fds["ready"].read(1)
         return line.decode().strip()
 
     def release(self, n: int) -> None:
-        os.close(self.fds.pop(f"hold{n}"))
-
-    def close(self) -> None:
-        for fd in self.fds.values():
-            os.close(fd)
+        self.fds.pop(f"hold{n}").close()
 
 
-def test_two_verifications_of_one_tree_never_delete_each_others_checkout(gate, tmp_path):
+@pytest.fixture
+def holds(tmp_path):
+    root = tmp_path / "holds"
+    root.mkdir()
+    with ExitStack() as files:
+        yield Holds(root, files)
+
+
+def test_two_verifications_of_one_tree_never_delete_each_others_checkout(gate, tmp_path, holds):
     """B3. The commit task and the push task of one tree under two keys run at once; each check holds, then reads
     its own checkout. A worker that removes the directory of another lets a failing tree through twice."""
     holds_dir = tmp_path / "holds"
-    holds_dir.mkdir()
-    holds = Holds(holds_dir)
     remote = tmp_path / "remote.git"
     git(tmp_path, "init", "-q", "--bare", str(remote))
     git(gate.repo, "remote", "add", "origin", str(remote))
     declare(gate, [{"name": "no-bad", "paths": ["*.txt"], "argv": ["sh", "-c", HOLDER, "gate", "{files}"]}],
             env={"D": str(holds_dir)})
-    try:
-        tree = gate.stage("BAD: this tree fails its check\n")
-        hook(gate, "gate-start.py", "git add a.txt", env={"LANG": "C"})
-        assert holds.ready() == "1"
-        git(gate.repo, "branch", "side", git(gate.repo, "commit-tree", tree, "-p", "HEAD", "-m", "same tree"))
-        hook(gate, "gate-proof.py", "git push origin side", env={"LANG": "en_US.UTF-8"})  # another key, same tree
-        assert holds.ready() == "2"
-        ids = sorted(p.stem for p in gate.state.glob(f"gate-*{tree}-*.json"))
-        assert len(ids) == 2
-        holds.release(1)
-        holds.release(2)
-        finals = [tasks.status(i, str(gate.repo)) for i in ids]
-        for rec in finals:
-            wait_exit(rec["pid"])
-        assert [tasks.status(i, str(gate.repo))["state"] for i in ids] == ["failed", "failed"]
-    finally:
-        holds.close()
+    tree = gate.stage("BAD: this tree fails its check\n")
+    hook(gate, "gate-start.py", "git add a.txt", env={"LANG": "C"})
+    assert holds.ready() == "1"
+    git(gate.repo, "branch", "side", git(gate.repo, "commit-tree", tree, "-p", "HEAD", "-m", "same tree"))
+    hook(gate, "gate-proof.py", "git push origin side", env={"LANG": "en_US.UTF-8"})  # another key, same tree
+    assert holds.ready() == "2"
+    ids = sorted(p.stem for p in gate.state.glob(f"gate-*{tree}-*.json"))
+    assert len(ids) == 2
+    holds.release(1)
+    holds.release(2)
+    finals = [tasks.status(i, str(gate.repo)) for i in ids]
+    for rec in finals:
+        wait_exit(rec["pid"])
+    assert [tasks.status(i, str(gate.repo))["state"] for i in ids] == ["failed", "failed"]
 
 
 def test_a_ratchet_check_judges_the_files_a_change_adds_even_in_full_mode(gate):

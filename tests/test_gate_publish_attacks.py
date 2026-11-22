@@ -16,7 +16,7 @@ import subprocess
 import pytest
 
 from gate_support import GIT_ENV, git
-from test_gate_attacks import FAIL_IF_BAD, gate, push_green_main_with_failing_feat, settle  # noqa: F401  (fixture)
+from test_gate_attacks import gate, push_green_main_with_failing_feat, settle  # noqa: F401  (fixture)
 
 
 def tag_the_failing_commit(g, name: str = "tbad", *flags: str) -> None:

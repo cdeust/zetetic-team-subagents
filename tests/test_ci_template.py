@@ -4,10 +4,7 @@ docs/superpowers/specs/2026-10-22-single-ci-design.md, "ci.yml, generated from
 one template" and decisions 1 to 9."""
 from __future__ import annotations
 
-import json
-import os
 import re
-import subprocess
 import textwrap
 from pathlib import Path
 
