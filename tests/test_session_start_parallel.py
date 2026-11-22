@@ -45,20 +45,21 @@ def test_sections_overlap_and_keep_their_order(tmp_path):
     for name in ("start", "go"):
         os.mkfifo(tmp_path / name)
     # Held read-write, so the tools' open() never blocks and nothing sees EOF.
-    start = os.fdopen(os.open(tmp_path / "start", os.O_RDWR), "r")
-    go = os.open(tmp_path / "go", os.O_RDWR)
-    env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin), "TMPDIR": str(scratch),
-           "START_FIFO": str(tmp_path / "start"), "GO_FIFO": str(tmp_path / "go")}
-    hook = subprocess.Popen(
-        ["bash", str(plugin / "hooks" / "session-start.sh")],
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True, env=env, cwd=tmp_path,
-    )
-    announced = set()
-    while len(announced) < len(SLOW_TOOLS):
-        announced.add(start.readline().strip())  # blocks until a tool is running
-    assert announced == set(SLOW_TOOLS)  # all five alive before any was released
-    os.write(go, b"g" * RELEASES)
-    out = hook.communicate()[0]
+    with (tmp_path / "start").open("r+b", buffering=0) as start, (tmp_path / "go").open("r+b", buffering=0) as go:
+        env = {**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin), "TMPDIR": str(scratch),
+               "START_FIFO": str(tmp_path / "start"), "GO_FIFO": str(tmp_path / "go")}
+        with subprocess.Popen(
+            ["bash", str(plugin / "hooks" / "session-start.sh")],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True, env=env, cwd=tmp_path,
+        ) as hook:
+            announced = set()
+            try:
+                while len(announced) < len(SLOW_TOOLS):
+                    announced.add(start.readline().decode().strip())
+                assert announced == set(SLOW_TOOLS)
+            finally:
+                go.write(b"g" * RELEASES)
+            out = hook.communicate()[0]
     assert hook.returncode == 0
     headings = [
         "Difficulty Books", "Memory Scopes", "Agent Worktrees",

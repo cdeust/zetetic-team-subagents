@@ -13,6 +13,7 @@ import os
 import signal
 import subprocess
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -55,10 +56,8 @@ def test_task_survives_sigkill_of_the_callers_whole_process_group(tmp_path, monk
 
 def reap_hook(hook: subprocess.Popen) -> None:
     """Leave no hook behind, whatever the assertions did (the group may already be dead)."""
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(hook.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
     hook.wait()
     hook.stdin.close()
     hook.stdout.close()

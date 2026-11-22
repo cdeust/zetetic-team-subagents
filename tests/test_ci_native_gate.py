@@ -4,7 +4,6 @@ The merge job is the aggregate of the test jobs of the run (owner rule 2026-10-2
 reads no live PR state, so the eligibility-step tests that lived here are gone.
 """
 
-import json
 import re
 from pathlib import Path
 from types import ModuleType
@@ -12,7 +11,6 @@ from types import ModuleType
 import pytest
 import yaml
 
-from test_ci_pr_safety import GH_STUB, execute
 from test_ci_template import heredoc
 
 ROOT = Path(__file__).resolve().parents[1]

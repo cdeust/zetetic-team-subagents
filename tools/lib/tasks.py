@@ -81,22 +81,27 @@ def _launch(directory: str, rec: dict) -> dict:
     (EOF), so no ordering depends on timing.
     """
     path = store.record_path(directory, rec["id"])
-    gate_r, gate_w = os.pipe()
     try:
-        with open(os.path.join(directory, f"{rec['id']}.a{rec['attempt']}.worker.log"), "wb") as log:
-            worker = subprocess.Popen([sys.executable, WORKER, directory, rec["id"], str(rec["attempt"])],
-                                      stdin=gate_r, stdout=log, stderr=log, start_new_session=True)
-    except BaseException as exc:  # FAILS_ON: fork/exec of the worker failed; nothing will ever run it
-        os.close(gate_w)
-        os.close(gate_r)
+        gate_r, gate_w = os.pipe()
+    except OSError as exc:
         return _fail_unlaunched(path, rec, exc)
-    os.close(gate_r)
-    try:
+    with os.fdopen(gate_w, "wb"), os.fdopen(gate_r, "rb") as reader:
+        log_path = os.path.join(directory, f"{rec['id']}.a{rec['attempt']}.worker.log")
+        try:
+            with open(log_path, "wb") as log:
+                worker = subprocess.Popen(
+                    [sys.executable, WORKER, directory, rec["id"], str(rec["attempt"])],
+                    stdin=reader, stdout=log, stderr=log, start_new_session=True,
+                )
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            return _fail_unlaunched(path, rec, exc)
+        except (KeyboardInterrupt, SystemExit) as exc:
+            # A child that reached the gate sees the failed record before EOF.
+            _fail_unlaunched(path, rec, exc)
+            raise
         rec = {**rec, "pid": worker.pid, "pid_token": proc.proc_token(worker.pid),
                "output_path": store.output_path(directory, rec["id"], rec["attempt"])}
         store.atomic_write(path, rec)
-    finally:
-        os.close(gate_w)  # EOF: the worker may now go (even if the write above failed)
     return rec
 
 

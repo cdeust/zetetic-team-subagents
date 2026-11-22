@@ -5,6 +5,7 @@ No sleep, poll or timeout decides pass or fail.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import signal
@@ -50,6 +51,40 @@ def test_failure_records_rc_and_fills_the_inbox(state):
     entries = tasks.drain_inbox(str(state))
     assert [(e["id"], e["rc"], e["attempt"]) for e in entries] == [("unit-bad", 7, 1)]
     assert entries[0]["result_excerpt"] == "oops\n"
+
+
+@pytest.mark.parametrize("failure", [OSError("spawn failed"), KeyboardInterrupt(), SystemExit(3)])
+def test_failed_worker_launch_releases_the_pipe_and_records_the_error(state, monkeypatch, failure):
+    job = tasks.Job("unit", "launch", [sys.executable, "-V"], str(state))
+    directory = store.tasks_dir(str(state))
+    rec = tasks._new_record(job)
+    opened = []
+    pipe = os.pipe
+
+    def tracked_pipe():
+        pair = pipe()
+        opened.extend(pair)
+        return pair
+
+    def fail_spawn(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(tasks.os, "pipe", tracked_pipe)
+    monkeypatch.setattr(tasks.subprocess, "Popen", fail_spawn)
+    if isinstance(failure, OSError):
+        assert tasks._launch(directory, rec)["state"] == "failed"
+    else:
+        with pytest.raises(type(failure)):
+            tasks._launch(directory, rec)
+    saved = store.read_record(store.record_path(directory, rec["id"]))
+    assert saved["state"] == "failed"
+    assert type(failure).__name__ in saved["reason"]
+    assert [entry["id"] for entry in store.inbox_drain(directory)] == [rec["id"]]
+    assert len(opened) == 2
+    for fd in opened:
+        with pytest.raises(OSError) as closed:
+            os.fstat(fd)
+        assert closed.value.errno == errno.EBADF
 
 
 def test_unstartable_command_is_failed_127_not_lost(state):

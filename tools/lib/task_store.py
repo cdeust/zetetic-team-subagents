@@ -21,6 +21,7 @@ import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import task_proc as proc  # noqa: E402
@@ -189,7 +190,7 @@ def claim(directory: str, name: str) -> bool:
         try:
             os.rename(path, f"{path}.dead.{uuid.uuid4().hex}")
         except FileNotFoundError:
-            pass
+            continue  # another claimer already retired the dead owner
 
 
 # -- the failure inbox: one file per failure, at-least-once ----------------------
@@ -217,8 +218,5 @@ def inbox_drain(directory: str) -> list[dict]:
         entry = read_record(os.path.join(inbox, name))
         if entry is not None:
             entries.append(entry)
-        try:
-            os.unlink(os.path.join(inbox, name))
-        except FileNotFoundError:
-            pass
+        Path(inbox, name).unlink(missing_ok=True)
     return entries
