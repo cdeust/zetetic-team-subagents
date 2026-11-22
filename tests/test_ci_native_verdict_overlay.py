@@ -450,6 +450,7 @@ def test_latest_codex_after_claude_attempt_preserves_claude_blocks(resolver, old
         budgets=[budget_job(1), budget_job(2, 44)],
         route_jobs={43: [route_job("Select Claude")], 44: [route_job(run_id=44)]},
         pages=iter([page(summary(resolver))]),
+        verifiers=[verification_job(review_job("Codex GitHub review", attempt=2))],
         comments=[] if old_verdict is None else [claude_comment(old_verdict)],
     )
     if old_verdict == "block":
@@ -489,15 +490,17 @@ def test_ambiguous_historical_claude_verdict_holds_a_latest_codex_approval(resol
     assert not api.merges
 
 
-@pytest.mark.parametrize("historical_provider", ["claude", "codex"])
-def test_previously_verified_historical_verdict_cannot_disappear(resolver, historical_provider):
+@pytest.mark.parametrize(
+    ("historical_provider", "verifier_conclusion"),
+    [("claude", "success"), ("claude", "failure"), ("codex", "failure")],
+)
+def test_previously_verified_historical_verdict_cannot_disappear(resolver, historical_provider, verifier_conclusion):
     old_claude = historical_provider == "claude"
     old_job = review_job("Claude review" if old_claude else "Codex GitHub review", conclusion="failure")
     latest_job = review_job("Codex GitHub review" if old_claude else "Claude review", attempt=2)
     old_verifier = verification_job(old_job)
-    if old_claude:
-        old_verifier["conclusion"] = "success"
-    else:
+    old_verifier["conclusion"] = verifier_conclusion
+    if not old_claude:
         old_verifier["steps"][-1]["conclusion"] = "failure"
     api = GitHubFixture(
         run=review_run(attempt=2), jobs=[old_job, latest_job],

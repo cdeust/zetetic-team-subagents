@@ -180,7 +180,7 @@ def _selected_review_approves(number, head, repository, api):
             )
         if previous_provider == "claude" and (previous_run["id"], previous_attempt) not in claude:
             require(
-                not _verified_job(
+                not _verified_steps(
                     previous_jobs.get("Verify Claude review verdict", {}),
                     ("Verify the verdict for this run",),
                 ),
