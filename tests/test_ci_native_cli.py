@@ -1,6 +1,7 @@
-"""Native CI uses the frozen CLI project; legacy generation stays independent."""
+"""Both pipeline profiles install the integrity-locked CLI project."""
 
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -8,8 +9,9 @@ import yaml
 from scripts.lib import render_ci as renderer
 
 
-def test_native_delivers_private_cli_project_with_integrity_lock(tmp_path):
-    files = renderer.prepare_files(tmp_path, native_review=True)
+@pytest.mark.parametrize("native_review", [False, True])
+def test_delivers_private_cli_project_with_integrity_lock(tmp_path, native_review):
+    files = renderer.prepare_files(tmp_path, native_review=native_review)
     root = tmp_path / ".github/claude-cli"
     package = json.loads(files[root / "package.json"])
     lock = json.loads(files[root / "package-lock.json"])
@@ -23,9 +25,10 @@ def test_native_delivers_private_cli_project_with_integrity_lock(tmp_path):
             assert data["resolved"].startswith("https://registry.npmjs.org/")
 
 
+@pytest.mark.parametrize("native_review", [False, True])
 @pytest.mark.parametrize("workflow", ["pipeline.yml", "pipeline-post-merge.yml"])
-def test_native_cli_installs_from_lock_and_exports_its_bin(tmp_path, workflow):
-    files = renderer.prepare_files(tmp_path, native_review=True)
+def test_cli_installs_from_lock_and_exports_its_bin(tmp_path, workflow, native_review):
+    files = renderer.prepare_files(tmp_path, native_review=native_review)
     document = yaml.safe_load(files[tmp_path / ".github/workflows" / workflow])
     for category in ("environment", "install"):
         steps = document["jobs"][category]["steps"]
@@ -38,3 +41,11 @@ def test_native_cli_installs_from_lock_and_exports_its_bin(tmp_path, workflow):
             in command
         )
         assert "npm install -g" not in command
+
+
+def test_repository_ships_the_same_cli_manifest_and_lock(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    files = renderer.prepare_files(tmp_path, native_review=True)
+    for name in ("package.json", "package-lock.json"):
+        path = Path(".github/claude-cli") / name
+        assert (root / path).read_bytes() == files[tmp_path / path]

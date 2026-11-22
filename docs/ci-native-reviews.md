@@ -22,17 +22,15 @@ polling. `--no-schedule` requires `--native-review` and supports `--dry-run`.
 The canonical assets and their source digests remain unchanged; the consumer
 rendering option is recorded in `templates/ci/native/source.json`.
 
-The default invocation keeps the legacy Claude review/fix pipeline byte for byte.
+The default invocation retains the legacy Claude review/fix policy.
 The native profile replaces its review and merge jobs with the Cortex native
 Codex readers and protected completion resolver. It preserves the common test
-jobs and tag publication. Native environment/install jobs use a private
+jobs and tag publication. Both profiles' environment and install jobs use a private
 `.github/claude-cli/package.json` and `package-lock.json`, with Claude Code still
 pinned to 2.1.306. [npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci) installs
 that frozen graph under `.github/claude-cli`, and `GITHUB_PATH` exposes its local
 bin directory to later steps. The lock records package integrity for the CLI
-and its platform-specific native packages. This replaces the four global npm
-installs across direct and post-merge workflows; legacy generation keeps its
-existing commands.
+and its platform-specific native packages across the direct and post-merge workflows.
 
 Its tag job pins `actions/setup-python` v7.1.0 at
 `6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`, matching the copied Cortex source and

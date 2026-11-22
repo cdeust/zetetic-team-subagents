@@ -512,7 +512,10 @@ jobs:
           ref: ${{ needs.contract.outputs.tested_sha }}
 
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.306
+        # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"
+          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Scratch directory and OS name
         run: |
@@ -545,7 +548,10 @@ jobs:
           ref: ${{ needs.contract.outputs.tested_sha }}
 
       - name: Install the Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.306
+        # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
+        run: |
+          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"
+          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Scratch directory and OS name
         run: |

@@ -26,7 +26,7 @@ PINS = {
     "anthropics/claude-code-action": "8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
 }
 # source: claude-mods PR45, unit job119805310369 passed with Claude 2.1.306.
-CLI_PIN = "npm install -g @anthropic-ai/claude-code@2.1.306"
+CLI_PIN = 'npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"'
 
 
 @pytest.fixture(scope="module")

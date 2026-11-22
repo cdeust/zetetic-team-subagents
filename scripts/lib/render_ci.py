@@ -17,13 +17,13 @@ from typing import NamedTuple
 ROOT = Path(__file__).resolve().parents[2]
 CATEGORIES = ("unit", "regression", "e2e", "environment", "install")
 # Source: templates/ci/native/source.json pins the copied Cortex configuration.
+CLI_ASSETS = (".github/claude-cli/package.json", ".github/claude-cli/package-lock.json")
 NATIVE_ASSETS = (
     "scripts/tests/test_no_main_comparison.py",
     ".github/workflows/Codex.yml",
     ".github/workflows/claude-review.yml",
     ".github/workflows/claude.yml",
-    ".github/claude-cli/package.json",
-    ".github/claude-cli/package-lock.json",
+    *CLI_ASSETS,
     "scripts/ci_codex_review_event.py",
     "scripts/ci_codex_review_event_source.py",
     "scripts/ci_codex_review_resume.py",
@@ -282,14 +282,15 @@ def prepare_files(target, root=ROOT, native_review=False, no_schedule=False, nat
         target / ".github/workflows" / name: body.encode()
         for name, body in artifacts(root, native_review).items()
     }
+    assets = root / "templates/ci/native/assets"
     if native_review:
-        assets = root / "templates/ci/native/assets"
         files.update(
             {target / name: native_asset(assets / name, no_schedule) for name in NATIVE_ASSETS}
         )
     else:
         review = root / "templates/ci/review"
         files.update({target / name: (review / name).read_bytes() for name in REVIEW_ASSETS})
+        files.update({target / name: (assets / name).read_bytes() for name in CLI_ASSETS})
     example = (root / "templates/ci/ci.example.json").read_bytes()
     if not (target / "ci.json").exists():
         files[target / "ci.json"] = example
