@@ -64,12 +64,12 @@ def test_overlay_refuses_incompatible_resolver_without_writing(target):
     assert not (target / renderer.NATIVE_PARSER).exists()
 
 
-def review_run(attempt=1, head=HEAD):
+def review_run(attempt=1, head=HEAD, conclusion="success"):
     return {
         "id": 42, "head_sha": head, "run_attempt": attempt, "event": "pull_request",
         "head_repository": {"full_name": REPO}, "path": ".github/workflows/claude-review.yml",
         "repository": {"full_name": REPO}, "pull_requests": [{"number": PR}],
-        "created_at": "2026-11-22T10:00:00Z", "status": "completed",
+        "created_at": "2026-11-22T10:00:00Z", "status": "completed", "conclusion": conclusion,
     }
 
 
@@ -205,6 +205,7 @@ def test_failed_native_run_never_falls_back_to_claude(resolver, evidence, reason
         "in_progress": page(summary(resolver, status="running")),
     }
     api = GitHubFixture(
+        run=review_run(conclusion="failure"),
         jobs=[review_job("Codex GitHub review", conclusion="failure"), review_job("Claude review")],
         pages=iter([pages[evidence]]),
     )
@@ -312,3 +313,23 @@ def test_other_pr_with_same_head_cannot_supply_native_route(resolver):
         merge(resolver, api)
     assert not api.merges
     assert api.graphql == []
+
+
+@pytest.mark.parametrize(
+    ("provider", "choice", "job", "rejection"),
+    [
+        ("claude", "Select Claude", "Claude review", "no admitted Claude review"),
+        ("codex", "Request Codex", "Codex GitHub review", "no admitted native Codex review"),
+    ],
+)
+def test_successful_review_job_cannot_approve_a_failed_run(resolver, provider, choice, job, rejection):
+    api = GitHubFixture(
+        run=review_run(conclusion="failure"),
+        jobs=[review_job(job)],
+        route_jobs={43: [route_job(choice)]},
+        comments=[claude_comment("approve")],
+        pages=iter([page(summary(resolver))] if provider == "codex" else []),
+    )
+    with pytest.raises(resolver["PostMergeError"], match=rejection):
+        merge(resolver, api)
+    assert not api.merges

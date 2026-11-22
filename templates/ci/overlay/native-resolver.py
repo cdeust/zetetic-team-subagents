@@ -99,7 +99,7 @@ def _provider_admissions(runs, repository, api):
 
 
 def _successful_review_job(provider, run, repository, api):
-    if run.get("status") != "completed":
+    if not _succeeded(run):
         return False
     job_name = {"claude": "Claude review", "codex": "Codex GitHub review"}[provider]
     attempt = run["run_attempt"]
