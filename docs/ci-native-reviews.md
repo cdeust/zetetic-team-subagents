@@ -269,10 +269,12 @@ directly and requires its first attempt to have succeeded on the default
 branch. A missing or pending decision for the latest source run holds the
 merge.
 
-Every provider selected for the head by a trusted decision must approve. Each
-provider's latest current admission must have a successful source run,
+The latest admitted attempt must approve with a successful source run,
 `PR Review` job step, and independently successful verdict verification job
-and steps on the admitted attempt.
+and steps. An earlier attempt with no verdict does not prevent another provider
+from completing the review if the evidence is consistent. A verified receipt
+that has since disappeared holds the merge. Authenticated historical blocks on the same head
+still veto the merge, and an earlier approval cannot satisfy the latest attempt.
 
 For native Codex, the resolver reads all GitHub GraphQL comment pages and
 verifies the connector's Bot ID, author and last editor, the open PR's exact

@@ -22,8 +22,7 @@ def _attempt_jobs(run, attempt, repository, api):
     return _effective_jobs(jobs, run)
 
 
-def _route_provider(repository, api, run, attempt):
-    jobs = _attempt_jobs(run, attempt, repository, api)
+def _route_provider(repository, api, run, attempt, jobs):
     markers = [
         (step, re.fullmatch(r"Subscription decision run ([1-9][0-9]*)", step.get("name") or ""))
         for job in jobs if job["name"] == "Claude review budget" and _succeeded(job)
@@ -82,19 +81,21 @@ def _review_runs(number, head, repository, api):
 
 
 def _provider_admissions(runs, repository, api):
-    required, current = set(), {}
+    admissions = []
     for run in runs:
         attempt = run.get("run_attempt")
         require(type(attempt) is int and attempt > 0, "invalid review run attempt")
         for candidate in range(1, attempt + 1):
-            provider = _route_provider(repository, api, run, candidate)
+            jobs = _attempt_jobs(run, candidate, repository, api)
+            provider = _route_provider(repository, api, run, candidate, jobs)
             if provider:
-                required.add(provider)
-                if candidate == attempt:
-                    current[provider] = run
-        if run is runs[-1]:
-            require(run in current.values(), "merge held: latest review admission is unverified")
-    return required, current
+                admissions.append((provider, run, candidate, {job["name"]: job for job in jobs}))
+    latest = runs[-1]
+    require(
+        admissions and admissions[-1][1:3] == (latest, latest["run_attempt"]),
+        "merge held: latest review admission is unverified",
+    )
+    return admissions
 
 
 REVIEW_JOBS = {
@@ -111,9 +112,7 @@ REVIEW_JOBS = {
 }
 
 
-def _verified_job(job, expected_steps):
-    if not job or not _succeeded(job):
-        return False
+def _verified_steps(job, expected_steps):
     steps = job.get("steps") or []
     for name in expected_steps:
         matches = [step for step in steps if step.get("name") == name]
@@ -122,44 +121,84 @@ def _verified_job(job, expected_steps):
     return True
 
 
-def _successful_review_job(provider, run, repository, api):
-    if not _succeeded(run):
-        return False
-    jobs = {job["name"]: job for job in _attempt_jobs(run, run["run_attempt"], repository, api)}
-    return all(_verified_job(jobs.get(name), steps) for name, steps in REVIEW_JOBS[provider].items())
+def _verified_job(job, expected_steps):
+    return _succeeded(job) and _verified_steps(job, expected_steps)
 
 
-def _admitted_claude_approves(number, run, repository, api):
-    require(
-        run and _successful_review_job("claude", run, repository, api),
-        "merge held: no admitted Claude review ran on this head",
+def _successful_review_job(provider, run, jobs):
+    return _succeeded(run) and all(
+        _verified_job(jobs.get(name, {}), steps) for name, steps in REVIEW_JOBS[provider].items()
     )
+
+
+def _claude_verdicts(number, admissions, repository, api):
     origin = f"https://github.com/{repository}/actions/runs/"
-    link = f"]({origin}{run['id']}/attempts/{run['run_attempt']})"
-    verdicts = []
+    links = {
+        f"]({origin}{run['id']}/attempts/{attempt})": (run["id"], attempt)
+        for provider, run, attempt, _ in admissions if provider == "claude"
+    }
+    if not links:
+        return {}
+    verdicts = {}
     for comment in api.records(f"/repos/{repository}/issues/{number}/comments"):
         user, body = comment.get("user") or {}, comment.get("body") or ""
-        if user.get("login") != "claude[bot]" or user.get("type") != "Bot" or link not in body:
+        if user.get("login") != "claude[bot]" or user.get("type") != "Bot":
             continue
+        matched = [identity for link, identity in links.items() if link in body]
         found = re.findall(r"^Verdict: (approve|block)\s*$", body, re.M)
-        if found:
-            verdicts.append((comment["updated_at"], found[-1]))
-    require(verdicts, "merge held: no verdict from an admitted Claude attempt")
-    require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
+        if matched and found:
+            require(len(matched) == 1 and len(found) == 1, "ambiguous Claude verdict evidence")
+            verdicts.setdefault(matched[0], set()).add(found[0])
+    return verdicts
 
 
 def _selected_review_approves(number, head, repository, api):
     runs = _review_runs(number, head, repository, api)
     require(runs, "merge held: no candidate review run on this PR head")
-    required, admissions = _provider_admissions(runs, repository, api)
-    if "codex" in required:
-        verdict, _ = state(_native_pages(number, head, repository, api), head)
-        require(verdict != "block", "merge held: native Codex review verdict is block")
-        require(verdict == "approve", "merge held: native Codex verdict is pending")
-        run = admissions.get("codex")
+    admissions = _provider_admissions(runs, repository, api)
+    provider, run, attempt, jobs = admissions[-1]
+
+    native = None
+    if any(selected == "codex" for selected, _, _, _ in admissions):
+        native, _ = state(_native_pages(number, head, repository, api), head)
+        require(native != "block", "merge held: native Codex review verdict is block")
+        require(native not in ("running", "queued"), "merge held: native Codex verdict is pending")
+    claude = _claude_verdicts(number, admissions, repository, api)
+    require(
+        not any("block" in verdicts for verdicts in claude.values()),
+        "merge held: Claude review verdict is block",
+    )
+
+    for previous_provider, previous_run, previous_attempt, previous_jobs in admissions[:-1]:
+        if previous_provider == "codex" and native is None:
+            require(
+                not _verified_steps(
+                    previous_jobs.get("Verify native Codex review verdict", {}),
+                    ("Read the OpenAI verdict from GitHub again",),
+                ),
+                "merge held: historical native Codex verdict evidence is missing",
+            )
+        if previous_provider == "claude" and (previous_run["id"], previous_attempt) not in claude:
+            require(
+                not _verified_job(
+                    previous_jobs.get("Verify Claude review verdict", {}),
+                    ("Verify the verdict for this run",),
+                ),
+                "merge held: historical Claude verdict evidence is missing",
+            )
+
+    if provider == "codex":
+        require(native == "approve", "merge held: native Codex verdict is pending")
         require(
-            run and _successful_review_job("codex", run, repository, api),
+            _successful_review_job(provider, run, jobs),
             "merge held: no admitted native Codex review ran on this head",
         )
-    if "claude" in required:
-        _admitted_claude_approves(number, admissions.get("claude"), repository, api)
+    else:
+        require(
+            _successful_review_job(provider, run, jobs),
+            "merge held: no admitted Claude review ran on this head",
+        )
+        require(
+            "approve" in claude.get((run["id"], attempt), ()),
+            "merge held: no verdict from an admitted Claude attempt",
+        )

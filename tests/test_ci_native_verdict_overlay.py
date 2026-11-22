@@ -247,19 +247,32 @@ def claude_comment(verdict, *, attempt=1, repo=REPO, author="claude[bot]"):
     }
 
 
-def test_both_admitted_reviewers_remain_required_after_partial_rerun(resolver):
+@pytest.mark.parametrize("old_verdict", [None, "approve", "block", "running", "queued"])
+def test_latest_claude_after_native_attempt_preserves_native_blocks(resolver, old_verdict):
+    status = old_verdict if old_verdict in ("running", "queued") else "completed"
+    old_evidence = [] if old_verdict is None else [
+        summary(resolver, unresolved=old_verdict == "block", status=status)
+    ]
     api = GitHubFixture(
         run=review_run(attempt=2),
-        jobs=[review_job("Codex GitHub review"), review_job("Codex GitHub review", attempt=2, conclusion="skipped"),
+        jobs=[review_job("Codex GitHub review", conclusion="failure"),
               review_job("Claude review", attempt=2)],
         routes=[route(), route(source_attempt=2, id=44)], budgets=[budget_job(1), budget_job(2, 44)],
         route_jobs={43: [route_job()], 44: [route_job("Select Claude", run_id=44)]},
+        verifiers=[verification_job(review_job("Claude review", attempt=2))],
         comments=[claude_comment("approve", attempt=2)],
-        pages=iter([page(summary(resolver))]),
+        pages=iter([page(*old_evidence)]),
     )
-    with pytest.raises(resolver["PostMergeError"], match="no admitted native Codex review"):
-        merge(resolver, api)
-    assert not api.merges
+    if old_verdict == "block":
+        with pytest.raises(resolver["PostMergeError"], match="native Codex review verdict is block"):
+            merge(resolver, api)
+        assert not api.merges
+    elif old_verdict in ("running", "queued"):
+        with pytest.raises(resolver["PostMergeError"], match="native Codex verdict is pending"):
+            merge(resolver, api)
+        assert not api.merges
+    else:
+        assert merge(resolver, api) == MERGED
 
 
 def test_latest_admitted_claude_attempt_requires_its_own_verdict(resolver):
@@ -424,5 +437,80 @@ def test_source_budget_must_attest_one_eligible_exact_route(resolver, defect):
         pages=iter([page(summary(resolver))]),
     )
     with pytest.raises(resolver["PostMergeError"], match="latest review admission is unverified"):
+        merge(resolver, api)
+    assert not api.merges
+
+
+@pytest.mark.parametrize("old_verdict", [None, "approve", "block"])
+def test_latest_codex_after_claude_attempt_preserves_claude_blocks(resolver, old_verdict):
+    api = GitHubFixture(
+        run=review_run(attempt=2),
+        jobs=[review_job("Claude review", conclusion="failure"), review_job("Codex GitHub review", attempt=2)],
+        routes=[route(), route(source_attempt=2, id=44)],
+        budgets=[budget_job(1), budget_job(2, 44)],
+        route_jobs={43: [route_job("Select Claude")], 44: [route_job(run_id=44)]},
+        pages=iter([page(summary(resolver))]),
+        comments=[] if old_verdict is None else [claude_comment(old_verdict)],
+    )
+    if old_verdict == "block":
+        with pytest.raises(resolver["PostMergeError"], match="Claude review verdict is block"):
+            merge(resolver, api)
+        assert not api.merges
+    else:
+        assert merge(resolver, api) == MERGED
+
+
+def test_native_history_api_error_cannot_be_treated_as_absence(resolver):
+    api = GitHubFixture(
+        run=review_run(attempt=2), jobs=[review_job("Claude review", attempt=2)],
+        routes=[route(), route(source_attempt=2, id=44)],
+        budgets=[budget_job(1), budget_job(2, 44)],
+        route_jobs={43: [route_job()], 44: [route_job("Select Claude", run_id=44)]},
+        comments=[claude_comment("approve", attempt=2)],
+        pages=iter([{"errors": [{"message": "API rejected the historical query"}]}]),
+    )
+    with pytest.raises(ValueError, match="Unable to authenticate GitHub review"):
+        merge(resolver, api)
+    assert not api.merges
+
+
+def test_ambiguous_historical_claude_verdict_holds_a_latest_codex_approval(resolver):
+    comment = claude_comment("approve")
+    comment["body"] += "\nVerdict: block"
+    api = GitHubFixture(
+        run=review_run(attempt=2), jobs=[review_job("Codex GitHub review", attempt=2)],
+        routes=[route(), route(source_attempt=2, id=44)],
+        budgets=[budget_job(1), budget_job(2, 44)],
+        route_jobs={43: [route_job("Select Claude")], 44: [route_job(run_id=44)]},
+        comments=[comment], pages=iter([page(summary(resolver))]),
+    )
+    with pytest.raises(resolver["PostMergeError"], match="ambiguous Claude verdict evidence"):
+        merge(resolver, api)
+    assert not api.merges
+
+
+@pytest.mark.parametrize("historical_provider", ["claude", "codex"])
+def test_previously_verified_historical_verdict_cannot_disappear(resolver, historical_provider):
+    old_claude = historical_provider == "claude"
+    old_job = review_job("Claude review" if old_claude else "Codex GitHub review", conclusion="failure")
+    latest_job = review_job("Codex GitHub review" if old_claude else "Claude review", attempt=2)
+    old_verifier = verification_job(old_job)
+    if old_claude:
+        old_verifier["conclusion"] = "success"
+    else:
+        old_verifier["steps"][-1]["conclusion"] = "failure"
+    api = GitHubFixture(
+        run=review_run(attempt=2), jobs=[old_job, latest_job],
+        verifiers=[old_verifier, verification_job(latest_job)],
+        routes=[route(), route(source_attempt=2, id=44)],
+        budgets=[budget_job(1), budget_job(2, 44)],
+        route_jobs={
+            43: [route_job("Select Claude" if old_claude else "Request Codex")],
+            44: [route_job("Request Codex" if old_claude else "Select Claude", run_id=44)],
+        },
+        comments=[] if old_claude else [claude_comment("approve", attempt=2)],
+        pages=iter([page(summary(resolver)) if old_claude else page()]),
+    )
+    with pytest.raises(resolver["PostMergeError"], match="historical .* verdict evidence is missing"):
         merge(resolver, api)
     assert not api.merges
