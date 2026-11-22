@@ -12,15 +12,23 @@ import json
 import os
 import re
 import subprocess
+import sys
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
+# Direct loading by filename uses sibling sources. The embedded workflow
+# preloads its pages module, so it does not add a checkout to the import path.
+if "ci_codex_review_pages" not in sys.modules:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import ci_codex_review_pages as _pages  # noqa: E402
+
+# Keep the historical names available to direct importers.
+EvidenceError = _pages.EvidenceError
+summary_comments = _pages.summary_comments
+
 Record = dict[str, Any]
-
-
-class EvidenceError(ValueError):
-    """Only fixed diagnostic categories may cross the CLI boundary."""
 
 
 class APIError(EvidenceError):
@@ -279,12 +287,4 @@ def _owner_proof(target, body, review, metadata):
 
 # Body and edit attribution live in the shared comment boundary.
 def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
-    from ci_codex_review_comments import _comment_pages as normalize  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
-
-    return normalize(pages, sha, pr)
-
-
-def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
-    from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
-
-    return fetch(repo, pr, sha, request)
+    return _pages._comment_pages(pages, sha, pr)

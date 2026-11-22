@@ -158,6 +158,22 @@ def without_agreement(text, pairs):
 
 
 def original_security_runtime(delivered):
+    # Recompose the runtime's historical error declaration from the page boundary.
+    pages = (NATIVE / "assets/scripts/ci_codex_review_pages.py").read_bytes()
+    error = pages[pages.index(b"class EvidenceError"):pages.index(b"# Rule D5")]
+    imported = (
+        b"# Direct loading by filename uses sibling sources. The embedded workflow\n"
+        b"# preloads its pages module, so it does not add a checkout to the import path.\n"
+        b'if "ci_codex_review_pages" not in sys.modules:\n'
+        b"    sys.path.insert(0, str(Path(__file__).resolve().parent))\n\n"
+        b"import ci_codex_review_pages as _pages  # noqa: E402\n\n"
+        b"# Keep the historical names available to direct importers.\n"
+        b"EvidenceError = _pages.EvidenceError\n"
+        b"summary_comments = _pages.summary_comments\n\n"
+    )
+    delivered = without_agreement(delivered, [
+        (b"import sys\n", b""), (imported, b""), (b"class APIError", error + b"class APIError"),
+    ])
     delivered = without_agreement(delivered, [(AGREEMENT_OUTPUT, b"")])
     delivered = original_owner_resolution(
         delivered.decode(), "scripts/ci_codex_review_runtime.py"
@@ -245,8 +261,14 @@ def without_reaction_verdict(text):
 
 
 def original_security_reader(delivered):
+    reader = without_agreement(delivered.decode(), [
+        ("_outputs = runtime._outputs\n\n\n", ""),
+        ("import ci_codex_review_runtime as runtime  # noqa: E402\n",
+         "import ci_codex_review_runtime as runtime  # noqa: E402\n"
+         "from ci_codex_review_runtime import _outputs  # noqa: E402\n"),
+    ])
     original = original_owner_resolution(
-        without_agreement(without_reaction_verdict(delivered.decode()), AGREEMENT_READER),
+        without_agreement(without_reaction_verdict(reader), AGREEMENT_READER),
         "scripts/ci_codex_reviews.py",
     )
     original = original_security_receipt(original_reader_api(original))
@@ -313,6 +335,13 @@ def original_review_job(delivered):
     anchored = "        run: |\n          set -euo pipefail\n          args=("
     assert original.count(anchored) == 1
     original = original.replace(anchored, anchored.replace("run: |", "run: &codex_review_reader |"))
+    first = original.index("          PAGES_SOURCE = r" + "'" * 3 + "\n")
+    last = original.index("          RUNTIME_SOURCE = r" + "'" * 3 + "\n", first)
+    original = without_agreement(original[:first] + original[last:], [(
+        '          _pages = ModuleType("ci_codex_review_pages")\n'
+        '          exec(compile(PAGES_SOURCE, "ci_codex_review_pages.py", "exec"), _pages.__dict__)\n'
+        "          sys.modules[_pages.__name__] = _pages\n", "",
+    )])
     first = original.index("          REACTION_SOURCE = r'''\n")
     last = original.index("          AGREEMENT_SOURCE = r'''\n", first)
     original = without_agreement(original[:first] + original[last:], [(
@@ -799,6 +828,7 @@ def test_native_inline_codex_readers_match_the_delivered_scripts(tmp_path):
     direct = yaml.safe_load(files[tmp_path / ".github/workflows/pipeline.yml"])
     command = direct["jobs"]["review"]["steps"][0]["run"]
     for variable, filename in (
+        ("PAGES_SOURCE", "ci_codex_review_pages.py"),
         ("RUNTIME_SOURCE", "ci_codex_review_runtime.py"),
         ("COMMENTS_SOURCE", "ci_codex_review_comments.py"),
         ("REACTION_SOURCE", "ci_codex_review_reaction.py"),
@@ -820,6 +850,7 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
     loaded = {}
     with patch.dict(sys.modules):
         for name in (
+            "ci_codex_review_pages",
             "ci_codex_review_runtime",
             "ci_codex_review_comments",
             "ci_codex_review_reaction",
@@ -834,8 +865,8 @@ def test_native_comment_boundary_loads_in_isolation_with_the_shared_error(tmp_pa
             exec(compile(source, module.__file__, "exec"), module.__dict__)
             sys.modules[name] = module
             loaded[name] = module
-        runtime, comments, _, _, reader = loaded.values()
-        assert comments.EvidenceError is runtime.EvidenceError
+        pages, runtime, comments, _, _, reader = loaded.values()
+        assert comments.EvidenceError is runtime.EvidenceError is pages.EvidenceError
         rows = [comment(), claude_row(SHA)]  # Codex and Claude agree on the head.
         assert reader.review_evidence(rows, SHA, REPO, PR)["state"] == "success"
         rows = runtime._comment_pages([page([comment()])], SHA, PR)

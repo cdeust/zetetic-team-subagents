@@ -244,6 +244,9 @@
         "tests/test_ci_post_merge_template.py",
         "tests/test_ci_native_renderer.py"
       ]
+    },
+    "acyclic-comment-pages": {
+      "reason": "The comment page/error boundary is dependency-free and loads before runtime and comments; direct imports remain available and the reader uses one runtime import form. The legacy modules use explicit aliases to the public page objects and typed private delegates to the same normalizer."
     }
   },
   "adapted_assets": {
@@ -271,14 +274,15 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "8aac5f9613bab0d4b23b00af418593171bf2211071e0d96104dc74a03116dd7c",
+      "sha256": "dc5034bde61ae9fdb0c6959e63903475c01f43e37a9d8f86b2c0ba3fb7c422dd",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
         "comment-boundary-module",
         "structured-api-errors",
         "reviewer-agreement-lifts-review-holds",
-        "security-owner-resolution"
+        "security-owner-resolution",
+        "acyclic-comment-pages"
       ]
     },
     "scripts/ci_codex_reviews.py": {
@@ -290,9 +294,10 @@
         "security-receipt-proof",
         "reviewer-agreement-lifts-review-holds",
         "security-owner-resolution",
-        "codex-reaction-verdict"
+        "codex-reaction-verdict",
+        "acyclic-comment-pages"
       ],
-      "sha256": "2a01779250d332a738fc8b07832ae20ce0b00264b9a0e1a3d6a8ffd547c44750"
+      "sha256": "e63df571a867a4cb444e114f872283535f2cf62c3aeb2d8f9c869750178191ec"
     },
     "scripts/ci_codex_review_event.py": {
       "source_sha256": "e6a778bd14b37b53b3eeaa2f2cf95233029087638c76652da2e8b8b14790fe80",
@@ -327,7 +332,7 @@
     "scripts/ci_codex_review_reaction.py": "4879edcd9d9194187f3c2e4448f7b1a43a4075e5e17d482ca1d128e608902ae2",
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "5b2a3e73a5aa7a29e51a89c348123fca87a0ba35e27e067020a3e39fe1675f9b",
+    "scripts/ci_codex_review_comments.py": "cddc610be7e99b1106bb01e3ba1027178585f9b2ca54a3a22c2e39769794b5fd",
     "scripts/tests/codex_resume_fixtures.py": "3259d5d6049f9a72e3e1adc4f72e7021a72c67c82a1fae842f6b8e4242f58ad3",
     "scripts/tests/test_ci_codex_review_event.py": "4f4fb694130571e4d570280c87becc8ad07ae02d11dcee1c90aaed35fc758c35",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
@@ -341,13 +346,14 @@
     "scripts/tests/test_ci_codex_review_proof_first.py": "1b046a129447084575e2260b7eac4175342bfdd4fa9ec339d81fc3fb48348403",
     "scripts/tests/test_ci_codex_review_gate_groups.py": "93e81fb2b1fb42c9f3c3aa820dbaf6b01278146cb7965cfb86d38452bca9f2d6",
     "scripts/tests/test_no_main_comparison.py": "61901ca00aec3d6c280a35a9a22e298ce5eac88dc95fb63676f066cc17850b27",
-    "scripts/ci_codex_review_agreement.py": "427535b75ecf3d374c15f69a59868e59a23b8ea6ac323102f848ced794846923"
+    "scripts/ci_codex_review_agreement.py": "427535b75ecf3d374c15f69a59868e59a23b8ea6ac323102f848ced794846923",
+    "scripts/ci_codex_review_pages.py": "7f1c2b9a617069bdd0197079a18722a990c443b491eebb35aa093ebc03531364"
   },
   "adapted_jobs": {
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "b226b9886e55f13d96bba95c4eb87bc264b37042642757bee2dba19d0d6f34fe",
+      "sha256": "7255e4ae4b8ba879774aa2a234dbc3746165f5e3ec4d7365fa201253dc875e0d",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
@@ -360,7 +366,8 @@
         "security-owner-resolution",
         "codex-reaction-verdict",
         "receipt-head-binding",
-        "review-never-blocks"
+        "review-never-blocks",
+        "acyclic-comment-pages"
       ]
     },
     "resolve": {
