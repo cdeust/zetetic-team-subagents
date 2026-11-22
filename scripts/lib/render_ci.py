@@ -9,19 +9,21 @@ import argparse
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 from textwrap import indent
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 CATEGORIES = ("unit", "regression", "e2e", "environment", "install")
 # Source: templates/ci/native/source.json pins the copied Cortex configuration.
+CLI_ASSETS = (".github/claude-cli/package.json", ".github/claude-cli/package-lock.json")
 NATIVE_ASSETS = (
     "scripts/tests/test_no_main_comparison.py",
     ".github/workflows/Codex.yml",
     ".github/workflows/claude-review.yml",
     ".github/workflows/claude.yml",
-    ".github/claude-cli/package.json",
-    ".github/claude-cli/package-lock.json",
+    *CLI_ASSETS,
     "scripts/ci_codex_review_event.py",
     "scripts/ci_codex_review_event_source.py",
     "scripts/ci_codex_review_resume.py",
@@ -280,14 +282,15 @@ def prepare_files(target, root=ROOT, native_review=False, no_schedule=False, nat
         target / ".github/workflows" / name: body.encode()
         for name, body in artifacts(root, native_review).items()
     }
+    assets = root / "templates/ci/native/assets"
     if native_review:
-        assets = root / "templates/ci/native/assets"
         files.update(
             {target / name: native_asset(assets / name, no_schedule) for name in NATIVE_ASSETS}
         )
     else:
         review = root / "templates/ci/review"
         files.update({target / name: (review / name).read_bytes() for name in REVIEW_ASSETS})
+        files.update({target / name: (assets / name).read_bytes() for name in CLI_ASSETS})
     example = (root / "templates/ci/ci.example.json").read_bytes()
     if not (target / "ci.json").exists():
         files[target / "ci.json"] = example
@@ -296,40 +299,99 @@ def prepare_files(target, root=ROOT, native_review=False, no_schedule=False, nat
     return files
 
 
-def write_bytes(path, data):
+class Output(NamedTuple):
+    data: bytes
+    device: int
+    inode: int
+    uid: int
+    gid: int
+    mode: int
+
+
+def output_state(data, info):
+    return Output(data, info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode))
+
+
+def read_output(path):
+    # Read both the bytes and their identity from the same regular file.
+    if path.is_symlink():
+        raise OSError("Refusing symlink output: " + str(path))
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError("Refusing non-file output: " + str(path))
+        return output_state(stream.read(), info)
+
+
+def require_output(path, expected):
+    if read_output(path) != expected:
+        raise OSError("Concurrent edit of rendered output: " + str(path))
+
+
+def write_output(path, data, expected, permissions):
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=".render-ci-", dir=path.parent)
     try:
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(data)
-        os.chmod(temporary, 0o644)
+            stream.flush()
+            if permissions is not None:
+                mode, owner, group = permissions
+                info = os.fstat(stream.fileno())
+                if info.st_uid != owner or info.st_gid != group:
+                    raise OSError("Cannot preserve output ownership: " + str(path))
+                if hasattr(os, "fchmod"):
+                    os.fchmod(stream.fileno(), mode)
+                else:
+                    os.chmod(temporary, mode)
+            written = output_state(data, os.fstat(stream.fileno()))
+        require_output(path, expected)
         os.replace(temporary, path)
+        return written
     finally:
         Path(temporary).unlink(missing_ok=True)
 
 
 def deliver(files, dry_run=False):
-    before = {path: path.read_bytes() if path.exists() else None for path in files}
-    changed = [path for path, body in files.items() if before[path] != body]
+    before = {path: read_output(path) for path in files}
+    changed = [path for path, body in files.items() if before[path] is None or before[path].data != body]
+    for path in changed:
+        original = before[path]
+        if original and original.mode & (stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX):
+            raise ValueError("Refusing special mode on rendered output: " + str(path))
     if dry_run:
         for path in changed:
             print("Would write:", path)
         return
-    written = []
+    written = {}
     try:
         for path in changed:
-            write_bytes(path, files[path])
-            written.append(path)
+            original = before[path]
+            # New outputs stay private (mkstemp). Only existing data-file access
+            # bits may be carried forward; generated files never gain an executable bit.
+            allowed = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH
+            permissions = (original.mode & allowed, original.uid, original.gid) if original else None
+            written[path] = write_output(path, files[path], original, permissions)
     except OSError:
+        conflicts = []
         for path in reversed(written):
-            if path.read_bytes() != files[path]:
-                raise RuntimeError(
-                    "Concurrent edit prevents rollback: " + str(path)
-                ) from None
-            if before[path] is None:
-                path.unlink()
-            else:
-                write_bytes(path, before[path])
+            original = before[path]
+            try:
+                if original is None:
+                    require_output(path, written[path])
+                    path.unlink()
+                else:
+                    permissions = original.mode, original.uid, original.gid
+                    write_output(path, original.data, written[path], permissions)
+            except OSError as exc:
+                conflicts.append(str(exc))
+        if conflicts:
+            raise RuntimeError("Could not roll back rendered outputs: " + ", ".join(conflicts))
         raise
     for path in files:
         print("Wrote:" if path in changed else "Unchanged:", path)
