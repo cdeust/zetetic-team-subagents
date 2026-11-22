@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+from textwrap import indent
 
 ROOT = Path(__file__).resolve().parents[2]
 CATEGORIES = ("unit", "regression", "e2e", "environment", "install")
@@ -225,10 +226,56 @@ def native_asset(path: Path, no_schedule: bool) -> bytes:
     return data
 
 
-def prepare_files(target, root=ROOT, native_review=False, no_schedule=False):
+POST_MERGE = ".github/workflows/pipeline-post-merge.yml"
+NATIVE_PARSER = "scripts/ci_native_verdict.py"
+OVERLAY_START = "          # render-ci: native-verdict begin\n"
+OVERLAY_END = "          # render-ci: native-verdict end\n"
+CLAUDE_GATE = '                  _review_approves(pr["number"], head, repository, api)\n'
+NATIVE_GATE = '                  _selected_review_approves(pr["number"], head, repository, api)\n'
+
+
+def validate_path(target, path):
+    if any((target / parent).is_symlink() for parent in path.relative_to(target).parents):
+        raise ValueError("Refusing symlink output parent: " + str(path))
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ValueError("Refusing non-file output: " + str(path))
+
+
+def overlay_files(target, root, workflow):
+    assets = root / "templates/ci/overlay"
+    parser = (assets / "ci_native_verdict.py").read_text()
+    resolver = (assets / "native-resolver.py").read_text()
+    overlay = OVERLAY_START + indent(parser + "\n\n" + resolver, " " * 10) + OVERLAY_END
+    if OVERLAY_START in workflow:
+        if workflow.count(OVERLAY_START) != 1 or workflow.count(OVERLAY_END) != 1:
+            raise ValueError("Invalid native-verdict overlay markers")
+        before, _, rest = workflow.partition(OVERLAY_START)
+        _, found, after = rest.partition(OVERLAY_END + "\n")
+        if not found:
+            raise ValueError("Invalid native-verdict overlay marker order")
+        workflow = replace_exact(before + after, NATIVE_GATE, CLAUDE_GATE)
+    elif OVERLAY_END in workflow:
+        raise ValueError("Missing native-verdict overlay start")
+    anchor = "          def _merge_open_pr(pr, merge_path, head, api, repository):\n"
+    workflow = replace_exact(workflow, anchor, overlay + "\n" + anchor)
+    workflow = replace_exact(workflow, CLAUDE_GATE, NATIVE_GATE)
+    parser_path = target / NATIVE_PARSER
+    validate_path(target, parser_path)
+    return {target / POST_MERGE: workflow.encode(), parser_path: parser.encode()}
+
+
+def prepare_files(target, root=ROOT, native_review=False, no_schedule=False, native_verdict=False):
     if no_schedule and not native_review:
         raise ValueError("--no-schedule requires --native-review")
-    # Resolve/validate every source before the first destination write.
+    post_merge = target / POST_MERGE
+    validate_path(target, post_merge)
+    workflow = post_merge.read_bytes().decode() if post_merge.exists() else ""
+    if native_verdict or OVERLAY_START in workflow or OVERLAY_END in workflow:
+        if native_review:
+            raise ValueError("--native-review conflicts with the native-verdict overlay")
+        if not workflow:
+            raise ValueError("--native-verdict requires an existing pipeline-post-merge.yml")
+        return overlay_files(target, root, workflow)
     files = {
         target / ".github/workflows" / name: body.encode()
         for name, body in artifacts(root, native_review).items()
@@ -245,13 +292,7 @@ def prepare_files(target, root=ROOT, native_review=False, no_schedule=False):
     if not (target / "ci.json").exists():
         files[target / "ci.json"] = example
     for path in files:
-        if any(
-            (target / parent).is_symlink()
-            for parent in path.relative_to(target).parents
-        ):
-            raise ValueError("Refusing symlink output parent: " + str(path))
-        if path.is_symlink() or (path.exists() and not path.is_file()):
-            raise ValueError("Refusing non-file output: " + str(path))
+        validate_path(target, path)
     return files
 
 
@@ -298,7 +339,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", type=Path)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument(
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument(
+        "--native-verdict",
+        action="store_true",
+        help="overlay authenticated native merge verdicts on an existing consumer pipeline",
+    )
+    profile.add_argument(
         "--native-review",
         action="store_true",
         help="install native Codex and official Claude review workflows",
@@ -314,7 +361,10 @@ def main():
     if not args.target.is_dir():
         parser.error("target must be an existing repository directory")
     files = prepare_files(
-        args.target, native_review=args.native_review, no_schedule=args.no_schedule
+        args.target,
+        native_review=args.native_review,
+        no_schedule=args.no_schedule,
+        native_verdict=args.native_verdict,
     )
     deliver(files, args.dry_run)
 

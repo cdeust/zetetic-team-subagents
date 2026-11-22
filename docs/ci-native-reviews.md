@@ -241,3 +241,56 @@ Sources: [supported Actions events](https://docs.github.com/en/actions/reference
 and [thread webhook](https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_thread).
 See also [schedule constraints](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 and [public runner billing](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run#standard-github-hosted-runners-for-public-repositories).
+
+## Authenticated code review overlay for quota-routed repositories
+
+A repository that already routes its existing `PR Review` workflow between Claude
+and native Codex can opt in to using native Codex code review verdicts in the
+protected merge resolver:
+
+```bash
+bash scripts/setup.sh render-ci /path/to/repository --native-verdict --dry-run
+bash scripts/setup.sh render-ci /path/to/repository --native-verdict
+```
+
+The overlay expects an existing generated `pipeline-post-merge.yml` with the
+Claude verdict gate. It updates that gate and exports the same native GraphQL
+reader as `scripts/ci_native_verdict.py` for the consumer review collector to
+import. The direct Pipeline, caller, review workflow, and budget remain owned
+by the consumer. Subsequent renders recognize the overlay markers and refresh
+only those two paths. An incompatible resolver or an attempt to combine this
+option with `--native-review` fails before writing.
+
+The protected resolver reads the default-branch `review-subscription.yml`
+decision for the exact PR, head, review run and attempt. The source attempt's
+successful `Claude review budget` job must report exactly one successful
+`Subscription decision run <id>` step. The resolver reads that route run
+directly and requires its first attempt to have succeeded on the default
+branch. A missing or pending decision for the latest source run holds the
+merge.
+
+The latest admitted attempt must approve with a successful source run,
+`PR Review` job step, and independently successful verdict verification job
+and steps. An earlier attempt with no verdict does not prevent another provider
+from completing the review if the evidence is consistent. A verified receipt
+that has since disappeared holds the merge. Authenticated historical blocks on the same head
+still veto the merge, and an earlier approval cannot satisfy the latest attempt.
+
+For native Codex, the resolver reads all GitHub GraphQL comment pages and
+verifies the connector's Bot ID, author and last editor, the open PR's exact
+head, and the summary's explicit findings flags. Missing, pending, blocked,
+ambiguous or unauthenticated native evidence holds the merge. Claude verdict
+comments must be authored by `claude[bot]` and include the exact admitted
+attempt's Markdown link, using the following format:
+
+```text
+[View job run](https://github.com/OWNER/REPO/actions/runs/RUN_ID/attempts/RUN_ATTEMPT)
+Verdict: approve
+```
+
+The merge step submits the tested SHA to GitHub.
+
+The reader runs inline on the default-branch `workflow_run` path and consumes
+GitHub data without checking out or executing repository code. Keep the
+`Pipeline` and `PR Review` completion triggers so a native review that
+approves after the tests can wake the merge resolver.
