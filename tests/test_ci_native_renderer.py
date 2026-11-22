@@ -719,12 +719,13 @@ def test_rollback_respects_concurrent_permission_change(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX owner/group identity")
-def test_replacement_cannot_share_another_groups_permissions(tmp_path):
+@pytest.mark.parametrize("mode", [0o640, 0o604])
+def test_replacement_cannot_share_another_groups_permissions(tmp_path, mode):
     target = tmp_path / "shared"
     target.write_bytes(b"previous")
     state = renderer.read_output(target)
     with pytest.raises(OSError, match="preserve output ownership"):
-        renderer.write_output(target, b"new", state, (0o640, state.uid, state.gid + 1))
+        renderer.write_output(target, b"new", state, (mode, state.uid, state.gid + 1))
     assert renderer.read_output(target) == state
     assert not list(tmp_path.glob(".render-ci-*"))
 

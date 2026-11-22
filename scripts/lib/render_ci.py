@@ -343,7 +343,7 @@ def write_output(path, data, expected, permissions):
             if permissions is not None:
                 mode, owner, group = permissions
                 info = os.fstat(stream.fileno())
-                if info.st_uid != owner or (mode & stat.S_IRWXG and info.st_gid != group):
+                if info.st_uid != owner or info.st_gid != group:
                     raise OSError("Cannot preserve output ownership: " + str(path))
                 if hasattr(os, "fchmod"):
                     os.fchmod(stream.fileno(), mode)
