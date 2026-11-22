@@ -608,6 +608,122 @@ jobs:
           import sys
           from types import ModuleType
 
+          PAGES_SOURCE = r'''
+          """Normalize authenticated GraphQL comment pages and define their shared error."""
+
+          from __future__ import annotations
+
+          from typing import Any
+
+          Record = dict[str, Any]
+
+
+          class EvidenceError(ValueError):
+              """Only fixed diagnostic categories may cross the CLI boundary."""
+
+
+          # Rule D5, 2026-10-29: Claude skips Dependabot (no Actions secrets, PR #224), so an absent
+          # marker agrees on a PR by GraphQL author dependabot/Bot on dependabot/* (prD evidence, PR212).
+          DEPENDABOT = {"login": "dependabot", "__typename": "Bot"}
+
+
+          class Comments(list):
+              """Comment rows of one PR, read with its author from the same GraphQL node."""
+              dependabot = False
+
+
+          # Body and edit attribution must come from the same authenticated API node.
+          # https://docs.github.com/en/graphql/reference/issues#issuecomment
+          COMMENTS_QUERY = """
+          query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                number headRefOid headRefName author { login __typename }
+                comments(first:100, after:$endCursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    databaseId body updatedAt lastEditedAt
+                    author { login __typename ... on Bot { id } ... on User { id } }
+                    editor { login __typename ... on Bot { id } ... on User { id } }
+                  }
+                }
+              }
+            }
+          }
+          """
+
+
+          def _comment_row(node: Any) -> Record:
+              keys = ("databaseId", "body", "updatedAt", "author", "editor", "lastEditedAt")
+              if not isinstance(node, dict) or any(key not in node for key in keys):
+                  raise EvidenceError("protocol")
+              identity = node["databaseId"]
+              if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
+                  raise EvidenceError("protocol")
+              author = node["author"] or {}
+              if not isinstance(author, dict):
+                  raise EvidenceError("protocol")
+              login, kind = author.get("login"), author.get("__typename")
+              if login in ("chatgpt-codex-connector", "claude") and kind == "Bot":
+                  login += "[bot]"  # REST form; GraphQL Bot logins omit it (prD evidence).
+              return {
+                  "id": identity,
+                  "body": node["body"],
+                  "updated_at": node["updatedAt"],
+                  "user": {"login": login, "type": kind, "node_id": author.get("id")},
+                  "editor": node["editor"],
+                  "lastEditedAt": node["lastEditedAt"],
+              }
+
+
+          def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+              if not isinstance(pages, list) or not pages:
+                  raise EvidenceError("protocol")
+              rows, identities, cursors = Comments(), set(), set()
+              try:
+                  for index, page in enumerate(pages):
+                      if page.get("errors"):
+                          raise EvidenceError("protocol")
+                      pull = page["data"]["repository"]["pullRequest"]
+                      if index == 0:  # Same node as the comments; absent fields mean not Dependabot.
+                          who, ref = pull.get("author"), str(pull.get("headRefName"))
+                          rows.dependabot = who == DEPENDABOT and ref.startswith("dependabot/")
+                      if pull["headRefOid"] != sha:
+                          raise EvidenceError("head_moved")
+                      if type(pull["number"]) is not int or pull["number"] != pr:
+                          raise EvidenceError("protocol")
+                      connection = pull["comments"]
+                      more, cursor = (
+                          connection["pageInfo"][key] for key in ("hasNextPage", "endCursor")
+                      )
+                      if type(more) is not bool or more != (index < len(pages) - 1):
+                          raise EvidenceError("protocol")
+                      if cursor is not None and (not isinstance(cursor, str) or not cursor):
+                          raise EvidenceError("protocol")
+                      if more and (cursor is None or cursor in cursors):
+                          raise EvidenceError("protocol")
+                      cursors.add(cursor)
+                      if not isinstance(connection["nodes"], list):
+                          raise EvidenceError("protocol")
+                      current = [_comment_row(node) for node in connection["nodes"]]
+                      current_ids = [row["id"] for row in current]
+                      if len(set(current_ids)) != len(current_ids) or identities.intersection(
+                          current_ids
+                      ):
+                          raise EvidenceError("protocol")
+                      identities.update(current_ids)
+                      rows.extend(current)
+              except (KeyError, TypeError, AttributeError) as exc:
+                  raise EvidenceError("protocol") from exc
+              return rows
+
+
+          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+              owner, name = repo.split("/")
+              fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
+              return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
+          '''
+
           RUNTIME_SOURCE = r'''
           """Trusted Codex review I/O and nullable security-resolution proof.
 
@@ -623,15 +739,23 @@ jobs:
           import os
           import re
           import subprocess
+          import sys
           from http import HTTPStatus
           from pathlib import Path
           from typing import Any
 
+          # Direct loading by filename uses sibling sources. The embedded workflow
+          # preloads its pages module, so it does not add a checkout to the import path.
+          if "ci_codex_review_pages" not in sys.modules:
+              sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+          from ci_codex_review_pages import (  # noqa: E402
+              EvidenceError as EvidenceError,
+              _comment_pages as _comment_pages,
+              summary_comments as summary_comments,
+          )
+
           Record = dict[str, Any]
-
-
-          class EvidenceError(ValueError):
-              """Only fixed diagnostic categories may cross the CLI boundary."""
 
 
           class APIError(EvidenceError):
@@ -886,19 +1010,6 @@ jobs:
                   "source": "github_review_threads",
                   "finding_ids": sorted(expected),
               }
-
-
-          # Body and edit attribution live in the shared comment boundary.
-          def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
-              from ci_codex_review_comments import _comment_pages as normalize  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
-
-              return normalize(pages, sha, pr)
-
-
-          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
-              from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
-
-              return fetch(repo, pr, sha, request)
           '''
 
           COMMENTS_SOURCE = r'''
@@ -914,6 +1025,17 @@ jobs:
           import re
           from typing import Any
 
+          import ci_codex_review_runtime as runtime
+          from ci_codex_review_pages import (
+              COMMENTS_QUERY as COMMENTS_QUERY,
+              DEPENDABOT as DEPENDABOT,
+              Comments as Comments,
+              EvidenceError as EvidenceError,
+              _comment_pages as _comment_pages,
+              _comment_row as _comment_row,
+              summary_comments as summary_comments,
+          )
+
           Record = dict[str, Any]
           # Source: native Codex summary6456275844 on2026-10-28.
           BOT = "chatgpt-codex-connector[bot]"
@@ -921,21 +1043,8 @@ jobs:
           STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
 
 
-          def _runtime():
-              """The runtime module, resolved on use: runtime imports this module lazily too."""
-              import ci_codex_review_runtime as runtime  # noqa: PLC0415 - keeps the import graph acyclic
-
-              return runtime
-
-
           def _api(*args: Any, **kwargs: Any) -> Any:
-              return _runtime()._api(*args, **kwargs)
-
-
-          def __getattr__(name: str) -> Any:
-              if name == "EvidenceError":
-                  return _runtime().EvidenceError
-              raise AttributeError(name)
+              return runtime._api(*args, **kwargs)
 
 
           def _canonical(comment: Any) -> bool:
@@ -963,28 +1072,28 @@ jobs:
           def _authenticate_editor(comment: Record, login: str = "chatgpt-codex-connector") -> None:
               # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
               if "editor" not in comment or "lastEditedAt" not in comment:
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
               identity = comment.get("user", {}).get("node_id")
               if not isinstance(identity, str) or not identity:
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
               editor, edited = comment["editor"], comment["lastEditedAt"]
               if edited is None:
                   if editor is not None:
-                      raise _runtime().EvidenceError("editor")
+                      raise EvidenceError("editor")
                   return
               if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
               try:
                   datetime.fromisoformat(edited.replace("Z", "+00:00"))
               except ValueError as exc:
-                  raise _runtime().EvidenceError("editor") from exc
+                  raise EvidenceError("editor") from exc
               if (
                   not isinstance(editor, dict)
                   or editor.get("__typename") != "Bot"
                   or editor.get("login") != login
                   or editor.get("id") != identity
               ):
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
 
 
           # Source: native receipts6491350304 (cortex-viz PR213) and6491478435 (Cortex
@@ -1041,7 +1150,7 @@ jobs:
                   return named
               try:
                   commit = _api(f"repos/{repo}/commits/{named}")  # late-bound runtime API
-              except _runtime().EvidenceError:
+              except EvidenceError:
                   return None
               full = commit.get("sha") if isinstance(commit, dict) else None
               if not isinstance(full, str) or re.fullmatch(r"[0-9a-f]{40}", full) is None:
@@ -1087,108 +1196,6 @@ jobs:
                   "source": "codex_security_receipt",
                   "receipt_ids": sorted(receipts),
               }
-
-
-          # Rule D5, 2026-10-29: Claude skips Dependabot (no Actions secrets, PR #224), so an absent
-          # marker agrees on a PR by GraphQL author dependabot/Bot on dependabot/* (prD evidence, PR212).
-          DEPENDABOT = {"login": "dependabot", "__typename": "Bot"}
-
-
-          class Comments(list):
-              """Comment rows of one PR, read with its author from the same GraphQL node."""
-              dependabot = False
-
-
-          # Body and edit attribution must come from the same authenticated API node.
-          # https://docs.github.com/en/graphql/reference/issues#issuecomment
-          COMMENTS_QUERY = """
-          query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
-            repository(owner: $owner, name: $name) {
-              pullRequest(number: $number) {
-                number headRefOid headRefName author { login __typename }
-                comments(first:100, after:$endCursor) {
-                  pageInfo { hasNextPage endCursor }
-                  nodes {
-                    databaseId body updatedAt lastEditedAt
-                    author { login __typename ... on Bot { id } ... on User { id } }
-                    editor { login __typename ... on Bot { id } ... on User { id } }
-                  }
-                }
-              }
-            }
-          }
-          """
-
-
-          def _comment_row(node: Any) -> Record:
-              keys = ("databaseId", "body", "updatedAt", "author", "editor", "lastEditedAt")
-              if not isinstance(node, dict) or any(key not in node for key in keys):
-                  raise _runtime().EvidenceError("protocol")
-              identity = node["databaseId"]
-              if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
-                  raise _runtime().EvidenceError("protocol")
-              author = node["author"] or {}
-              if not isinstance(author, dict):
-                  raise _runtime().EvidenceError("protocol")
-              login, kind = author.get("login"), author.get("__typename")
-              if login in ("chatgpt-codex-connector", "claude") and kind == "Bot":
-                  login += "[bot]"  # REST form; GraphQL Bot logins omit it (prD evidence).
-              return {
-                  "id": identity,
-                  "body": node["body"],
-                  "updated_at": node["updatedAt"],
-                  "user": {"login": login, "type": kind, "node_id": author.get("id")},
-                  "editor": node["editor"],
-                  "lastEditedAt": node["lastEditedAt"],
-              }
-
-
-          def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
-              if not isinstance(pages, list) or not pages:
-                  raise _runtime().EvidenceError("protocol")
-              rows, identities, cursors = Comments(), set(), set()
-              try:
-                  for index, page in enumerate(pages):
-                      if page.get("errors"):
-                          raise _runtime().EvidenceError("protocol")
-                      pull = page["data"]["repository"]["pullRequest"]
-                      if index == 0:  # Same node as the comments; absent fields mean not Dependabot.
-                          who, ref = pull.get("author"), str(pull.get("headRefName"))
-                          rows.dependabot = who == DEPENDABOT and ref.startswith("dependabot/")
-                      if pull["headRefOid"] != sha:
-                          raise _runtime().EvidenceError("head_moved")
-                      if type(pull["number"]) is not int or pull["number"] != pr:
-                          raise _runtime().EvidenceError("protocol")
-                      connection = pull["comments"]
-                      more, cursor = (
-                          connection["pageInfo"][key] for key in ("hasNextPage", "endCursor")
-                      )
-                      if type(more) is not bool or more != (index < len(pages) - 1):
-                          raise _runtime().EvidenceError("protocol")
-                      if cursor is not None and (not isinstance(cursor, str) or not cursor):
-                          raise _runtime().EvidenceError("protocol")
-                      if more and (cursor is None or cursor in cursors):
-                          raise _runtime().EvidenceError("protocol")
-                      cursors.add(cursor)
-                      if not isinstance(connection["nodes"], list):
-                          raise _runtime().EvidenceError("protocol")
-                      current = [_comment_row(node) for node in connection["nodes"]]
-                      current_ids = [row["id"] for row in current]
-                      if len(set(current_ids)) != len(current_ids) or identities.intersection(
-                          current_ids
-                      ):
-                          raise _runtime().EvidenceError("protocol")
-                      identities.update(current_ids)
-                      rows.extend(current)
-              except (KeyError, TypeError, AttributeError) as exc:
-                  raise _runtime().EvidenceError("protocol") from exc
-              return rows
-
-
-          def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
-              owner, name = repo.split("/")
-              fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
-              return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
           '''
 
           REACTION_SOURCE = r'''
@@ -1471,13 +1478,15 @@ jobs:
           if "ci_codex_review_runtime" not in sys.modules:
               sys.path.insert(0, str(Path(__file__).resolve().parent))
           import ci_codex_review_runtime as runtime  # noqa: E402
-          from ci_codex_review_runtime import _outputs  # noqa: E402
           from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
           from ci_codex_review_comments import security_receipt  # noqa: E402
           from ci_codex_review_reaction import reaction_verdict  # noqa: E402
           from ci_codex_review_agreement import conclude  # noqa: E402
 
           Record = dict[str, Any]
+          _outputs = runtime._outputs
+
+
           SUMMARY = "<!-- codex-pull-request-review-summary -->"
           BOT = "chatgpt-codex-connector[bot]"
           KINDS = ("code_review", "security_review")
@@ -1743,6 +1752,9 @@ jobs:
               sys.exit(main())
           '''
 
+          _pages = ModuleType("ci_codex_review_pages")
+          exec(compile(PAGES_SOURCE, "ci_codex_review_pages.py", "exec"), _pages.__dict__)
+          sys.modules[_pages.__name__] = _pages
           _runtime = ModuleType("ci_codex_review_runtime")
           exec(compile(RUNTIME_SOURCE, "ci_codex_review_runtime.py", "exec"), _runtime.__dict__)
           sys.modules[_runtime.__name__] = _runtime

@@ -23,13 +23,15 @@ from typing import Any
 if "ci_codex_review_runtime" not in sys.modules:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_runtime as runtime  # noqa: E402
-from ci_codex_review_runtime import _outputs  # noqa: E402
 from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 from ci_codex_review_comments import security_receipt  # noqa: E402
 from ci_codex_review_reaction import reaction_verdict  # noqa: E402
 from ci_codex_review_agreement import conclude  # noqa: E402
 
 Record = dict[str, Any]
+_outputs = runtime._outputs
+
+
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
 BOT = "chatgpt-codex-connector[bot]"
 KINDS = ("code_review", "security_review")
