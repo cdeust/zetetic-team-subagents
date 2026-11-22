@@ -22,11 +22,12 @@ from typing import Any
 if "ci_codex_review_pages" not in sys.modules:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ci_codex_review_pages import (  # noqa: E402
-    EvidenceError as EvidenceError,
-    _comment_pages as _comment_pages,
-    summary_comments as summary_comments,
-)
+import ci_codex_review_pages as _pages  # noqa: E402
+
+# Keep the historical names available to direct importers.
+EvidenceError = _pages.EvidenceError
+_comment_pages = _pages._comment_pages
+summary_comments = _pages.summary_comments
 
 Record = dict[str, Any]
 

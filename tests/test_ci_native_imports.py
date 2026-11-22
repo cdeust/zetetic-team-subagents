@@ -49,13 +49,50 @@ importlib.import_module(sys.argv[2])
 import ci_codex_review_comments as comments
 import ci_codex_review_runtime as runtime
 import ci_codex_reviews as reader
+from ci_codex_review_comments import _comment_row
+from ci_codex_review_runtime import _comment_pages
 
 assert comments.EvidenceError is runtime.EvidenceError
 assert comments._comment_pages is runtime._comment_pages
 assert comments.summary_comments is runtime.summary_comments
 assert reader._outputs is runtime._outputs
+for module in (comments, runtime):
+    wildcard = {}
+    exec(f"from {module.__name__} import *", wildcard)
+    assert set(wildcard) - {"__builtins__"} == {
+        name for name in vars(module) if not name.startswith("_")
+    }
+    assert not {"_comment_pages", "_comment_row"} & wildcard.keys()
+for read, args in [(_comment_row, (None,)), (_comment_pages, ([], "c" * 40, 1))]:
+    try:
+        read(*args)
+    except comments.EvidenceError as error:
+        assert str(error) == "protocol"
+    else:
+        raise AssertionError("malformed input did not raise the shared error")
 '''
     subprocess.run(
         [sys.executable, "-IB", "-c", program, str(tmp_path / "scripts"), first],
         check=True,
     )
+
+
+@pytest.mark.parametrize(
+    ("module", "exports"),
+    [
+        ("ci_codex_review_comments",
+         {"COMMENTS_QUERY", "DEPENDABOT", "Comments", "EvidenceError",
+          "_comment_pages", "_comment_row", "summary_comments"}),
+        ("ci_codex_review_runtime", {"EvidenceError", "_comment_pages", "summary_comments"}),
+    ],
+)
+def test_historical_aliases_are_explicit_assignments_from_the_pages_module(module, exports):
+    tree = ast.parse((SCRIPTS / f"{module}.py").read_text())
+    bindings = {
+        node.targets[0].id: node.value.attr
+        for node in tree.body
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "_pages"
+    }
+    assert bindings == {name: name for name in exports}

@@ -171,11 +171,11 @@ def original_security_runtime(delivered):
         b"# preloads its pages module, so it does not add a checkout to the import path.\n"
         b'if "ci_codex_review_pages" not in sys.modules:\n'
         b"    sys.path.insert(0, str(Path(__file__).resolve().parent))\n\n"
-        b"from ci_codex_review_pages import (  # noqa: E402\n"
-        b"    EvidenceError as EvidenceError,\n"
-        b"    _comment_pages as _comment_pages,\n"
-        b"    summary_comments as summary_comments,\n"
-        b")\n\n"
+        b"import ci_codex_review_pages as _pages  # noqa: E402\n\n"
+        b"# Keep the historical names available to direct importers.\n"
+        b"EvidenceError = _pages.EvidenceError\n"
+        b"_comment_pages = _pages._comment_pages\n"
+        b"summary_comments = _pages.summary_comments\n\n"
     )
     delivered = without_agreement(delivered, [
         (b"import sys\n", b""), (imported, b""), (b"class APIError", error + b"class APIError"),

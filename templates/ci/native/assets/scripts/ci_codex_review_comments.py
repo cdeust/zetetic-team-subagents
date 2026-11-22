@@ -11,15 +11,16 @@ import re
 from typing import Any
 
 import ci_codex_review_runtime as runtime
-from ci_codex_review_pages import (
-    COMMENTS_QUERY as COMMENTS_QUERY,
-    DEPENDABOT as DEPENDABOT,
-    Comments as Comments,
-    EvidenceError as EvidenceError,
-    _comment_pages as _comment_pages,
-    _comment_row as _comment_row,
-    summary_comments as summary_comments,
-)
+import ci_codex_review_pages as _pages
+
+# Keep the historical names available to direct importers.
+COMMENTS_QUERY = _pages.COMMENTS_QUERY
+DEPENDABOT = _pages.DEPENDABOT
+Comments = _pages.Comments
+EvidenceError = _pages.EvidenceError
+_comment_pages = _pages._comment_pages
+_comment_row = _pages._comment_row
+summary_comments = _pages.summary_comments
 
 Record = dict[str, Any]
 # Source: native Codex summary6456275844 on2026-10-28.
