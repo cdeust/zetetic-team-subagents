@@ -18,8 +18,6 @@ COMMENTS_QUERY = _pages.COMMENTS_QUERY
 DEPENDABOT = _pages.DEPENDABOT
 Comments = _pages.Comments
 EvidenceError = _pages.EvidenceError
-_comment_pages = _pages._comment_pages
-_comment_row = _pages._comment_row
 summary_comments = _pages.summary_comments
 
 Record = dict[str, Any]
@@ -27,6 +25,14 @@ Record = dict[str, Any]
 BOT = "chatgpt-codex-connector[bot]"
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
 STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+def _comment_row(node: Any) -> Record:
+    return _pages._comment_row(node)
+
+
+def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+    return _pages._comment_pages(pages, sha, pr)
 
 
 def _api(*args: Any, **kwargs: Any) -> Any:

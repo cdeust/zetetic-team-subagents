@@ -246,7 +246,7 @@
       ]
     },
     "acyclic-comment-pages": {
-      "reason": "The comment page/error boundary is dependency-free and loads before runtime and comments; direct imports remain available and the reader uses one runtime import form. The legacy modules use explicit compatibility assignments to the same page objects."
+      "reason": "The comment page/error boundary is dependency-free and loads before runtime and comments; direct imports remain available and the reader uses one runtime import form. The legacy modules use explicit aliases to the public page objects and typed private delegates to the same normalizer."
     }
   },
   "adapted_assets": {
@@ -274,7 +274,7 @@
     },
     "scripts/ci_codex_review_runtime.py": {
       "source_sha256": "91d99c54263529bfbd0d1e256dcebb76462e71b33da71c998a1bfbd303ced07a",
-      "sha256": "75c712e192bba9c9e910c904b8377e03db1d39f2761f502b8c02a8c01b69069c",
+      "sha256": "dc5034bde61ae9fdb0c6959e63903475c01f43e37a9d8f86b2c0ba3fb7c422dd",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",
@@ -332,7 +332,7 @@
     "scripts/ci_codex_review_reaction.py": "4879edcd9d9194187f3c2e4448f7b1a43a4075e5e17d482ca1d128e608902ae2",
     ".github/claude-cli/package.json": "02d69d16892770ef77a3839bfdab97d0ebf07a919bbb56a026c4ee8f8d1aec8e",
     ".github/claude-cli/package-lock.json": "198b04838271ad96e0034f20610e7c8fce294f874b23b97bd9b60f2601fb0c82",
-    "scripts/ci_codex_review_comments.py": "f2541fb8c66edac924622ba9482431e066ca310c31566aec02378ae8c8570f07",
+    "scripts/ci_codex_review_comments.py": "cddc610be7e99b1106bb01e3ba1027178585f9b2ca54a3a22c2e39769794b5fd",
     "scripts/tests/codex_resume_fixtures.py": "3259d5d6049f9a72e3e1adc4f72e7021a72c67c82a1fae842f6b8e4242f58ad3",
     "scripts/tests/test_ci_codex_review_event.py": "4f4fb694130571e4d570280c87becc8ad07ae02d11dcee1c90aaed35fc758c35",
     "scripts/tests/test_ci_codex_review_event_attempts.py": "380ae4ce1c20cb443a422d6714703d373ed49a549e65e8baed573face9d90ae5",
@@ -353,7 +353,7 @@
     "review": {
       "path": ".github/workflows/pipeline.yml",
       "source_sha256": "807359c21ea6365639b4c17f3c0389093d23d8d224b68fb75d63686b7475ca53",
-      "sha256": "6906f767e01330d706fe8eac1c8761988472fc9bc80e84bf699c7bead4a60ab0",
+      "sha256": "7255e4ae4b8ba879774aa2a234dbc3746165f5e3ec4d7365fa201253dc875e0d",
       "adaptation": [
         "current-security-findings",
         "summary-editor-authentication",

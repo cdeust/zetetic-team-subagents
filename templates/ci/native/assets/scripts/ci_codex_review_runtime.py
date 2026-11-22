@@ -26,7 +26,6 @@ import ci_codex_review_pages as _pages  # noqa: E402
 
 # Keep the historical names available to direct importers.
 EvidenceError = _pages.EvidenceError
-_comment_pages = _pages._comment_pages
 summary_comments = _pages.summary_comments
 
 Record = dict[str, Any]
@@ -284,3 +283,8 @@ def _owner_proof(target, body, review, metadata):
         "source": "github_review_threads",
         "finding_ids": sorted(expected),
     }
+
+
+# Body and edit attribution live in the shared comment boundary.
+def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+    return _pages._comment_pages(pages, sha, pr)

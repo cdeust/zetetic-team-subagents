@@ -174,7 +174,6 @@ def original_security_runtime(delivered):
         b"import ci_codex_review_pages as _pages  # noqa: E402\n\n"
         b"# Keep the historical names available to direct importers.\n"
         b"EvidenceError = _pages.EvidenceError\n"
-        b"_comment_pages = _pages._comment_pages\n"
         b"summary_comments = _pages.summary_comments\n\n"
     )
     delivered = without_agreement(delivered, [
