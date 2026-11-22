@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 from pathlib import Path
 import subprocess
 import textwrap
@@ -670,11 +671,78 @@ def test_native_assets_match_the_pinned_source_receipt(tmp_path):
         assert hashlib.sha256(original(delivered)).hexdigest() == source["source_sha256"]
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX access bits")
+def test_render_preserves_existing_access_and_creates_private_outputs(tmp_path):
+    fresh, private, shared = (tmp_path / name for name in ("fresh", "private", "shared"))
+    for path, mode in ((private, 0o600), (shared, 0o640)):
+        path.write_bytes(b"previous")
+        path.chmod(mode)
+    shared_owner = shared.stat().st_uid, shared.stat().st_gid
+    files = {p: b"workflow" for p in (fresh, private, shared)}
+    renderer.deliver(files)
+    for path, expected in ((fresh, 0o600), (private, 0o600), (shared, 0o640)):
+        assert stat.S_IMODE(path.stat().st_mode) == expected
+    assert (shared.stat().st_uid, shared.stat().st_gid) == shared_owner
+    before = fresh.stat()
+    renderer.deliver(files)
+    assert fresh.stat().st_ino == before.st_ino
+    assert fresh.stat().st_mtime_ns == before.st_mtime_ns
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX access bits")
+def test_render_preflights_special_bits_before_writing_any_output(tmp_path):
+    first, special = tmp_path / "first", tmp_path / "special"
+    special.write_bytes(b"existing")
+    special.chmod(stat.S_ISUID | stat.S_IRUSR | stat.S_IWUSR)
+    before = special.stat()
+    with pytest.raises(ValueError, match="special mode"):
+        renderer.deliver({first: b"new", special: b"replacement"})
+    assert not first.exists()
+    assert special.read_bytes() == b"existing"
+    assert special.stat().st_mode == before.st_mode
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX access bits")
+def test_rollback_respects_concurrent_permission_change(tmp_path, monkeypatch):
+    first, shared, last = (tmp_path / name for name in ("first", "shared", "last"))
+    shared.write_bytes(b"previous")
+    shared.chmod(0o640)
+    replace = renderer.os.replace
+
+    def fail_last(source, destination):
+        if destination == last:
+            shared.chmod(0o600)
+            raise OSError("delivery failed")
+        replace(source, destination)
+
+    monkeypatch.setattr(renderer.os, "replace", fail_last)
+    with pytest.raises(RuntimeError, match="Concurrent edit.*shared"):
+        renderer.deliver({first: b"created", shared: b"new", last: b"last"})
+    assert shared.read_bytes() == b"new"
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o600
+    assert not first.exists()
+    assert not last.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX owner/group identity")
+def test_replacement_cannot_share_another_groups_permissions(tmp_path):
+    target = tmp_path / "shared"
+    target.write_bytes(b"previous")
+    state = renderer.read_output(target)
+    with pytest.raises(OSError, match="preserve output ownership"):
+        renderer.write_output(target, b"new", state, (0o640, state.uid, state.gid + 1))
+    assert renderer.read_output(target) == state
+    assert not list(tmp_path.glob(".render-ci-*"))
+
+
 def test_native_delivery_rolls_back_workflows_and_assets(tmp_path, monkeypatch):
     files = renderer.prepare_files(tmp_path, native_review=True)
     old = tmp_path / ".github/workflows/pipeline.yml"
     old.parent.mkdir(parents=True)
     old.write_bytes(b"previous workflow")
+    if os.name == "posix":
+        old.chmod(0o640)
+    old_mode = stat.S_IMODE(old.stat().st_mode)
     before = {path: path.read_bytes() if path.exists() else None for path in files}
     last = list(files)[-1]
     replace = renderer.os.replace
@@ -688,6 +756,7 @@ def test_native_delivery_rolls_back_workflows_and_assets(tmp_path, monkeypatch):
     with pytest.raises(OSError, match="fixture native delivery failure"):
         renderer.deliver(files)
     assert {p: p.read_bytes() if p.exists() else None for p in files} == before
+    assert stat.S_IMODE(old.stat().st_mode) == old_mode
     assert not list(tmp_path.rglob(".render-ci-*"))
 
 
