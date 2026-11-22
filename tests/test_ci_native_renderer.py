@@ -18,16 +18,10 @@ NATIVE = ROOT / "templates/ci/native"
 
 
 def native_common_jobs():
-    # Source: Cortex8e7375bf/Spec616eb04 pin v7.1.0; npm ci docs define frozen installs.
+    # Source: Cortex8e7375bf/Spec616eb04 pin v7.1.0.
     text = renderer.artifacts()["pipeline.yml"].replace(
         "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
         "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0",
-    )
-    text = text.replace(
-        "        run: npm install -g @anthropic-ai/claude-code@2.1.306",
-        "        run: |\n"
-        '          npm ci --prefix "$GITHUB_WORKSPACE/.github/claude-cli"\n'
-        '          echo "$GITHUB_WORKSPACE/.github/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"',
     )
     return yaml.safe_load(text)
 
