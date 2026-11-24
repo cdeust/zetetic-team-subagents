@@ -8,11 +8,65 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools/ci_tag.py"
+
+
+@pytest.mark.parametrize("status", [0, 1])
+def test_release_credential_lifetime(repositories, status):
+    """A real atomic push sees only the fixture key, even when the receiver rejects it."""
+    local, remote, sha = repositories
+    workflow = SCRIPT.parents[1] / ".github/workflows/pipeline.yml"
+    steps = yaml.safe_load(workflow.read_text())["jobs"]["tag"]["steps"]
+    publish_step = next(step for step in steps if step.get("id") == "publish")
+    deploy_key = "${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    outside_publish = [step["name"] for step in steps if step is not publish_step
+                       and deploy_key in step.get("env", {}).values()]
+    assert not outside_publish, f"write identity available outside publication: {outside_publish}"
+    assert publish_step["env"]["SSH_KEY"] == deploy_key
+    # Unix-domain socket addresses have a length limit. Avoid pytest's nested case names.
+    with tempfile.TemporaryDirectory(prefix="") as runner_temp:
+        root = Path(runner_temp)
+        identity = root / "fixture"
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", identity], check=True)
+        fingerprint = subprocess.check_output(["ssh-keygen", "-lf", identity.with_suffix(".pub")],
+                                              text=True).split()[1]
+        key = identity.read_text()
+        identity.unlink()
+        witness = remote / "hooks/pre-receive"
+        witness.write_text(
+            '#!/bin/sh\nset -eu\n'
+            'test -z "${SSH_KEY-}"\n'
+            'printf "%s" "$SSH_AUTH_SOCK" > "$RUNNER_TEMP/socket"\n'
+            'ssh-add -l > "$RUNNER_TEMP/identities"\n'
+            'ssh-add -T "$RUNNER_TEMP/fixture.pub"\n'
+            'exit "$RECEIVER_STATUS"\n'
+        )
+        witness.chmod(0o700)
+        env = dict(PATH=os.environ["PATH"], HOME=runner_temp, GIT_CONFIG_NOSYSTEM="1",
+                   RUNNER_TEMP=runner_temp, SSH_AUTH_SOCK=str(root / "no-agent"),
+                   RELEASE_TAGS='["fixture/v1"]', TESTED_SHA=sha,
+                   RECEIVER_STATUS=str(status), GITHUB_STEP_SUMMARY=str(root / "summary"))
+        env["SSH_KEY"] = key
+        result = subprocess.run(["bash", "-eo", "pipefail", "-c", publish_step["run"]], cwd=local, env=env,
+                                capture_output=True, text=True)
+        assert result.returncode == status, result.stderr
+        identities = (root / "identities").read_text().splitlines()
+        assert len(identities) == 1, "the receiver did not see the release identity"
+        assert identities[0].split()[1] == fingerprint
+        assert git(remote, "tag", "--list") == ("" if status else "fixture/v1")
+        socket = Path((root / "socket").read_text())
+        assert socket.is_absolute()
+        probe = subprocess.run(["ssh-add", "-l"], env={"PATH": env["PATH"], "SSH_AUTH_SOCK": str(socket)},
+                               capture_output=True)
+        assert probe.returncode == 2, "SSH agent remained reachable after publication"
+        for directory in (root, local, remote):
+            assert not any(key.encode() in p.read_bytes() for p in directory.rglob("*") if p.is_file())
 
 
 def git(root, *args):

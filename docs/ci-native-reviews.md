@@ -32,17 +32,19 @@ that frozen graph under `.github/claude-cli`, and `GITHUB_PATH` exposes its loca
 bin directory to later steps. The lock records package integrity for the CLI
 and its platform-specific native packages across the direct and post-merge workflows.
 
-Its tag job pins `actions/setup-python` v7.1.0 at
-`6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`, matching the copied Cortex source and
-Spec main `616eb04`; the legacy profile retains v7.0.0. This prevents opting in
-from downgrading that consumer's existing action. The tag job of both profiles
-checks nothing out: it holds the write-enabled `RELEASE_TAG_SSH_KEY` after a
-`workflow_run` event, and a checkout there is the CodeQL finding
-`actions/untrusted-checkout` (Cortex PR839, codebase PR471, high). The tested
-commit is fetched by its 40-hex SHA into a bare repository under `runner.temp`,
-GitHub's SSH host keys come from `api.github.com/meta` over TLS with
-`StrictHostKeyChecking=yes`, and the publish step runs in that bare repository
-(`tag-fetch-without-checkout` adaptation, `tests/test_ci_tag_no_checkout.py`). The `merge`
+The native and legacy tag jobs pin `actions/setup-python` v7.1.0 at
+`6d4fd22b20465ccc0f7354476588e8df7c9ca0e0`.
+Both profiles disable credential persistence in test checkouts. The tag job uses
+its read-only token to fetch the tested commit by SHA over HTTPS into a bare
+repository under `runner.temp`. It obtains GitHub's SSH host keys from
+`api.github.com/meta` over TLS and sets up Python before the publish step.
+Only that step receives `RELEASE_TAG_SSH_KEY`. It loads the key from standard input
+into a dedicated OpenSSH agent and publishes with strict host checking. The step
+clears the agent and terminates it on success or failure. The bare fetch and
+publication contracts are exercised in `tests/test_ci_tag_no_checkout.py` and
+`tests/test_ci_tag_publish.py`. Keeping the commit out of a worktree addresses
+CodeQL's `actions/untrusted-checkout` finding (Cortex PR839, codebase PR471).
+The `merge`
 job arms GitHub auto-merge on its own PR once the test jobs are green
 (`merge-arms-auto-merge` adaptation): the PR's definition merges the PR, and a
 fix to the pipeline is merged by the pipeline it fixes; the completion resolver
