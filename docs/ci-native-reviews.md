@@ -39,8 +39,10 @@ its read-only token to fetch the tested commit by SHA over HTTPS into a bare
 repository under `runner.temp`. It obtains GitHub's SSH host keys from
 `api.github.com/meta` over TLS and sets up Python before the publish step.
 Only that step receives `RELEASE_TAG_SSH_KEY`. It loads the key from standard input
-into a dedicated OpenSSH agent and publishes with strict host checking. The step
-clears the agent and terminates it on success or failure. The bare fetch and
+into a dedicated OpenSSH agent. Its socket lives in a fresh private directory
+under `/tmp`, independent of the length of `RUNNER_TEMP`. SSH ignores host
+configuration files and checks the server against the fetched host keys. The
+step terminates the agent and removes its directory on success or failure. The bare fetch and
 publication contracts are exercised in `tests/test_ci_tag_no_checkout.py` and
 `tests/test_ci_tag_publish.py`. Keeping the commit out of a worktree addresses
 CodeQL's `actions/untrusted-checkout` finding (Cortex PR839, codebase PR471).

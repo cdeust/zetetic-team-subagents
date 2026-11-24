@@ -6,9 +6,9 @@ No hosted repository, remote network, user identity or product version is change
 
 import json
 import os
+import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,56 +17,135 @@ import yaml
 SCRIPT = Path(__file__).resolve().parents[1] / "tools/ci_tag.py"
 
 
-@pytest.mark.parametrize("status", [0, 1])
-def test_release_credential_lifetime(repositories, status):
-    """A real atomic push sees only the fixture key, even when the receiver rejects it."""
-    local, remote, sha = repositories
+def publish_step():
     workflow = SCRIPT.parents[1] / ".github/workflows/pipeline.yml"
     steps = yaml.safe_load(workflow.read_text())["jobs"]["tag"]["steps"]
-    publish_step = next(step for step in steps if step.get("id") == "publish")
+    publish = next(step for step in steps if step.get("id") == "publish")
     deploy_key = "${{ secrets.RELEASE_TAG_SSH_KEY }}"
-    outside_publish = [step["name"] for step in steps if step is not publish_step
+    outside_publish = [step["name"] for step in steps if step is not publish
                        and deploy_key in step.get("env", {}).values()]
     assert not outside_publish, f"write identity available outside publication: {outside_publish}"
-    assert publish_step["env"]["SSH_KEY"] == deploy_key
-    # Unix-domain socket addresses have a length limit. Avoid pytest's nested case names.
-    with tempfile.TemporaryDirectory(prefix="") as runner_temp:
-        root = Path(runner_temp)
-        identity = root / "fixture"
-        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", identity], check=True)
-        fingerprint = subprocess.check_output(["ssh-keygen", "-lf", identity.with_suffix(".pub")],
-                                              text=True).split()[1]
-        key = identity.read_text()
-        identity.unlink()
-        witness = remote / "hooks/pre-receive"
-        witness.write_text(
-            '#!/bin/sh\nset -eu\n'
-            'test -z "${SSH_KEY-}"\n'
-            'printf "%s" "$SSH_AUTH_SOCK" > "$RUNNER_TEMP/socket"\n'
-            'ssh-add -l > "$RUNNER_TEMP/identities"\n'
-            'ssh-add -T "$RUNNER_TEMP/fixture.pub"\n'
-            'exit "$RECEIVER_STATUS"\n'
-        )
-        witness.chmod(0o700)
-        env = dict(PATH=os.environ["PATH"], HOME=runner_temp, GIT_CONFIG_NOSYSTEM="1",
-                   RUNNER_TEMP=runner_temp, SSH_AUTH_SOCK=str(root / "no-agent"),
-                   RELEASE_TAGS='["fixture/v1"]', TESTED_SHA=sha,
-                   RECEIVER_STATUS=str(status), GITHUB_STEP_SUMMARY=str(root / "summary"))
-        env["SSH_KEY"] = key
-        result = subprocess.run(["bash", "-eo", "pipefail", "-c", publish_step["run"]], cwd=local, env=env,
-                                capture_output=True, text=True)
-        assert result.returncode == status, result.stderr
-        identities = (root / "identities").read_text().splitlines()
-        assert len(identities) == 1, "the receiver did not see the release identity"
-        assert identities[0].split()[1] == fingerprint
-        assert git(remote, "tag", "--list") == ("" if status else "fixture/v1")
-        socket = Path((root / "socket").read_text())
-        assert socket.is_absolute()
-        probe = subprocess.run(["ssh-add", "-l"], env={"PATH": env["PATH"], "SSH_AUTH_SOCK": str(socket)},
-                               capture_output=True)
-        assert probe.returncode == 2, "SSH agent remained reachable after publication"
-        for directory in (root, local, remote):
-            assert not any(key.encode() in p.read_bytes() for p in directory.rglob("*") if p.is_file())
+    assert publish["env"]["SSH_KEY"] == deploy_key
+    return publish["run"]
+
+
+def executable(path, script):
+    path.write_text("#!/bin/sh\nset -eu\n" + script)
+    path.chmod(0o700)
+
+
+def install_transport(root):
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    # The real agent's argv names this test's tmp_path, including a detached second agent.
+    (bin_dir / "test-agent").symlink_to(shutil.which("ssh-agent"))
+    executable(bin_dir / "ssh-agent", '''
+if [ "$1" != -k ]; then echo start >> "$RUNNER_TEMP/starts"; fi
+exec "$RUNNER_TEMP/bin/test-agent" "$@"
+''')
+    executable(bin_dir / "ssh-add", '''
+if [ "$1" = - ]; then
+  printf '%s\\n' "$SSH_AGENT_PID" "$SSH_AUTH_SOCK" > "$RUNNER_TEMP/agent"
+fi
+exec "$REAL_SSH_ADD" "$@"
+''')
+    executable(bin_dir / "ssh", '''
+"$REAL_SSH" -G "$@" > "$RUNNER_TEMP/ssh-config"
+test "$1" = -F && test "$2" = /dev/null || exit 1
+for last do :; done
+case "$last" in
+  "git-upload-pack '/fixture.git'") exec git-upload-pack "$FIXTURE_REMOTE" ;;
+  "git-receive-pack '/fixture.git'") exec git-receive-pack "$FIXTURE_REMOTE" ;;
+  *) exit 1 ;;
+esac
+''')
+    return str(bin_dir) + os.pathsep + os.environ["PATH"]
+
+
+@pytest.fixture
+def release_case(repositories, tmp_path):
+    local, remote, sha = repositories
+    # Longer than Linux's 108-byte sockaddr_un.sun_path (unix(7)).
+    root = tmp_path / ("long runner path-" * 8)
+    root.mkdir()
+    identity = root / "fixture"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", identity], check=True)
+    key = identity.read_text()
+    identity.unlink()
+    (root / "github-env").touch()
+    (root / "release-known-hosts").touch()
+    (root / "tag.sock").write_text("pre-existing runner file")
+    git(local, "remote", "set-url", "origin", "ssh://git@release.invalid/fixture.git")
+    executable(remote / "hooks/pre-receive", '''
+test -z "${SSH_KEY-}"
+ssh-add -l > "$RUNNER_TEMP/identities"
+ssh-add -T "$RUNNER_TEMP/fixture.pub"
+exit "$RECEIVER_STATUS"
+''')
+    env = dict(PATH=install_transport(root), HOME=str(root), GIT_CONFIG_NOSYSTEM="1",
+               RUNNER_TEMP=str(root), SSH_AUTH_SOCK=str(root / "no-agent"), SSH_KEY=key,
+               REAL_SSH=shutil.which("ssh"), REAL_SSH_ADD=shutil.which("ssh-add"),
+               GIT_SSH_VARIANT="ssh", FIXTURE_REMOTE=str(remote), RELEASE_TAGS='["fixture/v1"]',
+               TESTED_SHA=sha, GITHUB_ENV=str(root / "github-env"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+    return root, env
+
+
+def assert_agent_closed(root):
+    assert (root / "github-env").stat().st_size == 0, "publish wrote to GITHUB_ENV"
+    assert (root / "starts").read_text().splitlines() == ["start"], "additional SSH agent launched"
+    pid, address = (root / "agent").read_text().splitlines()
+    socket = Path(address)
+    assert socket.is_absolute() and not socket.exists(), "publication socket survived"
+    assert not socket.parent.exists(), "private socket directory survived"
+    assert (root / "tag.sock").read_text() == "pre-existing runner file"
+    probe = subprocess.run(["ssh-add", "-l"], env=dict(PATH=os.environ["PATH"], SSH_AUTH_SOCK=address),
+                           capture_output=True)
+    assert probe.returncode == 2, "SSH agent remained reachable after publication"
+    state = subprocess.run(["ps", "-p", str(int(pid)), "-o", "stat="], capture_output=True, text=True)
+    assert state.returncode in (0, 1) and not state.stderr, state.stderr
+    assert not state.stdout.strip() or state.stdout.strip().startswith("Z"), "publication agent survived"
+
+
+def assert_ssh_transport(root):
+    lines = (root / "ssh-config").read_text().splitlines()
+    config = dict(line.split(" ", 1) for line in lines)
+    assert config["batchmode"] == "yes"
+    assert config["identitiesonly"] == "no", "SSH must offer the dedicated agent identity"
+    assert [line for line in lines if line.startswith("identityfile ")] == ["identityfile none"]
+    assert config["stricthostkeychecking"] in ("true", "yes")
+    assert config["userknownhostsfile"] == str(root / "release-known-hosts")
+    assert config["globalknownhostsfile"] == "/dev/null"
+
+
+@pytest.mark.spawns
+@pytest.mark.parametrize("status", [0, 1])
+def test_release_credential_lifetime(repositories, release_case, status):
+    local, remote, _ = repositories
+    root, env = release_case
+    result = subprocess.run(["bash", "-eo", "pipefail", "-c", publish_step()], cwd=local,
+                            env=dict(env, RECEIVER_STATUS=str(status)), capture_output=True, text=True)
+    assert result.returncode == status, result.stderr
+    assert_agent_closed(root)
+    assert_ssh_transport(root)
+    fingerprint = subprocess.check_output(["ssh-keygen", "-lf", root / "fixture.pub"], text=True).split()[1]
+    identities = (root / "identities").read_text().splitlines()
+    assert len(identities) == 1 and identities[0].split()[1] == fingerprint
+    assert git(remote, "tag", "--list") == ("" if status else "fixture/v1")
+    for directory in (root, local, remote):
+        files = (p for p in directory.rglob("*") if p.is_file() and not p.is_symlink())
+        assert not any(env["SSH_KEY"].encode() in p.read_bytes() for p in files)
+
+
+@pytest.mark.spawns
+def test_invalid_release_identity_closes_agent_before_transport(repositories, release_case):
+    local, remote, _ = repositories
+    root, env = release_case
+    result = subprocess.run(["bash", "-eo", "pipefail", "-c", publish_step()], cwd=local,
+                            env=dict(env, SSH_KEY="invalid test identity", RECEIVER_STATUS="0"), capture_output=True)
+    assert result.returncode == 1 and b"Error loading key" in result.stderr
+    assert_agent_closed(root)
+    assert not (root / "ssh-config").exists()
+    assert git(remote, "tag", "--list") == ""
 
 
 def git(root, *args):

@@ -15,7 +15,7 @@
     "setup-python": {
       "from": "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
       "to": "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0",
-      "reason": "Match Cortex8e7375bf and Spec616eb04 without downgrading consumer setup-python; legacy default unchanged."
+      "reason": "Match Cortex8e7375bf and Spec616eb04 without downgrading consumer setup-python. Both native and legacy templates pin v7.1.0."
     },
     "strict-mcp-config": {
       "flag": "--strict-mcp-config",

@@ -59,6 +59,35 @@ def workflow_findings(directory, files):
     return counts
 
 
+def verify_mutations(python, runner_temp):
+    """A canary exercises the runner environment file. The extra agent has no keys."""
+    workflow = (ROOT / WORKFLOW).read_text()
+    # Even a second agent that exits on its own must be detected. No secret is passed to it.
+    mutations = [
+        ("SSH options", "IdentitiesOnly=no", "IdentitiesOnly=yes", "SSH must offer the dedicated agent identity"),
+        ("runner export", "unset SSH_KEY", 'unset SSH_KEY\n          echo canary >> "$GITHUB_ENV"',
+         "publish wrote to GITHUB_ENV"),
+        ("second agent", "unset SSH_KEY", "unset SSH_KEY\n          ssh-agent /bin/true",
+         "additional SSH agent launched"),
+    ]
+    with tempfile.TemporaryDirectory(dir=runner_temp) as tmp:
+        case = Path(tmp)
+        for path in (WORKFLOW, PUBLISH_TEST):
+            (case / path).parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / PUBLISH_TEST, case / PUBLISH_TEST)
+        (case / "tools").mkdir()
+        shutil.copyfile(ROOT / "tools/ci_tag.py", case / "tools/ci_tag.py")
+        for label, original, replacement, expected in mutations:
+            if workflow.count(original) != 1:
+                raise RuntimeError(f"Update mutation anchor for {label}")
+            (case / WORKFLOW).write_text(workflow.replace(original, replacement))
+            args = [python, "-m", "pytest", "-q", f"{PUBLISH_TEST}::test_release_credential_lifetime[0]"]
+            result = subprocess.run(args, cwd=case, capture_output=True, text=True)
+            if result.returncode != 1 or f"AssertionError: {expected}" not in result.stdout:
+                raise RuntimeError(f"Missing targeted failure for {label}\n{result.stdout}\n{result.stderr}")
+            print(f"Mutation {label}: rejected (pytest exit 1).", flush=True)
+
+
 def verify_static(files, runner_temp):
     actionlint = runner_temp / "venv/bin/actionlint"
     if subprocess.check_output([actionlint, "-version"], text=True).splitlines()[0] != "1.7.12":
@@ -87,7 +116,8 @@ def main():
     run(["bash", "-eo", "pipefail", "-c", commands["unit"]])
     python = runner_temp / "venv/bin/python"
     verify_before(python, runner_temp)
-    run([python, "-m", "pytest", "-q", str(PUBLISH_TEST), "-k", "release_credential_lifetime"])
+    run([python, "-m", "pytest", "-q", str(PUBLISH_TEST), "-k", "release_credential_lifetime or invalid_release_identity"])
+    verify_mutations(python, runner_temp)
     files = [Path(".github/workflows") / (name + ".yml") for name in
              ("codeql", "release", "pipeline", "pipeline-post-merge")]
     verify_static([*files, *sorted(Path("templates/ci").rglob("pipeline.yml"))], runner_temp)

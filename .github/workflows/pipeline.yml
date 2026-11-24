@@ -689,11 +689,13 @@ jobs:
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
         run: |
           # OpenSSH ties the agent to its command. Delete its identities before returning.
-          ssh-agent -a "$RUNNER_TEMP/tag.sock" bash -euo pipefail <<'PUBLISH'
+          agent_dir=$(mktemp -d /tmp/release-agent.XXXXXXXX)
+          trap 'rm -f -- "$agent_dir/s"; rmdir -- "$agent_dir"' EXIT
+          ssh-agent -a "$agent_dir/s" bash -euo pipefail <<'PUBLISH'
           trap 'ssh-add -D >/dev/null 2>&1; ssh-agent -k >/dev/null' EXIT
           printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
           unset SSH_KEY
-          export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o IdentityFile=none -o "UserKnownHostsFile=$RUNNER_TEMP/release-known-hosts" -o StrictHostKeyChecking=yes'
+          export GIT_SSH_COMMAND='ssh -F /dev/null -o BatchMode=yes -o IdentitiesOnly=no -o IdentityFile=none -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\"" -o StrictHostKeyChecking=yes'
           python3 - <<'PY'
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.

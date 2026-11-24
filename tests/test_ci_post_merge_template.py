@@ -34,14 +34,14 @@ def test_completion_trigger_ignores_main_and_cannot_recurse():
     assert not any("uses" in step for step in resolve["steps"])
 
 
-def test_only_the_resolver_the_issue_closer_and_the_tag_job_can_write():
+def test_only_the_resolver_and_issue_closer_have_write_permissions():
     jobs = workflow()["jobs"]
     assert jobs["resolve"]["permissions"] == {
         "contents": "write",
         "pull-requests": "write",
         "actions": "read",
     }
-    for name in ("contract", *CATEGORIES):
+    for name in ("contract", "tag", *CATEGORIES):
         assert "write" not in jobs[name].get("permissions", {}).values()
     assert jobs["close-issues"]["permissions"] == {"issues": "write", "pull-requests": "read"}
     # The aggregate merges nothing: the resolver does, on the Claude verdict.

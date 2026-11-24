@@ -92,7 +92,7 @@ def test_rendered_tag_jobs_fetch_without_a_checkout(tmp_path):
 
 
 def test_fetch_step_rejects_a_tampered_sha():
-    """The SHA guard runs before any key material is written."""
+    """Reject malformed SHAs before contacting GitHub or creating the bare repository."""
     import subprocess
 
     job = tag_job(TEMPLATES[1].read_text())
@@ -100,7 +100,7 @@ def test_fetch_step_rejects_a_tampered_sha():
     for sha in ("HEAD", "main; rm -rf /", "a" * 39, "A" * 40):
         result = subprocess.run(
             ["bash", "-c", run],
-            env={"PATH": "/usr/bin:/bin", "TESTED_SHA": sha, "SSH_KEY": "k", "RUNNER_TEMP": "/nonexistent", "GITHUB_ENV": "/dev/null", "GITHUB_REPOSITORY": "o/r"},
+            env={"PATH": "/usr/bin:/bin", "TESTED_SHA": sha, "RUNNER_TEMP": "/nonexistent", "GITHUB_REPOSITORY": "o/r"},
             capture_output=True,
             text=True,
         )
