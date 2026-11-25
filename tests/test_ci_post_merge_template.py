@@ -34,14 +34,14 @@ def test_completion_trigger_ignores_main_and_cannot_recurse():
     assert not any("uses" in step for step in resolve["steps"])
 
 
-def test_only_the_resolver_the_issue_closer_and_the_tag_job_can_write():
+def test_only_the_resolver_and_issue_closer_have_write_permissions():
     jobs = workflow()["jobs"]
     assert jobs["resolve"]["permissions"] == {
         "contents": "write",
         "pull-requests": "write",
         "actions": "read",
     }
-    for name in ("contract", *CATEGORIES):
+    for name in ("contract", "tag", *CATEGORIES):
         assert "write" not in jobs[name].get("permissions", {}).values()
     assert jobs["close-issues"]["permissions"] == {"issues": "write", "pull-requests": "read"}
     # The aggregate merges nothing: the resolver does, on the Claude verdict.
@@ -84,10 +84,11 @@ def test_every_checkout_is_the_contract_sha_and_the_release_tags_that_commit():
     )
     fetch = next(step for step in jobs["tag"]["steps"] if step.get("name", "").startswith("Fetch the tested commit"))
     assert fetch["env"]["TESTED_SHA"] == "${{ needs.contract.outputs.tested_sha }}"
-    assert fetch["env"]["SSH_KEY"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    assert fetch["env"] == {"TESTED_SHA": "${{ needs.contract.outputs.tested_sha }}", "GH_TOKEN": "${{ github.token }}"}
     assert 'fetch --quiet --depth=1 origin "$TESTED_SHA"' in fetch["run"]
     publish = next(step for step in jobs["tag"]["steps"] if step.get("id") == "publish")
     assert publish["working-directory"] == "${{ runner.temp }}/release-repo"
+    assert publish["env"]["SSH_KEY"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
     assert publish["env"]["TESTED_SHA"] == "${{ needs.contract.outputs.tested_sha }}"
     assert "$GITHUB_SHA" not in publish["run"]
 

@@ -425,6 +425,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_run' && needs.resolve.outputs.tested_sha || github.sha }}
+          persist-credentials: false
       - name: Record tested commit
         id: source
         env:
@@ -696,6 +697,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Restore Cargo build cache
         id: cargo_cache
@@ -825,6 +827,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Cache Cargo build
         if: hashFiles('Cargo.lock') != ''
@@ -855,6 +858,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Cache Cargo build
         if: hashFiles('Cargo.lock') != ''
@@ -892,6 +896,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Install the Claude Code CLI
         # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
@@ -928,6 +933,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Install the Claude Code CLI
         # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
@@ -2275,7 +2281,7 @@ jobs:
       && needs.install.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     concurrency:
       group: release-tag-${{ needs.contract.outputs.release_group }}
       cancel-in-progress: false
@@ -2283,16 +2289,8 @@ jobs:
       - name: Guard, skip cleanly when RELEASE_TAG_SSH_KEY is missing
         id: guard
         env:
-          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
-        run: |
-          if [ -z "$SSH_KEY" ]; then
-            echo "RELEASE_TAG_SSH_KEY secret not configured, skipping."
-            echo "Add the private half of a write-enabled repository deploy"
-            echo "key at Settings -> Secrets and variables -> Actions."
-            echo "has_deploy_key=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
-          fi
+          HAS_DEPLOY_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY != '' }}
+        run: echo "has_deploy_key=$HAS_DEPLOY_KEY" >> "$GITHUB_OUTPUT"
 
       # No working tree of the tested commit is checked out here. This job holds
       # a write-enabled deploy key and runs after a workflow_run event, so a
@@ -2306,7 +2304,6 @@ jobs:
       - name: Fetch the tested commit into a bare repository
         if: steps.guard.outputs.has_deploy_key == 'true'
         env:
-          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -2315,17 +2312,14 @@ jobs:
             *[!0-9a-f]* | '') echo "::error::tested_sha is not a lowercase hex SHA"; exit 1 ;;
           esac
           [ "${#TESTED_SHA}" -eq 40 ] || { echo "::error::tested_sha is not 40 hex chars"; exit 1; }
-          key_dir="$RUNNER_TEMP/release-key"
-          (umask 077 && mkdir -p "$key_dir" && printf '%s\n' "$SSH_KEY" > "$key_dir/id")
-          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$key_dir/known_hosts"
-          [ -s "$key_dir/known_hosts" ] || { echo "::error::api.github.com/meta returned no SSH host keys"; exit 1; }
-          ssh_command="ssh -i $key_dir/id -o IdentitiesOnly=yes -o UserKnownHostsFile=$key_dir/known_hosts -o StrictHostKeyChecking=yes"
-          echo "GIT_SSH_COMMAND=$ssh_command" >> "$GITHUB_ENV"
-          export GIT_SSH_COMMAND="$ssh_command"
+          known_hosts="$RUNNER_TEMP/release-known-hosts"
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$known_hosts"
+          [ -s "$known_hosts" ] || { echo "::error::api.github.com/meta returned no SSH host keys"; exit 1; }
           repo="$RUNNER_TEMP/release-repo"
           git init --quiet --bare "$repo"
-          git -C "$repo" remote add origin "git@github.com:${GITHUB_REPOSITORY}.git"
-          git -C "$repo" fetch --quiet --depth=1 origin "$TESTED_SHA"
+          git -C "$repo" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$repo" -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --quiet --depth=1 origin "$TESTED_SHA"
+          git -C "$repo" remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
           [ "$(git -C "$repo" cat-file -t "$TESTED_SHA")" = commit ] || { echo "::error::fetched object is not a commit"; exit 1; }
 
       - name: Set up Python
@@ -2339,10 +2333,47 @@ jobs:
         if: steps.guard.outputs.has_deploy_key == 'true'
         working-directory: ${{ runner.temp }}/release-repo
         env:
+          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
           RELEASE_TAGS: ${{ needs.contract.outputs.release_tags }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
         run: |
-          python3 - <<'PY'
+          # The write key exists only in a command-scoped OpenSSH agent, for this step.
+          # exec makes the step's PID the agent's command. The runner's SIGINT and
+          # SIGTERM go to that PID alone (actions/runner ProcessInvoker) and reach the
+          # traps below; after a SIGKILL the agent exits by itself once its command is
+          # gone (ssh-agent checks its parent every 10 s). The socket directory is
+          # private and short: RUNNER_TEMP can exceed sun_path (104 bytes on macOS).
+          agent_dir=$(mktemp -d "${TMPDIR:-/tmp}/release-agent.XXXXXX")
+          export AGENT_DIR="$agent_dir"
+          exec ssh-agent -a "$agent_dir/agent" bash -euo pipefail <<'PUBLISH'
+          publisher=
+          # Stop the publisher and the agent, wait 5 s at most, then kill what is left
+          # and fail visibly. A second signal cannot cut this short.
+          release() {
+            status=$?
+            trap '' INT TERM
+            for pid in $publisher "$SSH_AGENT_PID"; do kill -TERM "$pid" 2>/dev/null || :; done
+            for _ in $(seq 50); do
+              kill -0 $publisher "$SSH_AGENT_PID" 2>/dev/null || break
+              sleep 0.1
+            done
+            for pid in $publisher "$SSH_AGENT_PID"; do
+              kill -0 "$pid" 2>/dev/null || continue
+              kill -KILL "$pid"
+              echo "::error::release process $pid did not stop on SIGTERM"
+              [ "$status" -ne 0 ] || status=1
+            done
+            rm -f -- "$SSH_AUTH_SOCK"
+            rmdir -- "$AGENT_DIR" || status=1
+            exit "$status"
+          }
+          trap release EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
+          unset SSH_KEY
+          export GIT_SSH_COMMAND='ssh -F /dev/null -o BatchMode=yes -o IdentitiesOnly=no -o IdentityFile=none -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\"" -o StrictHostKeyChecking=yes'
+          python3 - <<'PY' &
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
 
@@ -2353,6 +2384,7 @@ jobs:
           import json
           import os
           import re
+          import signal
           import subprocess
           import sys
           from pathlib import Path
@@ -2455,8 +2487,17 @@ jobs:
 
 
           if __name__ == "__main__":
+              # The release shell stops the publisher with SIGTERM. SystemExit raised
+              # inside subprocess.run kills the running git before unwinding.
+              signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
               sys.exit(main())
           PY
+          publisher=$!
+          status=0
+          wait "$publisher" || status=$?
+          publisher=
+          exit "$status"
+          PUBLISH
 
       - name: Summarize missing release key
         if: steps.guard.outputs.has_deploy_key != 'true'

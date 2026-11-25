@@ -15,7 +15,7 @@
     "setup-python": {
       "from": "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
       "to": "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0",
-      "reason": "Match Cortex8e7375bf and Spec616eb04 without downgrading consumer setup-python; legacy default unchanged."
+      "reason": "Match Cortex8e7375bf and Spec616eb04 without downgrading consumer setup-python. Both native and legacy templates pin v7.1.0."
     },
     "strict-mcp-config": {
       "flag": "--strict-mcp-config",
@@ -220,7 +220,7 @@
     "tag-fetch-without-checkout": {
       "rule": "Owner rule 2026-11-03: CodeQL findings are fixed, not dismissed. The tag job never checks out the tested commit.",
       "evidence": "CodeQL actions/untrusted-checkout on Cortex PR839 (pipeline-post-merge.yml:971, high) and ai-architect-mcp-codebase PR471 (pipeline-post-merge.yml:972 high, pipeline.yml:1822 medium): checkout of untrusted code in a privileged workflow (workflow_run) with later potential execution, while the job holds the write-enabled RELEASE_TAG_SSH_KEY.",
-      "reason": "The publish script needs only the commit object and an authenticated origin. The step fetches the 40-hex tested_sha by SHA into a bare repository under runner.temp (git init --bare, fetch --depth=1), installs GitHub's SSH host keys from api.github.com/meta over TLS with StrictHostKeyChecking=yes, and the publish step runs there; nothing from the commit is checked out or executed.",
+      "reason": "Fetch the tested commit into a bare repository over HTTPS with the read-only job token. Only publication receives the write-enabled deploy key. Its OpenSSH agent terminates with that step. The SSH client checks the remote against GitHub's host keys from api.github.com/meta.",
       "sources": [
         "https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout/",
         "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints",

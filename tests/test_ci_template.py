@@ -38,9 +38,11 @@ def workflow(text):
 
 def heredoc(text: str, opener: str) -> str:
     """The body of the ``<<'PY'`` heredoc whose opening line contains
-    ``opener``, dedented: what ``python3 -`` executes."""
+    ``opener``, dedented: what ``python3 -`` executes, in the foreground or
+    in the background (``<<'PY' &``, the release publisher)."""
     lines = text.splitlines()
-    start = next(i for i, line in enumerate(lines) if opener in line and line.rstrip().endswith("<<'PY'"))
+    openers = ("<<'PY'", "<<'PY' &")
+    start = next(i for i, line in enumerate(lines) if opener in line and line.rstrip().endswith(openers))
     indent = len(lines[start]) - len(lines[start].lstrip())
     body = []
     for line in lines[start + 1:]:
@@ -137,9 +139,10 @@ def test_the_tag_runs_on_push_or_resolved_merge_over_the_deploy_key(workflow):
     # checks nothing out; the tested commit is fetched by SHA into a bare repo.
     assert not any(s.get("uses", "").startswith("actions/checkout") for s in job["steps"])
     fetch = next(s for s in job["steps"] if s.get("name") == "Fetch the tested commit into a bare repository")
-    assert fetch["env"]["SSH_KEY"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    assert fetch["env"] == {"TESTED_SHA": "${{ needs.contract.outputs.tested_sha }}", "GH_TOKEN": "${{ github.token }}"}
     assert "git init --quiet --bare" in fetch["run"]
     publish = next(s for s in job["steps"] if s.get("name") == "Publish declared package tags")
+    assert publish["env"]["SSH_KEY"] == "${{ secrets.RELEASE_TAG_SSH_KEY }}"
     assert publish["env"]["RELEASE_TAGS"] == "${{ needs.contract.outputs.release_tags }}"
     assert heredoc(publish["run"], "python3 -") == (REPO / "tools/ci_tag.py").read_text()
 
