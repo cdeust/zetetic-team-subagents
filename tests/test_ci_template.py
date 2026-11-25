@@ -38,9 +38,11 @@ def workflow(text):
 
 def heredoc(text: str, opener: str) -> str:
     """The body of the ``<<'PY'`` heredoc whose opening line contains
-    ``opener``, dedented: what ``python3 -`` executes."""
+    ``opener``, dedented: what ``python3 -`` executes, in the foreground or
+    in the background (``<<'PY' &``, the release publisher)."""
     lines = text.splitlines()
-    start = next(i for i, line in enumerate(lines) if opener in line and line.rstrip().endswith("<<'PY'"))
+    openers = ("<<'PY'", "<<'PY' &")
+    start = next(i for i, line in enumerate(lines) if opener in line and line.rstrip().endswith(openers))
     indent = len(lines[start]) - len(lines[start].lstrip())
     body = []
     for line in lines[start + 1:]:

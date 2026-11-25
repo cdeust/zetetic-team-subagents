@@ -8,6 +8,7 @@ Concurrent overlap is retried only after the pending set strictly shrinks.
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -110,4 +111,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # The release shell stops the publisher with SIGTERM. SystemExit raised
+    # inside subprocess.run kills the running git before unwinding.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     sys.exit(main())

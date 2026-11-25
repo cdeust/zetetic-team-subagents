@@ -1958,15 +1958,43 @@ jobs:
           RELEASE_TAGS: ${{ needs.contract.outputs.release_tags }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
         run: |
-          # OpenSSH ties the agent to its command. Delete its identities before returning.
-          agent_dir=$(mktemp -d /tmp/release-agent.XXXXXXXX)
-          trap 'rm -f -- "$agent_dir/s"; rmdir -- "$agent_dir"' EXIT
-          ssh-agent -a "$agent_dir/s" bash -euo pipefail <<'PUBLISH'
-          trap 'ssh-add -D >/dev/null 2>&1; ssh-agent -k >/dev/null' EXIT
+          # The write key exists only in a command-scoped OpenSSH agent, for this step.
+          # exec makes the step's PID the agent's command. The runner's SIGINT and
+          # SIGTERM go to that PID alone (actions/runner ProcessInvoker) and reach the
+          # traps below; after a SIGKILL the agent exits by itself once its command is
+          # gone (ssh-agent checks its parent every 10 s). The socket directory is
+          # private and short: RUNNER_TEMP can exceed sun_path (104 bytes on macOS).
+          agent_dir=$(mktemp -d "${TMPDIR:-/tmp}/release-agent.XXXXXX")
+          export AGENT_DIR="$agent_dir"
+          exec ssh-agent -a "$agent_dir/agent" bash -euo pipefail <<'PUBLISH'
+          publisher=
+          # Stop the publisher and the agent, wait 5 s at most, then kill what is left
+          # and fail visibly. A second signal cannot cut this short.
+          release() {
+            status=$?
+            trap '' INT TERM
+            for pid in $publisher "$SSH_AGENT_PID"; do kill -TERM "$pid" 2>/dev/null || :; done
+            for _ in $(seq 50); do
+              kill -0 $publisher "$SSH_AGENT_PID" 2>/dev/null || break
+              sleep 0.1
+            done
+            for pid in $publisher "$SSH_AGENT_PID"; do
+              kill -0 "$pid" 2>/dev/null || continue
+              kill -KILL "$pid"
+              echo "::error::release process $pid did not stop on SIGTERM"
+              [ "$status" -ne 0 ] || status=1
+            done
+            rm -f -- "$SSH_AUTH_SOCK"
+            rmdir -- "$AGENT_DIR" || status=1
+            exit "$status"
+          }
+          trap release EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
           printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
           unset SSH_KEY
           export GIT_SSH_COMMAND='ssh -F /dev/null -o BatchMode=yes -o IdentitiesOnly=no -o IdentityFile=none -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\"" -o StrictHostKeyChecking=yes'
-          python3 - <<'PY'
+          python3 - <<'PY' &
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
 
@@ -1977,6 +2005,7 @@ jobs:
           import json
           import os
           import re
+          import signal
           import subprocess
           import sys
           from pathlib import Path
@@ -2079,8 +2108,16 @@ jobs:
 
 
           if __name__ == "__main__":
+              # The release shell stops the publisher with SIGTERM. SystemExit raised
+              # inside subprocess.run kills the running git before unwinding.
+              signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
               sys.exit(main())
           PY
+          publisher=$!
+          status=0
+          wait "$publisher" || status=$?
+          publisher=
+          exit "$status"
           PUBLISH
 
       - name: Summarize missing release key
