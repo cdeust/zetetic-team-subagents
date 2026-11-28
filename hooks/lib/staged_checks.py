@@ -47,6 +47,55 @@ def _entries(raw):
     return entries
 
 
+def diff_ranges(repo, env):
+    """ZETETIC_DIFF_RANGES for the staged content: '<path>:<a>-<b>,...;<path>:...'
+
+    The checkers run against FROZEN INDEX BLOBS materialized into a disposable
+    repository, where `git diff --cached` compares nothing, so the changed line
+    ranges can only be computed here, against the real index, and handed over in
+    the environment. They are what keeps a commit gate answerable for the
+    commit: a finding outside these ranges is pre-existing and is not attributed
+    to it. tools/lib/diff-scope.sh holds the format and the reporting rule.
+
+    `-U0` so a hunk header names exactly the changed lines.
+
+    The file list comes from `--name-only -z`, which is authoritative and cannot
+    be spoofed by file CONTENT, and hunks are read one diff per file. Parsing
+    `+++ b/` headers out of a combined diff was a real false negative: an ADDED
+    line reading `++ b/ignored` opened a bogus record and the real file's later
+    hunks were credited to it, suppressing its findings.
+
+    A pure deletion (`+n,0`) records no added line, yet can still create a
+    violation -- deleting a `def` line merges two functions into one over-long
+    one -- so the deletion SITE is recorded as a point range.
+    """
+    head = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--verify', 'HEAD'],
+                          env=env, capture_output=True)
+    ref = [head.stdout.decode().strip()] if head.returncode == 0 else []
+    listing = git(repo, ['diff', '--cached', '--name-only', '-z',
+                         '--diff-filter=ACMR', *ref, '--'], env)
+    records = []
+    for raw_name in listing.split(b'\0'):
+        if not raw_name:
+            continue
+        name = os.fsdecode(raw_name)
+        spans = []
+        raw = git(repo, ['diff', '--cached', '-U0', '--diff-filter=ACMR',
+                         *ref, '--', name], env)
+        for line in raw.decode(errors='replace').splitlines():
+            if not line.startswith('@@ '):
+                continue
+            added = line.split('+', 1)[1].split(' ', 1)[0].split('@@', 1)[0]
+            start, _, count = added.partition(',')
+            start, length = int(start), int(count) if count else 1
+            if length:
+                spans.append(f'{start}-{start + length - 1}')
+            elif start:
+                spans.append(f'{start}-{start}')   # deletion site
+        records.append([name, spans])
+    return ';'.join(f'{name}:{",".join(spans)}' for name, spans in records)
+
+
 def freeze(repo, env):
     """Capture stable paths/object IDs; concurrent index edits require a retry."""
     before = git(repo, ['ls-files', '--stage', '-z'], env)
@@ -101,8 +150,17 @@ def check_staged(plugin, repo):
     env = environment()
     repo = Path(git(repo, ['rev-parse', '--show-toplevel'], env).decode().strip())
     selection = freeze(repo, env)
+    # Scope the checkers' REPORTING to the lines this commit changed. Set
+    # unconditionally, so an empty value means "nothing changed" rather than
+    # "scoping off" — the checkers distinguish the two.
+    env['ZETETIC_DIFF_RANGES'] = diff_ranges(repo, env)
     with tempfile.TemporaryDirectory(prefix='zetetic-index-') as directory:
         snapshot = Path(directory)
+        # The root the recorded paths are relative to. The checkers run with
+        # cwd=snapshot on relative names, so this is only the fallback that lets
+        # an absolute path resolve to the same form by EXACT match rather than
+        # by a suffix match, which could collide (a/x.py vs z/a/x.py).
+        env['ZETETIC_DIFF_ROOT'] = str(snapshot)
         git(snapshot, ['init', '-q', '--template='], env)
         names = _materialize(repo, snapshot, selection, env)
         return _check(plugin, snapshot, names, env)
