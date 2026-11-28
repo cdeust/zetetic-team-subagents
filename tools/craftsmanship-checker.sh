@@ -158,6 +158,18 @@ fi
 # shellcheck disable=SC1090
 source "$CRAFT_LIB"
 
+# Diff scoping (CRAFT-STAGED-PREEXISTING). Whole-file MEASUREMENT is kept — it
+# is the only correct way to size a function — and only the REPORTING decision
+# narrows: in --staged mode a finding is reported when its span intersects a
+# line the commit changed. See tools/lib/diff-scope.sh for the contract.
+CRAFT_DIFF_SCOPE_LIB="$CRAFT_SELF_DIR/lib/diff-scope.sh"
+if [[ ! -f "$CRAFT_DIFF_SCOPE_LIB" ]]; then
+  echo "ERROR: diff-scope library not found at $CRAFT_DIFF_SCOPE_LIB" >&2
+  exit 2
+fi
+# shellcheck disable=SC1090
+source "$CRAFT_DIFF_SCOPE_LIB"
+
 # ── Argument parsing (first-positional dispatch) ───────────────────────
 MODE=""
 FILES=()
@@ -232,6 +244,10 @@ collect_files_full() {
 # ── Finding accounting ─────────────────────────────────────────────────
 ERRORS=0
 WARNINGS=0
+# Findings measured but not attributed to this commit (diff scoping). Counted
+# and reported rather than dropped in silence: a gate that quietly stops
+# reporting is indistinguishable from a gate that broke.
+SUPPRESSED=0
 
 # Resolve a rule's effective severity by indirection on its SEV_* variable,
 # applying the strict-profile promotion (advise -> block). Echoes block|advise|off.
@@ -243,33 +259,41 @@ craft_effective_sev() {
   echo "$sev"
 }
 
-# Emit one finding RECORD. Args: RULE SEVVAR FILE LINE RAWLINE MESSAGE.
+# Emit one finding RECORD. Args: RULE SEVVAR FILE LINE RAWLINE MESSAGE [ENDLINE].
 # Detectors run inside pipelines (subshells), so emit MUST NOT mutate the
 # ERRORS/WARNINGS counters here — the increments would be lost with the subshell.
 # Instead it writes a tab-delimited record to stdout; the main-shell consumer
 # (craft_consume) resolves severity, formats, and counts. Newlines/tabs in the
 # snippet are stripped so each finding is exactly one record line.
+#
+# ENDLINE is the last line of the finding's SPAN, for the rules that have one
+# (a function's or class's closing line). It is what diff scoping intersects
+# against the commit's changed lines, so a line-only rule may leave it out and
+# be attributed by its single line. The MESSAGE field is kept 6th so a detector
+# that does not know its span needs no change.
 craft_emit() {
-  local rule="$1" sevvar="$2" f="$3" ln="$4" raw="$5" msg="$6"
+  local rule="$1" sevvar="$2" f="$3" ln="$4" raw="$5" msg="$6" endln="${7:-$4}"
   local snippet
   snippet=$(printf '%s' "$raw" | head -c 80 | tr '\t\n' '  ')
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$rule" "$sevvar" "$f" "$ln" "$snippet" "$msg"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$rule" "$sevvar" "$f" "$ln" "$snippet" "$msg" "$endln"
 }
 
 # Size-rule helper applying the §10 flex band. Args:
-#   RULE SEVVAR FILE LINE VALUE LIMIT BAND MESSAGE [RAWLINE]
+#   RULE SEVVAR FILE LINE VALUE LIMIT BAND MESSAGE [RAWLINE] [ENDLINE]
 # >limit and <=band*limit => advise; >band*limit => the rule's configured severity.
+# ENDLINE is the span's last line, for diff scoping; it defaults to LINE.
 craft_size_finding() {
   local rule="$1" sevvar="$2" f="$3" ln="$4" val="$5" limit="$6" band="$7"
-  local msg="$8" raw="${9:-}"
+  local msg="$8" raw="${9:-}" endln="${10:-$4}"
   [[ "$val" -le "$limit" ]] && return 0
   local threshold
   threshold=$(awk -v l="$limit" -v b="$band" 'BEGIN{ printf "%d", l*b }')
   [[ -z "$raw" ]] && raw="$msg"
   if [[ "$val" -le "$threshold" ]]; then
-    craft_emit "$rule" "SEV___ADVISE_BAND__" "$f" "$ln" "$raw" "$msg (within ${band}x flex band — advisory)"
+    craft_emit "$rule" "SEV___ADVISE_BAND__" "$f" "$ln" "$raw" \
+      "$msg (within ${band}x flex band — advisory)" "$endln"
   else
-    craft_emit "$rule" "$sevvar" "$f" "$ln" "$raw" "$msg"
+    craft_emit "$rule" "$sevvar" "$f" "$ln" "$raw" "$msg" "$endln"
   fi
 }
 
@@ -319,9 +343,12 @@ emit_all_records() {
 # shell (records arrive via process substitution feeding this while loop, whose
 # body runs in the main shell — same pattern as zetetic-checker's check_line loop).
 craft_consume() {
-  local rule sevvar f ln snippet msg sev label
-  while IFS=$'\t' read -r rule sevvar f ln snippet msg; do
+  local rule sevvar f ln snippet msg endln sev label
+  while IFS=$'\t' read -r rule sevvar f ln snippet msg endln; do
     [[ -z "$rule" ]] && continue
+    # Diff scoping: under --staged, drop a finding whose span the commit never
+    # touched. The measurement was still whole-file; only the blame is narrowed.
+    ds_touches "$f" "$ln" "$endln" || { SUPPRESSED=$((SUPPRESSED + 1)); continue; }
     sev="$(craft_effective_sev "$sevvar")"
     [[ "$sev" == "off" ]] && continue
     if [[ "$sev" == "block" ]]; then
@@ -336,7 +363,12 @@ craft_consume() {
 
 # ── Main ───────────────────────────────────────────────────────────────
 case "$MODE" in
-  staged) COLLECT=collect_files_staged ;;
+  staged) COLLECT=collect_files_staged
+          # The commit gate judges the commit. Compute the changed ranges from
+          # the index unless the caller already supplied them — hooks/lib/
+          # staged_checks.py does, because it checks frozen blobs in a
+          # disposable repository where `git diff --cached` compares nothing.
+          ds_scoped || ds_ranges_from_index "$(craft_repo_root)" ;;
   files)  COLLECT=collect_files_named ;;
   full)   COLLECT=collect_files_full ;;
 esac
@@ -348,6 +380,10 @@ echo ""
 echo "Profile: $CRAFTSMANSHIP_PROFILE  ($MODE mode)"
 echo "Errors:   $ERRORS  (blocking)"
 echo "Warnings: $WARNINGS  (advisory — promoted to errors when profile=strict)"
+if [[ $SUPPRESSED -gt 0 ]]; then
+  echo "Pre-existing: $SUPPRESSED finding(s) measured in changed files but outside the lines this commit"
+  echo "              touched — not attributed to it. Run --files on the file to see them all."
+fi
 
 if [[ "$CRAFTSMANSHIP_PROFILE" == "permissive" ]]; then
   echo "PASSED (permissive): all findings are informational."

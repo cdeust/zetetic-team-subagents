@@ -46,12 +46,18 @@ craft_is_brace_lang() {
 }
 
 # ── Detector 1: FILE_TOO_LONG (§4.1) — language-agnostic ────────────────
+# §4.1 has no span: it is a property of the file as a whole. Its reported span
+# is therefore the whole file (1..lines), so under diff scoping it is attributed
+# whenever the commit changed that file ANYWHERE. That is the deliberate choice:
+# the rule asks the author to split a file they are already editing, the signal
+# is actionable in that commit, and scoping it to the changed lines would mean a
+# 900-line file could grow forever as long as each commit edited only its middle.
 craft_d1_file_too_long() {
   local f="$1" max="$2" flex="$3" lines
   lines=$(wc -l < "$f" 2>/dev/null | tr -d ' ') || return 0
   [[ -z "$lines" ]] && return 0
   craft_size_finding "FILE_TOO_LONG" "SEV_FILE_TOO_LONG" "$f" 1 \
-    "$lines" "$max" "$flex" "file has $lines lines (max $max)"
+    "$lines" "$max" "$flex" "file has $lines lines (max $max)" "" "$lines"
 }
 
 # ── Detector 2: NESTING_TOO_DEEP (§4.5) — brace depth or python indent ──
@@ -223,13 +229,18 @@ craft_fn_brace() {
 }
 
 # Shared: turn "start<TAB>name<TAB>len" rows into size findings at the head line.
+# The span's last line (start+len) is reported as the finding's end, so diff
+# scoping can tell whether the commit touched anywhere INSIDE the function —
+# not merely its header line. A function the commit edited anywhere is the
+# commit's to answer for; one it never entered is not.
 craft_replay_fn() {
   local f="$1" max="$2" flex="$3" start name len head
   while IFS=$'\t' read -r start name len; do
     [[ -z "$start" ]] && continue
     head=$(sed -n "${start}p" "$f" 2>/dev/null)
     craft_size_finding "FUNCTION_TOO_LONG" "SEV_FUNCTION_TOO_LONG" "$f" "$start" \
-      "$len" "$max" "$flex" "function ${name} spans $len lines (max $max)" "$head"
+      "$len" "$max" "$flex" "function ${name} spans $len lines (max $max)" "$head" \
+      "$((start + len))"
   done
 }
 
@@ -270,13 +281,15 @@ craft_class_brace() {
   ' "$f" 2>/dev/null | craft_replay_class "$f" "$max" "$flex"
 }
 
+# As craft_replay_fn: the span's last line goes to the finding, for diff scoping.
 craft_replay_class() {
   local f="$1" max="$2" flex="$3" start name len head
   while IFS=$'\t' read -r start name len; do
     [[ -z "$start" ]] && continue
     head=$(sed -n "${start}p" "$f" 2>/dev/null)
     craft_size_finding "CLASS_TOO_LONG" "SEV_CLASS_TOO_LONG" "$f" "$start" \
-      "$len" "$max" "$flex" "class ${name} spans $len lines (max $max)" "$head"
+      "$len" "$max" "$flex" "class ${name} spans $len lines (max $max)" "$head" \
+      "$((start + len))"
   done
 }
 
