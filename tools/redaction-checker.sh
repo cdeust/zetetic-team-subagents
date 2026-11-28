@@ -123,6 +123,27 @@ if [[ -f "$repo_root/.zetetic.conf" ]]; then
   [[ -n "$profile_line" ]] && ZETETIC_PROFILE="${profile_line#*=}"
 fi
 
+# ── Diff scoping ───────────────────────────────────────────────────────
+# REDACT-STAGED-PREEXISTING: in --staged mode a finding is reported only on a
+# line the commit added or changed. A document with 25 pre-existing em dashes
+# re-reported all 25 on every commit that touched it, telling the author of a
+# one-line change to fix 25 lines they did not write.
+#
+# This narrows the STAGED-CONTENT path ONLY. --stdin is the assistant's own
+# outgoing message and the commit messages, PR bodies and comments it writes:
+# that text is wholly new, has no diff, and whole-text scanning is correct
+# there, so --stdin never sets ZETETIC_DIFF_RANGES and is untouched. --full and
+# a plain --files audit likewise stay whole-file. The two paths are kept apart
+# by WHO sets the variable, not by a flag read inside the scan loop.
+REDACT_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REDACT_DIFF_SCOPE_LIB="$REDACT_SELF_DIR/lib/diff-scope.sh"
+if [[ ! -f "$REDACT_DIFF_SCOPE_LIB" ]]; then
+  echo "redaction-checker: diff-scope library not found at $REDACT_DIFF_SCOPE_LIB" >&2
+  exit 2
+fi
+# shellcheck disable=SC1090
+source "$REDACT_DIFF_SCOPE_LIB"
+
 # ── File selection ─────────────────────────────────────────────────────
 mode="${1:-}"
 files=()
@@ -130,6 +151,10 @@ case "$mode" in
   --staged)
     while IFS= read -r f; do files+=("$f"); done \
       < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E "$COPY_INCLUDE" | grep -Ev "$COPY_EXCLUDE" || true)
+    # Unless the caller supplied them: hooks/lib/staged_checks.py does, because
+    # it checks frozen index blobs in a disposable repository whose own
+    # `git diff --cached` compares nothing.
+    ds_scoped || ds_ranges_from_index "$repo_root"
     ;;
   --files)
     shift
@@ -174,6 +199,10 @@ esac
 
 # ── Scan ───────────────────────────────────────────────────────────────
 findings=0
+# Copy lines left unjudged because this commit did not change them (diff
+# scoping). Reported, not hidden: a gate that quietly narrows what it looks at
+# is indistinguishable from a gate that stopped working.
+unchanged_lines=0
 
 # Remove the parts of a line that are NOT reader-facing copy, leaving the prose
 # the rule set is entitled to judge. Result in $STRIPPED (an out-variable, not
@@ -207,6 +236,16 @@ scan_file() {
     # skip fenced code blocks — code and quoted commands aren't copy
     if [[ "$line" =~ ^\`\`\` ]]; then in_fence=$((1 - in_fence)); continue; fi
     [[ $in_fence -eq 1 ]] && continue
+    # Diff scoping (REDACT-STAGED-PREEXISTING): under --staged, judge only the
+    # lines this commit added or changed. Every rule below is line-scoped, so
+    # one guard here covers all of them. Off (and a no-op) in every other mode.
+    # The line is counted as pre-existing copy rather than silently vanishing,
+    # so the summary can say the gate narrowed its scope instead of looking as
+    # though a clean file had no patterns in it at all.
+    if ! ds_touches "$label" "$lineno"; then
+      unchanged_lines=$((unchanged_lines + 1))
+      continue
+    fi
     strip_noncopy "$line"; line="$STRIPPED"
     # Matching uses bash's builtin `=~` (ERE, same dialect as `grep -E`) and
     # BASH_REMATCH for the excerpt. The previous form spawned up to twelve
@@ -250,6 +289,10 @@ scan_file() {
 
 for f in "${files[@]}"; do scan_file "$f"; done
 
+if [[ $unchanged_lines -gt 0 ]]; then
+  echo "redaction: $unchanged_lines copy line(s) in the changed files were not judged — this commit did not"
+  echo "           change them. Run --files on the file to review all of its copy."
+fi
 if [[ $findings -gt 0 ]]; then
   echo "redaction: $findings candidate pattern(s) in reader-facing copy. Authoritative inventory: skills/writing/redaction.md"
   if [[ "$ZETETIC_PROFILE" == "strict" ]]; then

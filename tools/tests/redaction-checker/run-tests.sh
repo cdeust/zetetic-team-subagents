@@ -215,6 +215,57 @@ run_case "T21 a caller in a UTF-8 locale does not make an absent candidate pass:
 "$CHECKER" --no-such-mode >/dev/null 2>&1; rc=$?
 run_case "T21 an unknown mode is still exit 2" test "$rc" -eq 2
 
+# T22 diff scoping (REDACT-STAGED-PREEXISTING). --staged judges only the lines
+# the commit changed; --files and --stdin stay whole-text. A document with
+# pre-existing em dashes re-reported every one of them to the author of a
+# one-line change, who could neither fix them in that commit nor bypass the
+# gate. ZETETIC_DIFF_RANGES is the contract (tools/lib/diff-scope.sh).
+mkdir -p scope/docs
+( cd scope && git init -q . && git config user.email t@t && git config user.name t ) >/dev/null 2>&1
+{ echo "# Design"; for i in 1 2 3 4 5; do printf 'Row %s has a dash \xe2\x80\x94 here.\n' "$i"; done; } > scope/docs/d.md
+( cd scope && git add -A && git commit -qm base ) >/dev/null 2>&1
+printf 'A plain added sentence.\n' >> scope/docs/d.md
+( cd scope && git add -A ) >/dev/null 2>&1
+out=$(cd scope && "$CHECKER" --staged 2>&1); rc=$?
+run_case "T22 staged, added line clean: no EM_DASH reported" test "$(grep -c EM_DASH <<<"$out")" -eq 0
+run_case "T22 staged: exit 0" test "$rc" -eq 0
+run_case "T22 staged: the unjudged pre-existing copy is reported, not hidden" \
+  grep -q "were not judged" <<<"$out"
+printf 'Added line with a dash \xe2\x80\x94 here.\n' >> scope/docs/d.md
+( cd scope && git add -A ) >/dev/null 2>&1
+out=$(cd scope && "$CHECKER" --staged 2>&1)
+run_case "T22 staged, added line dirty: exactly the added line is reported" \
+  test "$(grep -c EM_DASH <<<"$out")" -eq 1
+out=$(cd scope && "$CHECKER" --files docs/d.md 2>&1)
+run_case "T22 --files audit still reports every em dash in the file" \
+  test "$(grep -c EM_DASH <<<"$out")" -eq 6
+out=$(printf 'one \xe2\x80\x94 dash\ntwo \xe2\x80\x94 dash\n' | "$CHECKER" --stdin 2>&1)
+run_case "T22 --stdin (the assistant's own message) still scans the whole text" \
+  test "$(grep -c EM_DASH <<<"$out")" -eq 2
+out=$(cd scope && ZETETIC_DIFF_RANGES="docs/d.md:2-2" "$CHECKER" --files docs/d.md 2>&1)
+run_case "T22 a caller-supplied range scopes --files too (the commit-gate path)" \
+  test "$(grep -c EM_DASH <<<"$out")" -eq 1
+
+# T23 FALSE NEGATIVE: path collision. ds_ranges_for matched a path SUFFIX, so
+# with both `README.md` and `sub/README.md` staged -- a very common layout --
+# `sub/README.md` ends with `/README.md` and inherited the root file's ranges, so
+# its own added em dash was never reported. Under ZETETIC_PROFILE=strict that
+# finding blocks, which makes this a missed violation, not just a missed warning.
+# Only exact matches count now (tools/lib/diff-scope.sh).
+mkdir -p nest/sub
+( cd nest && git init -q . && git config user.email t@t && git config user.name t ) >/dev/null 2>&1
+printf '# Root\n\nPlain copy here.\n' > nest/README.md
+{ printf '# Sub\n'; for i in $(seq 1 28); do printf 'Row %s is clean.\n' "$i"; done; } > nest/sub/README.md
+( cd nest && git add -A && git commit -qm base ) >/dev/null 2>&1
+printf 'Another plain line.\n' >> nest/README.md
+printf 'A sub line with a dash \xe2\x80\x94 here.\n' >> nest/sub/README.md
+( cd nest && git add -A ) >/dev/null 2>&1
+out=$(cd nest && "$CHECKER" --staged 2>&1)
+run_case "T23 a nested path that ends with another staged path keeps its own ranges" \
+  grep -q 'sub/README.md:30: EM_DASH' <<<"$out"
+run_case "T23 exactly the one added em dash is reported" \
+  test "$(grep -c EM_DASH <<<"$out")" -eq 1
+
 echo "----------------------------------------"
 echo "redaction-checker suite: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
