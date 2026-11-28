@@ -103,7 +103,7 @@ def test_declarations_are_checked_and_the_latest_wins(path, repo):
 @pytest.mark.parametrize("case", [
     ("verify", {"command": "x"}, "proven by the transcript"),
     ("refine", {"sha": "deadbeef"}, "is not a commit"),
-    ("refine", {"url": "https://example.com/pull/1"}, "not a GitHub"),
+    ("refine", {"url": "https://example.com/pull/1"}, "not a pull-request or issue URL"),
     ("refine", {"memory": 0}, "positive integer"),
     ("refine", {"memory": True}, "positive integer"),
     ("refine", {"n/a": "no spec"}, "accepts sha, url, memory"),
@@ -313,9 +313,9 @@ def test_worktree_gone_needs_both_recorded_absolute_paths_absent(tmp_path):
 
 REFUSALS = {  # case -> what the refusal names
     "worktree-exists": "not proven gone", "no-repo": "not proven gone", "relative-first-path": "not proven gone",
-    "unknown-task": "no open task", "not-a-pr": "not a GitHub pull-request URL",
-    "trailing-newline": "not a GitHub pull-request URL", "other-repo": "not a pull request of origin",
-    "no-origin": "no GitHub origin remote", "unpushed": "no ref of origin contains",
+    "unknown-task": "no open task", "not-a-pr": "not a pull-request URL",
+    "trailing-newline": "not a pull-request URL", "other-repo": "not a pull request of origin",
+    "no-origin": "no origin remote", "unpushed": "no ref of origin contains",
     "base-commit-of-main": "committed before the task opened", "older-than-task": "committed before the task opened",
     "unrelated-pushed-commit": "does not change a.py", "unrelated-commit-on-main": "does not change a.py",
 }
@@ -425,3 +425,66 @@ def test_a_task_closes_after_a_merge_commit_put_its_work_in_the_default_branch(p
     git_in(origin, "update-ref", "-d", "refs/remotes/origin/feature")  # the branch is deleted after the merge
     sha = merge if give == "merge-commit" else work
     assert cl.close_disposed(str(origin), task["open"], PR, sha)["disposed"]["sha"] == sha
+
+
+# ── Defect A: the host of origin, not github.com, decides a URL; a sha stands alone ──
+# A Gitea/GitLab/self-hosted origin could not close a disposed task at all: the
+# URL pattern and the origin matcher both hardcoded github.com, and --url was
+# argparse-required, so neither path was reachable off GitHub.
+
+GITEA_REMOTE = "http://gitea.example:3000/acme/widget.git"
+GITEA_PR = "http://gitea.example:3000/acme/widget/pulls/34"
+
+
+@pytest.fixture
+def gitea(repo):
+    """``repo`` cloned-like from a self-hosted Gitea: the shape of the reported case."""
+    git_in(repo, "remote", "add", "origin", GITEA_REMOTE)
+    git_in(repo, "update-ref", "refs/remotes/origin/main", commit_file(repo, "base.py"))
+    git_in(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+    return repo
+
+
+def test_close_disposed_accepts_a_pull_request_url_of_a_non_github_origin(path, gitea, tmp_path):
+    """The origin remote's own host and path decide the URL, not github.com."""
+    task = gone_task(path, tmp_path)
+    sha = pushed_work(gitea, task)
+    row = cl.close_disposed(str(gitea), task["open"], GITEA_PR, sha)
+    assert row["disposed"] == {"url": GITEA_PR, "sha": sha}
+    assert cl.open_tasks(gates_jsonl.read_rows(path)) == []
+
+
+def test_close_disposed_closes_on_the_sha_alone_when_the_default_branch_reaches_it(path, gitea, tmp_path):
+    """--sha is sufficient evidence by itself: an ancestor of the remote default
+    branch is checkable, where a URL is only a string that matched a pattern."""
+    task = gone_task(path, tmp_path)
+    merged = commit_file(gitea, "a.py", task["time"])
+    git_in(gitea, "update-ref", "refs/remotes/origin/main", merged)
+    assert cl.main(["--cwd", str(gitea), "close-disposed", task["open"], "--sha", merged[:12]]) == 0
+    rows = gates_jsonl.read_rows(path)
+    assert rows[-1]["disposed"] == {"url": None, "sha": merged}
+    assert cl.open_tasks(rows) == []
+
+
+def test_declare_accepts_a_pull_request_url_of_a_non_github_origin(path, gitea):
+    """The same validator serves ``declare --stage refine --url``; §A asks for it
+    to be fixed consistently, so a Gitea PR is a valid refine reference too."""
+    task = cl.open_task(path, opener(gitea))[0]
+    row = cl.declare(str(gitea), task["open"], "refine", {"url": GITEA_PR})
+    assert (row["kind"], row["ref"]) == ("url", GITEA_PR)
+
+
+def test_close_disposed_still_refuses_a_url_of_another_repository_on_the_same_host(path, gitea, tmp_path):
+    """Widening the host must not widen the repository: the owner/name still bind."""
+    task = gone_task(path, tmp_path)
+    sha = pushed_work(gitea, task)
+    with pytest.raises(cl.DeclareRefused, match="not a pull request of origin"):
+        cl.close_disposed(str(gitea), task["open"], "http://gitea.example:3000/someone/else/pulls/34", sha)
+
+
+def test_close_disposed_refuses_a_sha_the_default_branch_does_not_reach(path, gitea, tmp_path):
+    """The sha-alone path needs the stronger proof: merged, not merely pushed."""
+    task = gone_task(path, tmp_path)
+    sha = pushed_work(gitea, task)  # on origin/feature only, never merged
+    with pytest.raises(cl.DeclareRefused, match="default branch"):
+        cl.close_disposed(str(gitea), task["open"], None, sha)

@@ -32,10 +32,14 @@ Rows (``gates_jsonl.py`` contract, file ``cycles.jsonl``):
            is logged once, not on every later stop.
            A task whose worktree was disposed after its push closes instead
            with "disposed": {"url", "sha"} (``close_disposed``): its stages
-           cannot be re-proven once the files are gone, so the pushed commit
-           and its pull request are the evidence: a pull request of origin, and
-           a commit on a branch of origin, absent from origin's default branch,
-           committed after the task opened. Its window_end is the end of the
+           cannot be re-proven once the files are gone, so the pushed commit is
+           the evidence, optionally with its pull request. The commit must be
+           reached by a ref of origin, change the file the task first edited and
+           be committed after the task opened; without a URL it must also be an
+           ancestor of origin's default branch. The forge is whatever origin
+           points at -- a URL's host and owner/repo are checked against origin,
+           not against github.com, so a self-hosted Gitea or GitLab works.
+           "url" is null on a close made on the sha alone. Its window_end is the end of the
            reader's transcript at the close, so the next task starts after it.
 A task is open while no close row names it. ``agent_id`` is null for the main
 agent; one open task per (session, agent) at a time, enforced by reading and
@@ -68,12 +72,20 @@ LEDGER_NAME = "cycles.jsonl"
 # (sha, PR URL, memory id)"; the check is a command by engineering-loop step 0.
 DECLARABLE = {"check": ("command",), "refine": ("sha", "url", "memory"),
               "benchmark": ("sha", "url", "memory", "n/a")}
-_URL = re.compile(r"^https://github\.com/(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)/(?P<kind>pull|issues)/\d+/?$")
+# A pull-request or issue URL of SOME forge: host (with optional port),
+# owner/repo, the kind segment and a number. GitHub spells a pull request
+# ``pull``, Gitea ``pulls``, GitLab ``merge_requests``. The host is deliberately
+# NOT pinned here: a pattern match only proves the string's shape. What proves
+# the URL names THIS repository's forge is ``_check_pull_request``, which binds
+# host and owner/repo to the configured origin remote.
+_URL = re.compile(r"^https?://(?P<host>[\w.-]+(?::\d+)?)/(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)"
+                  r"/(?P<kind>pulls?|issues|merge_requests)/\d+/?$")
 _SHA = re.compile(r"^[0-9a-f]{7,40}$")
-# The GitHub repository an origin URL names: https (with or without
-# credentials), scp-like ``git@github.com:o/r.git`` and ``ssh://git@github.com/o/r``.
-_REMOTE = re.compile(r"(?:https://(?:[^@/]+@)?|ssh://git@|git@)github\.com[:/]"
-                     r"(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)(?:\.git)?/?")
+# The repository an origin URL names, on any host: http(s) (with or without
+# a userinfo prefix), scp-like ``git@host:o/r.git`` and ``ssh://git@host/o/r``.
+_REMOTE = re.compile(r"(?:https?://(?:[^@/]+@)?|ssh://(?:[^@/]+@)?|(?:[^@/:]+@))"
+                     r"(?P<host>[\w.-]+(?::\d+)?)[:/]"
+                     r"(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)(?:\.git)?/?$")
 MAIN_AGENT = "main"
 
 
@@ -204,7 +216,7 @@ def _kind_and_ref(cwd: str, stage: str, ref: Dict) -> tuple:
     if kind == "sha" and not (_SHA.match(value) and git(cwd, "cat-file", "-e", f"{value}^{{commit}}").returncode == 0):
         raise DeclareRefused(f"{value!r} is not a commit of the repository at {cwd}")
     if kind == "url" and not _URL.match(value):
-        raise DeclareRefused(f"{value!r} is not a GitHub pull-request or issue URL")
+        raise DeclareRefused(f"{value!r} is not a pull-request or issue URL")
     if kind == "memory" and not (isinstance(value, int) and not isinstance(value, bool) and value > 0):
         raise DeclareRefused("--memory-id must be the positive integer Cortex `remember` returned")
     return kind, value.strip() if isinstance(value, str) else value
@@ -260,23 +272,61 @@ def _open_task_row(path: str, task_id: str) -> Dict:
 
 
 def _origin_repo(cwd: str) -> tuple:
-    """(owner, repository), lower case (GitHub names are case-insensitive), of
-    the GitHub repository the origin remote points at; DeclareRefused otherwise."""
+    """(host, owner, repository), lower case (forge host and repository names are
+    case-insensitive), of the repository the origin remote points at, on whatever
+    host that is; DeclareRefused when origin is absent or unparseable."""
     remote = git(cwd, "remote", "get-url", "origin")
     match = _REMOTE.fullmatch(remote.stdout.strip()) if remote.returncode == 0 else None
     if match is None:
-        raise DeclareRefused(f"the repository at {cwd} has no GitHub origin remote to bind a pull request to")
-    return match["owner"].lower(), match["repo"].lower()
+        raise DeclareRefused(f"the repository at {cwd} has no origin remote to bind a pull request to")
+    return match["host"].lower(), match["owner"].lower(), match["repo"].lower()
 
 
 def _check_pull_request(cwd: str, url: str) -> None:
-    """``url`` is, in full (no trailing newline), a pull request of origin."""
+    """``url`` is, in full (no trailing newline), a pull request of origin.
+
+    The accepted host is origin's own, not github.com: the forge is whatever the
+    repository is actually hosted on. Binding host AND owner/repo to origin is
+    what makes the URL evidence about THIS repository rather than any URL that
+    happens to match the shape."""
     match = _URL.fullmatch(url) if isinstance(url, str) else None
-    if match is None or match["kind"] != "pull":
-        raise DeclareRefused(f"{url!r} is not a GitHub pull-request URL")
+    if match is None or match["kind"] == "issues":
+        raise DeclareRefused(f"{url!r} is not a pull-request URL")
     origin = _origin_repo(cwd)
-    if (match["owner"].lower(), match["repo"].lower()) != origin:
-        raise DeclareRefused(f"{url} is not a pull request of origin ({'/'.join(origin)})")
+    if (match["host"].lower(), match["owner"].lower(), match["repo"].lower()) != origin:
+        raise DeclareRefused(f"{url} is not a pull request of origin "
+                             f"({origin[0]}/{origin[1]}/{origin[2]})")
+
+
+def _origin_default_branch(cwd: str) -> str:
+    """The ref of origin's default branch, from ``refs/remotes/origin/HEAD``;
+    DeclareRefused when the clone does not record one (``git remote set-head
+    origin --auto`` writes it). Nothing is guessed: a wrong guess here would
+    accept a commit that is merged nowhere."""
+    head = git(cwd, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
+    ref = head.stdout.strip() if head.returncode == 0 else ""
+    if not ref:
+        raise DeclareRefused(f"the repository at {cwd} records no default branch for origin "
+                             "(run `git remote set-head origin --auto`), so a sha alone cannot be "
+                             "checked against it; give --url as well")
+    return ref
+
+
+def _merged_into_default_branch(cwd: str, full: str) -> None:
+    """``full`` is an ancestor of origin's default branch. This is the evidence
+    the sha-alone close rests on, and it is strictly stronger than a URL: a URL
+    is a string that matched a pattern, while this is ``git merge-base
+    --is-ancestor`` over refs the clone actually holds.
+    git-merge-base(1) EXIT STATUS: 0 ancestor, 1 not, anything else an error."""
+    ref = _origin_default_branch(cwd)
+    probe = git(cwd, "merge-base", "--is-ancestor", full, ref)
+    if probe.returncode == 1:
+        raise DeclareRefused(f"{full} is not an ancestor of origin's default branch ({ref}): it is not "
+                             "merged, so the sha alone does not close the task; merge it (then `git fetch "
+                             "origin`) or give --url as well")
+    if probe.returncode != 0:
+        raise DeclareRefused(f"cannot tell whether {full} is an ancestor of {ref} "
+                             f"(git merge-base exit {probe.returncode}): {probe.stderr.strip()}")
 
 
 def _committed_after_open(cwd: str, full: str, opened: object) -> None:
@@ -354,20 +404,32 @@ def _scanned_end(task: Dict) -> tuple:
         return 0, transcript
 
 
-def close_disposed(cwd: str, task_id: str, url: str, sha: str) -> Dict:
+def close_disposed(cwd: str, task_id: str, url: Optional[str], sha: str) -> Dict:
     """Close an open task whose worktree no longer exists (``worktree_gone``)
-    on a pull request of origin and a pushed commit of the task's own work
-    (``_check_task_commit``). Refuses (DeclareRefused), leaving the ledger
-    unchanged, when any of these fails. The git and filesystem checks run
-    before the lock, as in ``declare``; under it only the ledger state is
-    re-read, so a task closed meanwhile is not closed twice."""
+    on a pushed commit of the task's own work (``_check_task_commit``), and on a
+    pull request of origin when ``url`` is given. Refuses (DeclareRefused),
+    leaving the ledger unchanged, when any of these fails.
+
+    ``sha`` is required; ``url`` is optional. Without a URL the commit must also
+    be an ancestor of origin's default branch (``_merged_into_default_branch``):
+    the work is demonstrably landed, which is the stronger of the two kinds of
+    evidence. With a URL, the commit need only be reachable from some ref of
+    origin, as before, so an existing workflow that closes an in-review task on
+    its pull request is unaffected.
+
+    The git and filesystem checks run before the lock, as in ``declare``; under
+    it only the ledger state is re-read, so a task closed meanwhile is not
+    closed twice."""
     path = ledger_path(cwd)
     task = _open_task_row(path, task_id)
     if not worktree_gone(task):
         raise DeclareRefused(f"the worktree of {task_id} is not proven gone (repo {task.get('repo')!r}, "
                              f"first path {task.get('first_path')!r}); prove its stages instead")
-    _check_pull_request(cwd, url)
+    if url is not None:
+        _check_pull_request(cwd, url)
     full = _check_task_commit(cwd, sha, task)
+    if url is None:
+        _merged_into_default_branch(cwd, full)
     window_end, transcript = _scanned_end(task)
     row = {"close": task_id, "disposed": {"url": url, "sha": full},
            "evidence": {}, "counts": {"edits": 0, "reviews": 0, "reopens": 0},
@@ -420,7 +482,8 @@ def _build_parser() -> argparse.ArgumentParser:
     dis = sub.add_parser("close-disposed",
                          help="close a task whose worktree was removed after its push, on its PR and pushed commit")
     dis.add_argument("task_id")
-    dis.add_argument("--url", required=True, help="the pull request of origin that carries the task's work")
+    dis.add_argument("--url", help="optional: the pull request of origin that carries the task's work. "
+                                   "Without it the commit must be merged into origin's default branch")
     dis.add_argument("--sha", required=True,
                      help="a commit of that work that origin reaches (its branch, or its default branch once merged)")
     return parser
